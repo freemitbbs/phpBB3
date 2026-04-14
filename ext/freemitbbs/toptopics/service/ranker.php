@@ -25,6 +25,7 @@ class ranker
 	private const DEFAULT_REPLY_WEIGHT = 0.75;
 	private const DEFAULT_VIEW_WEIGHT = 0.15;
 	private const DEFAULT_CONTENT_WEIGHT = 0.35;
+	private const DEFAULT_REACTION_WEIGHT = 0.3;
 	private const DEFAULT_MANUAL_BOOST_MULTIPLIER = 2.0;
 	private const DEFAULT_MANUAL_DEMOTE_MULTIPLIER = 0.3;
 	private const DEFAULT_CANDIDATE_POOL_MIN = 250;
@@ -50,9 +51,11 @@ class ranker
 	protected \phpbb\user $user;
 	protected string $likes_table;
 	protected string $dislikes_table;
+	protected string $post_reactions_table;
 	protected string $topic_overrides_table;
 	protected string $scope_snapshots_table;
 	protected string $scope_forums_table;
+	protected ?bool $has_post_reactions_table = null;
 
 	public function __construct(
 		\phpbb\auth\auth $auth,
@@ -78,6 +81,7 @@ class ranker
 		$this->user = $user;
 		$this->likes_table = $likes_table;
 		$this->dislikes_table = $dislikes_table;
+		$this->post_reactions_table = $this->derive_post_reactions_table($likes_table);
 		$this->topic_overrides_table = $topic_overrides_table;
 		$this->scope_snapshots_table = $scope_snapshots_table;
 		$this->scope_forums_table = $scope_forums_table;
@@ -354,6 +358,7 @@ class ranker
 		$topic_sql = $this->db->sql_in_set('t.topic_id', $candidate_topic_ids);
 		$candidate_post_sql = $this->db->sql_in_set('p.topic_id', $candidate_topic_ids);
 		$candidate_topic_join_sql = $this->db->sql_in_set('tt.topic_id', $candidate_topic_ids);
+		$candidate_reaction_topic_sql = $this->db->sql_in_set('pr.topic_id', $candidate_topic_ids);
 		$now = time();
 		$early_window_seconds = $options['early_window_hours'] * 3600;
 		$content_length_sql = $this->get_text_length_sql('base.first_post_text');
@@ -367,9 +372,11 @@ class ranker
 		$reply_signal_sql = $this->sql_ln('(1.0 + ' . $replies_sql . ')');
 		$view_signal_sql = $this->sql_ln('(1.0 + (' . $views_sql . ' / ' . $age_divisor_sql . '))');
 		$content_signal_sql = $this->sql_ln('(1.0 + (' . $content_length_capped_sql . ' / ' . self::CONTENT_LENGTH_SCALE . '))');
+		$reaction_signal_sql = $this->sql_ln('(1.0 + base.reaction_count)');
 		$signal_score_sql = '(' . $points_sql
 			. ' + (' . $reply_signal_sql . ' * ' . $options['reply_weight'] . ')'
 			. ' + (' . $view_signal_sql . ' * ' . $options['view_weight'] . ')'
+			. ' + (' . $reaction_signal_sql . ' * ' . $options['reaction_weight'] . ')'
 			. ' + (' . $content_signal_sql . ' * ' . $options['content_weight'] . '))';
 		$base_rank_sql = '((' . $signal_score_sql . ' - 1.0) / ' . $this->sql_power('(' . $age_hours_sql . ' + ' . $options['age_offset_hours'] . ')', $options['gravity']) . ')';
 		$rank_after_velocity_sql = 'CASE
@@ -404,6 +411,22 @@ class ranker
 				THEN (scored.pre_manual_rank * ' . $options['manual_demote_multiplier'] . ')
 			ELSE scored.pre_manual_rank
 		END';
+		$reaction_select_sql = ',
+					0 AS reaction_count';
+		$reaction_join_sql = '';
+
+		if ($this->has_post_reactions_table())
+		{
+			$reaction_select_sql = ',
+					COALESCE(reaction_data.reaction_count, 0) AS reaction_count';
+			$reaction_join_sql = '
+				LEFT JOIN (
+					SELECT pr.topic_id, COUNT(pr.reaction_id) AS reaction_count
+					FROM ' . $this->post_reactions_table . ' pr
+					WHERE ' . $candidate_reaction_topic_sql . '
+					GROUP BY pr.topic_id
+				) reaction_data ON reaction_data.topic_id = t.topic_id';
+		}
 
 		$base_sql = 'SELECT t.topic_id, t.forum_id, t.topic_title, t.topic_time, t.topic_last_post_time, t.topic_last_post_id,
 					t.topic_last_poster_id, t.topic_last_poster_name, t.topic_last_poster_colour, t.topic_type,
@@ -415,7 +438,8 @@ class ranker
 					COALESCE(like_data.like_count, 0) AS like_count,
 					COALESCE(like_data.early_like_count, 0) AS early_like_count,
 					COALESCE(dislike_data.dislike_count, 0) AS dislike_count,
-					COALESCE(report_data.flag_count, 0) AS flag_count
+					COALESCE(report_data.flag_count, 0) AS flag_count'
+					. $reaction_select_sql . '
 				FROM ' . TOPICS_TABLE . ' t
 				INNER JOIN ' . FORUMS_TABLE . ' f ON f.forum_id = t.forum_id
 				LEFT JOIN ' . POSTS_TABLE . ' fp ON fp.post_id = t.topic_first_post_id
@@ -446,7 +470,8 @@ class ranker
 					WHERE r.report_closed = 0
 						AND ' . $candidate_post_sql . '
 					GROUP BY p.topic_id
-				) report_data ON report_data.topic_id = t.topic_id
+				) report_data ON report_data.topic_id = t.topic_id'
+				. $reaction_join_sql . '
 				WHERE ' . $topic_sql;
 
 		$scored_sql = 'SELECT base.*,
@@ -469,6 +494,7 @@ class ranker
 					ranked.like_count <> 0
 					OR ranked.dislike_count <> 0
 					OR ranked.flag_count <> 0
+					OR ranked.reaction_count <> 0
 					OR ranked.replies <> 0
 					OR ranked.views <> 0
 					OR ranked.override_state = \'boost\'
@@ -663,10 +689,47 @@ class ranker
 			'flag_hard_penalty' => $this->get_float_config('toptopics_flag_hard_penalty', self::DEFAULT_FLAG_HARD_PENALTY, 0.01, 1.0),
 			'hide_flag_threshold' => $this->get_int_config('toptopics_hide_flag_threshold', self::DEFAULT_HIDE_FLAG_THRESHOLD, 0),
 			'hide_point_threshold' => $this->get_int_config('toptopics_hide_point_threshold', self::DEFAULT_HIDE_POINT_THRESHOLD),
+			'reaction_weight' => $this->get_float_config('toptopics_reaction_weight', self::DEFAULT_REACTION_WEIGHT, 0.0, 10.0),
 			'trust_boost_cap' => $this->get_float_config('toptopics_trust_boost_cap', self::DEFAULT_TRUST_BOOST_CAP, 0.0, 1.0),
 			'reply_weight' => $this->get_float_config('toptopics_reply_weight', self::DEFAULT_REPLY_WEIGHT, 0.0, 10.0),
 			'view_weight' => $this->get_float_config('toptopics_view_weight', self::DEFAULT_VIEW_WEIGHT, 0.0, 10.0),
 		];
+	}
+
+	protected function derive_post_reactions_table(string $likes_table): string
+	{
+		$likes_suffix = 'posts_likes';
+		if (substr($likes_table, -strlen($likes_suffix)) !== $likes_suffix)
+		{
+			return '';
+		}
+
+		return substr($likes_table, 0, -strlen($likes_suffix)) . 'post_reactions';
+	}
+
+	protected function has_post_reactions_table(): bool
+	{
+		if ($this->has_post_reactions_table !== null)
+		{
+			return $this->has_post_reactions_table;
+		}
+
+		if ($this->post_reactions_table === '')
+		{
+			$this->has_post_reactions_table = false;
+			return false;
+		}
+
+		$this->db->sql_return_on_error(true);
+		$result = $this->db->sql_query_limit('SELECT reaction_id FROM ' . $this->post_reactions_table, 1);
+		$this->has_post_reactions_table = ($result !== false);
+		if ($result !== false)
+		{
+			$this->db->sql_freeresult($result);
+		}
+		$this->db->sql_return_on_error(false);
+
+		return $this->has_post_reactions_table;
 	}
 
 	protected function get_int_config(string $key, int $default, ?int $min = null, ?int $max = null): int
