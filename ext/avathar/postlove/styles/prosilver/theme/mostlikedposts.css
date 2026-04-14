@@ -33,7 +33,7 @@
 
 .postlove-summary-header dd {
 	box-sizing: border-box;
-	text-align: center;
+	text-align: left;
 }
 
 .postlove-summary-author {
@@ -46,10 +46,16 @@
 
 .postlove-summary-likes-header {
 	width: 80px;
+	text-align: center !important;
 }
 
 .postlove-summary-forum {
 	width: 140px;
+}
+
+.postlove-summary-content .table1 {
+	width: 100%;
+	table-layout: fixed;
 }
 
 .tr_likedposts td,
@@ -57,11 +63,32 @@
 	vertical-align: top;
 }
 
-.tr_likedposts td:not(#td_likedpost) {
+#td_author,
+#td_posted,
+.postlove-summary-likes,
+#td_forum {
 	max-width: 110px;
 	text-overflow: ellipsis;
 	overflow: hidden;
 	white-space: nowrap;
+}
+
+#td_author {
+	width: 110px;
+}
+
+#td_posted {
+	width: 110px;
+}
+
+.postlove-summary-likes {
+	width: 80px;
+	text-align: center;
+}
+
+#td_forum {
+	width: 140px;
+	max-width: 140px;
 }
 
 #td_likedpost {
@@ -121,11 +148,14 @@
 		display: none;
 	}
 
-	.tr_likedposts td:not(#td_likedpost) {
-		max-width: 60px;
-	}
+		#td_author,
+		#td_posted,
+		.postlove-summary-likes,
+		#td_forum {
+			max-width: 60px;
+		}
 
-	#td_likedpost{
+		#td_likedpost{
 		max-width: 155px;
 	}
 
@@ -143,7 +173,10 @@
 		max-width: 135px;
 	}
 
-	.tr_likedposts td:not(#td_likedpost) {
-		max-width: 52px;
+		#td_author,
+		#td_posted,
+		.postlove-summary-likes,
+		#td_forum {
+			max-width: 52px;
+		}
 	}
-}

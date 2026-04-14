@@ -37,18 +37,9 @@
 				</td>
 				<td id='td_author'> {most_liked_posts.USERNAME_FULL}</td>
 				<td id='td_posted'>{most_liked_posts.POST_TIME}</td>
-				<td class="postlove-summary-likes">
-					{most_liked_posts.POST_LIKES_IN_PERIOD}
-					<!-- IF most_liked_posts.S_HAS_POST_LIKERS -->
-					<details class="postlove-likers-details">
-						<summary class="postlove-likers-button" title="{most_liked_posts.POST_LIKERS}" aria-label="{most_liked_posts.POST_LIKERS}">
-							<i class="icon fa-users fa-fw" aria-hidden="true"></i>
-							<span class="sr-only">{most_liked_posts.POST_LIKERS}</span>
-						</summary>
-						<div class="postlove-likers-list">{most_liked_posts.POST_LIKERS_LIST}</div>
-					</details>
-					<!-- ENDIF -->
-				</td>
+					<td class="postlove-summary-likes"<!-- IF most_liked_posts.S_HAS_POST_LIKERS --> title="{most_liked_posts.POST_LIKERS}" aria-label="{most_liked_posts.POST_LIKERS}"<!-- ENDIF -->>
+						{most_liked_posts.POST_LIKES_IN_PERIOD}
+					</td>
 				<td id='td_forum'>{most_liked_posts.FORUM_NAME}</td>
 			</tr>
 			<!-- END most_liked_posts -->

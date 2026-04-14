@@ -461,6 +461,7 @@ class summary_listener implements EventSubscriberInterface
 			$row['bbcode_bitfield'],
 			$flags
 		);
+		$text = $this->strip_quoted_html($text);
 		$text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
 		$text = preg_replace('/\s+/u', ' ', $text);
 		$text = trim((string) $text);
@@ -471,5 +472,52 @@ class summary_listener implements EventSubscriberInterface
 		}
 
 		return truncate_string($text, 120, 255, false, $this->user->lang['ELLIPSIS']);
+	}
+
+	protected function strip_quoted_html(string $html): string
+	{
+		if ($html === '' || stripos($html, '<blockquote') === false || !class_exists(\DOMDocument::class))
+		{
+			return $html;
+		}
+
+		$dom = new \DOMDocument('1.0', 'UTF-8');
+		$libxml_previous = libxml_use_internal_errors(true);
+		$options = (defined('LIBXML_HTML_NOIMPLIED') ? LIBXML_HTML_NOIMPLIED : 0)
+			| (defined('LIBXML_HTML_NODEFDTD') ? LIBXML_HTML_NODEFDTD : 0);
+		$loaded = $dom->loadHTML(
+			'<?xml encoding="UTF-8"><div id="postlove-excerpt-root">' . $html . '</div>',
+			$options
+		);
+		libxml_clear_errors();
+		libxml_use_internal_errors($libxml_previous);
+
+		if (!$loaded)
+		{
+			return $html;
+		}
+
+		$xpath = new \DOMXPath($dom);
+		foreach ($xpath->query('//blockquote') as $blockquote)
+		{
+			if ($blockquote->parentNode)
+			{
+				$blockquote->parentNode->removeChild($blockquote);
+			}
+		}
+
+		$root = $xpath->query('//*[@id="postlove-excerpt-root"]')->item(0);
+		if (!$root)
+		{
+			return $html;
+		}
+
+		$clean_html = '';
+		foreach (iterator_to_array($root->childNodes) as $child)
+		{
+			$clean_html .= $dom->saveHTML($child);
+		}
+
+		return $clean_html;
 	}
 }
