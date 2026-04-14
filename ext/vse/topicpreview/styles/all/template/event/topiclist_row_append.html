@@ -1,0 +1,16 @@
+{% import '@vse_topicpreview/topicpreview_macro.html' as macro %}
+{# Context variables:
+	tpl block		purpose
+	---------		-------
+	topicrow		display topic preview in view forum
+	searchresults	display topic preview in search results
+	similar			display topic preview in Similar Topics extension
+	recent_topics	display topic preview in Recent Topics extension
+	rtng			display topic preview in Recent Topics NG extension
+	top_five_topic	display topic preview in Top Five extension - deprecated @v2.2.1
+#}
+{% for context in [topicrow, searchresults, similar, recent_topics, rtng, top_five_topic] %}
+	{% if context.TOPIC_PREVIEW_FIRST_POST %}
+		{{ macro.renderTopicPreview(context) }}
+	{% endif %}
+{% endfor %}

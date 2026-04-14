@@ -1,0 +1,9 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <rect x="16" y="16" width="224" height="224" rx="48" fill="#1D4ED8"/>
+
+  <!-- centered FM monogram -->
+  <g transform="translate(-14 0)">
+    <path d="M72 72H132V92H92V112H126V132H92V176H72V72Z" fill="#FFFFFF"/>
+    <path d="M136 176V72H156L172 116L188 72H208V176H188V108L172 144H170L156 108V176H136Z" fill="#FFFFFF"/>
+  </g>
+</svg>

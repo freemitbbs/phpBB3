@@ -1,0 +1,59 @@
+<!-- INCLUDECSS @avathar_postlove/mostlikedposts.css -->
+
+<!-- IF not (S_IS_BOT or $POSTLOVE_SHOWN) -->
+<!-- DEFINE $POSTLOVE_SHOWN = 1 -->
+<div class="forabg postlove-summary-panel" id="liked_posts" data-storage-key="postlove.summary.collapsed">
+	<ul class="topiclist">
+		<li class="header">
+				<dl class="row-item postlove-summary-header">
+					<dt><div class="list-inner"><i class="icon fa-heart fa-fw" aria-hidden="true"></i> {L_POST_OF_THE_DAY}</div></dt>
+				<dd class="postlove-summary-author">{L_POSTED_BY}</dd>
+				<dd class="postlove-summary-posted" id="th_posted">{L_POSTED_AT}</dd>
+				<dd class="postlove-summary-likes-header">{L_POST_LIKES}</dd>
+				<dd class="postlove-summary-forum" id="th_forum">{L_FORUM}</dd>
+			</dl>
+			<a href="#" class="postlove-collapse-btn" title="{L_COLLAPSE_VIEW}" aria-label="{L_COLLAPSE_VIEW}" aria-expanded="true" data-title-expand="{L_EXPAND_VIEW}" style="display: none;">
+				<i class="fa fa-minus-square" aria-hidden="true"></i>
+				<span class="sr-only">{L_COLLAPSE_VIEW}</span>
+			</a>
+		</li>
+	</ul>
+	<div class="postlove-summary-content">
+	<table class="table1 not-responsive">
+		<tbody>
+			<!-- BEGIN most_liked_posts -->
+			<tr class="tr_likedposts <!-- IF most_liked_posts.ROWCOUNT is even -->bg1<!-- ELSE -->bg2<!-- ENDIF -->">
+				<td id='td_likedpost'>
+					<div class="postlove-summary-cell">
+						<a class="postlove-summary-status <!-- IF most_liked_posts.S_UNREAD -->unread<!-- ELSE -->read<!-- ENDIF -->" href="{most_liked_posts.U_TOPIC}">
+							<!-- IF most_liked_posts.S_UNREAD --><i class="icon fa-file fa-fw icon-red icon-md" aria-hidden="true"></i>
+							<!-- ELSE --><i class="icon fa-file fa-fw icon-grey icon-md" aria-hidden="true"></i><!-- ENDIF -->
+						</a>
+						<a href="{most_liked_posts.U_TOPIC}" class="postlove-summary-entry">
+							<span class="postlove-summary-title">{most_liked_posts.TOPIC_TITLE}</span>
+							<span class="postlove-summary-excerpt">{most_liked_posts.POST_EXCERPT}</span>
+						</a>
+					</div>
+				</td>
+				<td id='td_author'> {most_liked_posts.USERNAME_FULL}</td>
+				<td id='td_posted'>{most_liked_posts.POST_TIME}</td>
+				<td class="postlove-summary-likes">
+					{most_liked_posts.POST_LIKES_IN_PERIOD}
+					<!-- IF most_liked_posts.S_HAS_POST_LIKERS -->
+					<details class="postlove-likers-details">
+						<summary class="postlove-likers-button" title="{most_liked_posts.POST_LIKERS}" aria-label="{most_liked_posts.POST_LIKERS}">
+							<i class="icon fa-users fa-fw" aria-hidden="true"></i>
+							<span class="sr-only">{most_liked_posts.POST_LIKERS}</span>
+						</summary>
+						<div class="postlove-likers-list">{most_liked_posts.POST_LIKERS_LIST}</div>
+					</details>
+					<!-- ENDIF -->
+				</td>
+				<td id='td_forum'>{most_liked_posts.FORUM_NAME}</td>
+			</tr>
+			<!-- END most_liked_posts -->
+		</tbody>
+	</table>
+	</div>
+</div>
+	<!-- ENDIF -->

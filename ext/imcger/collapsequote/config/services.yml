@@ -1,0 +1,42 @@
+services:
+    imcger.collapsequote.admin.controller:
+        class: 'imcger\collapsequote\controller\cquote_admin_controller'
+        arguments:
+            - '@config'
+            - '@template'
+            - '@language'
+            - '@request'
+            - '@user'
+            - '@dbal.conn'
+            - '@ext.manager'
+
+    imcger.collapsequote.main.listener:
+        class: imcger\collapsequote\event\cquote_main_listener
+        arguments:
+            - '@config'
+            - '@template'
+            - '@language'
+            - '@user'
+        tags:
+            - { name: event.listener }
+
+    imcger.collapsequote.acp.listener:
+        class: 'imcger\collapsequote\event\cquote_acp_listener'
+        arguments:
+            - '@template'
+            - '@language'
+            - '@request'
+        tags:
+            - { name: event.listener }
+
+    imcger.collapsequote.ucp.listener:
+        class: 'imcger\collapsequote\event\cquote_ucp_listener'
+        arguments:
+            - '@config'
+            - '@template'
+            - '@user'
+            - '@language'
+            - '@request'
+            - '@dbal.conn'
+        tags:
+            - { name: event.listener }

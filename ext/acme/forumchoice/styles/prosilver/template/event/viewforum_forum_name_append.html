@@ -1,0 +1,10 @@
+{% if U_FAVORITE_TOGGLE is defined and U_FAVORITE_TOGGLE %}
+	<a href="{{ U_FAVORITE_TOGGLE }}" class="button" title="{{ L_FAVORITE_ACTION }}" data-ajax="true" data-refresh="true" style="margin-left: 10px; vertical-align: middle;">
+		{% if S_FORUM_FAVORITE %}
+			<i class="icon fa-star fa-fw" style="color: #e8a317;" aria-hidden="true"></i>
+		{% else %}
+			<i class="icon fa-star-o fa-fw" aria-hidden="true"></i>
+		{% endif %}
+		<span>{{ L_FAVORITE_ACTION }}</span>
+	</a>
+{% endif %}

@@ -1,0 +1,22 @@
+<!-- IF S_HAS_FAVORITE_FORUMS -->
+<div class="forabg forumchoice-favorites-block">
+	<div class="inner">
+	<ul class="topiclist">
+		<li class="header">
+			<dl class="row-item">
+				<dt><div class="list-inner"><i class="icon fa-star fa-fw forumchoice-favorites-star" aria-hidden="true"></i> {L_FAVORITE_FORUMS}</div></dt>
+			</dl>
+		</li>
+		<li class="forumchoice-favorites-shell">
+			<div class="forumchoice-favorites-wrap">
+				<div class="forumchoice-favorites-menu">
+					<!-- BEGIN favorite_forums -->
+					<a href="{favorite_forums.U_VIEWFORUM}" class="forumchoice-favorites-link">{favorite_forums.FORUM_NAME}</a>
+					<!-- END favorite_forums -->
+				</div>
+			</div>
+		</li>
+	</ul>
+	</div>
+</div>
+<!-- ENDIF -->

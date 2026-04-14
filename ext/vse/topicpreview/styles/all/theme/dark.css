@@ -1,0 +1,11 @@
+/** Topic Preview - Dark Theme */
+@import url("light.css");
+
+:root {
+	--tp-bg: #1e1e1e;
+	--tp-shadow: #808080;
+	--tp-text: #cecece;
+	--tp-scrollbar-track: #2a2a2a;
+	--tp-scrollbar-thumb: #555555;
+	--tp-scrollbar-hover: #777777;
+}

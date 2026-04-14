@@ -1,0 +1,30 @@
+# Configuration files
+config.php
+
+# Cache and temporary storage
+cache/*
+!cache/index.htm
+!cache/.htaccess
+
+# User-uploaded content
+files/*
+!files/index.htm
+!files/.htaccess
+images/avatars/upload/*
+!images/avatars/upload/index.htm
+
+# Store folder (backups and logs)
+store/*
+!store/index.htm
+!store/.htaccess
+
+# Dependencies
+vendor/
+
+# Development and OS files
+.idea/
+.vscode/
+*.log
+.DS_Store
+Thumbs.db
+.tmp/

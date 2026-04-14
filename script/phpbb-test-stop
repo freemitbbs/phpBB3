@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TMP_DIR="$ROOT_DIR/.tmp"
+MARIADB_DIR="$TMP_DIR/mariadb"
+MARIADB_RUN_DIR="$MARIADB_DIR/run"
+PHPBB_RUN_DIR="$TMP_DIR/phpbb-test"
+MYSQL_PID_FILE="$MARIADB_RUN_DIR/mysql.pid"
+LEGACY_MYSQL_PID_FILE="/tmp/phpbb-mysql.pid"
+MYSQL_SOCKET="/tmp/phpbb-mysql.sock"
+PHP_SERVER_PID_FILE="$PHPBB_RUN_DIR/php-server.pid"
+PHP_SERVER_HOST="127.0.0.1"
+PHP_SERVER_PORT="8090"
+
+pid_from_file() {
+	local pid_file="$1"
+
+	if [[ ! -f "$pid_file" ]]; then
+		return 1
+	fi
+
+	local pid
+	pid="$(tr -d '[:space:]' < "$pid_file")"
+	if [[ ! "$pid" =~ ^[0-9]+$ ]]; then
+		return 1
+	fi
+
+	printf '%s\n' "$pid"
+}
+
+pid_is_running() {
+	local pid_file="$1"
+	local pid
+
+	pid="$(pid_from_file "$pid_file")" || return 1
+	kill -0 "$pid" 2>/dev/null
+}
+
+find_process_pid() {
+	local pattern="$1"
+
+	ps -ef | awk -v pattern="$pattern" '$0 ~ pattern && $0 !~ /awk/ {print $2; exit}'
+}
+
+stop_pid() {
+	local label="$1"
+	local pid="$2"
+
+	if ! kill -0 "$pid" 2>/dev/null; then
+		return 0
+	fi
+
+	echo "Stopping $label ($pid)"
+	kill "$pid"
+
+	for ((i = 1; i <= 30; i++)); do
+		if ! kill -0 "$pid" 2>/dev/null; then
+			return 0
+		fi
+		sleep 1
+	done
+
+	echo "$label did not stop gracefully; sending SIGKILL"
+	kill -9 "$pid"
+}
+
+stop_from_pid_file() {
+	local label="$1"
+	local pid_file="$2"
+	local pid
+
+	pid="$(pid_from_file "$pid_file")" || return 1
+	stop_pid "$label" "$pid"
+	rm -f "$pid_file"
+}
+
+main() {
+	local found=0
+	local pid=""
+
+	if pid_is_running "$PHP_SERVER_PID_FILE"; then
+		stop_from_pid_file "PHP server" "$PHP_SERVER_PID_FILE"
+		found=1
+	else
+		rm -f "$PHP_SERVER_PID_FILE"
+		pid="$(find_process_pid "php -S ${PHP_SERVER_HOST}:${PHP_SERVER_PORT}")"
+		if [[ -n "$pid" ]]; then
+			stop_pid "PHP server" "$pid"
+			found=1
+		fi
+	fi
+
+	if pid_is_running "$MYSQL_PID_FILE"; then
+		stop_from_pid_file "MariaDB" "$MYSQL_PID_FILE"
+		found=1
+	else
+		rm -f "$MYSQL_PID_FILE"
+		if pid_is_running "$LEGACY_MYSQL_PID_FILE"; then
+			stop_from_pid_file "MariaDB" "$LEGACY_MYSQL_PID_FILE"
+			found=1
+		else
+			rm -f "$LEGACY_MYSQL_PID_FILE"
+			pid="$(find_process_pid "mariadbd --socket=${MYSQL_SOCKET}")"
+			if [[ -n "$pid" ]]; then
+				stop_pid "MariaDB" "$pid"
+				found=1
+			fi
+		fi
+	fi
+
+	rm -f "$MYSQL_SOCKET"
+
+	if [[ "$found" -eq 0 ]]; then
+		echo "phpBB test services are not running"
+		return 0
+	fi
+
+	echo "phpBB test services stopped"
+}
+
+main "$@"

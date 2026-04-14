@@ -1,0 +1,38 @@
+/**
+ * Collapse Quote
+ * An extension for the phpBB Forum Software package.
+ *
+ * @copyright (c) 2022, Thorsten Ahlers
+ * @license GNU General Public License, version 2 (GPL-2.0)
+ *
+ */
+
+.imcger-quote {
+	position: relative;
+}
+
+.imcger-quote-text {
+  transition: 0.5s ease height;
+}
+
+.imcger-quote-shadow {
+	display: none;
+	position: absolute;
+	width: 100%;
+	bottom: 0px;
+}
+
+.imcger-quote-togglebutton {
+	font-weight: bold;
+	cursor: pointer;
+	display: none;
+	position: relative;
+	text-align: center;
+	z-index: 1;
+}
+
+.content > blockquote > div > cite,
+.content > blockquote.uncited::before {
+  position: relative;
+  z-index: 1;
+}

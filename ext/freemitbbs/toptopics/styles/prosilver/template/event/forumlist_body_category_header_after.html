@@ -1,0 +1,8 @@
+{% if forumrow.S_TOPTOPICS_CATEGORY_BLOCK %}
+<li class="toptopics-category-menu-shell">
+	<div class="toptopics-category-menu-wrap">
+		<div class="toptopics-category-forum-menu">{{ forumrow.TOPTOPICS_CATEGORY_FORUM_MENU|raw }}</div>
+	</div>
+</li>
+{{ forumrow.TOPTOPICS_CATEGORY_ROWS_HTML|raw }}
+{% endif %}

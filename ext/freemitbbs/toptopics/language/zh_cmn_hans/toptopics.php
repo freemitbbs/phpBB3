@@ -1,0 +1,56 @@
+<?php
+
+if (!defined('IN_PHPBB'))
+{
+	exit;
+}
+
+if (empty($lang) || !is_array($lang))
+{
+	$lang = [];
+}
+
+$lang = array_merge($lang, [
+	'ACL_U_TOPTOPICS_DISLIKE' => '热门话题：可以踩帖子',
+	'TOPTOPICS_INDEX_TITLE' => '热门话题',
+	'TOPTOPICS_FORUM_TITLE' => '本版热门话题',
+	'TOPTOPICS_SCORE' => '得分',
+	'TOPTOPICS_SIGNALS' => '指标',
+	'TOPTOPICS_LIKES' => '赞',
+	'TOPTOPICS_DISLIKES' => '踩',
+	'TOPTOPICS_VIEWS' => '浏览',
+	'TOPTOPICS_FLAGS' => '举报',
+	'TOPTOPICS_REACTIONS' => '互动',
+	'TOPTOPICS_POINTS' => '积分',
+	'TOPTOPICS_REPUTATION' => '声望',
+	'TOPTOPICS_CATEGORY_EMPTY' => '这个分类里还没有热门话题',
+	'TOPTOPICS_CATEGORY_MORE' => '更多',
+	'TOPTOPICS_RANK_TITLE' => '按时间衰减得分排序，综合考虑赞、踩、回复、浏览、举报惩罚和讨论失衡',
+	'TOPTOPICS_ADMIN_OVERRIDE' => '热门话题管理员覆盖',
+	'TOPTOPICS_OVERRIDE_NORMAL' => '正常',
+	'TOPTOPICS_OVERRIDE_BOOST' => '提升',
+	'TOPTOPICS_OVERRIDE_DEMOTE' => '压低',
+	'TOPTOPICS_OVERRIDE_KILL' => '隐藏',
+	'TOPTOPICS_OVERRIDE_CURRENT_NORMAL' => '当前状态：正常',
+	'TOPTOPICS_OVERRIDE_CURRENT_BOOST' => '当前状态：已提升',
+	'TOPTOPICS_OVERRIDE_CURRENT_DEMOTE' => '当前状态：已压低',
+	'TOPTOPICS_OVERRIDE_CURRENT_KILL' => '当前状态：已隐藏',
+	'TOPTOPICS_COLLAPSE_SHOW' => '显示热门话题',
+	'TOPTOPICS_COLLAPSE_HIDE' => '隐藏热门话题',
+	'CLICK_TO_DISLIKE' => '点击踩这篇帖子',
+	'CLICK_TO_UNDISLIKE' => '点击取消对这篇帖子的踩',
+	'LOGIN_TO_DISLIKE_POST' => '登录后才能踩这篇帖子',
+	'CANT_DISLIKE_OWN_POST' => '不能踩自己的帖子',
+	'TOPTOPICS_MIN_POSTS_TO_DISLIKE' => '至少需要 %d 个帖子后才能使用踩',
+	'TOPTOPICS_MIN_REPUTATION_TO_DISLIKE' => '声望至少达到 %1$s 才能踩内容。你当前的声望是 %2$s',
+	'TOPTOPICS_MIN_REPUTATION_TO_REPORT' => '声望至少达到 %1$s 才能举报内容。你当前的声望是 %2$s',
+	'TOPTOPICS_RATE_LIMIT_MINUTE' => '你在本分钟内的踩已达到上限',
+	'TOPTOPICS_RATE_LIMIT_DAY' => '你今天的踩已达到上限',
+	'TOPTOPICS_REMOVE_LIKE_FIRST' => '请先取消赞',
+	'TOPTOPICS_REMOVE_DISLIKE_FIRST' => '请先取消踩',
+	'TOPTOPICS_DISLIKES_COUNT' => [
+		0 => '%d 次踩',
+		1 => '%d 次踩',
+		2 => '%d 次踩',
+	],
+]);

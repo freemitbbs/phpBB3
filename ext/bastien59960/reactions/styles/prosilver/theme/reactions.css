@@ -1,0 +1,410 @@
+/**
+ * Fichier : styles/prosilver/theme/reactions.css — bastien59960/reactions
+ *
+ * Feuille de style CSS pour l'extension Reactions.
+ *
+ * Ce fichier contient tous les styles CSS nécessaires pour l'affichage
+ * et l'interactivité des réactions aux messages du forum.
+ *
+ * Points clés de la logique métier :
+ * - Conteneur principal des réactions
+ * - Boutons de réactions avec emojis
+ * - Bouton "plus" pour ouvrir la palette
+ * - Palette d'emojis avec catégories
+ * - Tooltips avec liste des utilisateurs
+ * - États interactifs (hover, active, loading)
+ * - Mode lecture seule pour utilisateurs non connectés
+ * - Responsive design
+ * 
+ * @copyright (c) 2025 Bastien59960
+ * - Responsive design
+ */
+:root {
+    --reactions-post-emoji-size: 24px;
+    --reactions-picker-width: 320px;
+    --reactions-picker-height: 280px;
+    --reactions-picker-emoji-size: 24px;
+}
+
+
+/* ============================================================================= */
+/* CONTENEUR PRINCIPAL */
+/* ============================================================================= */
+
+/**
+ * Conteneur principal des réactions
+ * 
+ * Position relative pour permettre le positionnement absolu
+ * des palettes et tooltips.
+ */
+.post-reactions-container {
+    position: relative;
+}
+
+/**
+ * Zone d'affichage des réactions
+ * 
+ * Contient toutes les réactions d'un message avec
+ * une bordure supérieure et un espacement approprié.
+ */
+.post-reactions {
+    margin-top: 10px;
+    padding: 8px 0; /* 8px vertical (haut/bas), 0px horizontal (gauche/droite) */
+    border-top: 1px solid #e1e1e2;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* ============================================================================= */
+/* BOUTON "PLUS" POUR OUVRIR LA PALETTE */
+/* ============================================================================= */
+
+/**
+ * Bouton "Like" style Facebook
+ *
+ * Bouton compact avec pouce bleu, le texte apparaît au survol.
+ */
+.reaction-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    background: transparent;
+    border: none;
+    border-radius: 20px;
+    padding: 6px 12px;
+    cursor: pointer;
+    color: #1877F2;
+    transition: all 0.2s ease;
+    order: -1;
+    margin-right: 8px;
+    font-size: 18px;
+}
+
+.reaction-more:hover {
+    background: rgba(24, 119, 242, 0.1);
+}
+
+.reaction-more-icon {
+    font-size: 18px;
+    line-height: 1;
+}
+
+.reaction-more-icon::before {
+    content: '👍';
+}
+
+.reaction-more-text {
+    font-size: 13px;
+    font-weight: 600;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    margin-left: 0;
+    transition: all 0.25s ease;
+    white-space: nowrap;
+}
+
+.reaction-more:hover .reaction-more-text {
+    max-width: 80px;
+    opacity: 1;
+    margin-left: 6px;
+}
+
+/* ========== RÉACTIONS (emojis affichés sous le post) ========== */
+.post-reactions .reaction-wrapper {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #f3f3f3;
+    border: 1px solid #d1d1d1;
+    border-radius: 15px;
+    padding: 2px 6px;
+    cursor: pointer;
+    font-size: var(--reactions-post-emoji-size, 24px);
+    line-height: 1;
+    transition: all 0.2s ease;
+    user-select: none;
+    position: relative;
+    vertical-align: middle;
+    order: 1;
+    margin-right: 4px;
+}
+
+.post-reactions .reaction-more {
+    order: -1;
+    border-style: dashed;
+}
+
+.post-reactions .reaction-wrapper:hover {
+    background: #e8e8e8;
+    border-color: #b8b8b8;
+    transform: translateY(-1px);
+}
+
+.post-reactions .reaction-wrapper.active {
+    background: #4a90c2;
+    border-color: #3a7ca8;
+}
+
+.post-reactions .reaction-wrapper.active .reaction, .post-reactions .reaction-wrapper.active .count { color: white; }
+.post-reactions .reaction .count {
+    margin-left: 4px;
+    font-weight: 500;
+    font-size: 12px;
+}
+
+/* ========== LECTURE SEULE ========== */
+.post-reactions-readonly .reaction-wrapper {
+    cursor: default !important;
+    opacity: 0.8;
+    background: #f3f3f3 !important;
+    transform: none !important;
+}
+
+
+.reaction-readonly {
+    cursor: default !important;
+    pointer-events: none;
+}
+
+/*
+=============================================================================
+ PICKER D'EMOJIS - NOUVEAU STYLE INSPIRÉ DE LINKEDIN
+=============================================================================
+*/
+
+.emoji-picker {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+    width: var(--reactions-picker-width, 320px);
+    max-width: var(--reactions-picker-width, 320px);
+    height: var(--reactions-picker-height, 400px);
+    max-height: var(--reactions-picker-height, 400px);
+    display: flex;
+    flex-direction: column;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    overflow: hidden;
+}
+
+/* ========== CORPS DU PICKER (contient tout le contenu scrollable) ========== */
+.emoji-picker-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0; /* Important pour que flex fonctionne avec overflow */
+    scrollbar-width: thin;
+    scrollbar-color: #e0e0e0 white;
+}
+
+/* ========== HEADER DU PICKER (Recherche + Bouton Fermer) ========== */
+.emoji-picker-header {
+    padding: 12px 16px; /* 12px vertical, 16px horizontal */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.emoji-search-input {
+    flex-grow: 1;
+    padding: 8px 12px 8px 36px; /* haut, droite, bas, gauche */
+    border: 1px solid #e0e0e0;
+    border-radius: 20px;
+    font-size: 14px;
+    outline: none;
+    transition: all 0.2s ease;
+    background: #f3f6f8 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23666" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>') no-repeat 10px center;
+    background-size: 16px;
+}
+
+.emoji-search-input:focus {
+    border-color: #0a66c2;
+    background-color: white;
+    box-shadow: 0 0 0 2px rgba(10, 102, 194, 0.2); /* décalage X, décalage Y, flou, épaisseur, couleur */
+}
+
+.emoji-picker-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: #666;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.emoji-picker-close:hover {
+    background: #f3f6f8;
+}
+
+.emoji-picker-close::before {
+    content: '✕';
+}
+
+/* ========== SECTION EMOJIS COURANTS ========== */
+.emoji-frequent-section {
+    padding: 8px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+/* ========== CONTENU PRINCIPAL (catégories du JSON) ========== */
+.emoji-picker-main {
+    padding: 8px;
+}
+
+/* ========== CATÉGORIES ET GRILLES ========== */
+.emoji-category {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    padding: 16px 8px 8px 8px; /* haut, droite, bas, gauche */
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 5;
+}
+
+.emoji-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px 2px; /* 4px verticalement, 2px horizontalement */
+}
+
+.emoji-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--reactions-picker-emoji-size, 24px);
+    height: var(--reactions-picker-emoji-size, 24px);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    font-size: var(--reactions-picker-emoji-size, 24px);
+    line-height: var(--reactions-picker-emoji-size, 24px);
+}
+
+.emoji-cell:hover {
+    background: #f3f6f8;
+}
+
+/* ========== RÉSULTATS DE RECHERCHE ========== */
+.emoji-search-results {
+    padding: 8px; /* 8px sur tous les côtés */
+    height: 100%;
+}
+
+.emoji-no-results {
+    text-align: center;
+    padding: 40px 15px; /* 40px vertical, 15px horizontal */
+    color: #757575;
+    font-size: 14px;
+}
+
+/* ========== FOOTER DU PICKER (ONGLETS) ========== */
+.emoji-picker-footer {
+    border-top: 1px solid #f0f0f0;
+    padding: 4px 8px; /* 4px vertical, 8px horizontal */
+    background: white;
+}
+
+.emoji-tabs {
+    display: flex;
+    justify-content: space-around;
+}
+
+.emoji-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: calc(var(--reactions-picker-emoji-size, 24px) + 16px);
+    height: calc(var(--reactions-picker-emoji-size, 24px) + 16px);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: var(--reactions-picker-emoji-size, 24px);
+    line-height: var(--reactions-picker-emoji-size, 24px);
+    transition: background-color 0.15s ease;
+    background: transparent;
+    border: none;
+    color: #666;
+}
+
+.emoji-tab:hover {
+    background: #f3f6f8;
+}
+
+.emoji-tab.active {
+    background: #e8f5ff;
+    color: #0a66c2;
+}
+
+/* ========== Tooltip Utilisateurs (CORRIGÉ) ========== */
+.reaction-user-tooltip {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px; /* Rayon de la bordure */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* décalage X, décalage Y, flou, couleur */
+    font-size: 13px;
+    z-index: 10001;
+    list-style: none; /* Supprime les puces (•) */
+    margin: 0;
+    padding: 8px 12px; /* 8px vertical, 12px horizontal */
+    text-align: left;
+}
+
+.reaction-user-tooltip .reaction-user-link {
+    color: #1976d2;
+    text-decoration: none;
+    display: inline-block;
+    padding: 2px 4px; /* 2px vertical, 4px horizontal */
+    transition: all 0.15s;
+}
+.reaction-user-tooltip .reaction-user-link:hover {
+    background: #e3f2fd;
+    border-radius: 3px;
+    color: #0d47a1;
+}
+
+.reaction-user-tooltip li {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+    border-bottom: 1px solid #f0f0f0;
+    white-space: nowrap;
+}
+
+.reaction-user-tooltip li:last-child {
+    border-bottom: none;
+}
+
+.reaction-user-tooltip .reaction-time {
+    font-size: 11px;
+    color: #888;
+    flex-shrink: 0;
+}
+
+.emoji-picker--no-categories .emoji-tabs,
+.emoji-picker--no-categories .emoji-picker-main {
+    display: none;
+}
+
+.emoji-picker--no-search .emoji-search-input {
+    display: none !important;
+}
+
+.emoji-picker--no-search .emoji-picker-header {
+    justify-content: flex-end;
+}

@@ -1,0 +1,33 @@
+# @package    bastien59960/reactions
+# @version    1.0.0
+# @author     Bastien (bastien59960) <bastien@debucquoi.com>
+# @copyright  (c) 2025 Bastien59960
+# @license    http://opensource.org/licenses/gpl-2.0.php GNU General Public License v2
+#
+# Fichier : config/parameters.yml
+# Rôle : Définition des paramètres globaux de l'extension.
+#
+# Description détaillée :
+# Ce fichier contient les constantes de configuration, principalement les noms
+# des tables de la base de données utilisées par l'extension, pour faciliter
+# leur maintenance et leur injection dans les services.
+
+parameters:
+    # =============================================================================
+    # TABLES DE BASE DE DONNÉES
+    # =============================================================================
+
+    # Table principale des réactions
+    tables.post_reactions: '%core.table_prefix%post_reactions'
+
+    # Table des sujets (référence)
+    tables.topics: '%core.table_prefix%topics'
+
+    # Table des forums (référence)
+    tables.forums: '%core.table_prefix%forums'
+
+    # Table des notifications (référence)
+    tables.notifications: '%core.table_prefix%notifications'
+
+    # Table des préférences de notifications utilisateurs (requise par base.php)
+    tables.user_notifications: '%core.table_prefix%user_notifications'

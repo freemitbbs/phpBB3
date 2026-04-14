@@ -1,0 +1,34 @@
+{
+	"name": "avathar/postlove",
+	"type": "phpbb-extension",
+	"description": "Adds a simple heart/like button to posts.",
+	"homepage": "https://github.com/avatharbe/postlove",
+	"version": "2.2.3",
+	"license": "GPL-2.0-only",
+	"authors": [
+		{
+			"name": "Stanislav Atanasov",
+			"role": "Original Developer"
+		},
+		{
+			"name": "Andy Vandenberghe",
+			"homepage": "https://www.avathar.be",
+			"role": "Maintainer"
+		}
+	],
+	"require": {
+		"php": ">=8.1"
+	},
+	"require-dev": {},
+	"extra": {
+		"display-name": "Post Love",
+		"soft-require": {
+			"phpbb/phpbb": ">=3.3.0"
+		},
+		"version-check": {
+			"host": "www.avathar.be",
+			"directory": "/versioncheck",
+			"filename": "postlove.json"
+		}
+	}
+}

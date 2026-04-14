@@ -1,0 +1,153 @@
+.postlove-summary-panel .topiclist li.header {
+	position: relative;
+}
+
+.postlove-collapse-btn {
+	font-size: 1rem !important;
+	position: absolute;
+	top: 50%;
+	right: 0;
+	transform: translateY(calc(-50% - 2px));
+	line-height: 1;
+	text-decoration: none;
+}
+
+.postlove-collapse-btn:hover,
+.postlove-collapse-btn:focus {
+	text-decoration: none;
+}
+
+.rtl .postlove-collapse-btn {
+	left: 0;
+	right: auto;
+}
+
+.postlove-summary-header dt {
+	margin-right: -440px;
+}
+
+.postlove-summary-header dt .list-inner {
+	margin-right: 440px;
+	padding-right: 50px;
+}
+
+.postlove-summary-header dd {
+	box-sizing: border-box;
+	text-align: center;
+}
+
+.postlove-summary-author {
+	width: 110px;
+}
+
+.postlove-summary-posted {
+	width: 110px;
+}
+
+.postlove-summary-likes-header {
+	width: 80px;
+}
+
+.postlove-summary-forum {
+	width: 140px;
+}
+
+.tr_likedposts td,
+.tr_likedposts th {
+	vertical-align: top;
+}
+
+.tr_likedposts td:not(#td_likedpost) {
+	max-width: 110px;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+#td_likedpost {
+	max-width: 260px;
+}
+
+.postlove-summary-cell {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	min-width: 0;
+}
+
+.postlove-summary-status {
+	flex: 0 0 auto;
+	line-height: 1;
+}
+
+.postlove-summary-entry {
+	display: block;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.postlove-summary-title {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.postlove-summary-excerpt {
+	display: none;
+	margin-top: 4px;
+	color: #666;
+	line-height: 1.3;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
+@media only screen and (max-width: 700px) {
+
+	.tr_likedposts td,
+	.tr_likedposts th{
+		padding: 2px !important;
+		font-size: 10px !important;
+	}
+
+	#td_forum,
+	#th_forum{
+		display: none;
+	}
+}
+
+@media only screen and (max-width: 550px) {
+	#td_posted,
+	#th_posted{
+		display: none;
+	}
+
+	.tr_likedposts td:not(#td_likedpost) {
+		max-width: 60px;
+	}
+
+	#td_likedpost{
+		max-width: 155px;
+	}
+
+	.postlove-summary-title {
+		display: none;
+	}
+
+	.postlove-summary-excerpt {
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		overflow: hidden;
+	}
+}
+
+@media only screen and (max-width: 400px) {
+	#td_likedpost{
+		max-width: 135px;
+	}
+
+	.tr_likedposts td:not(#td_likedpost) {
+		max-width: 52px;
+	}
+}

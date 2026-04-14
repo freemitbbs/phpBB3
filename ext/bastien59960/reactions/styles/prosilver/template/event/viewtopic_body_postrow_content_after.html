@@ -1,0 +1,32 @@
+<!-- IF S_REACTIONS_ENABLED and not S_IS_BOT and S_USER_LOGGED_IN -->
+<div class="post-reactions-container" data-post-id="{postrow.POST_ID}">
+    <div class="post-reactions">
+        <!-- BEGIN postrow.post_reactions -->
+        <span class="reaction<!-- IF postrow.post_reactions.USER_REACTED --> active<!-- ENDIF -->" 
+              data-emoji="{postrow.post_reactions.EMOJI}" 
+              data-count="{postrow.post_reactions.COUNT}"
+              data-users='{postrow.post_reactions.USERS}'
+              <!-- IF postrow.post_reactions.COUNT == 0 -->style="display:none;"<!-- ENDIF -->>
+            {postrow.post_reactions.EMOJI} <span class="count">{postrow.post_reactions.COUNT}</span>
+        </span>
+        <!-- END postrow.post_reactions -->
+        
+        <span class="reaction-more" role="button" title="{L_REACTIONS_ADD_TOOLTIP}" aria-label="{L_REACTIONS_ADD_TOOLTIP}"><span class="reaction-more-icon"></span><span class="reaction-more-text">{L_REACTIONS_BUTTON_TEXT}</span></span>
+    </div>
+</div>
+
+<!-- ELSEIF S_REACTIONS_ENABLED and not S_IS_BOT and not S_USER_LOGGED_IN -->
+<div class="post-reactions-container post-reactions-readonly" data-post-id="{postrow.POST_ID}">
+    <div class="post-reactions">
+        <!-- BEGIN postrow.post_reactions -->
+        <!-- IF postrow.post_reactions.COUNT > 0 -->
+        <span class="reaction reaction-readonly" 
+              data-emoji="{postrow.post_reactions.EMOJI}" 
+              data-count="{postrow.post_reactions.COUNT}">
+            {postrow.post_reactions.EMOJI} <span class="count">{postrow.post_reactions.COUNT}</span>
+        </span>
+        <!-- ENDIF -->
+        <!-- END postrow.post_reactions -->
+    </div>
+</div>
+<!-- ENDIF -->

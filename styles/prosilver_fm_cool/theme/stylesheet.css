@@ -1,0 +1,463 @@
+/*  phpBB3 Style Sheet
+    --------------------------------------------------------------
+	Style name:			prosilver FM Cool
+	Based on style:		prosilver Special Edition / prosilver
+	Original author:	Tom Beddard ( http://www.subblue.com/ )
+	Modified by:		phpBB Limited ( https://www.phpbb.com/ ) and Freemit BBS
+
+	Cool palette derived from the FM logo blue, desaturated for comfort.
+	Modern, professional feel with strong brand cohesion.
+    --------------------------------------------------------------
+*/
+
+/* === Page background === */
+html, body {
+	background-color: #C8CDD4;
+}
+
+body.simple {
+	min-height: 100%;
+	padding: 0 5px;
+}
+
+.wrap {
+	border: 2px solid #E2E6EC;
+	border-radius: 15px;
+	box-shadow: 0 0 5px 2px #A8AEB8, inset 0 3px 18px rgba(15, 23, 42, .10);
+	margin: 0 auto;
+	max-width: 1152px;
+	padding: 13px 23px;
+}
+
+.search-header {
+	box-shadow: 0 0 10px #1E3A5F;
+}
+
+/* === Header - dark navy, logo sits naturally here === */
+.headerbar {
+	background-color: #1E3A5F;
+	background-image: linear-gradient(to bottom, #2A4D73 0%, #1E3A5F 40%, #162D4A 100%);
+	background-repeat: repeat-x;
+}
+
+/* === Navbar - cool light gray === */
+.navbar {
+	background-color: #E2E6EC;
+	background-image: linear-gradient(to bottom, #EEF1F5 0%, #D8DDE5 100%);
+}
+
+/* === Forum category headers - muted blue family === */
+.forabg, .forumbg {
+	background-color: #2B6CB0;
+	background-image: linear-gradient(to bottom, #4A8AC8 0%, #3278B8 8%, #2B6CB0 50%, #225EA0 100%);
+	background-repeat: repeat-x;
+}
+
+.forabg {
+	background-color: #225EA0;
+	background-image: linear-gradient(to bottom, #3A7EC0 0%, #2E6FB0 8%, #225EA0 50%, #1A4E88 100%);
+	background-repeat: repeat-x;
+}
+
+.copyright a {
+	color: #1E293B !important;
+}
+
+/* === Links - muted blue === */
+a { color: #2B6CB0; }
+a:hover { color: #1E5A96; }
+
+.forumbg .header a, .forabg .header a, th a {
+	color: #FFFFFF;
+}
+
+.forumbg .header a:hover, .forabg .header a:hover, th a:hover {
+	color: #C5DDF0;
+}
+
+.postlink {
+	border-bottom-color: #2B6CB0;
+	color: #2B6CB0;
+}
+
+.postlink:visited {
+	border-bottom-color: #6B7FA0;
+	color: #6B7FA0;
+}
+
+.postlink:hover {
+	background-color: #EBF3FA;
+	color: #1E3A5F;
+}
+
+/* === Headings === */
+h2 {
+	color: #1E3A5F;
+}
+
+h3 {
+	color: #2B6CB0;
+	border-bottom-color: #CBD5E1;
+}
+
+/* === Content panels === */
+.panel,
+.post {
+	background-color: #FAFBFC;
+	color: #1E293B;
+}
+
+.post:target .content {
+	color: #0F172A;
+}
+
+.content h2, .panel h2 {
+	color: #1E3A5F;
+	border-bottom-color: #CBD5E1;
+}
+
+/* === Row backgrounds - cool with visible zebra striping === */
+li.row {
+	background-color: #FAFBFC;
+	border-top-color: #FFFFFF;
+	border-bottom-color: #225EA0;
+}
+
+li.row strong {
+	color: #0F172A;
+}
+
+li.row:hover {
+	background-color: #EBF3FA;
+}
+
+li.row:hover dd {
+	border-left-color: #CBD5E1;
+}
+
+li.row.bg3 {
+	background-color: #F1F5F9;
+}
+
+li.row.bg3:hover {
+	background-color: #EBF3FA;
+}
+
+li.header dt, li.header dd {
+	color: #FFFFFF;
+}
+
+.bg1,
+table.zebra-list tr:nth-child(odd) td,
+ul.zebra-list li:nth-child(odd) {
+	background-color: #FAFBFC;
+}
+
+.bg2 {
+	background-color: #F1F5F9;
+}
+
+.bg3 {
+	background-color: #E2E8F0;
+}
+
+.fieldsbg {
+	background-color: #EDF0F5;
+}
+
+/* === Text colors === */
+ul.topiclist li {
+	color: #475569;
+}
+
+.postbody {
+	color: #1E293B;
+}
+
+.content {
+	color: #1E293B;
+}
+
+dl.details dt {
+	color: #0F172A;
+}
+
+dl.details dd {
+	color: #475569;
+}
+
+/* === Logo === */
+.site_logo {
+	background-image: url("./images/site_logo.svg");
+}
+
+/* === Jumpbox === */
+.jumpbox-cat-link {
+	background-color: #2B6CB0;
+	background-image: linear-gradient(to bottom, #4A8AC8 0%, #3278B8 8%, #2B6CB0 50%, #225EA0 100%);
+	background-repeat: repeat-x;
+	color: #FFFFFF;
+}
+
+.jumpbox-cat-link:hover {
+	background-color: #2668A8;
+	border-top-color: #2668A8;
+	color: #FFFFFF;
+}
+
+.jumpbox-sub-link {
+	background-color: #FAFBFC;
+}
+
+.jumpbox-sub-link:hover {
+	background-color: #EBF3FA;
+}
+
+.jumpbox .dropdown .pointer-inner {
+	border-color: #FAFBFC transparent;
+}
+
+/* === Buttons - blue accent === */
+.button {
+	color: #2B6CB0;
+}
+
+.button:hover,
+.button:focus {
+	border-color: #2B6CB0;
+	color: #2B6CB0;
+}
+
+.button .icon,
+.button-secondary {
+	color: #8f8f8f;
+}
+
+.button-secondary:focus,
+.button-secondary:hover,
+.button:focus .icon,
+.button:hover .icon {
+	color: #2B6CB0;
+}
+
+a.button1:hover, input.button1:hover, a.button2:hover, input.button2:hover, input.button3:hover {
+	border-color: #2B6CB0;
+	color: #2B6CB0;
+}
+
+input.button1:focus, input.button2:focus, input.button3:focus {
+	border-color: #2B6CB0;
+	color: #1E3A5F;
+}
+
+/* === Pagination === */
+.pagination li.active span {
+	background: #2B6CB0;
+	border-color: #2B6CB0;
+	color: #FFFFFF;
+}
+
+.pagination li a:hover,
+.pagination li a:hover .icon,
+.pagination .dropdown-visible a.dropdown-trigger,
+.nojs .pagination .dropdown-container:hover a.dropdown-trigger {
+	background: #2668A8;
+	border-color: #2668A8;
+	color: #FFFFFF;
+}
+
+/* === Input fields === */
+.inputbox:hover {
+	border-color: #2B6CB0;
+}
+
+.inputbox:focus {
+	border-color: #2B6CB0;
+}
+
+/* === Tables === */
+table.table1 thead th {
+	color: #FFFFFF;
+}
+
+table.table1 tbody tr:hover, table.table1 tbody tr.hover {
+	background-color: #EFF6FF;
+	color: #000;
+}
+
+table.table1 td {
+	color: #475569;
+}
+
+/* === Tabs === */
+.tabs .tab > a {
+	background: #D0DAE5;
+	color: #475569;
+}
+
+.tabs .tab > a:hover {
+	background: #D8E8F5;
+	color: #2B6CB0;
+}
+
+.tabs .activetab > a,
+.tabs .activetab > a:hover {
+	background-color: #E2E6EC;
+	background-image: linear-gradient(to bottom, #F1F5F9 0%, #E2E6EC 100%);
+	border-color: #E2E6EC;
+	box-shadow: 0 1px 1px #F8FAFC inset;
+	color: #1E293B;
+}
+
+.tabs .activetab > a:hover {
+	color: #0F172A;
+}
+
+/* === CP Navigation === */
+.navigation a {
+	color: #333;
+	background: #D0DAE5;
+	background: linear-gradient(to right, #BCC9D6 50%, #D0DAE5 100%);
+}
+
+.navigation a:hover {
+	background: #B0BECC;
+	color: #2B6CB0;
+}
+
+.navigation .active-subsection a {
+	background: #F9FAFB;
+	color: #2B6CB0;
+}
+
+.navigation .active-subsection a:hover {
+	color: #2B6CB0;
+}
+
+/* === Quote blocks - cool tones === */
+blockquote {
+	background-color: #F1F5F9;
+	border-color: #CBD5E1;
+}
+
+blockquote blockquote {
+	background-color: #E8EDF3;
+}
+
+blockquote blockquote blockquote {
+	background-color: #F1F5F9;
+}
+
+/* === Notifications & badges === */
+.badge {
+	background-color: #2B6CB0;
+	color: #FFFFFF;
+}
+
+li.notification-reported strong, li.notification-disapproved strong {
+	color: #DC2626;
+}
+
+/* === Icon colors === */
+.icon.icon-blue, a:hover .icon.icon-blue {
+	color: #2B6CB0;
+}
+
+.sep {
+	color: #2B6CB0;
+}
+
+/* === Search results === */
+.search-results li:hover,
+.search-results li.active {
+	background-color: #EFF6FF;
+}
+
+/* === Dropdowns === */
+.dropdown-extended ul li:hover {
+	background-color: #EFF6FF;
+	color: #000000;
+}
+
+.dropdown-extended .header {
+	background-color: #F1F5F9;
+	background-image: linear-gradient(to bottom, #F8FAFC 0%, #E2E8F0 100%);
+}
+
+.dropdown-extended .pointer-inner {
+	border-color: #F8FAFC transparent;
+}
+
+/* === Panel container === */
+.panel-container .panel {
+	background-color: #FAFBFC;
+}
+
+.cp-mini {
+	background-color: #F1F5F9;
+}
+
+/* === Misc === */
+.arrow-left:hover, .arrow-right:hover {
+	color: #2B6CB0;
+}
+
+.posthilit {
+	background-color: #D0E4F2;
+	color: #1E3A5F;
+}
+
+.copyright {
+	color: #475569;
+}
+
+/* === toptopics category forum links - cool overrides === */
+.toptopics-category-menu-wrap {
+	background: #F1F5F9;
+	border-top-color: #CBD5E1;
+	border-bottom-color: #CBD5E1;
+}
+
+.toptopics-category-forum-link {
+	background: #FFFFFF;
+	border-color: #CBD5E1;
+	color: #2B6CB0;
+}
+
+.toptopics-category-forum-link:hover {
+	background: #EBF3FA;
+	border-color: #2B6CB0;
+	box-shadow: 0 1px 3px rgba(43, 108, 176, 0.12);
+}
+
+/* === responsive.css changes === */
+@media only screen and (max-width: 920px), only screen and (max-device-width: 920px) {
+	html, body {
+		background-color: #FFF;
+	}
+
+	body {
+		padding-left: 5px;
+		padding-right: 5px;
+	}
+
+	#wrap {
+		width: 850px;
+		padding: 0;
+		border-width: 0;
+		border-radius: 0;
+		box-shadow: none;
+	}
+}
+
+@media only screen and (max-width: 860px), only screen and (max-device-width: 860px) {
+	#wrap {
+		width: auto;
+	}
+}
+
+@media only screen and (max-width: 900px), only screen and (max-device-width: 900px) {
+	#navigation a, .rtl #navigation a {
+		background: #BCC9D6;
+	}
+}

@@ -1,0 +1,213 @@
+<?php
+/**
+ * Fichier : reaction_email_digest.php
+ * Chemin : bastien59960/reactions/notification/type/reaction_email_digest.php
+ * Auteur : Bastien (bastien59960)
+ * GitHub : https://github.com/bastien59960/reactions
+ *
+ * Rôle :
+ * Définit le type de notification pour l'envoi groupé d'e-mails (digest).
+ * Cette classe est utilisée par la tâche cron pour construire et envoyer les
+ * e-mails de résumé contenant les nouvelles réactions.
+ *
+ * @copyright (c) 2025 Bastien59960
+ * @license GNU General Public License, version 2 (GPL-2.0)
+ */
+
+namespace bastien59960\reactions\notification\type;
+
+if (!defined('IN_PHPBB'))
+{
+    exit;
+}
+
+use phpbb\notification\type\type_interface;
+use phpbb\template\template; // Seule dépendance supplémentaire nécessaire
+
+class reaction_email_digest extends \phpbb\notification\type\base implements type_interface
+{
+    /**
+     * Options de notification pour l'UCP
+     *
+     * IMPORTANT: Cette propriété est requise pour que phpBB affiche correctement
+     * les options de notification dans le Panneau de Contrôle Utilisateur (UCP).
+     */
+    public static $notification_option = [
+        'lang'  => 'NOTIFICATION_REACTION_EMAIL_DIGEST_TITLE',
+        'group' => 'NOTIFICATION_GROUP_POSTING',
+    ];
+
+    /** @var \phpbb\config\config */
+    protected $config;
+
+    /** @var \phpbb\template\template */
+    protected $template;
+
+    public function __construct(
+        // Dépendances pour le parent
+        \phpbb\db\driver\driver_interface $db,
+        \phpbb\language\language $language,
+        \phpbb\user $user,
+        \phpbb\auth\auth $auth,
+        $phpbb_root_path,
+        $php_ext,
+        $user_notifications_table,
+        // Dépendances spécifiques
+        \phpbb\config\config $config,
+        \phpbb\template\template $template // Ajout de la dépendance au template
+    ) {
+        parent::__construct($db, $language, $user, $auth, $phpbb_root_path, $php_ext, $user_notifications_table);
+        // On assigne manuellement les dépendances non gérées par le parent.
+        $this->config = $config;
+        $this->template = $template;
+
+        // Charger le fichier de langue de l'extension via l'objet language
+        $this->language->add_lang('common', 'bastien59960/reactions');
+    }
+
+    /**
+     * Retourne le nom unique du type de notification.
+     *
+     * IMPORTANT : Ce nom doit correspondre EXACTEMENT au nom de service défini
+     * dans services.yml (bastien59960.reactions.notification.type.reaction_email_digest).
+     *
+     * @return string Le nom complet du service
+     */
+    public function get_type()
+    {
+        return 'bastien59960.reactions.notification.type.reaction_email_digest';
+    }
+
+    /**
+     * Indique si ce type de notification est disponible.
+     *
+     * @return bool
+     */
+    public function is_available()
+    {
+        return true;
+    }
+
+    /**
+     * Spécifie le nom du template d'e-mail à utiliser.
+     * phpBB cherchera 'reaction_digest.html' et 'reaction_digest.txt'.
+     *
+     * @return string|bool Le nom du template ou false si aucun e-mail n'est envoyé.
+     */
+    public function get_email_template()
+    {
+        return 'reaction_digest';
+    }
+
+    /**
+     * Retourne le nom du type affiché dans l'UCP.
+     *
+     * @return string La clé de langue pour le nom.
+     */
+    public static function get_item_type_name()
+    {
+        // Cette clé doit être définie dans le fichier de langue de la notification.
+        return 'NOTIFICATION_REACTION_EMAIL_DIGEST_TITLE';
+    }
+
+    /**
+     * Retourne la description du type affichée dans l'UCP.
+     *
+     * @return string La clé de langue pour la description.
+     */
+    public static function get_item_type_description()
+    {
+        // Cette clé doit être définie dans le fichier de langue de la notification.
+        return 'NOTIFICATION_REACTION_EMAIL_DIGEST_DESC';
+    }
+
+	/**
+	 * Définit les méthodes de notification par défaut pour les nouveaux utilisateurs.
+	 *
+	 * @return array Méthodes par défaut (ex: 'notification.method.email')
+	 */
+	public function get_default_methods()
+	{
+		// Activer par défaut les notifications par e-mail pour le digest
+		return array('notification.method.email');
+	}
+
+    /**
+     * Spécifie le fichier de langue à charger.
+     * CORRECTION : On retourne `false` pour unifier le comportement avec la classe `reaction`.
+     * Toutes les clés de langue sont maintenant dans `common.php`, chargé globalement.
+     *
+     * @return string
+     */
+    public function get_language_file()
+    {
+        return false;
+    }
+
+    /**
+     * Trouve l'utilisateur à notifier. Dans notre cas, c'est l'auteur du message.
+     */
+    public function find_users_for_notification($data, $options = [])
+    {
+        // Le tableau d'utilisateurs est passé directement par la tâche cron via la clé 'users'
+        return $data['users'];
+    }
+
+    /**
+     * Prépare les données pour le template d'e-mail.
+     * C'est ici que nous assignons toutes nos variables.
+     */
+    public function get_email_template_variables()
+    {
+        // Variables globales
+        $vars = [
+            'USERNAME'         => $this->notification_data['author_name'],
+            'DIGEST_SINCE'     => $this->notification_data['since_time_formatted'],
+            'DIGEST_UNTIL'     => date('d/m/Y H:i'),
+            'DIGEST_SIGNATURE' => sprintf($this->language->lang('REACTIONS_DIGEST_SIGNATURE'), $this->config['sitename']),
+        ];
+
+        // Assignation des blocs (posts et réactions)
+        if (!empty($this->notification_data['posts']))
+        {
+            foreach ($this->notification_data['posts'] as $post_data)
+            {
+                $this->template->assign_block_vars('posts', [
+                    'SUBJECT_PLAIN'     => $post_data['SUBJECT_PLAIN'],
+                    'POST_URL_ABSOLUTE' => $post_data['POST_URL_ABSOLUTE'],
+                ]);
+
+                foreach ($post_data['reactions'] as $reaction)
+                {
+                    $this->template->assign_block_vars('posts.reactions', $reaction);
+                }
+            }
+        }
+
+        return $vars;
+    }
+
+
+    /**
+     * Cette notification est gérée par une tâche cron et n'est pas créée directement.
+     * Ces méthodes ne sont donc pas utilisées mais doivent exister.
+     */
+    public static function get_item_id($data) { return 0; }
+
+    /**
+     * Méthodes abstraites requises par l'interface, mais non utilisées pour ce type.
+     * Elles doivent exister et retourner une valeur par défaut valide.
+     */
+    public static function get_item_parent_id($data)
+    {
+        return 0;
+    }
+
+    public function users_to_query()
+    {
+        return [];
+    }
+
+    public function get_title() { return ''; }
+    public function get_url() { return ''; }
+}

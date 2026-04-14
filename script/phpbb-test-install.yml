@@ -1,0 +1,38 @@
+installer:
+    admin:
+        name: admin
+        password: adminadmin
+        email: admin@example.org
+
+    board:
+        lang: en
+        name: Local Test Board
+        description: Local phpBB test instance for acme/forumchoice
+
+    database:
+        dbms: mysqli
+        dbhost: localhost
+        dbport: /tmp/phpbb-mysql.sock
+        dbuser: phpbb
+        dbpasswd: phpbb
+        dbname: phpbb_test
+        table_prefix: phpbb_
+
+    email:
+        enabled: false
+        smtp_delivery: ~
+        smtp_host: ~
+        smtp_port: ~
+        smtp_auth: ~
+        smtp_user: ~
+        smtp_pass: ~
+
+    server:
+        cookie_secure: false
+        server_protocol: http://
+        force_server_vars: true
+        server_name: 127.0.0.1
+        server_port: 8090
+        script_path: /
+
+    extensions: ['phpbb/viglink', 'acme/forumchoice']

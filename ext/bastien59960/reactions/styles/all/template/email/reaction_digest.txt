@@ -1,0 +1,27 @@
+Subject: {REACTIONS_DIGEST_SUBJECT}
+
+{HELLO_USERNAME}
+
+{DIGEST_INTRO}
+
+<!-- BEGIN posts -->
+-------------------------------------------------
+{posts.POST_TITLE}
+
+<!-- BEGIN reactions -->
+- {posts.reactions.EMOJI} par {posts.reactions.REACTER_NAME} (le {posts.reactions.TIME_FORMATTED})
+<!-- END reactions -->
+
+Voir le message : {posts.POST_URL_ABSOLUTE}
+<!-- END posts -->
+
+-------------------------------------------------
+
+{DIGEST_FOOTER}
+{UNSUBSCRIBE_TEXT}
+{U_UNSUBSCRIBE}
+
+Lien vers votre profil : {U_USER_PROFILE}
+Lien vers vos préférences : {U_UCP}
+
+{DIGEST_SIGNATURE}

@@ -1,0 +1,152 @@
+From: patch
+Subject: Disable users from reacting to their own posts/comments
+
+This patch makes 4 changes:
+1. ajax.php: Add is_own_post() method and check it before allowing add/remove
+2. listener.php: Pass S_IS_OWN_POST flag to the template for each post
+3. viewtopic_body_postrow_content_after.html: Render readonly mode for own posts
+4. reactions.js: Handle own_post error from server without breaking the session
+5. language/en/common.php: Add REACTION_OWN_POST language key
+
+NOTE: You must also add the REACTION_OWN_POST key to other language files
+      (fr, de, es, it) with appropriate translations.
+
+---
+ controller/ajax.php                                              | 29 ++++++++++++++
+ event/listener.php                                               |  5 +++
+ language/en/common.php                                           |  1 +
+ styles/prosilver/template/event/viewtopic_body_postrow_content_after.html | 12 +++++-
+ styles/prosilver/template/js/reactions.js                        |  8 ++++
+ 5 files changed, 54 insertions(+), 1 deletion(-)
+
+diff --git a/controller/ajax.php b/controller/ajax.php
+--- a/controller/ajax.php
++++ b/controller/ajax.php
+@@ -343,6 +343,17 @@
+             // Pour les autres actions, on vérifie si l'utilisateur peut interagir avec le post.
+             if ($action !== 'sync')
+             {
++                // Interdire de réagir à ses propres messages
++                if (in_array($action, ['add', 'remove'], true) && $this->is_own_post($post_id)) {
++                    return new JsonResponse([
++                        'success'  => false,
++                        'error'    => $this->language->lang('REACTION_OWN_POST'),
++                        'own_post' => true,
++                        'rid'      => $rid,
++                    ], 400);
++                }
++
+                 if (!$this->can_react_to_post($post_id)) {
+                     return new JsonResponse([
+                         'success' => false,
+@@ -875,6 +886,24 @@
+         return true;
+     }
+
++    /**
++     * Vérifie si le message appartient à l'utilisateur courant
++     *
++     * @param int $post_id ID du message
++     * @return bool true si l'utilisateur est l'auteur du message
++     */
++    private function is_own_post($post_id)
++    {
++        $sql = 'SELECT poster_id FROM ' . $this->posts_table . ' WHERE post_id = ' . (int) $post_id;
++        $result = $this->db->sql_query($sql);
++        $row = $this->db->sql_fetchrow($result);
++        $this->db->sql_freeresult($result);
++
++        if (!$row) {
++            return false;
++        }
++
++        return (int) $row['poster_id'] === (int) $this->user->data['user_id'];
++    }
++
+     // =============================================================================
+     // MÉTHODES UTILITAIRES
+     // =============================================================================
+diff --git a/event/listener.php b/event/listener.php
+--- a/event/listener.php
++++ b/event/listener.php
+@@ -206,9 +206,14 @@
+         $reactions_by_db = $this->get_post_reactions($post_id);
+         $user_reactions = $this->get_user_reactions($post_id, (int) $this->user->data['user_id']);
+
++        // Déterminer si le message appartient à l'utilisateur courant
++        $poster_id = isset($row['poster_id']) ? (int) $row['poster_id'] : 0;
++        $is_own_post = ($poster_id === (int) $this->user->data['user_id']);
++
+         $visible_reactions = [];
+         foreach ($reactions_by_db as $emoji => $count) {
+             if ((int) $count > 0) {
+@@ -228,6 +233,7 @@
+         $post_row = array_merge($post_row, [
+             'S_REACTIONS_ENABLED' => true,
++            'S_IS_OWN_POST'      => $is_own_post,
+             'post_reactions'      => $visible_reactions,
+         ]);
+
+diff --git a/language/en/common.php b/language/en/common.php
+--- a/language/en/common.php
++++ b/language/en/common.php
+@@ -35,6 +35,7 @@
+     'REACTION_NOT_AUTHORIZED'   => 'You are not authorized to react',
++    'REACTION_OWN_POST'         => 'You cannot react to your own post',
+     'REACTION_INVALID_POST'     => 'Invalid post',
+     'REACTION_INVALID_EMOJI'    => 'Invalid emoji',
+
+diff --git a/styles/prosilver/template/event/viewtopic_body_postrow_content_after.html b/styles/prosilver/template/event/viewtopic_body_postrow_content_after.html
+--- a/styles/prosilver/template/event/viewtopic_body_postrow_content_after.html
++++ b/styles/prosilver/template/event/viewtopic_body_postrow_content_after.html
+@@ -1,5 +1,6 @@
+-<!-- IF S_REACTIONS_ENABLED and not S_IS_BOT and S_USER_LOGGED_IN -->
++<!-- IF S_REACTIONS_ENABLED and not S_IS_BOT and S_USER_LOGGED_IN and not postrow.S_IS_OWN_POST -->
+ <div class="post-reactions-container" data-post-id="{postrow.POST_ID}">
+     <div class="post-reactions">
+         <!-- BEGIN postrow.post_reactions -->
+@@ -14,6 +15,17 @@
+     </div>
+ </div>
+
++<!-- ELSEIF S_REACTIONS_ENABLED and not S_IS_BOT and S_USER_LOGGED_IN and postrow.S_IS_OWN_POST -->
++<div class="post-reactions-container post-reactions-readonly" data-post-id="{postrow.POST_ID}">
++    <div class="post-reactions">
++        <!-- BEGIN postrow.post_reactions -->
++        <!-- IF postrow.post_reactions.COUNT > 0 -->
++        <span class="reaction reaction-readonly"
++              data-emoji="{postrow.post_reactions.EMOJI}"
++              data-count="{postrow.post_reactions.COUNT}"
++              data-users='{postrow.post_reactions.USERS}'>
++            {postrow.post_reactions.EMOJI} <span class="count">{postrow.post_reactions.COUNT}</span>
++        </span>
++        <!-- ENDIF -->
++        <!-- END postrow.post_reactions -->
++    </div>
++</div>
++
+ <!-- ELSEIF S_REACTIONS_ENABLED and not S_IS_BOT and not S_USER_LOGGED_IN -->
+diff --git a/styles/prosilver/template/js/reactions.js b/styles/prosilver/template/js/reactions.js
+--- a/styles/prosilver/template/js/reactions.js
++++ b/styles/prosilver/template/js/reactions.js
+@@ -1055,6 +1055,14 @@
+             switch (status) {
+                 case 401: // Unauthorized
+                 case 403: // Forbidden
+                     handleUnauthorizedSession(serverMessage);
+                     break;
++                case 400: // Bad Request
++                    // If it's an own-post error, just show the message without
++                    // switching the entire page to readonly mode.
++                    if (error.data && error.data.own_post) {
++                        alert(serverMessage || 'You cannot react to your own post.');
++                        break;
++                    }
++                    alert(serverMessage || 'Une erreur de validation est survenue.');
++                    break;
+                 case 429: // Too Many Requests (limite atteinte)
+-                case 400: // Bad Request (emoji invalide, etc.)
+-                    // Affiche le message d'erreur spécifique envoyé par le serveur.
+-                    alert(serverMessage || 'Une erreur de validation est survenue.');
++                    alert(serverMessage || 'Une erreur de validation est survenue.');
+                     break;

@@ -1,0 +1,5 @@
+acme_forumchoice_toggle:
+    path: /forumchoice/toggle/{forum_id}
+    defaults: { _controller: acme.forumchoice.controller:toggle }
+    requirements:
+        forum_id: \d+

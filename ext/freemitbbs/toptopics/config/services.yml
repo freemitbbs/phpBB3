@@ -1,0 +1,107 @@
+parameters:
+    tables.freemitbbs.toptopics.dislikes: '%core.table_prefix%posts_dislikes'
+    tables.freemitbbs.toptopics.dislike_history: '%core.table_prefix%posts_dislike_actions'
+    tables.freemitbbs.toptopics.likes: '%core.table_prefix%posts_likes'
+    tables.freemitbbs.toptopics.topic_overrides: '%core.table_prefix%toptopics_topic_overrides'
+    tables.freemitbbs.toptopics.user_reputation: '%core.table_prefix%toptopics_user_reputation'
+    tables.freemitbbs.toptopics.scope_snapshots: '%core.table_prefix%toptopics_scope_snapshots'
+    tables.freemitbbs.toptopics.scope_forums: '%core.table_prefix%toptopics_scope_forums'
+
+services:
+    freemitbbs.toptopics.cache_invalidator:
+        class: freemitbbs\toptopics\service\cache_invalidator
+        arguments:
+            - '@cache'
+
+    freemitbbs.toptopics.ranker:
+        class: freemitbbs\toptopics\service\ranker
+        arguments:
+            - '@auth'
+            - '@cache'
+            - '@freemitbbs.toptopics.cache_invalidator'
+            - '@config'
+            - '@content.visibility'
+            - '@dbal.conn'
+            - '@user'
+            - '%tables.freemitbbs.toptopics.likes%'
+            - '%tables.freemitbbs.toptopics.dislikes%'
+            - '%tables.freemitbbs.toptopics.topic_overrides%'
+            - '%tables.freemitbbs.toptopics.scope_snapshots%'
+            - '%tables.freemitbbs.toptopics.scope_forums%'
+
+    freemitbbs.toptopics.reputation:
+        class: freemitbbs\toptopics\service\reputation
+        arguments:
+            - '@config'
+            - '@dbal.conn'
+            - '%tables.freemitbbs.toptopics.likes%'
+            - '%tables.freemitbbs.toptopics.dislikes%'
+            - '%tables.freemitbbs.toptopics.user_reputation%'
+
+    freemitbbs.toptopics.listener:
+        class: freemitbbs\toptopics\event\listener
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@dbal.conn'
+            - '@request'
+            - '@template'
+            - '@user'
+            - '@language'
+            - '@controller.helper'
+            - '@freemitbbs.toptopics.ranker'
+            - '@freemitbbs.toptopics.cache_invalidator'
+            - '@freemitbbs.toptopics.reputation'
+            - '@?vse.topicpreview.data'
+            - '@?vse.topicpreview.renderer'
+            - '@?phpbb.collapsiblecategories.operator'
+            - '%tables.freemitbbs.toptopics.dislikes%'
+            - '%tables.freemitbbs.toptopics.dislike_history%'
+            - '%tables.freemitbbs.toptopics.topic_overrides%'
+            - '%tables.freemitbbs.toptopics.user_reputation%'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+        tags:
+            - { name: event.listener }
+
+    freemitbbs.toptopics.ajaxify:
+        class: freemitbbs\toptopics\controller\ajaxify
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@content.visibility'
+            - '@dbal.conn'
+            - '@request'
+            - '@user'
+            - '@language'
+            - '@freemitbbs.toptopics.ranker'
+            - '@freemitbbs.toptopics.reputation'
+            - '%tables.freemitbbs.toptopics.dislikes%'
+            - '%tables.freemitbbs.toptopics.dislike_history%'
+            - '%tables.freemitbbs.toptopics.likes%'
+
+    freemitbbs.toptopics.moderation:
+        class: freemitbbs\toptopics\controller\moderation
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@dbal.conn'
+            - '@controller.helper'
+            - '@request'
+            - '@user'
+            - '@language'
+            - '@freemitbbs.toptopics.ranker'
+            - '%tables.freemitbbs.toptopics.topic_overrides%'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+
+    freemitbbs.toptopics.cron.refresh_scopes:
+        class: freemitbbs\toptopics\cron\refresh_scopes
+        arguments:
+            - '@cache'
+            - '@config'
+            - '@freemitbbs.toptopics.ranker'
+        calls:
+            - [set_name, [cron.task.freemitbbs.toptopics.refresh_scopes]]
+        tags:
+            - { name: cron.task }

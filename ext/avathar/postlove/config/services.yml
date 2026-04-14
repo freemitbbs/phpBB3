@@ -1,0 +1,91 @@
+parameters:
+    tables.avathar.postlove: '%core.table_prefix%posts_likes'
+services:
+    avathar.postlove.listener:
+        class: avathar\postlove\event\main_listener
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@dbal.conn'
+            - '@request'
+            - '@template'
+            - '@user'
+            - '@language'
+            - '@controller.helper'
+            - '%tables.avathar.postlove%'
+        tags:
+            - {name: event.listener}
+    avathar.postlove.summary_listener:
+        class: avathar\postlove\event\summary_listener
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@cache'
+            - '@content.visibility'
+            - '@dbal.conn'
+            - '@dispatcher'
+            - '@template'
+            - '@user'
+            - '@language'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+            - '%core.table_prefix%'
+        tags:
+            - {name: event.listener}
+    avathar.postlove.ajaxify:
+        class: avathar\postlove\controller\ajaxify
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@content.visibility'
+            - '@dbal.conn'
+            - '@request'
+            - '@user'
+            - '@language'
+            - '@cache'
+            - '@avathar.postlove.notifyhelper'
+            - '@?freemitbbs.toptopics.ranker'
+            - '@?freemitbbs.toptopics.reputation'
+            - '%tables.avathar.postlove%'
+            - '%core.table_prefix%'
+    avathar.postlove.lovelist:
+        class: avathar\postlove\controller\lovelist
+        arguments:
+            - '@user'
+            - '@language'
+            - '@controller.helper'
+            - '@dbal.conn'
+            - '@auth'
+            - '@user_loader'
+            - '@template'
+            - '@pagination'
+            - '@request'
+            - '%tables.avathar.postlove%'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+    avathar.postlove.notifyhelper:
+        class: avathar\postlove\controller\notifyhelper
+        arguments:
+            - '@config'
+            - '@dbal.conn'
+            - '@request'
+            - '@template'
+            - '@user'
+            - '@service_container'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+            - '%tables.avathar.postlove%'
+    avathar.postlove.topic_likes:
+        class: avathar\postlove\service\topic_likes
+        arguments:
+            - '@dbal.conn'
+            - '%tables.avathar.postlove%'
+    avathar.postlove.notification.type.postlove:
+        class: avathar\postlove\notification\postlove
+        shared: false
+        parent: notification.type.base
+        calls:
+            - [set_user_loader, ['@user_loader']]
+            - [set_config, ['@config']]
+        tags:
+            - {name: notification.type}

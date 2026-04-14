@@ -1,0 +1,246 @@
+.like, .liked { 
+	float: right;
+	width: 16px;
+	height: 16px;
+	margin-left: 1px;
+	margin-bottom: -3px;
+	background-size: 16px 16px;
+}
+
+.button .like, .button .liked {
+	float: none;
+}
+
+.like_info, .liked_info { 
+	float: left;
+	width: 16px;
+	height: 12px;
+	margin-left: 1px;
+}
+	
+.like {
+	position:relative;
+}
+.like:hover:before{
+	color: #ff726c;
+}
+.like:before{
+	font-family: FontAwesome;
+	top:0;
+	left:-5px;
+	padding-right:10px;
+	font-size: 1.35em;
+	content: "\f08a";
+	color: #ff0000;
+}
+
+.button .like:before, .button .liked:before {
+	font-size: 1em;
+	padding-right: 3px;
+}
+
+.liked {
+	position:relative;
+}
+.liked:hover:before{
+	color: #ff726c;
+}
+.liked:before{
+	font-family: FontAwesome;
+	top:0;
+	left:-5px;
+	padding-right:10px;
+	font-size: 1.35em;
+	content: "\f004";
+	color: #ff0000;
+}
+
+.like_info {
+	position:relative;
+}
+.like_info:before {
+	font-family: FontAwesome;
+	top:0;
+	left:-5px;
+	padding-right:10px;
+	font-size: 1.35em;
+	content: "\f004";
+	color: #ff0000;
+}
+.liked_info {
+	position:relative;
+}
+.liked_info:before {
+	font-family: FontAwesome;
+	top:0;
+	left:-5px;
+	padding-right:10px;
+	font-size: 1.35em;
+	content: "\f08a";
+	color: #ff0000;
+	font-weight: bold;
+}
+
+.postlove-count {
+    color: #222222 !important;
+}
+/* topic list heart count */
+.postlove-topic-count {
+	display: inline-block;
+	margin-left: 8px;
+	font-size: 0.85em;
+	color: #999;
+	vertical-align: middle;
+}
+.postlove-topic-count .liked:before {
+	font-size: 1em;
+	padding-right: 3px;
+}
+
+.postlove-summary-likes {
+	white-space: nowrap;
+}
+
+.postlove-likers-details {
+	display: inline-block;
+	position: relative;
+	margin-left: 6px;
+}
+
+.postlove-likers-details summary {
+	list-style: none;
+	cursor: pointer;
+}
+
+.postlove-likers-details summary::-webkit-details-marker {
+	display: none;
+}
+
+.postlove-likers-details summary::marker {
+	content: "";
+}
+
+.postlove-likers-button {
+	display: inline-block;
+	color: #666;
+}
+
+.postlove-likers-details[open] .postlove-likers-button {
+	color: #105289;
+}
+
+.postlove-likers-list {
+	position: absolute;
+	top: calc(100% + 4px);
+	left: 0;
+	z-index: 20;
+	min-width: 180px;
+	max-width: 260px;
+	padding: 8px 10px;
+	background: #fff;
+	border: 1px solid #c7d2db;
+	border-radius: 4px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+	line-height: 1.5;
+	text-align: left;
+}
+
+.postlove-likers-list a {
+	white-space: nowrap;
+}
+
+/* keep postlove button out of responsive dropdown menu */
+.post-buttons .postlove-li {
+    display: inline-block;
+    float: right;
+}
+
+.dropdown-contents .postlove-li {
+    display: none;
+}
+
+/* normalize postlove button in post-buttons area to match icon-button style */
+.post-buttons .postlove-button {
+    background: none !important;
+    border: none;
+    box-shadow: none !important;
+    color: inherit;
+    line-height: inherit;
+    padding: 0 3px;
+    height: auto;
+    width: auto;
+    text-shadow: none;
+}
+
+.post-buttons .postlove-button .like:before,
+.post-buttons .postlove-button .liked:before {
+    font-size: 1.3em;
+    padding-right: 3px;
+    left: 0;
+    color: #ff0000;
+}
+
+.post-buttons .postlove-button .like:hover:before,
+.post-buttons .postlove-button .liked:hover:before {
+    color: #ff726c;
+}
+
+.post-buttons .postlove-button .postlove-count {
+    color: inherit !important;
+    font-family: inherit;
+    font-style: normal;
+}
+
+/* MODALS */
+.modal {
+  display: none;
+  width: 95%;
+  height: 80%;
+  background: #fff;
+  padding-right: 12px;
+  -webkit-border-radius: 8px;
+  -moz-border-radius: 8px;
+  -o-border-radius: 8px;
+  -ms-border-radius: 8px;
+  border-radius: 8px;
+  -webkit-box-shadow: 0 0 10px #000;
+  -moz-box-shadow: 0 0 10px #000;
+  -o-box-shadow: 0 0 10px #000;
+  -ms-box-shadow: 0 0 10px #000;
+  box-shadow: 0 0 10px #000;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+.modal .inner {
+	width: 100%;
+	height: 100%;
+	overflow: scroll;
+	overflow-x: hidden;
+}
+.modal a.close-modal {
+  position: absolute;
+  top: -12.5px;
+  right: -12.5px;
+  display: block;
+  width: 30px;
+  height: 30px;
+  text-indent: -9999px;
+  z-index: 999;
+  background: url(./images/close.png) no-repeat 0 0;
+}
+
+.modal-spinner {
+  display: none;
+  width: 64px;
+  height: 64px;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  margin-right: -32px;
+  margin-top: -32px;
+  background: url(./images/spinner.gif) #111 no-repeat center center;
+  -webkit-border-radius: 8px;
+  -moz-border-radius: 8px;
+  -o-border-radius: 8px;
+  -ms-border-radius: 8px;
+  border-radius: 8px;
+}

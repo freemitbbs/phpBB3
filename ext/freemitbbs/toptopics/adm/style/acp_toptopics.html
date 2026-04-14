@@ -1,0 +1,68 @@
+<!-- INCLUDE overall_header.html -->
+
+<a name="maincontent"></a>
+<h1>{L_ACP_TOPTOPICS}</h1>
+<p>{L_TOPTOPICS_EXPLAIN}</p>
+
+<form id="acp_toptopics" method="post" action="{U_ACTION}">
+	<fieldset>
+		<legend>{L_TOPTOPICS_FIELDSET_SUMMARY}</legend>
+		<p>{L_TOPTOPICS_SUMMARY_POSITION_NOTICE} {TOPTOPICS_SUMMARY_POSITION_LABEL}</p>
+		<!-- BEGIN summary_settings -->
+		<dl>
+			<dt>
+				<label for="{summary_settings.NAME}">{summary_settings.LABEL}</label><br />
+				<span>{summary_settings.EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="{summary_settings.NAME}" name="toptopics[{summary_settings.NAME}]" value="{summary_settings.VALUE}" size="8" /></dd>
+		</dl>
+		<!-- END summary_settings -->
+	</fieldset>
+
+	<fieldset>
+		<legend>{L_TOPTOPICS_FIELDSET_DOWNVOTES}</legend>
+		<!-- BEGIN downvote_settings -->
+		<dl>
+			<dt>
+				<label for="{downvote_settings.NAME}">{downvote_settings.LABEL}</label><br />
+				<span>{downvote_settings.EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="{downvote_settings.NAME}" name="toptopics[{downvote_settings.NAME}]" value="{downvote_settings.VALUE}" size="8" /></dd>
+		</dl>
+		<!-- END downvote_settings -->
+	</fieldset>
+
+	<fieldset>
+		<legend>{L_TOPTOPICS_FIELDSET_REPUTATION}</legend>
+		<!-- BEGIN reputation_settings -->
+		<dl>
+			<dt>
+				<label for="{reputation_settings.NAME}">{reputation_settings.LABEL}</label><br />
+				<span>{reputation_settings.EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="{reputation_settings.NAME}" name="toptopics[{reputation_settings.NAME}]" value="{reputation_settings.VALUE}" size="8" /></dd>
+		</dl>
+		<!-- END reputation_settings -->
+	</fieldset>
+
+	<fieldset>
+		<legend>{L_TOPTOPICS_FIELDSET_RANKING}</legend>
+		<!-- BEGIN ranking_settings -->
+		<dl>
+			<dt>
+				<label for="{ranking_settings.NAME}">{ranking_settings.LABEL}</label><br />
+				<span>{ranking_settings.EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="{ranking_settings.NAME}" name="toptopics[{ranking_settings.NAME}]" value="{ranking_settings.VALUE}" size="8" /></dd>
+		</dl>
+		<!-- END ranking_settings -->
+	</fieldset>
+
+	<fieldset class="submit-buttons">
+		{S_FORM_TOKEN}
+		<input class="button1" type="submit" id="submit" name="submit" value="{L_SUBMIT}" />
+		<input class="button2" type="reset" id="reset" name="reset" value="{L_RESET}" />
+	</fieldset>
+</form>
+
+<!-- INCLUDE overall_footer.html -->

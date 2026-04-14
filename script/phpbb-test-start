@@ -1,0 +1,286 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TMP_DIR="$ROOT_DIR/.tmp"
+MARIADB_DIR="$TMP_DIR/mariadb"
+MARIADB_DATA_DIR="$MARIADB_DIR/data"
+MARIADB_RUN_DIR="$MARIADB_DIR/run"
+PHPBB_RUN_DIR="$TMP_DIR/phpbb-test"
+INSTALL_CONFIG="$ROOT_DIR/script/phpbb-test-install.yml"
+INSTALL_DIR="$ROOT_DIR/install"
+DISABLED_INSTALL_DIR="$TMP_DIR/install-disabled"
+MYSQL_SOCKET="/tmp/phpbb-mysql.sock"
+MYSQL_PID_FILE="$MARIADB_RUN_DIR/mysql.pid"
+MYSQL_LOG_FILE="$MARIADB_RUN_DIR/mysql.err"
+LEGACY_MYSQL_PID_FILE="/tmp/phpbb-mysql.pid"
+PHP_SERVER_HOST="127.0.0.1"
+PHP_SERVER_PORT="8090"
+BOARD_URL="http://${PHP_SERVER_HOST}:${PHP_SERVER_PORT}/"
+PHP_SERVER_PID_FILE="$PHPBB_RUN_DIR/php-server.pid"
+PHP_SERVER_LOG_FILE="$PHPBB_RUN_DIR/php-server.log"
+
+MARIADBD_BIN="${MARIADBD_BIN:-$(command -v mariadbd || true)}"
+MARIADB_INSTALL_DB_BIN="${MARIADB_INSTALL_DB_BIN:-$(command -v mariadb-install-db || true)}"
+MYSQL_BIN="${MYSQL_BIN:-$(command -v mysql || true)}"
+PHP_BIN="${PHP_BIN:-$(command -v php || true)}"
+CURL_BIN="${CURL_BIN:-$(command -v curl || true)}"
+
+require_bin() {
+	local name="$1"
+	local path="$2"
+
+	if [[ -z "$path" ]]; then
+		echo "Missing required binary: $name" >&2
+		exit 1
+	fi
+}
+
+pid_from_file() {
+	local pid_file="$1"
+
+	if [[ ! -f "$pid_file" ]]; then
+		return 1
+	fi
+
+	local pid
+	pid="$(tr -d '[:space:]' < "$pid_file")"
+	if [[ ! "$pid" =~ ^[0-9]+$ ]]; then
+		return 1
+	fi
+
+	printf '%s\n' "$pid"
+}
+
+pid_is_running() {
+	local pid_file="$1"
+	local pid
+
+	pid="$(pid_from_file "$pid_file")" || return 1
+	kill -0 "$pid" 2>/dev/null
+}
+
+find_process_pid() {
+	local pattern="$1"
+
+	ps -ef | awk -v pattern="$pattern" '$0 ~ pattern && $0 !~ /awk/ {print $2; exit}'
+}
+
+wait_for_mysql() {
+	local attempts=30
+
+	for ((i = 1; i <= attempts; i++)); do
+		if "$MYSQL_BIN" --socket="$MYSQL_SOCKET" -uroot -e 'SELECT 1' >/dev/null 2>&1; then
+			return 0
+		fi
+		sleep 1
+	done
+
+	echo "MariaDB did not become ready. See $MYSQL_LOG_FILE" >&2
+	exit 1
+}
+
+wait_for_http() {
+	local attempts=30
+
+	for ((i = 1; i <= attempts; i++)); do
+		if "$CURL_BIN" -sI "$BOARD_URL" >/dev/null 2>&1; then
+			return 0
+		fi
+		sleep 1
+	done
+
+	echo "PHP server did not become ready. See $PHP_SERVER_LOG_FILE" >&2
+	exit 1
+}
+
+board_is_installed() {
+	[[ -f "$ROOT_DIR/config.php" ]] && grep -q "PHPBB_INSTALLED" "$ROOT_DIR/config.php"
+}
+
+disable_installer() {
+	if [[ -d "$INSTALL_DIR" && -d "$DISABLED_INSTALL_DIR" ]]; then
+		echo "Both $INSTALL_DIR and $DISABLED_INSTALL_DIR exist; refusing to move installer." >&2
+		exit 1
+	fi
+
+	if [[ -d "$INSTALL_DIR" ]]; then
+		mv "$INSTALL_DIR" "$DISABLED_INSTALL_DIR"
+	fi
+}
+
+enable_installer() {
+	if [[ -d "$INSTALL_DIR" ]]; then
+		return 0
+	fi
+
+	if [[ ! -d "$DISABLED_INSTALL_DIR" ]]; then
+		echo "Installer directory is missing from both $INSTALL_DIR and $DISABLED_INSTALL_DIR." >&2
+		exit 1
+	fi
+
+	mv "$DISABLED_INSTALL_DIR" "$INSTALL_DIR"
+}
+
+ensure_mariadb_data() {
+	mkdir -p "$MARIADB_DATA_DIR" "$MARIADB_RUN_DIR" "$PHPBB_RUN_DIR"
+
+	if [[ -d "$MARIADB_DATA_DIR/mysql" ]]; then
+		return 0
+	fi
+
+	echo "Initializing MariaDB data dir in $MARIADB_DATA_DIR"
+	"$MARIADB_INSTALL_DB_BIN" \
+		--datadir="$MARIADB_DATA_DIR" \
+		--auth-root-authentication-method=normal \
+		--skip-test-db >/dev/null
+}
+
+adopt_running_mariadb() {
+	local pid
+
+	if pid_is_running "$MYSQL_PID_FILE"; then
+		return 0
+	fi
+
+	if [[ -S "$MYSQL_SOCKET" ]] && "$MYSQL_BIN" --socket="$MYSQL_SOCKET" -uroot -e 'SELECT 1' >/dev/null 2>&1; then
+		if pid_is_running "$LEGACY_MYSQL_PID_FILE"; then
+			cp "$LEGACY_MYSQL_PID_FILE" "$MYSQL_PID_FILE"
+			return 0
+		fi
+
+		pid="$(find_process_pid "mariadbd --datadir=${MARIADB_DATA_DIR}")"
+		if [[ -n "$pid" ]]; then
+			printf '%s\n' "$pid" > "$MYSQL_PID_FILE"
+		fi
+	fi
+}
+
+start_mariadb() {
+	adopt_running_mariadb
+
+	if "$MYSQL_BIN" --socket="$MYSQL_SOCKET" -uroot -e 'SELECT 1' >/dev/null 2>&1; then
+		echo "MariaDB already running on $MYSQL_SOCKET"
+		return 0
+	fi
+
+	rm -f "$MYSQL_SOCKET" "$MYSQL_PID_FILE"
+
+	echo "Starting MariaDB"
+	nohup "$MARIADBD_BIN" \
+		--datadir="$MARIADB_DATA_DIR" \
+		--socket="$MYSQL_SOCKET" \
+		--pid-file="$MYSQL_PID_FILE" \
+		--skip-networking \
+		--log-error="$MYSQL_LOG_FILE" >/dev/null 2>&1 < /dev/null &
+
+	wait_for_mysql
+}
+
+ensure_phpbb_database() {
+	echo "Ensuring phpBB database and user exist"
+	"$MYSQL_BIN" --socket="$MYSQL_SOCKET" -uroot <<'SQL'
+CREATE DATABASE IF NOT EXISTS phpbb_test CHARACTER SET utf8 COLLATE utf8_bin;
+CREATE USER IF NOT EXISTS 'phpbb'@'localhost' IDENTIFIED BY 'phpbb';
+GRANT ALL PRIVILEGES ON phpbb_test.* TO 'phpbb'@'localhost';
+FLUSH PRIVILEGES;
+SQL
+}
+
+install_board_if_needed() {
+	if board_is_installed; then
+		disable_installer
+		return 0
+	fi
+
+	if [[ ! -f "$INSTALL_CONFIG" ]]; then
+		echo "Missing install config: $INSTALL_CONFIG" >&2
+		exit 1
+	fi
+
+	echo "Installing phpBB test board"
+	enable_installer
+	trap 'disable_installer' EXIT
+	(
+		cd "$ROOT_DIR"
+		"$PHP_BIN" install/phpbbcli.php install "$INSTALL_CONFIG"
+	)
+	disable_installer
+	trap - EXIT
+}
+
+purge_phpbb_cache() {
+	if ! board_is_installed; then
+		return 0
+	fi
+
+	echo "Purging phpBB cache"
+	(
+		cd "$ROOT_DIR"
+		"$PHP_BIN" bin/phpbbcli.php cache:purge >/dev/null
+	)
+}
+
+adopt_running_php_server() {
+	local pid
+
+	if pid_is_running "$PHP_SERVER_PID_FILE"; then
+		return 0
+	fi
+
+	if "$CURL_BIN" -sI "$BOARD_URL" >/dev/null 2>&1; then
+		pid="$(find_process_pid "php -S ${PHP_SERVER_HOST}:${PHP_SERVER_PORT}")"
+		if [[ -n "$pid" ]]; then
+			printf '%s\n' "$pid" > "$PHP_SERVER_PID_FILE"
+		fi
+	fi
+}
+
+start_php_server() {
+	adopt_running_php_server
+
+	if "$CURL_BIN" -sI "$BOARD_URL" >/dev/null 2>&1; then
+		echo "PHP server already responding on $BOARD_URL"
+		return 0
+	fi
+
+	rm -f "$PHP_SERVER_PID_FILE"
+
+	echo "Starting phpBB server on $BOARD_URL"
+	(
+		cd "$ROOT_DIR"
+		nohup "$PHP_BIN" -S "${PHP_SERVER_HOST}:${PHP_SERVER_PORT}" >"$PHP_SERVER_LOG_FILE" 2>&1 < /dev/null &
+		echo $! > "$PHP_SERVER_PID_FILE"
+	)
+
+	wait_for_http
+}
+
+show_summary() {
+	echo
+	echo "phpBB test board is ready"
+	echo "URL: $BOARD_URL"
+	echo "Admin login: admin / adminadmin"
+	echo "MariaDB socket: $MYSQL_SOCKET"
+	echo "MariaDB log: $MYSQL_LOG_FILE"
+	echo "PHP log: $PHP_SERVER_LOG_FILE"
+}
+
+main() {
+	require_bin "mariadbd" "$MARIADBD_BIN"
+	require_bin "mariadb-install-db" "$MARIADB_INSTALL_DB_BIN"
+	require_bin "mysql" "$MYSQL_BIN"
+	require_bin "php" "$PHP_BIN"
+	require_bin "curl" "$CURL_BIN"
+
+	ensure_mariadb_data
+	start_mariadb
+	ensure_phpbb_database
+	install_board_if_needed
+	purge_phpbb_cache
+	start_php_server
+	show_summary
+}
+
+main "$@"

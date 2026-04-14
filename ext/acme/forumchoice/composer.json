@@ -1,0 +1,22 @@
+{
+	"name": "acme/forumchoice",
+	"type": "phpbb-extension",
+	"description": "Allows users to favorite forums and display them at the top of the board index.",
+	"version": "1.0.0",
+	"license": "GPL-2.0-only",
+	"authors": [
+		{
+			"name": "Acme"
+		}
+	],
+	"require": {
+		"php": ">=7.1",
+		"phpbb/phpbb": ">=3.2.0"
+	},
+	"extra": {
+		"display-name": "Forum Favorites",
+		"soft-require": {
+			"phpbb/phpbb": ">=3.2.0,<4.0.0@dev"
+		}
+	}
+}

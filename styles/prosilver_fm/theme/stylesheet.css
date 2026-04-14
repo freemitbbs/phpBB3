@@ -1,0 +1,168 @@
+/*  phpBB3 Style Sheet
+    --------------------------------------------------------------
+	Style name:			prosilver FM
+	Based on style:		prosilver Special Edition / prosilver
+	Original author:	Tom Beddard ( http://www.subblue.com/ )
+	Modified by:		phpBB Limited ( https://www.phpbb.com/ ) and Freemit BBS
+
+	Warm nostalgic palette with navy header to match the FM logo.
+	Inspired by the classic Chinese BBS aesthetic (mitbbs.cn).
+    --------------------------------------------------------------
+*/
+
+/* colours.css changes */
+html, body {
+	background-color: #C8C2B8;
+}
+
+body.simple {
+	min-height: 100%;
+	padding: 0 5px;
+}
+
+.wrap {
+	border: 2px solid #FFF;
+	border-radius: 15px;
+	box-shadow: 0 0 5px 2px #9D9A93, inset 0 3px 18px rgba(100, 100, 100, .25);
+	margin: 0 auto;
+	max-width: 1152px;
+	padding: 13px 23px;
+}
+
+.search-header {
+	box-shadow: 0 0 10px #6E5230;
+}
+
+/* Header - warm walnut to stay consistent with the beige/gold forum palette */
+.headerbar {
+	background-color: #6E5230;
+	background-image: linear-gradient(to bottom, #907245 0%, #73562F 42%, #5A4125 100%);
+	background-repeat: repeat-x;
+}
+
+/* Navbar - warm cream */
+.navbar {
+	background-color: #EDE8DC;
+	background-image: linear-gradient(to bottom, #F3EEE2 0%, #E5DDCC 100%);
+}
+
+/* Forum category headers - warm tan/brown (nostalgic BBS feel) */
+.forabg, .forumbg {
+	background-color: #b08d50;
+	background-image: linear-gradient(to bottom, #ceb172 0%, #bf9d5f 46%, #a48249 100%);
+	background-repeat: repeat-x;
+}
+
+.forabg {
+	background-color: #a58246;
+	background-image: linear-gradient(to bottom, #c7a468 0%, #b69256 46%, #99753f 100%);
+	background-repeat: repeat-x;
+}
+
+/* Warm gold hover for links on the tan forum headers */
+.forumbg .header a:hover, .forabg .header a:hover, th a:hover {
+	color: #FFF3D0;
+}
+
+.copyright a {
+	color: #000000 !important;
+}
+
+/* Content panels */
+.panel,
+.post {
+	background-color: #F5F1E6;
+	color: #2C2417;
+}
+
+/* Row backgrounds - visible zebra striping */
+li.row {
+	background-color: #F7F4EA;
+}
+
+li.row:hover {
+	background-color: #FFF6E0;
+}
+
+li.row.bg3 {
+	background-color: #EFEBDD;
+}
+
+li.row.bg3:hover {
+	background-color: #FFF6E0;
+}
+
+.bg1,
+table.zebra-list tr:nth-child(odd) td,
+ul.zebra-list li:nth-child(odd) {
+	background-color: #F7F4EA;
+}
+
+.bg2 {
+	background-color: #F1ECDE;
+}
+
+.fieldsbg {
+	background-color: #EAE4D4;
+}
+
+.site_logo {
+	background-image: url("./images/site_logo.svg");
+}
+
+/* Jumpbox - matches warm forum headers */
+.jumpbox-cat-link {
+	background-color: #b08d50;
+	background-image: linear-gradient(to bottom, #ceb172 0%, #bf9d5f 46%, #a48249 100%);
+	background-repeat: repeat-x;
+	color: #FFFFFF;
+}
+
+.jumpbox-sub-link {
+	background-color: #F7F4EA;
+}
+
+/* toptopics category forum links - warm overrides */
+.toptopics-category-menu-wrap {
+	background: #F5F1E6;
+	border-top-color: #E5DCC8;
+	border-bottom-color: #E5DCC8;
+}
+
+.toptopics-category-forum-link {
+	background: #FFFFFF;
+	border-color: #D5CCBA;
+	color: #105289;
+}
+
+.toptopics-category-forum-link:hover {
+	background: #FFF6E0;
+	border-color: #B8A060;
+	box-shadow: 0 1px 3px rgba(100, 80, 30, 0.12);
+}
+
+/* responsive.css changes */
+@media only screen and (max-width: 920px), only screen and (max-device-width: 920px) {
+	html, body {
+		background-color: #FFF;
+	}
+
+	body {
+		padding-left: 5px;
+		padding-right: 5px;
+	}
+
+	#wrap {
+		width: 850px;
+		padding: 0;
+		border-width: 0;
+		border-radius: 0;
+		box-shadow: none;
+	}
+}
+
+@media only screen and (max-width: 860px), only screen and (max-device-width: 860px) {
+	#wrap {
+		width: auto;
+	}
+}

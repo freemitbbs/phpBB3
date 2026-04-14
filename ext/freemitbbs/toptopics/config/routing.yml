@@ -1,0 +1,12 @@
+freemitbbs_toptopics_vote:
+    path: /toptopics/{action}/{post}
+    defaults: { _controller: freemitbbs.toptopics.ajaxify:base }
+    requirements:
+        post: \d+
+
+freemitbbs_toptopics_override:
+    path: /toptopics/override/{topic}/{state}
+    defaults: { _controller: freemitbbs.toptopics.moderation:topic_override }
+    requirements:
+        topic: \d+
+        state: normal|boost|demote|kill

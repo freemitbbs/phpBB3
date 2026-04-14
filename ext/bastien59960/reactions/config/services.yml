@@ -1,0 +1,147 @@
+# @package    bastien59960/reactions
+# @version    1.0.0
+# @author     Bastien (bastien59960) <bastien@debucquoi.com>
+# @copyright  (c) 2025 Bastien59960
+# @license    http://opensource.org/licenses/gpl-2.0.php GNU General Public License v2
+#
+# Fichier : config/services.yml
+# Rôle : Configuration des services (Injection de Dépendances).
+#
+# Description détaillée :
+# Ce fichier déclare l'ensemble des services utilisés par l'extension (contrôleurs,
+# listeners, tâches cron, types de notifications, etc.) et définit leurs dépendances.
+# Il permet à phpBB d'instancier automatiquement ces classes avec les arguments requis.
+imports:
+    - { resource: 'parameters.yml' }
+
+services:
+    # =========================================================================
+    # HELPER CENTRALISÉ
+    # =========================================================================
+    bastien59960.reactions.helper:
+        class: bastien59960\reactions\controller\helper
+        arguments:
+            - '@dbal.conn'
+            - '@user'
+            - '@template'
+            - '@language'
+            - '@controller.helper'
+            - '%tables.post_reactions%'
+
+    # =========================================================================
+    # LISTENER D'ÉVÉNEMENTS
+    # =========================================================================
+    bastien59960.reactions.listener:
+        class: bastien59960\reactions\event\listener
+        arguments:
+            - '@dbal.conn'
+            - '@user'
+            - '%tables.post_reactions%'
+            - '%tables.posts%'
+            - '@template'
+            - '@language'
+            - '@bastien59960.reactions.helper'
+            - '@config'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+        tags:
+            - { name: event.listener }
+
+    # =========================================================================
+    # CONTRÔLEUR AJAX
+    # =========================================================================
+    bastien59960.reactions.unsubscribe:
+        class: bastien59960\reactions\controller\unsubscribe
+        arguments:
+            - '@config'
+            - '@dbal.conn'
+            - '@language'
+            - '@request'
+            - '@template'
+            - '@dbal.tools'
+            - '%core.table_prefix%'
+
+    bastien59960.reactions.ajax:
+        class: bastien59960\reactions\controller\ajax
+        arguments:
+            - '@dbal.conn'
+            - '@user'
+            - '@request'
+            - '@auth'
+            - '@language'
+            - '%tables.post_reactions%'
+            - '%tables.posts%'
+            - '%tables.topics%'
+            - '%tables.forums%'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+            - '@config'
+            - '@notification_manager'
+            - '@bastien59960.reactions.helper'
+
+    # =========================================================================
+    # TÂCHE CRON PRINCIPALE (DIGEST E-MAIL)
+    # =========================================================================
+    cron.task.bastien59960.reactions.notification:
+        class: bastien59960\reactions\cron\notification_task
+        arguments:
+            - '@dbal.conn'
+            - '@config'
+            - '@notification_manager'
+            - '@user_loader'
+            - '@language'
+            - '@template'
+            - '%tables.post_reactions%'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+            - '%core.table_prefix%'
+        tags:
+            - { name: cron.task }
+
+    # =========================================================================
+    # TYPE DE NOTIFICATION : RÉACTION (CLIC CLOCHE)
+    # =========================================================================
+    bastien59960.reactions.notification.type.reaction:
+        class: bastien59960\reactions\notification\type\reaction
+        shared: false
+        arguments:
+            - '@dbal.conn'
+            - '@language'
+            - '@user'
+            - '@auth'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+            - '%tables.user_notifications%'
+        tags:
+            - { name: notification.type }
+
+    # =========================================================================
+    # TYPE DE NOTIFICATION : DIGEST COURRIEL
+    # =========================================================================
+    bastien59960.reactions.notification.type.reaction_email_digest:
+        class: bastien59960\reactions\notification\type\reaction_email_digest
+        shared: false
+        arguments:
+            - '@dbal.conn'
+            - '@language'
+            - '@user'
+            - '@auth'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+            - '%tables.user_notifications%'
+            - '@config'
+            - '@template'
+        tags:
+            - { name: notification.type }
+
+    # =========================================================================
+    # CONTRÔLEUR UCP (PREFERENCES UTILISATEURS)
+    # =========================================================================
+    bastien59960.reactions.controller.ucp_reactions:
+        class: bastien59960\reactions\controller\ucp_reactions
+        arguments:
+            - '@dbal.conn'
+            - '@request'
+            - '@template'
+            - '@user'
+            - '%core.table_prefix%'

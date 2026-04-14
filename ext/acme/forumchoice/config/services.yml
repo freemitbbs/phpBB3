@@ -1,0 +1,27 @@
+services:
+    acme.forumchoice.listener:
+        class: acme\forumchoice\event\listener
+        arguments:
+            - '@dbal.conn'
+            - '@dbal.tools'
+            - '@content.visibility'
+            - '@user'
+            - '@template'
+            - '@controller.helper'
+            - '@auth'
+            - '%core.table_prefix%'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+        tags:
+            - { name: event.listener }
+
+    acme.forumchoice.controller:
+        class: acme\forumchoice\controller\main
+        arguments:
+            - '@dbal.conn'
+            - '@dbal.tools'
+            - '@request'
+            - '@user'
+            - '%core.table_prefix%'
+            - '%core.root_path%'
+            - '%core.php_ext%'

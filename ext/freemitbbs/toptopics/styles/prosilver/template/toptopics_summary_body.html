@@ -1,0 +1,114 @@
+{% if S_TOPTOPICS_COLLAPSIBLE %}
+<a class="category{% if S_TOPTOPICS_HIDDEN %} hidden-category{% endif %}" id="category{{ TOPTOPICS_BLOCK_ID }}" style="display: none; height: 0"></a>
+{% endif %}
+<div class="forabg toptopics-summary">
+	<div class="inner">
+		<ul class="topiclist">
+			<li class="header">
+				<dl class="row-item">
+					<dt><div class="list-inner"><i class="icon fa-line-chart fa-fw" aria-hidden="true"></i> {{ TOPTOPICS_BLOCK_TITLE }}</div></dt>
+					<dd class="posts">{{ lang('REPLIES') }}</dd>
+					<dd class="views">{{ lang('VIEWS') }}</dd>
+					<dd class="lastpost"><span>{{ lang('LAST_POST') }}</span></dd>
+				</dl>
+				{% if S_TOPTOPICS_COLLAPSIBLE %}
+				<a href="{{ U_TOPTOPICS_COLLAPSE_URL }}"
+					class="collapse-btn"
+					data-hidden="{{ S_TOPTOPICS_HIDDEN ? '1' : '' }}"
+					data-ajax="phpbb_collapse"
+					data-overlay="true"
+					data-title-alt="{{ S_TOPTOPICS_HIDDEN ? lang('TOPTOPICS_COLLAPSE_HIDE') : lang('TOPTOPICS_COLLAPSE_SHOW') }}"
+					title="{{ S_TOPTOPICS_HIDDEN ? lang('TOPTOPICS_COLLAPSE_SHOW') : lang('TOPTOPICS_COLLAPSE_HIDE') }}"
+					style="display: none; line-height: 0;">
+					<i class="fa {% if S_TOPTOPICS_HIDDEN %}fa-plus-square{% else %}fa-minus-square{% endif %}"></i>
+				</a>
+				{% endif %}
+			</li>
+		</ul>
+		<ul class="topiclist topics collapsible">
+			<!-- BEGIN top_topics -->
+			<li class="row <!-- IF top_topics.S_ROW_COUNT is odd -->bg1<!-- ELSE -->bg2<!-- ENDIF -->">
+				<dl class="row-item {top_topics.TOPIC_IMG_STYLE}">
+					<dt title="{top_topics.TOPIC_FOLDER_IMG_ALT}">
+						<!-- IF top_topics.S_UNREAD_TOPIC and not S_IS_BOT --><a href="{top_topics.U_NEWEST_POST}" class="row-item-link"></a><!-- ENDIF -->
+						<div class="list-inner">
+							<!-- IF top_topics.S_UNREAD_TOPIC and not S_IS_BOT -->
+								<a class="unread" href="{top_topics.U_NEWEST_POST}">
+									<i class="icon fa-file fa-fw icon-red icon-md" aria-hidden="true"></i><span class="sr-only">{NEW_POST}</span>
+								</a>
+							<!-- ENDIF -->
+								<a href="{top_topics.U_TOPIC}" class="topictitle">{top_topics.TOPIC_TITLE}</a>
+								<div class="toptopics-meta">
+									{L_POST_BY_AUTHOR} {top_topics.USERNAME_FULL} &bull; {top_topics.POST_TIME}
+									<!-- IF S_TOPTOPICS_INCLUDE_FORUM_NAME --> &bull; <a href="{top_topics.U_FORUM}">{top_topics.FORUM_NAME}</a><!-- ENDIF -->
+								</div>
+								<div class="responsive-show toptopics-mobile-stats" style="display: none;">
+									<span class="toptopics-mobile-stat">{L_REPLIES}{L_COLON} <strong>{top_topics.REPLIES}</strong></span>
+									<span class="toptopics-mobile-stat">{L_VIEWS}{L_COLON} <strong>{top_topics.VIEWS}</strong></span>
+								</div>
+								<div class="responsive-show toptopics-mobile-lastpost" style="display: none;">
+									{L_LAST_POST} {L_POST_BY_AUTHOR} {top_topics.LAST_POST_AUTHOR_FULL} &laquo; <a href="{top_topics.U_LAST_POST}" title="{L_GOTO_LAST_POST}">{top_topics.LAST_POST_TIME}</a>
+								</div>
+							</div>
+						</dt>
+						<dd class="posts">{top_topics.REPLIES} <dfn>{L_REPLIES}</dfn></dd>
+						<dd class="views">{top_topics.VIEWS} <dfn>{L_VIEWS}</dfn></dd>
+						<dd class="lastpost">
+							<span><dfn>{L_LAST_POST} </dfn>{L_POST_BY_AUTHOR} {top_topics.LAST_POST_AUTHOR_FULL}
+								<!-- IF not S_IS_BOT and top_topics.U_LAST_POST -->
+									<a href="{top_topics.U_LAST_POST}" title="{L_GOTO_LAST_POST}">
+										<i class="icon fa-external-link-square fa-fw icon-lightgray icon-md" aria-hidden="true"></i><span class="sr-only">{VIEW_LATEST_POST}</span>
+									</a>
+								<!-- ENDIF -->
+								<br /><time datetime="{top_topics.LAST_POST_TIME_RFC3339}">{top_topics.LAST_POST_TIME}</time>
+							</span>
+						</dd>
+				</dl>
+				{% if top_topics.TOPIC_PREVIEW_FIRST_POST %}
+				<div class="topic_preview_content" style="display: none;">
+					<div class="topic_preview_section">
+						{% if top_topics.TOPIC_PREVIEW_LAST_POST %}
+							<strong class="topic_preview_section_title">{{ lang('FIRST_POST') }}</strong>
+						{% endif %}
+						<div class="topic_preview_post">
+							{% if top_topics.TOPIC_PREVIEW_FIRST_AVATAR %}
+								<div class="topic_preview_avatar">
+									{%- if top_topics.TOPIC_PREVIEW_FIRST_AVATAR is iterable -%}
+										{% include 'avatar.html' with {avatar_data: top_topics.TOPIC_PREVIEW_FIRST_AVATAR} only %}
+									{%- elseif top_topics.TOPIC_PREVIEW_FIRST_AVATAR != 'no-avatar' -%}
+										{{ top_topics.TOPIC_PREVIEW_FIRST_AVATAR }}
+									{%- else -%}
+										<div class="topic_preview_no_avatar"></div>
+									{%- endif -%}
+								</div>
+							{% endif %}
+							<div class="topic_preview_first">{{ top_topics.TOPIC_PREVIEW_FIRST_POST }}</div>
+						</div>
+					</div>
+
+					{% if top_topics.TOPIC_PREVIEW_LAST_POST %}
+					<div class="topic_preview_section">
+						<strong class="topic_preview_section_title">{{ lang('LAST_POST') }}</strong>
+						<div class="topic_preview_post">
+							{% if top_topics.TOPIC_PREVIEW_LAST_AVATAR %}
+								<div class="topic_preview_avatar">
+									{%- if top_topics.TOPIC_PREVIEW_LAST_AVATAR is iterable -%}
+										{% include 'avatar.html' with {avatar_data: top_topics.TOPIC_PREVIEW_LAST_AVATAR} only %}
+									{%- elseif top_topics.TOPIC_PREVIEW_LAST_AVATAR != 'no-avatar' -%}
+										{{ top_topics.TOPIC_PREVIEW_LAST_AVATAR }}
+									{%- else -%}
+										<div class="topic_preview_no_avatar"></div>
+									{%- endif -%}
+								</div>
+							{% endif %}
+							<div class="topic_preview_last">{{ top_topics.TOPIC_PREVIEW_LAST_POST }}</div>
+						</div>
+					</div>
+					{% endif %}
+				</div>
+				{% endif %}
+			</li>
+			<!-- END top_topics -->
+		</ul>
+	</div>
+</div>

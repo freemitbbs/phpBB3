@@ -1,0 +1,143 @@
+{#
+ *
+ * Recent Topics NG. An extension for the phpBB Forum Software package.
+ *
+ * @copyright (c) 2022, IMC, https://github.com/IMC-GER / LukeWCS, https://github.com/LukeWCS
+ * @copyright (c) 2017, Sajaki, https://www.avathar.be
+ * @copyright (c) 2015, PayBas
+ * @license GNU General Public License, version 2 (GPL-2.0-only)
+ *
+ * Based on the original NV Recent Topics by Joas Schilling (nickvergessen)
+ #}
+
+{% import '@imcger_recenttopicsng/rtng_macros.html' as common %}
+{% set switch_type = TOGGLECTRL_TYPE ?? 'toggle' %}
+
+{% include 'overall_header.html' %}
+
+<h1>{{ lang('RTNG_TITLE') }}</h1>
+<p>{{ lang('RTNG_EXPLAIN', RTNG_EXT_NAME) }}</p>
+
+<form id="rtng_settings" method="post" action="{{ U_ACTION }}">
+
+	<fieldset>
+		<legend>{{ lang('RTNG_GLOBAL_SETTINGS') }}</legend>
+
+		<dl>
+			<dt>
+				<label>{{ lang('RTNG_ALL_TOPICS') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('RTNG_ALL_TOPICS_EXP') }}</span>
+			</dt>
+			<dd>
+				{{ common.switch('rtng_all_topics', RTNG_ALL_TOPICS, switch_type) }}
+			</dd>
+		</dl>
+		<dl>
+			<dt>
+				<label>{{ lang('RTNG_MIN_TOPIC_LEVEL') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('RTNG_MIN_TOPIC_LEVEL_EXP') }}</span>
+			</dt>
+			<dd>
+				{{ common.select('rtng_min_topic_level', RTNG_MIN_TOPIC_LEVEL_OPTIONS) }}
+			</dd>
+		</dl>
+		<dl>
+			<dt>
+				<label>{{ lang('RTNG_ANTI_TOPICS') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('RTNG_ANTI_TOPICS_EXP') }}</span>
+			</dt>
+			<dd>
+				{{ common.text('rtng_anti_topics', RTNG_ANTI_TOPICS, 30, '67, 234, 5678', '^\\d+( ?, ?\\d+ ?)*$') }}
+			</dd>
+		</dl>
+		<dl>
+			<dt>
+				<label>{{ lang('RTNG_PARENTS') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('RTNG_PARENTS_EXP') }}</span>
+			</dt>
+			<dd>
+				{{ common.switch('rtng_parents', RTNG_PARENTS, switch_type) }}
+			</dd>
+		</dl>
+		<dl>
+			<dt>
+				<label>{{ lang('RTNG_SIMPLE_LINK') ~ lang('COLON') }}</label><br>
+			</dt>
+			<dd>
+				<a href="{{ U_RTNG_PAGE_SIMPLE }}" target="_blank">{{ U_RTNG_PAGE_SIMPLE|e('html') }}</a>
+			</dd>
+		</dl>
+		<dl>
+			<dt>
+				<label>{{ lang('RTNG_SIMPLE_TOPICS_QTY') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('RTNG_SIMPLE_TOPICS_QTY_EXP') }}</span>
+			</dt>
+			<dd>
+				{{ common.number('rtng_simple_topics_qty', RTNG_SIMPLE_TOPICS_QTY, 1, 999) }}
+			</dd>
+		</dl>
+		<dl>
+			<dt>
+				<label>{{ lang('RTNG_SIMPLE_PAGE_QTY') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('RTNG_SIMPLE_PAGE_QTY_EXP') }}</span>
+			</dt>
+			<dd>
+				{{ common.number('rtng_simple_page_qty', RTNG_SIMPLE_PAGE_QTY, 1, 999) }}
+			</dd>
+		</dl>
+	</fieldset>
+
+	<fieldset>
+		<legend>{{ lang('RTNG_OVERRIDABLE') }}</legend>
+		<p>{{ lang('RTNG_OVERRIDABLE_EXPLAIN', U_SERVER_LOAD) }}</p>
+		
+		<hr>
+
+		{% include '@imcger_recenttopicsng/rtng_user_settings.html' %}
+
+		<hr>
+
+		<dl>
+			<dt>
+				<label>{{ lang('RTNG_RESET_DEFAULT') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('RTNG_RESET_DEFAULT_EXP') }}</span>
+			</dt>
+			<dd>
+				{{ common.switch('rtng_reset_default', false, switch_type) }}
+				{{ _self.confirmbox('rtng_reset_default', lang('RTNG_RESET_ASK_BEFORE_EXP')) }}
+			</dd>
+		</dl>
+	</fieldset>
+
+	<fieldset>
+		<legend>{{ lang('ACP_SUBMIT_CHANGES') }}</legend>
+
+		<p class="submit-buttons">
+			<input class="button1" type="submit" name="submit" value="{{ lang('SUBMIT') }}">
+			<input class="button2" type="reset" name="reset" value="{{ lang('RESET') }}">
+		</p>
+	</fieldset>
+
+	{{ S_FORM_TOKEN }}
+</form>
+
+<p class="rtng-copyright">
+	{{ RTNG_EXT_NAME }} v{{ RTNG_EXT_VER }} &copy; IMC-GER / LukeWCS<br>
+	{{ lang('RTNG_LANG_DESC') }} v{{ lang('RTNG_LANG_VER') }} &copy; {{ lang('RTNG_LANG_AUTHOR') }}
+</p>
+
+{% include 'overall_footer.html' %}
+
+{% INCLUDECSS '@imcger_recenttopicsng/acp_rtng.css' %}
+{% INCLUDEJS '@imcger_recenttopicsng/acp_rtng.js' %}
+
+{% macro confirmbox(name, message, default = false) -%}
+	<div class="lukewcs_confirmbox" data-name="{{ name }}" data-default="{{ default }}" style="display: none;">
+		<h2>{{ lang('CONFIRM') }}</h2>
+		<p>{{ message }}</p>
+		<p>
+			<input type="button" class="button1" name="lukewcs_confirmbox_yes" value="{{ lang('YES') }}">&nbsp;
+			<input type="button" class="button2" name="lukewcs_confirmbox_no" value="{{ lang('NO') }}">
+		</p>
+	</div>
+{%- endmacro %}

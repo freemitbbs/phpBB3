@@ -1,0 +1,25 @@
+##
+# Fichier : routing.yml
+# Chemin : bastien59960/reactions/config/routing.yml
+# Auteur : Bastien (bastien59960)
+# GitHub : https://github.com/bastien59960/reactions
+#
+# Rôle :
+# Ce fichier définit les routes (URLs) de l'extension. Il associe des chemins
+# à des contrôleurs spécifiques.
+#
+# @copyright (c) 2025 Bastien59960
+# @license GNU General Public License, version 2 (GPL-2.0)
+##
+
+# Endpoint AJAX (ajout/suppression/récupération des réactions).
+bastien59960_reactions_ajax:
+  path: /reactions/ajax
+  defaults: { _controller: bastien59960.reactions.ajax:handle }
+  methods: [POST]
+
+# Endpoint désabonnement des emails de notification de réactions.
+bastien59960_reactions_unsubscribe:
+  path: /reactions/unsubscribe
+  defaults: { _controller: bastien59960.reactions.unsubscribe:handle }
+  methods: [GET]

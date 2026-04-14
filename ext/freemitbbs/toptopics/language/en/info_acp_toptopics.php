@@ -1,0 +1,91 @@
+<?php
+
+if (!defined('IN_PHPBB'))
+{
+	exit;
+}
+
+if (empty($lang) || !is_array($lang))
+{
+	$lang = [];
+}
+
+$lang = array_merge($lang, [
+	'ACP_TOPTOPICS_GRP' => 'Top Topics',
+	'ACP_TOPTOPICS' => 'Top Topics',
+	'TOPTOPICS_EXPLAIN' => 'Configure list sizes, dislike safeguards, and ranking weights for the Top Topics extension.',
+	'TOPTOPICS_FIELDSET_SUMMARY' => 'Summary blocks',
+	'TOPTOPICS_FIELDSET_DOWNVOTES' => 'Dislike safeguards',
+	'TOPTOPICS_FIELDSET_REPUTATION' => 'Reputation gating',
+	'TOPTOPICS_FIELDSET_RANKING' => 'Ranking model',
+	'TOPTOPICS_SUMMARY_POSITION_NOTICE' => 'The index block placement follows Post Love summary position. Current value:',
+	'TOPTOPICS_SUMMARY_POSITION_ABOVE' => 'Above the forum list',
+	'TOPTOPICS_SUMMARY_POSITION_BELOW' => 'Below the forum list',
+
+		'TOPTOPICS_INDEX_LIMIT' => 'Index topics limit',
+		'TOPTOPICS_INDEX_LIMIT_EXPLAIN' => 'Maximum number of ranked topics shown in the board-level Top Topics block.',
+		'TOPTOPICS_FORUM_LIMIT' => 'Forum topics limit',
+		'TOPTOPICS_FORUM_LIMIT_EXPLAIN' => 'Maximum number of ranked topics shown in the per-forum Top Topics block.',
+		'TOPTOPICS_SUMMARY_CACHE_SECONDS' => 'Summary cache lifetime',
+		'TOPTOPICS_SUMMARY_CACHE_SECONDS_EXPLAIN' => 'How long public Top Topics snapshots stay fresh, in seconds. Stale public snapshots may continue to be served briefly while a rebuild is in progress. Use 0 to disable snapshot caching.',
+
+		'TOPTOPICS_DOWNVOTE_MIN_POSTS' => 'Minimum posts required to dislike',
+	'TOPTOPICS_DOWNVOTE_MIN_POSTS_EXPLAIN' => 'Users need at least this many posts before the dislike action is allowed.',
+	'TOPTOPICS_DOWNVOTE_PER_MINUTE' => 'Dislikes per minute',
+	'TOPTOPICS_DOWNVOTE_PER_MINUTE_EXPLAIN' => 'Maximum number of new dislikes a user may cast in a rolling 60 second window. Use 0 to disable the limit.',
+	'TOPTOPICS_DOWNVOTE_PER_DAY' => 'Dislikes per day',
+	'TOPTOPICS_DOWNVOTE_PER_DAY_EXPLAIN' => 'Maximum number of new dislikes a user may cast in a rolling 24 hour window. Use 0 to disable the limit.',
+	'TOPTOPICS_REPUTATION_CACHE_SECONDS' => 'Reputation cache lifetime',
+	'TOPTOPICS_REPUTATION_CACHE_SECONDS_EXPLAIN' => 'How long a computed user reputation score is reused before it is recalculated. Use 0 to recompute on every check.',
+	'TOPTOPICS_MIN_REPUTATION_DISLIKE' => 'Minimum reputation to dislike',
+	'TOPTOPICS_MIN_REPUTATION_DISLIKE_EXPLAIN' => 'Users need at least this reputation score before the dislike action is allowed. Use 0 to disable reputation gating for dislikes.',
+	'TOPTOPICS_MIN_REPUTATION_REPORT' => 'Minimum reputation to report',
+	'TOPTOPICS_MIN_REPUTATION_REPORT_EXPLAIN' => 'Users need at least this reputation score before the report action is allowed. Keep this greater than or equal to the dislike threshold. Use 0 to disable reputation gating for reports.',
+
+	'TOPTOPICS_LOOKBACK_DAYS' => 'Candidate lookback window',
+	'TOPTOPICS_LOOKBACK_DAYS_EXPLAIN' => 'Only topics newer than this many days are considered for ranking.',
+	'TOPTOPICS_CANDIDATE_POOL_LIMIT' => 'Candidate pool cap',
+	'TOPTOPICS_CANDIDATE_POOL_LIMIT_EXPLAIN' => 'Maximum number of recent topics per scope to preselect before full ranking math is applied. Higher values improve accuracy on busy boards but increase query cost.',
+	'TOPTOPICS_AGE_OFFSET_HOURS' => 'Age offset hours',
+	'TOPTOPICS_AGE_OFFSET_HOURS_EXPLAIN' => 'Adds a fixed age cushion to the hotness denominator. Higher values soften recency bias.',
+	'TOPTOPICS_GRAVITY' => 'Time decay gravity',
+	'TOPTOPICS_GRAVITY_EXPLAIN' => 'Exponent used in the hotness denominator. Higher values make older topics fall faster.',
+	'TOPTOPICS_CONTENT_WEIGHT' => 'Content quality weight',
+	'TOPTOPICS_CONTENT_WEIGHT_EXPLAIN' => 'Weight applied to the first post\'s approximate plain-text length using a logarithmic scale. Longer, more substantial opening posts get a modest boost over one-line topics.',
+	'TOPTOPICS_REPLY_WEIGHT' => 'Reply engagement weight',
+	'TOPTOPICS_REPLY_WEIGHT_EXPLAIN' => 'Weight applied to ln(1 + replies) before time decay. Higher values let active discussion lift a topic sooner.',
+	'TOPTOPICS_VIEW_WEIGHT' => 'View engagement weight',
+	'TOPTOPICS_VIEW_WEIGHT_EXPLAIN' => 'Weight applied to ln(1 + views per hour) before time decay. Keep this lower than reply weight so raw traffic does not dominate ranking.',
+	'TOPTOPICS_MANUAL_BOOST_MULTIPLIER' => 'Manual boost multiplier',
+	'TOPTOPICS_MANUAL_BOOST_MULTIPLIER_EXPLAIN' => 'Multiplier applied to the final rank when an admin marks a topic as boosted.',
+	'TOPTOPICS_MANUAL_DEMOTE_MULTIPLIER' => 'Manual demote multiplier',
+	'TOPTOPICS_MANUAL_DEMOTE_MULTIPLIER_EXPLAIN' => 'Multiplier applied to the final rank when an admin marks a topic as demoted.',
+	'TOPTOPICS_EARLY_WINDOW_HOURS' => 'Early velocity window',
+	'TOPTOPICS_EARLY_WINDOW_HOURS_EXPLAIN' => 'Likes received inside this many hours from topic creation count as early traction.',
+	'TOPTOPICS_EARLY_LIKE_MINIMUM' => 'Minimum early likes for boost',
+	'TOPTOPICS_EARLY_LIKE_MINIMUM_EXPLAIN' => 'Minimum number of early likes required before the velocity boost can apply.',
+	'TOPTOPICS_EARLY_VELOCITY_THRESHOLD' => 'Early likes per hour threshold',
+	'TOPTOPICS_EARLY_VELOCITY_THRESHOLD_EXPLAIN' => 'Minimum early-like velocity needed to trigger the boost.',
+	'TOPTOPICS_VELOCITY_BOOST' => 'Velocity boost multiplier',
+	'TOPTOPICS_VELOCITY_BOOST_EXPLAIN' => 'Multiplier applied when a topic clears the early velocity threshold.',
+	'TOPTOPICS_DISCUSSION_REPLY_MINIMUM' => 'Reply count for discussion penalty',
+	'TOPTOPICS_DISCUSSION_REPLY_MINIMUM_EXPLAIN' => 'Minimum replies before the discussion imbalance check is applied.',
+	'TOPTOPICS_DISCUSSION_REPLY_LIKE_RATIO' => 'Reply-to-like ratio penalty',
+	'TOPTOPICS_DISCUSSION_REPLY_LIKE_RATIO_EXPLAIN' => 'If replies exceed likes by more than this ratio, the discussion penalty is applied.',
+	'TOPTOPICS_DISCUSSION_PENALTY' => 'Discussion penalty multiplier',
+	'TOPTOPICS_DISCUSSION_PENALTY_EXPLAIN' => 'Multiplier applied to discussion-heavy, low-signal topics.',
+	'TOPTOPICS_FLAG_WARNING_THRESHOLD' => 'Warning flag threshold',
+	'TOPTOPICS_FLAG_WARNING_THRESHOLD_EXPLAIN' => 'Open report count that triggers the warning penalty. Use 0 to disable.',
+	'TOPTOPICS_FLAG_WARNING_PENALTY' => 'Warning flag penalty multiplier',
+	'TOPTOPICS_FLAG_WARNING_PENALTY_EXPLAIN' => 'Multiplier applied when the warning flag threshold is reached.',
+	'TOPTOPICS_FLAG_HARD_THRESHOLD' => 'Hard flag threshold',
+	'TOPTOPICS_FLAG_HARD_THRESHOLD_EXPLAIN' => 'Open report count that triggers the hard penalty. Use 0 to disable.',
+	'TOPTOPICS_FLAG_HARD_PENALTY' => 'Hard flag penalty multiplier',
+	'TOPTOPICS_FLAG_HARD_PENALTY_EXPLAIN' => 'Multiplier applied when the hard flag threshold is reached.',
+	'TOPTOPICS_HIDE_FLAG_THRESHOLD' => 'Hide by flags threshold',
+	'TOPTOPICS_HIDE_FLAG_THRESHOLD_EXPLAIN' => 'Topics are completely excluded once they reach this many open reports. Use 0 to disable.',
+	'TOPTOPICS_HIDE_POINT_THRESHOLD' => 'Hide by points threshold',
+	'TOPTOPICS_HIDE_POINT_THRESHOLD_EXPLAIN' => 'Topics are excluded when net points are less than or equal to this value.',
+	'TOPTOPICS_TRUST_BOOST_CAP' => 'Trust boost cap',
+	'TOPTOPICS_TRUST_BOOST_CAP_EXPLAIN' => 'Maximum bonus added from the topic author’s post-count trust factor. Example: 0.1 means up to +10%.',
+]);

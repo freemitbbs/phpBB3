@@ -1,0 +1,91 @@
+<?php
+
+if (!defined('IN_PHPBB'))
+{
+	exit;
+}
+
+if (empty($lang) || !is_array($lang))
+{
+	$lang = [];
+}
+
+$lang = array_merge($lang, [
+	'ACP_TOPTOPICS_GRP' => '热门话题',
+	'ACP_TOPTOPICS' => '热门话题',
+	'TOPTOPICS_EXPLAIN' => '在这里配置 Top Topics 扩展的列表数量、踩的限制以及排名权重。',
+	'TOPTOPICS_FIELDSET_SUMMARY' => '摘要区块',
+	'TOPTOPICS_FIELDSET_DOWNVOTES' => '踩的限制',
+	'TOPTOPICS_FIELDSET_REPUTATION' => '声望门槛',
+	'TOPTOPICS_FIELDSET_RANKING' => '排名模型',
+	'TOPTOPICS_SUMMARY_POSITION_NOTICE' => '首页区块位置跟随 Post Love 摘要位置。当前值：',
+	'TOPTOPICS_SUMMARY_POSITION_ABOVE' => '论坛列表上方',
+	'TOPTOPICS_SUMMARY_POSITION_BELOW' => '论坛列表下方',
+
+		'TOPTOPICS_INDEX_LIMIT' => '首页话题数量上限',
+		'TOPTOPICS_INDEX_LIMIT_EXPLAIN' => '首页“热门话题”区块中最多显示多少条已排名的话题。',
+		'TOPTOPICS_FORUM_LIMIT' => '版块页话题数量上限',
+		'TOPTOPICS_FORUM_LIMIT_EXPLAIN' => '每个版块页“热门话题”区块中最多显示多少条已排名的话题。',
+		'TOPTOPICS_SUMMARY_CACHE_SECONDS' => '摘要缓存时间',
+		'TOPTOPICS_SUMMARY_CACHE_SECONDS_EXPLAIN' => '公共可见范围的 Top Topics 快照保持新鲜的秒数。重建进行中时，系统可能会短暂继续返回旧快照。填 0 表示禁用快照缓存。',
+
+		'TOPTOPICS_DOWNVOTE_MIN_POSTS' => '允许踩之前的最少发帖数',
+	'TOPTOPICS_DOWNVOTE_MIN_POSTS_EXPLAIN' => '用户至少需要达到这个发帖数后，才允许使用踩。',
+	'TOPTOPICS_DOWNVOTE_PER_MINUTE' => '每分钟可踩次数',
+	'TOPTOPICS_DOWNVOTE_PER_MINUTE_EXPLAIN' => '用户在滚动 60 秒窗口内最多可以新增多少次踩。填 0 表示禁用此限制。',
+	'TOPTOPICS_DOWNVOTE_PER_DAY' => '每天可踩次数',
+	'TOPTOPICS_DOWNVOTE_PER_DAY_EXPLAIN' => '用户在滚动 24 小时窗口内最多可以新增多少次踩。填 0 表示禁用此限制。',
+	'TOPTOPICS_REPUTATION_CACHE_SECONDS' => '声望缓存时间',
+	'TOPTOPICS_REPUTATION_CACHE_SECONDS_EXPLAIN' => '用户声望分数在重新计算前可复用多久。填 0 表示每次检查都重新计算。',
+	'TOPTOPICS_MIN_REPUTATION_DISLIKE' => '允许踩的最低声望',
+	'TOPTOPICS_MIN_REPUTATION_DISLIKE_EXPLAIN' => '用户至少需要达到这个声望分数后才允许使用踩。填 0 表示关闭踩的声望门槛。',
+	'TOPTOPICS_MIN_REPUTATION_REPORT' => '允许举报的最低声望',
+	'TOPTOPICS_MIN_REPUTATION_REPORT_EXPLAIN' => '用户至少需要达到这个声望分数后才允许举报。建议保持高于或等于踩的门槛。填 0 表示关闭举报的声望门槛。',
+
+	'TOPTOPICS_LOOKBACK_DAYS' => '候选话题回溯天数',
+	'TOPTOPICS_LOOKBACK_DAYS_EXPLAIN' => '只对最近这几天内创建的话题进行排名。',
+	'TOPTOPICS_CANDIDATE_POOL_LIMIT' => '候选池上限',
+	'TOPTOPICS_CANDIDATE_POOL_LIMIT_EXPLAIN' => '每个作用范围内，在套用完整排名公式前，最多预选多少条最近话题。数值越大，活跃站点上的准确度越高，但查询成本也越高。',
+	'TOPTOPICS_AGE_OFFSET_HOURS' => '时间偏移小时数',
+	'TOPTOPICS_AGE_OFFSET_HOURS_EXPLAIN' => '为热度公式分母增加一个固定时间偏移。值越大，时间新鲜度偏置越弱。',
+	'TOPTOPICS_GRAVITY' => '时间衰减系数',
+	'TOPTOPICS_GRAVITY_EXPLAIN' => '热度公式分母中的指数。值越大，旧话题下滑越快。',
+	'TOPTOPICS_CONTENT_WEIGHT' => '内容质量权重',
+	'TOPTOPICS_CONTENT_WEIGHT_EXPLAIN' => '对首帖近似纯文本长度应用的对数权重。更长、更有内容的开场帖会比一句话帖子获得适度加成。',
+	'TOPTOPICS_REPLY_WEIGHT' => '回复参与权重',
+	'TOPTOPICS_REPLY_WEIGHT_EXPLAIN' => '在时间衰减前，对 ln(1 + 回复数) 应用的权重。值越大，活跃讨论越容易被抬升。',
+	'TOPTOPICS_VIEW_WEIGHT' => '浏览参与权重',
+	'TOPTOPICS_VIEW_WEIGHT_EXPLAIN' => '在时间衰减前，对 ln(1 + 每小时浏览数) 应用的权重。建议低于回复权重，避免单纯流量压过真实讨论。',
+	'TOPTOPICS_MANUAL_BOOST_MULTIPLIER' => '手动提升倍数',
+	'TOPTOPICS_MANUAL_BOOST_MULTIPLIER_EXPLAIN' => '当管理员将话题标记为提升时，对最终排名应用的乘数。',
+	'TOPTOPICS_MANUAL_DEMOTE_MULTIPLIER' => '手动压低倍数',
+	'TOPTOPICS_MANUAL_DEMOTE_MULTIPLIER_EXPLAIN' => '当管理员将话题标记为压低时，对最终排名应用的乘数。',
+	'TOPTOPICS_EARLY_WINDOW_HOURS' => '早期速度窗口小时数',
+	'TOPTOPICS_EARLY_WINDOW_HOURS_EXPLAIN' => '话题发布后在这段时间内获得的赞，会被计入早期增长。',
+	'TOPTOPICS_EARLY_LIKE_MINIMUM' => '触发加成所需的最少早期赞数',
+	'TOPTOPICS_EARLY_LIKE_MINIMUM_EXPLAIN' => '只有达到这个早期赞数量后，速度加成才会生效。',
+	'TOPTOPICS_EARLY_VELOCITY_THRESHOLD' => '每小时早期赞阈值',
+	'TOPTOPICS_EARLY_VELOCITY_THRESHOLD_EXPLAIN' => '达到这个早期赞速度后，才会触发加成。',
+	'TOPTOPICS_VELOCITY_BOOST' => '速度加成倍数',
+	'TOPTOPICS_VELOCITY_BOOST_EXPLAIN' => '当话题达到早期速度阈值时应用的乘数。',
+	'TOPTOPICS_DISCUSSION_REPLY_MINIMUM' => '触发讨论惩罚的最少回复数',
+	'TOPTOPICS_DISCUSSION_REPLY_MINIMUM_EXPLAIN' => '只有回复数达到这个值后，才会检查讨论失衡惩罚。',
+	'TOPTOPICS_DISCUSSION_REPLY_LIKE_RATIO' => '回复对赞比例惩罚阈值',
+	'TOPTOPICS_DISCUSSION_REPLY_LIKE_RATIO_EXPLAIN' => '当回复数超过赞数达到这个比例时，会应用讨论惩罚。',
+	'TOPTOPICS_DISCUSSION_PENALTY' => '讨论惩罚倍数',
+	'TOPTOPICS_DISCUSSION_PENALTY_EXPLAIN' => '对讨论很多但信号偏弱的话题应用的乘数。',
+	'TOPTOPICS_FLAG_WARNING_THRESHOLD' => '举报警告阈值',
+	'TOPTOPICS_FLAG_WARNING_THRESHOLD_EXPLAIN' => '未处理举报数量达到这个值时，应用警告惩罚。填 0 表示禁用。',
+	'TOPTOPICS_FLAG_WARNING_PENALTY' => '举报警告惩罚倍数',
+	'TOPTOPICS_FLAG_WARNING_PENALTY_EXPLAIN' => '达到举报警告阈值后应用的乘数。',
+	'TOPTOPICS_FLAG_HARD_THRESHOLD' => '举报重罚阈值',
+	'TOPTOPICS_FLAG_HARD_THRESHOLD_EXPLAIN' => '未处理举报数量达到这个值时，应用重罚。填 0 表示禁用。',
+	'TOPTOPICS_FLAG_HARD_PENALTY' => '举报重罚倍数',
+	'TOPTOPICS_FLAG_HARD_PENALTY_EXPLAIN' => '达到举报重罚阈值后应用的乘数。',
+	'TOPTOPICS_HIDE_FLAG_THRESHOLD' => '按举报隐藏阈值',
+	'TOPTOPICS_HIDE_FLAG_THRESHOLD_EXPLAIN' => '未处理举报数量达到这个值后，话题将完全不显示。填 0 表示禁用。',
+	'TOPTOPICS_HIDE_POINT_THRESHOLD' => '按积分隐藏阈值',
+	'TOPTOPICS_HIDE_POINT_THRESHOLD_EXPLAIN' => '当净积分小于或等于这个值时，话题将被排除。',
+	'TOPTOPICS_TRUST_BOOST_CAP' => '信任加成上限',
+	'TOPTOPICS_TRUST_BOOST_CAP_EXPLAIN' => '基于话题作者发帖数的信任加成最大值。例如 0.1 表示最多增加 10%。',
+]);

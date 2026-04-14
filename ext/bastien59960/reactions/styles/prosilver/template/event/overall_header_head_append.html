@@ -1,0 +1,47 @@
+<!--
+    Template : styles/prosilver/template/event/overall_header_head_append.html — bastien59960/reactions
+
+    Template d'injection des ressources CSS et JavaScript pour l'extension Reactions.
+
+    Ce template est injecté dans le <head> de toutes les pages du forum pour charger :
+    - Les styles CSS des réactions (pour tous les utilisateurs)
+    - Les scripts JavaScript (UNIQUEMENT pour les utilisateurs connectés)
+    - Les variables JavaScript globales
+    - Les keywords français pour la recherche d'emojis
+
+    Points clés :
+    - CSS chargé pour tous (affichage des réactions en lecture seule)
+    - JS chargé uniquement pour les utilisateurs connectés (interaction)
+    - Les visiteurs voient les réactions mais ne peuvent pas interagir
+-->
+<!-- DEBUG: {DEBUG_REACTIONS} -->
+<!-- IF S_REACTIONS_ENABLED -->
+<!-- CSS chargé pour tous les utilisateurs (affichage des réactions) -->
+<link href="{REACTIONS_CSS_PATH}" rel="stylesheet" type="text/css" media="screen" />
+
+<!-- JavaScript chargé UNIQUEMENT pour les utilisateurs connectés -->
+<!-- IF S_USER_LOGGED_IN -->
+<script src="{ROOT_PATH}ext/bastien59960/reactions/styles/prosilver/template/js/emoji-keywords-fr.js"></script>
+
+<script>
+// Injection des variables globales depuis le listener PHP
+{REACTIONS_AJAX_URL_JS}
+
+// Fallback au cas où l'injection échouerait (ne devrait pas arriver)
+var REACTIONS_OPTIONS = window.REACTIONS_OPTIONS || {
+    postEmojiSize: parseInt('{REACTIONS_POST_EMOJI_SIZE}', 10) || 24,
+    pickerWidth: parseInt('{REACTIONS_PICKER_WIDTH}', 10) || 320,
+    pickerHeight: parseInt('{REACTIONS_PICKER_HEIGHT}', 10) || 280,
+    pickerEmojiSize: parseInt('{REACTIONS_PICKER_EMOJI_SIZE}', 10) || 24,
+    showCategories: parseInt('{REACTIONS_PICKER_SHOW_CATEGORIES}', 10) === 1,
+    showSearch: parseInt('{REACTIONS_PICKER_SHOW_SEARCH}', 10) === 1,
+    useJson: parseInt('{REACTIONS_PICKER_USE_JSON}', 10) === 1,
+    syncInterval: parseInt('{REACTIONS_SYNC_INTERVAL}', 10) || 5000
+};
+</script>
+
+<!-- Script principal des réactions (DOIT être chargé APRÈS emoji-keywords-fr.js) -->
+<script src="{REACTIONS_JS_PATH}"></script>
+<!-- ENDIF -->
+
+<!-- ENDIF -->

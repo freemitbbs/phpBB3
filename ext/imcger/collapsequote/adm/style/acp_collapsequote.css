@@ -1,0 +1,46 @@
+/**
+ * Collapse Quote
+ * An extension for the phpBB Forum Software package.
+ *
+ * @copyright (c) 2022, Thorsten Ahlers
+ * @license GNU General Public License, version 2 (GPL-2.0)
+ *
+ */
+
+/* ACP ConfirmBox (JS) */
+div[id$="_confirmbox"] {
+	max-width: 450px;
+	border: 2px solid skyblue;
+	margin: .75em .5em;
+	padding: .25em .5em;
+	border-radius: 5px;
+	-webkit-box-shadow: 2px 2px 10px 1px rgba(121, 162, 179, 0.5);
+	box-shadow: 2px 2px 10px 1px rgba(121, 162, 179, 0.5);
+}
+
+div[id$="_confirmbox"] h2 {
+	margin: 0 0 .25em 0;
+}
+
+div[id$="_confirmbox"] p:nth-of-type(2) {
+	text-align: center;
+	margin: 0;
+	padding: 0 4px 4px 4px;
+}
+
+div[id$="_confirmbox"] input[type="button"] {
+	padding: 3px 4px;
+}
+
+input[type="submit"]:disabled,
+input[type="button"]:disabled,
+input[class*="confirmbox_active"]:disabled {
+	opacity: .5;
+	cursor: not-allowed;
+}
+
+.imcger-copyright {
+	margin-top: 1em;
+	text-align: center;
+	font-size: .75em;
+}

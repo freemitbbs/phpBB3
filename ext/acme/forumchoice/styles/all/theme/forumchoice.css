@@ -1,0 +1,61 @@
+.forumchoice-favorites-block {
+	margin-bottom: 10px;
+}
+
+.forumchoice-favorites-block .header .row-item > dt {
+	width: 100%;
+}
+
+.forumchoice-favorites-block .header .row-item .list-inner {
+	padding-right: 0;
+}
+
+.forumchoice-favorites-star {
+	color: #e8a317;
+}
+
+.forumchoice-favorites-shell {
+	list-style: none;
+}
+
+.forumchoice-favorites-wrap {
+	padding: 10px 12px 8px;
+	background: #f7f9fb;
+	border-top: 1px solid #e2e6eb;
+	border-bottom: 1px solid #e2e6eb;
+}
+
+.forumchoice-favorites-menu {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+}
+
+.forumchoice-favorites-link {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	padding: 6px 16px;
+	border: 1px solid #d0d5dc;
+	border-radius: 6px;
+	background: #fff;
+	font-size: 1.05em;
+	font-weight: 600;
+	line-height: 1.3;
+	text-decoration: none;
+	transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.forumchoice-favorites-link:hover {
+	border-color: #93a3b8;
+	background: #f0f4f8;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+@media only screen and (max-width: 700px) {
+	.forumchoice-favorites-link {
+		font-size: 0.95em;
+		padding: 5px 12px;
+	}
+}
