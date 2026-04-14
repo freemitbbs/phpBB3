@@ -208,13 +208,54 @@ class summary_listener implements EventSubscriberInterface
 		$post_list = array();
 		$post_list[] = '0'; // Seed value so NOT IN clause is never empty
 
-		// build the array of most liked posts
-		$day_begin_time = (int) floor(($this->test_time ? $this->test_time : time()) / self::SECONDS_PER_DAY) * self::SECONDS_PER_DAY;
-		$post_list = $this->topposts_of_period($forum_ary, $this->config['postlove_' . $page_type . '_most_liked_ever'],		2,										'LIKES_EVER',		$post_list);
-		$post_list = $this->topposts_of_period($forum_ary, $this->config['postlove_' . $page_type . '_most_liked_this_year'],	$day_begin_time - self::SECONDS_PER_DAY * 366, 'LIKES_THIS_YEAR',	$post_list);
-		$post_list = $this->topposts_of_period($forum_ary, $this->config['postlove_' . $page_type . '_most_liked_this_month'],	$day_begin_time - self::SECONDS_PER_DAY * 31,	'LIKES_THIS_MONTH', $post_list);
-		$post_list = $this->topposts_of_period($forum_ary, $this->config['postlove_' . $page_type . '_most_liked_this_week'],	$day_begin_time - self::SECONDS_PER_DAY * 7,	'LIKES_THIS_WEEK',	$post_list);
-		$post_list = $this->topposts_of_period($forum_ary, $this->config['postlove_' . $page_type . '_most_liked_today'],		$day_begin_time - self::SECONDS_PER_DAY,		'LIKES_TODAY',		$post_list);
+		// Build period windows from the current user's local midnight.
+		$now = (int) ($this->test_time ? $this->test_time : time());
+		$user_tz = ($this->user->timezone instanceof \DateTimeZone) ? $this->user->timezone : new \DateTimeZone('UTC');
+		$day_begin_time = (new \DateTimeImmutable('@' . $now))
+			->setTimezone($user_tz)
+			->setTime(0, 0, 0)
+			->getTimestamp();
+
+		$rows_by_period = array(
+			'LIKES_EVER' => array(),
+			'LIKES_THIS_YEAR' => array(),
+			'LIKES_THIS_MONTH' => array(),
+			'LIKES_THIS_WEEK' => array(),
+			'LIKES_TODAY' => array(),
+		);
+
+		// Selection priority: recent windows first so old all-time posts don't crowd out fresh content.
+		$selection_periods = array(
+			array('key' => 'LIKES_TODAY', 'start' => $day_begin_time, 'count' => (int) $this->config['postlove_' . $page_type . '_most_liked_today']),
+			array('key' => 'LIKES_THIS_WEEK', 'start' => $day_begin_time - self::SECONDS_PER_DAY * 7, 'count' => (int) $this->config['postlove_' . $page_type . '_most_liked_this_week']),
+			array('key' => 'LIKES_THIS_MONTH', 'start' => $day_begin_time - self::SECONDS_PER_DAY * 31, 'count' => (int) $this->config['postlove_' . $page_type . '_most_liked_this_month']),
+			array('key' => 'LIKES_THIS_YEAR', 'start' => $day_begin_time - self::SECONDS_PER_DAY * 366, 'count' => (int) $this->config['postlove_' . $page_type . '_most_liked_this_year']),
+			array('key' => 'LIKES_EVER', 'start' => 2, 'count' => (int) $this->config['postlove_' . $page_type . '_most_liked_ever']),
+		);
+
+		foreach ($selection_periods as $period)
+		{
+			$period_rows = array();
+			$post_list = $this->topposts_of_period(
+				$forum_ary,
+				$period['count'],
+				$period['start'],
+				$period['key'],
+				$post_list,
+				$period_rows
+			);
+			$rows_by_period[$period['key']] = $period_rows;
+		}
+
+		// Display order requested by UI: ever -> year -> month -> week -> today.
+		$display_order = array('LIKES_EVER', 'LIKES_THIS_YEAR', 'LIKES_THIS_MONTH', 'LIKES_THIS_WEEK', 'LIKES_TODAY');
+		foreach ($display_order as $period_key)
+		{
+			foreach ($rows_by_period[$period_key] as $tpl_ary)
+			{
+				$this->template->assign_block_vars('most_liked_posts', $tpl_ary);
+			}
+		}
 
 		$this->template->assign_vars(array(
 			'S_MOSTLIKEDSUMMARYCOUNT'	=>  count($post_list) - 1,
@@ -241,10 +282,13 @@ class summary_listener implements EventSubscriberInterface
 	 * @param int    $period_start_time Unix timestamp for the start of the period
 	 * @param string $period_name      Language key for the period label (e.g. 'LIKES_TODAY')
 	 * @param array  $post_list        Post IDs already shown (excluded from results)
+	 * @param array  $period_rows      Output template rows for this period
 	 * @return array Updated post_list with newly shown post IDs appended
 	 */
-	function topposts_of_period($forum_ary, $howmany, $period_start_time, $period_name, $post_list)
+	function topposts_of_period($forum_ary, $howmany, $period_start_time, $period_name, $post_list, &$period_rows = array())
 	{
+		$period_rows = array();
+
 		if ($howmany == 0)
 		{
 			// configuration says we don't need to look for any in this period
@@ -347,11 +391,11 @@ class summary_listener implements EventSubscriberInterface
 			* @var  array   row 		Array with topic data
 			* @var  array   tpl_ary 	Template block array with topic data
 			* @since 2.2.2
-			*/
+				*/
 			$vars = array('row', 'tpl_ary');
 			extract($this->dispatcher->trigger_event('avathar.postlove.modify_summary_tpl_ary', compact($vars)));
 
-			$this->template->assign_block_vars('most_liked_posts', $tpl_ary);
+			$period_rows[] = $tpl_ary;
 		}
 		return $post_list;
 	}

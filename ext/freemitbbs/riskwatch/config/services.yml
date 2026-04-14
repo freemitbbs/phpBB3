@@ -1,0 +1,41 @@
+parameters:
+    tables.freemitbbs.riskwatch.user_risk_state: '%core.table_prefix%user_risk_state'
+    tables.freemitbbs.riskwatch.user_risk_manual: '%core.table_prefix%user_risk_manual'
+
+services:
+    freemitbbs.riskwatch.scorer:
+        class: freemitbbs\riskwatch\service\scorer
+        arguments:
+            - '@config'
+            - '@dbal.conn'
+            - '@log'
+            - '@notification_manager'
+            - '%tables.freemitbbs.riskwatch.user_risk_state%'
+            - '%tables.freemitbbs.riskwatch.user_risk_manual%'
+
+    freemitbbs.riskwatch.cron.refresh_risk:
+        class: freemitbbs\riskwatch\cron\refresh_risk
+        arguments:
+            - '@cache'
+            - '@config'
+            - '@freemitbbs.riskwatch.scorer'
+        calls:
+            - [set_name, [cron.task.freemitbbs.riskwatch.refresh_risk]]
+        tags:
+            - { name: cron.task }
+
+    freemitbbs.riskwatch.listener:
+        class: freemitbbs\riskwatch\event\listener
+        arguments:
+            - '@language'
+        tags:
+            - { name: event.listener }
+
+    freemitbbs.riskwatch.notification.type.alert:
+        class: freemitbbs\riskwatch\notification\alert
+        shared: false
+        parent: notification.type.base
+        calls:
+            - [set_user_loader, ['@user_loader']]
+        tags:
+            - { name: notification.type }

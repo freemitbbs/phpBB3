@@ -1,0 +1,159 @@
+<!-- INCLUDE overall_header.html -->
+
+<a name="maincontent"></a>
+<h1>{L_ACP_RISKWATCH}</h1>
+<p>{L_RISKWATCH_EXPLAIN}</p>
+
+<!-- BEGIN risk_errors -->
+<div class="errorbox">
+	<p>{risk_errors.MESSAGE}</p>
+</div>
+<!-- END risk_errors -->
+
+<!-- BEGIN risk_messages -->
+<div class="successbox">
+	<p>{risk_messages.MESSAGE}</p>
+</div>
+<!-- END risk_messages -->
+
+<form id="acp_riskwatch" method="post" action="{U_ACTION}">
+	<fieldset>
+		<legend>{L_RISKWATCH_FIELDSET_SETTINGS}</legend>
+		<!-- BEGIN settings -->
+		<dl>
+			<dt>
+				<label for="{settings.NAME}">{settings.LABEL}</label><br />
+				<span>{settings.EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="{settings.NAME}" name="riskwatch[{settings.NAME}]" value="{settings.VALUE}" size="8" /></dd>
+		</dl>
+		<!-- END settings -->
+	</fieldset>
+
+	<fieldset class="submit-buttons">
+		<input class="button1" type="submit" id="submit" name="submit" value="{L_SUBMIT}" />
+		<input class="button2" type="submit" id="recompute" name="recompute" value="{L_RISKWATCH_RECOMPUTE_NOW}" />
+	</fieldset>
+
+	<fieldset>
+		<legend>{L_RISKWATCH_FIELDSET_MANUAL}</legend>
+		<dl>
+			<dt>
+				<label for="manual_user_id">{L_RISKWATCH_MANUAL_USER_ID}</label><br />
+				<span>{L_RISKWATCH_MANUAL_USER_ID_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="2" id="manual_user_id" name="manual_user_id" value="{MANUAL_USER_ID}" size="8" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="manual_delta">{L_RISKWATCH_MANUAL_DELTA}</label><br />
+				<span>{L_RISKWATCH_MANUAL_DELTA_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" id="manual_delta" name="manual_delta" value="{MANUAL_DELTA}" size="8" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="manual_reason">{L_RISKWATCH_MANUAL_REASON}</label><br />
+				<span>{L_RISKWATCH_MANUAL_REASON_EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="manual_reason" name="manual_reason" value="{MANUAL_REASON}" size="60" maxlength="255" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="manual_expires_days">{L_RISKWATCH_MANUAL_EXPIRES_DAYS}</label><br />
+				<span>{L_RISKWATCH_MANUAL_EXPIRES_DAYS_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="0" id="manual_expires_days" name="manual_expires_days" value="{MANUAL_EXPIRES_DAYS}" size="8" /></dd>
+		</dl>
+		<div class="submit-buttons">
+			<input class="button1" type="submit" name="manual_add" value="{L_RISKWATCH_MANUAL_ADD}" />
+		</div>
+	</fieldset>
+
+	<h2>{L_RISKWATCH_MANUAL_ACTIVE}</h2>
+	<!-- IF S_MANUAL_ROWS -->
+	<table class="table1 fixed-width-table">
+		<thead>
+			<tr>
+				<th>{L_USERNAME}</th>
+				<th>{L_RISKWATCH_MANUAL_DELTA}</th>
+				<th>{L_RISKWATCH_MANUAL_REASON}</th>
+				<th>{L_RISKWATCH_MANUAL_CREATED_BY}</th>
+				<th>{L_RISKWATCH_MANUAL_CREATED_TIME}</th>
+				<th>{L_RISKWATCH_MANUAL_EXPIRES_AT}</th>
+				<th>{L_RISKWATCH_MANUAL_STATUS}</th>
+				<th>{L_ACTION}</th>
+			</tr>
+		</thead>
+		<tbody>
+			<!-- BEGIN manual_rows -->
+			<tr>
+				<td>{manual_rows.USERNAME_FULL}</td>
+				<td>{manual_rows.DELTA}</td>
+				<td>{manual_rows.REASON}</td>
+				<td>{manual_rows.CREATED_BY_FULL}</td>
+				<td>{manual_rows.CREATED_TIME}</td>
+				<td>{manual_rows.EXPIRES_TIME}</td>
+				<td>{manual_rows.STATUS_LABEL}</td>
+				<td><button class="button2" type="submit" name="manual_disable" value="{manual_rows.MANUAL_ID}">{L_RISKWATCH_MANUAL_DISABLE}</button></td>
+			</tr>
+			<!-- END manual_rows -->
+		</tbody>
+	</table>
+	<!-- ELSE -->
+	<p>{L_RISKWATCH_MANUAL_NONE}</p>
+	<!-- ENDIF -->
+
+	{S_FORM_TOKEN}
+</form>
+
+<h2>{L_RISKWATCH_TOP_USERS} ({RISKWATCH_TOTAL})</h2>
+
+<!-- IF S_RISKWATCH_ROWS -->
+<div class="pagination top-pagination">
+	{PAGE_NUMBER}
+	<span><!-- INCLUDE pagination.html --></span>
+</div>
+
+<table class="table1 fixed-width-table">
+	<thead>
+		<tr>
+			<th>{L_USERNAME}</th>
+			<th>{L_RISKWATCH_RISK_SCORE}</th>
+			<th>{L_RISKWATCH_RISK_LEVEL}</th>
+			<th>{L_RISKWATCH_WARNINGS}</th>
+			<th>{L_RISKWATCH_REPORTERS_30D}</th>
+			<th>{L_RISKWATCH_UNAPPROVED_30D}</th>
+			<th>{L_RISKWATCH_LOGIN_ATTEMPTS}</th>
+			<th>{L_RISKWATCH_ACTIVE_BAN}</th>
+			<th>{L_RISKWATCH_MANUAL_ADJUSTMENT}</th>
+			<th>{L_RISKWATCH_LAST_COMPUTED}</th>
+		</tr>
+	</thead>
+	<tbody>
+		<!-- BEGIN risk_rows -->
+		<tr>
+			<td>{risk_rows.USERNAME_FULL}</td>
+			<td>{risk_rows.RISK_SCORE}</td>
+			<td>{risk_rows.RISK_LEVEL_LABEL}</td>
+			<td>{risk_rows.WARNINGS_COUNT}</td>
+			<td>{risk_rows.OPEN_REPORTERS_30D}</td>
+			<td>{risk_rows.UNAPPROVED_POSTS_30D}</td>
+			<td>{risk_rows.LOGIN_ATTEMPTS}</td>
+			<td>{risk_rows.ACTIVE_BAN}</td>
+			<td>{risk_rows.MANUAL_ADJUSTMENT}</td>
+			<td>{risk_rows.COMPUTED_TIME}</td>
+		</tr>
+		<!-- END risk_rows -->
+	</tbody>
+</table>
+
+<div class="pagination">
+	{PAGE_NUMBER}
+	<span><!-- INCLUDE pagination.html --></span>
+</div>
+<!-- ELSE -->
+<p>{L_RISKWATCH_NO_DATA}</p>
+<!-- ENDIF -->
+
+<!-- INCLUDE overall_footer.html -->

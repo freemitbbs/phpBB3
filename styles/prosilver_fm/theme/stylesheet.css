@@ -133,12 +133,17 @@ ul.zebra-list li:nth-child(odd) {
 	background: #FFFFFF;
 	border-color: #D5CCBA;
 	color: #105289;
+	font-size: 1.15em !important;
 }
 
 .toptopics-category-forum-link:hover {
 	background: #FFF6E0;
 	border-color: #B8A060;
 	box-shadow: 0 1px 3px rgba(100, 80, 30, 0.12);
+}
+
+.forumchoice-favorites-link {
+	font-size: 1.15em !important;
 }
 
 /* responsive.css changes */
