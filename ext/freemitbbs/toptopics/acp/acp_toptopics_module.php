@@ -10,6 +10,7 @@ class acp_toptopics_module
 		['key' => 'toptopics_index_limit', 'type' => 'int', 'default' => 10, 'min' => 0, 'max' => 100],
 		['key' => 'toptopics_forum_limit', 'type' => 'int', 'default' => 5, 'min' => 0, 'max' => 100],
 		['key' => 'toptopics_summary_cache_seconds', 'type' => 'int', 'default' => 600, 'min' => 0, 'max' => 86400],
+		['key' => 'toptopics_index_excluded_forum_ids', 'type' => 'forum_ids', 'default' => '', 'size' => 40],
 	];
 
 	private const DOWNVOTE_SETTINGS = [
@@ -118,6 +119,7 @@ class acp_toptopics_module
 				'LABEL' => $language->lang(strtoupper($setting['key'])),
 				'EXPLAIN' => $language->lang(strtoupper($setting['key']) . '_EXPLAIN'),
 				'VALUE' => isset($config[$setting['key']]) ? $config[$setting['key']] : $setting['default'],
+				'SIZE' => (int) ($setting['size'] ?? 8),
 			]);
 		}
 	}
@@ -129,6 +131,11 @@ class acp_toptopics_module
 
 	protected function normalize_value(string $value, array $setting): string
 	{
+		if (($setting['type'] ?? '') === 'forum_ids')
+		{
+			return $this->normalize_forum_id_list($value);
+		}
+
 		if ($setting['type'] === 'int')
 		{
 			$normalized = (int) $value;
@@ -159,6 +166,30 @@ class acp_toptopics_module
 		}
 
 		return $this->format_float($normalized);
+	}
+
+	protected function normalize_forum_id_list(string $value): string
+	{
+		$trimmed = preg_replace('/\s+/', '', trim($value));
+		if ($trimmed === '')
+		{
+			return '';
+		}
+
+		$forum_ids = [];
+		foreach (explode(',', $trimmed) as $part)
+		{
+			$forum_id = (int) $part;
+			if ($forum_id > 0)
+			{
+				$forum_ids[$forum_id] = true;
+			}
+		}
+
+		$normalized_ids = array_keys($forum_ids);
+		sort($normalized_ids);
+
+		return implode(',', $normalized_ids);
 	}
 
 	protected function format_float(float $value): string

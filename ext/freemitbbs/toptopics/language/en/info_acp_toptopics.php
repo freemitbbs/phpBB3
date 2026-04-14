@@ -28,6 +28,8 @@ $lang = array_merge($lang, [
 		'TOPTOPICS_FORUM_LIMIT_EXPLAIN' => 'Maximum number of ranked topics shown in the per-forum Top Topics block.',
 		'TOPTOPICS_SUMMARY_CACHE_SECONDS' => 'Summary cache lifetime',
 		'TOPTOPICS_SUMMARY_CACHE_SECONDS_EXPLAIN' => 'How long public Top Topics snapshots stay fresh, in seconds. Stale public snapshots may continue to be served briefly while a rebuild is in progress. Use 0 to disable snapshot caching.',
+		'TOPTOPICS_INDEX_EXCLUDED_FORUM_IDS' => 'Excluded forum IDs on index',
+		'TOPTOPICS_INDEX_EXCLUDED_FORUM_IDS_EXPLAIN' => 'Comma-separated forum IDs to exclude from index Top Topics (global and category blocks). Example: 12,34,56',
 
 		'TOPTOPICS_DOWNVOTE_MIN_POSTS' => 'Minimum posts required to dislike',
 	'TOPTOPICS_DOWNVOTE_MIN_POSTS_EXPLAIN' => 'Users need at least this many posts before the dislike action is allowed.',
