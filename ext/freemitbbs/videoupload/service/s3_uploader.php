@@ -5,11 +5,19 @@ namespace freemitbbs\videoupload\service;
 class s3_uploader
 {
 	private const SERVICE = 's3';
-	private const ALLOWED_EXTENSIONS = ['mp4', 'ogg', 'webm'];
+	private const ALLOWED_EXTENSIONS = ['mp4', 'ogg', 'webm', 'weba', 'mp3', 'm4a', 'aac', 'wav', 'oga', 'opus', 'flac'];
 	private const CONTENT_TYPES = [
 		'mp4' => 'video/mp4',
 		'ogg' => 'video/ogg',
 		'webm' => 'video/webm',
+		'weba' => 'audio/webm',
+		'mp3' => 'audio/mpeg',
+		'm4a' => 'audio/mp4',
+		'aac' => 'audio/aac',
+		'wav' => 'audio/wav',
+		'oga' => 'audio/ogg',
+		'opus' => 'audio/opus',
+		'flac' => 'audio/flac',
 	];
 
 	protected \phpbb\config\config $config;
@@ -24,7 +32,11 @@ class s3_uploader
 		$extension = strtolower($extension);
 		if (!in_array($extension, self::ALLOWED_EXTENSIONS, true))
 		{
-			throw new \RuntimeException('Only .mp4, .ogg, and .webm uploads are supported.');
+			$allowed_extensions = implode(', ', array_map(static function ($ext)
+			{
+				return '.' . $ext;
+			}, self::ALLOWED_EXTENSIONS));
+			throw new \RuntimeException('Only ' . $allowed_extensions . ' uploads are supported.');
 		}
 
 		if (!function_exists('curl_init'))

@@ -2,7 +2,7 @@
 	'use strict';
 
 	function splitAllowedExts(rawValue) {
-		return (rawValue || '.mp4,.ogg,.webm')
+		return (rawValue || '.mp4,.ogg,.webm,.weba,.mp3,.m4a,.aac,.wav,.oga,.opus,.flac')
 			.split(',')
 			.map(function (item) { return item.trim().toLowerCase(); })
 			.filter(function (item) { return item.length > 0; });
@@ -11,6 +11,13 @@
 	function hasAllowedExtension(nameOrUrl, allowedExts) {
 		var base = String(nameOrUrl || '').split('#')[0].split('?')[0].toLowerCase();
 		return allowedExts.some(function (ext) {
+			return base.endsWith(ext);
+		});
+	}
+
+	function hasAnyExtension(nameOrUrl, extensions) {
+		var base = String(nameOrUrl || '').split('#')[0].split('?')[0].toLowerCase();
+		return extensions.some(function (ext) {
 			return base.endsWith(ext);
 		});
 	}
@@ -25,8 +32,28 @@
 		return document.getElementById('message');
 	}
 
-	function insertUrlIntoEditor(url) {
-		var text = String(url || '').trim() + '\n';
+	function isAudioUpload(file, url) {
+		var audioOnlyExtensions = ['.weba', '.mp3', '.m4a', '.aac', '.wav', '.oga', '.opus', '.flac'];
+		var mimeType = file && typeof file.type === 'string' ? file.type.toLowerCase() : '';
+
+		if (mimeType.indexOf('audio/') === 0) {
+			return true;
+		}
+
+		if (hasAnyExtension(url, audioOnlyExtensions)) {
+			return true;
+		}
+
+		if (hasAnyExtension(url, ['.ogg']) && mimeType === 'audio/ogg') {
+			return true;
+		}
+
+		return false;
+	}
+
+	function insertUrlIntoEditor(url, wrapAsAudio) {
+		var cleanedUrl = String(url || '').trim();
+		var text = wrapAsAudio ? ('[audio]' + cleanedUrl + '[/audio]\n') : (cleanedUrl + '\n');
 		if (!text.trim()) {
 			return false;
 		}
@@ -233,15 +260,15 @@
 						return;
 					}
 
-					if (!hasAllowedExtension(data.url, allowedExts)) {
-						setStatus(msgExtension, 'is-error');
-						return;
-					}
+						if (!hasAllowedExtension(data.url, allowedExts)) {
+							setStatus(msgExtension, 'is-error');
+							return;
+						}
 
-					if (!insertUrlIntoEditor(data.url)) {
-						setStatus(msgGeneric, 'is-error');
-						return;
-					}
+						if (!insertUrlIntoEditor(data.url, isAudioUpload(file, data.url))) {
+							setStatus(msgGeneric, 'is-error');
+							return;
+						}
 
 					setStatus(msgSuccess, 'is-success');
 				})

@@ -6,7 +6,21 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 class listener implements EventSubscriberInterface
 {
-	private const ALLOWED_EXTENSIONS = ['mp4', 'ogg', 'webm'];
+	private const ALLOWED_EXTENSIONS = ['mp4', 'ogg', 'webm', 'weba', 'mp3', 'm4a', 'aac', 'wav', 'oga', 'opus', 'flac'];
+	private const ACCEPT_MIME_TYPES = [
+		'video/mp4',
+		'video/ogg',
+		'video/webm',
+		'audio/webm',
+		'audio/mpeg',
+		'audio/mp4',
+		'audio/aac',
+		'audio/wav',
+		'audio/x-wav',
+		'audio/ogg',
+		'audio/opus',
+		'audio/flac',
+	];
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
@@ -57,6 +71,12 @@ class listener implements EventSubscriberInterface
 		$max_bytes = ($php_limit_bytes > 0) ? min($configured_max_bytes, $php_limit_bytes) : $configured_max_bytes;
 		$page_data = $event['page_data'];
 		$allowed_label = implode(', ', self::ALLOWED_EXTENSIONS);
+		$allowed_exts = array_map(static function ($extension)
+		{
+			return '.' . $extension;
+		}, self::ALLOWED_EXTENSIONS);
+		$allowed_exts_value = implode(',', $allowed_exts);
+		$accept_value = implode(',', array_merge($allowed_exts, self::ACCEPT_MIME_TYPES));
 
 		$page_data = array_merge($page_data, [
 			'S_VIDEOUPLOAD_AVAILABLE' => true,
@@ -64,8 +84,8 @@ class listener implements EventSubscriberInterface
 			'VIDEOUPLOAD_HASH' => generate_link_hash('freemitbbs_videoupload'),
 			'VIDEOUPLOAD_FORUM_ID' => $forum_id,
 			'VIDEOUPLOAD_MAX_BYTES' => $max_bytes,
-			'VIDEOUPLOAD_ALLOWED_EXTS' => '.mp4,.ogg,.webm',
-			'VIDEOUPLOAD_ACCEPT' => '.mp4,.ogg,.webm,video/mp4,video/ogg,video/webm',
+			'VIDEOUPLOAD_ALLOWED_EXTS' => $allowed_exts_value,
+			'VIDEOUPLOAD_ACCEPT' => $accept_value,
 			'VIDEOUPLOAD_HELP_TEXT' => $this->language->lang('VIDEOUPLOAD_HELP_WITH_LIMIT', $allowed_label, $this->format_size($max_bytes)),
 			'VIDEOUPLOAD_MSG_UPLOADING' => $this->language->lang('VIDEOUPLOAD_UPLOADING'),
 			'VIDEOUPLOAD_MSG_SUCCESS' => $this->language->lang('VIDEOUPLOAD_UPLOAD_SUCCESS'),
