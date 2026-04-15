@@ -1,0 +1,28 @@
+<!-- INCLUDE overall_header.html -->
+
+<a name="maincontent"></a>
+<h1>{L_ACP_HOTFORUMS}</h1>
+<p>{L_HOTFORUMS_EXPLAIN}</p>
+
+<form id="acp_hotforums" method="post" action="{U_ACTION}">
+	<fieldset>
+		<legend>{L_HOTFORUMS_FIELDSET_SETTINGS}</legend>
+		<!-- BEGIN settings -->
+		<dl>
+			<dt>
+				<label for="{settings.NAME}">{settings.LABEL}</label><br />
+				<span>{settings.EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="{settings.NAME}" name="hotforums[{settings.NAME}]" value="{settings.VALUE}" size="8" /></dd>
+		</dl>
+		<!-- END settings -->
+	</fieldset>
+
+	<fieldset class="submit-buttons">
+		{S_FORM_TOKEN}
+		<input class="button1" type="submit" id="submit" name="submit" value="{L_SUBMIT}" />
+		<input class="button2" type="reset" id="reset" name="reset" value="{L_RESET}" />
+	</fieldset>
+</form>
+
+<!-- INCLUDE overall_footer.html -->

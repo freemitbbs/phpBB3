@@ -1,0 +1,73 @@
+{# Display only on Posting->BBCodes page #}
+{% if bbcodes %}
+
+	{% INCLUDECSS '@vse_abbc3/acp_abbc3.css' %}
+	{% INCLUDEJS '@vse_abbc3/js/jquery.tablednd.min.js' %}
+
+	<div class="toast hidden" id="abbc3-successbox">
+		<div class="toast-content">
+			<i class="fa fa-check-circle toast-check"></i>
+			<div class="toast-message">
+				<span class="toast-text toast-text-info">{{ lang('INFORMATION') }}</span>
+				<span class="toast-text toast-text-body">{{ lang('ABBC3_BBCODE_ORDERED') }}</span>
+			</div>
+		</div>
+	</div>
+
+	<script>
+		(function($) {  // Avoid conflicts with other libraries
+			'use strict';
+			$(function() {
+				var msgTimer,
+					bbcodeTable = $('#down'),
+					msgSuccessBox = $('#abbc3-successbox');
+				// Get BBCode ids from the delete button,
+				// and create tr row IDs on the fly for use by tableDnD
+				bbcodeTable.find('tbody').find('tr').each(function() {
+					var url = $(this).find('a').last().attr('href');
+					if (url) $(this).attr('id', 'bbcode-' + url.split('bbcode=')[1]);
+				});
+				// Enable table row drag-drop
+				bbcodeTable.tableDnD({
+					onDragClass: 'row3',
+					onDrop: function(table, row) {
+						$.ajax({
+							url: '{{ UA_DRAG_DROP }}&tablename=' + $(table).attr('id'),
+							data: $.tableDnD.serialize(),
+							success: function(res) {
+								// Show the message
+								if (res.success) {
+									clearTimeout(msgTimer);
+									msgSuccessBox.stop(true, true).hide().fadeIn(250);
+									msgTimer = setTimeout(function() {
+										msgSuccessBox.fadeOut(250);
+									}, 3000);
+								}
+							}
+						});
+					}
+				});
+			});
+		})(jQuery);
+
+		function darkToast() {
+			const toast = document.getElementById('abbc3-successbox');
+
+			if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+				toast.classList.add("toast-dark");
+			} else {
+				toast.classList.remove("toast-dark");
+			}
+		}
+
+		// Initial check
+		darkToast();
+
+		// Add event listener to detect changes
+		window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+			darkToast();
+		});
+
+	</script>
+
+{% endif %}

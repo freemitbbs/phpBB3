@@ -1,0 +1,22 @@
+{
+	"name": "freemitbbs/hotforums",
+	"type": "phpbb-extension",
+	"description": "Displays the most-viewed forums on top of the index page.",
+	"version": "1.0.0",
+	"license": "GPL-2.0-only",
+	"authors": [
+		{
+			"name": "FreeMitBBS"
+		}
+	],
+	"require": {
+		"php": ">=8.1",
+		"phpbb/phpbb": ">=3.3.0"
+	},
+	"extra": {
+		"display-name": "Hot Forums",
+		"soft-require": {
+			"phpbb/phpbb": ">=3.3.0,<4.0.0@dev"
+		}
+	}
+}
