@@ -46,6 +46,7 @@ class summary_listener implements EventSubscriberInterface
 	protected string $php_ext;
 	protected string $table_prefix;
 	protected int $test_time;
+	protected ?array $foe_user_id_map = null;
 
 	/** @var array Prefetched like counts per topic_id */
 	protected array $topic_like_counts = [];
@@ -295,6 +296,8 @@ class summary_listener implements EventSubscriberInterface
 			return $post_list;
 		}
 
+		$foe_user_id_map = $this->get_current_user_foe_id_map();
+
 		// find all the visible, liked posts in the given period
 		$sql = 'SELECT '. USERS_TABLE . '.user_id, '. USERS_TABLE . '.username, '. USERS_TABLE . '.user_colour,
 			' . TOPICS_TABLE . '.topic_title, ' . TOPICS_TABLE . '.forum_id, ' . TOPICS_TABLE . '.topic_id,
@@ -325,17 +328,28 @@ class summary_listener implements EventSubscriberInterface
 		// cache the query to reduce load on server
 		// the same query is run for all users with the same set of forum permissions
 		// Note: cache is cleared each time a user adds or removes a like in the database
-		$result = $this->db->sql_query_limit($sql, $howmany, 0, (self::SECONDS_PER_HOUR * 12) - 1);
+		$query_limit = min(max($howmany * 5, $howmany), 200);
+		$result = $this->db->sql_query_limit($sql, $query_limit, 0, (self::SECONDS_PER_HOUR * 12) - 1);
 
 		$forums = array();
 		$rows = array();
 		$post_ids = array();
 		while ($row = $this->db->sql_fetchrow($result))
 		{
+			$poster_id = (int) ($row['user_id'] ?? 0);
+			if ($poster_id > 0 && isset($foe_user_id_map[$poster_id]))
+			{
+				continue;
+			}
+
 			$rows[] = $row;
 			$post_list[] = $row['post_id'];
 			$post_ids[] = (int) $row['post_id'];
 			$forums[$row['forum_id']][] = $row['topic_id'];
+			if (count($rows) >= $howmany)
+			{
+				break;
+			}
 		}
 		$this->db->sql_freeresult($result);
 
@@ -432,6 +446,38 @@ class summary_listener implements EventSubscriberInterface
 		$this->db->sql_freeresult($result);
 
 		return $post_likers;
+	}
+
+	protected function get_current_user_foe_id_map(): array
+	{
+		if ($this->foe_user_id_map !== null)
+		{
+			return $this->foe_user_id_map;
+		}
+
+		$this->foe_user_id_map = array();
+		$current_user_id = (int) ($this->user->data['user_id'] ?? ANONYMOUS);
+		if ($current_user_id === ANONYMOUS)
+		{
+			return $this->foe_user_id_map;
+		}
+
+		$sql = 'SELECT zebra_id
+			FROM ' . ZEBRA_TABLE . '
+			WHERE user_id = ' . $current_user_id . '
+				AND foe = 1';
+		$result = $this->db->sql_query($sql);
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$foe_user_id = (int) ($row['zebra_id'] ?? 0);
+			if ($foe_user_id > 0)
+			{
+				$this->foe_user_id_map[$foe_user_id] = true;
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		return $this->foe_user_id_map;
 	}
 
 	/**

@@ -38,6 +38,7 @@ class listener implements EventSubscriberInterface
 	protected ?int $index_category_candidate_limit = null;
 	protected ?array $index_excluded_forum_id_map = null;
 	protected ?array $index_recenttopics_topic_id_map = null;
+	protected ?array $foe_user_id_map = null;
 
 	public function __construct(
 		\phpbb\auth\auth $auth,
@@ -371,7 +372,7 @@ class listener implements EventSubscriberInterface
 		$scope_topics = !empty($scope_map)
 			? $this->ranker->get_topics_for_scopes($scope_map)
 			: [];
-		$this->index_summary_topics = $scope_topics[$summary_scope_id] ?? [];
+		$this->index_summary_topics = $this->exclude_foe_authored_topics($scope_topics[$summary_scope_id] ?? []);
 		$this->index_summary_topic_ids = [];
 		foreach ($this->index_summary_topics as $topic)
 		{
@@ -500,7 +501,9 @@ class listener implements EventSubscriberInterface
 			$this->db->sql_freeresult($result);
 		}
 
-		$topics = $this->ranker->get_topics($forum_ids, (int) $this->config['toptopics_forum_limit']);
+		$topics = $this->exclude_foe_authored_topics(
+			$this->ranker->get_topics($forum_ids, (int) $this->config['toptopics_forum_limit'])
+		);
 		$this->assign_summary($topics, 'S_TOPTOPICS_FORUM_ITEMS', $this->language->lang('TOPTOPICS_FORUM_TITLE'), $include_forum_name, 'toptopics_forum_' . $forum_id);
 	}
 
@@ -673,7 +676,9 @@ class listener implements EventSubscriberInterface
 		}
 
 		$forum_ids = $this->exclude_index_forum_ids($this->get_readable_forum_ids());
-		$this->index_summary_topics = $this->ranker->get_topics($forum_ids, (int) $this->config['toptopics_index_limit']);
+		$this->index_summary_topics = $this->exclude_foe_authored_topics(
+			$this->ranker->get_topics($forum_ids, (int) $this->config['toptopics_index_limit'])
+		);
 		$this->index_summary_topic_ids = [];
 
 		foreach ($this->index_summary_topics as $topic)
@@ -776,7 +781,8 @@ class listener implements EventSubscriberInterface
 			return [];
 		}
 
-		$filtered_topics = $this->exclude_topics_present_in_index_summary($topics);
+		$filtered_topics = $this->exclude_foe_authored_topics($topics);
+		$filtered_topics = $this->exclude_topics_present_in_index_summary($filtered_topics);
 		if (count($filtered_topics) > $forum_limit)
 		{
 			$filtered_topics = array_slice($filtered_topics, 0, $forum_limit);
@@ -1317,6 +1323,7 @@ class listener implements EventSubscriberInterface
 
 	protected function assign_summary(array $topics, string $template_flag, string $title, bool $include_forum_name, string $collapse_id): void
 	{
+		$topics = $this->exclude_foe_authored_topics($topics);
 		if (empty($topics))
 		{
 			return;
@@ -1371,6 +1378,66 @@ class listener implements EventSubscriberInterface
 
 			$this->template->assign_block_vars('top_topics', $topic_row);
 		}
+	}
+
+	protected function exclude_foe_authored_topics(array $topics): array
+	{
+		if (empty($topics))
+		{
+			return [];
+		}
+
+		$foe_user_id_map = $this->get_current_user_foe_id_map();
+		if (empty($foe_user_id_map))
+		{
+			return array_values($topics);
+		}
+
+		$filtered_topics = [];
+		foreach ($topics as $topic)
+		{
+			$topic_poster = (int) ($topic['topic_poster'] ?? 0);
+			if ($topic_poster > 0 && isset($foe_user_id_map[$topic_poster]))
+			{
+				continue;
+			}
+
+			$filtered_topics[] = $topic;
+		}
+
+		return $filtered_topics;
+	}
+
+	protected function get_current_user_foe_id_map(): array
+	{
+		if ($this->foe_user_id_map !== null)
+		{
+			return $this->foe_user_id_map;
+		}
+
+		$this->foe_user_id_map = [];
+		$current_user_id = (int) ($this->user->data['user_id'] ?? ANONYMOUS);
+		if ($current_user_id === ANONYMOUS)
+		{
+			return $this->foe_user_id_map;
+		}
+
+		$sql = 'SELECT zebra_id
+			FROM ' . ZEBRA_TABLE . '
+			WHERE user_id = ' . $current_user_id . '
+				AND foe = 1';
+		$result = $this->db->sql_query($sql);
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$foe_user_id = (int) ($row['zebra_id'] ?? 0);
+			if ($foe_user_id > 0)
+			{
+				$this->foe_user_id_map[$foe_user_id] = true;
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		return $this->foe_user_id_map;
 	}
 
 	protected function assign_topicpreview_template_vars(array $topicpreview): void

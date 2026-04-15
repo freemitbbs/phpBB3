@@ -21,6 +21,7 @@ class rtng_functions
 	private int $topics_page_number;
 	private ?array $toptopics_index_topic_ids;
 	private ?array $index_topic_ids_for_dedupe;
+	private ?array $foe_user_id_map;
 
 	public function __construct
 	(
@@ -46,6 +47,7 @@ class rtng_functions
 		$this->topics_page_number	= 0;
 		$this->toptopics_index_topic_ids = null;
 		$this->index_topic_ids_for_dedupe = null;
+		$this->foe_user_id_map = null;
 	}
 
 	/**
@@ -330,6 +332,7 @@ class rtng_functions
 			$sql_extra	   = ' AND ' . $this->db->sql_in_set('t.topic_id', $excluded_topics, true);
 			$sql_extra	  .= ' AND ' . $this->content_visibility->get_forums_visibility_sql('topic', $forum_id_list, $table_alias = 't.');
 			$sql_extra	  .= ' AND t.topic_status <> ' . ITEM_MOVED;
+			$sql_extra	  .= $this->build_non_foe_topic_poster_sql('t');
 			$unread_topics = get_unread_topics(false, $sql_extra, '', $total_topics_limit);
 
 			$total_topics_limit = min($total_topics_limit, count($unread_topics));
@@ -423,7 +426,8 @@ class rtng_functions
 			],
 			'WHERE'     => $this->db->sql_in_set('t.topic_id', $excluded_topics, true) . '
 					AND t.topic_status <> ' . ITEM_MOVED . '
-					AND ' . $this->content_visibility->get_forums_visibility_sql('topic', $forum_id_list, $table_alias = 't.'),
+					AND ' . $this->content_visibility->get_forums_visibility_sql('topic', $forum_id_list, $table_alias = 't.')
+					. $this->build_non_foe_topic_poster_sql('t'),
 			'ORDER_BY'  => 't.' . $sort_topics . ' DESC',
 		];
 
@@ -511,13 +515,22 @@ class rtng_functions
 
 		$topics = $this->toptopics_ranker->get_topics($forum_ids, $index_limit);
 		$topic_id_map = [];
+		$foe_user_id_map = $this->get_current_user_foe_id_map();
 		foreach ($topics as $topic)
 		{
 			$topic_id = (int) ($topic['topic_id'] ?? 0);
-			if ($topic_id > 0)
+			$topic_poster = (int) ($topic['topic_poster'] ?? 0);
+			if ($topic_id <= 0)
 			{
-				$topic_id_map[$topic_id] = true;
+				continue;
 			}
+
+			if (!empty($foe_user_id_map) && isset($foe_user_id_map[$topic_poster]))
+			{
+				continue;
+			}
+
+			$topic_id_map[$topic_id] = true;
 		}
 
 		$this->toptopics_index_topic_ids = array_keys($topic_id_map);
@@ -569,6 +582,55 @@ class rtng_functions
 		}
 
 		return $id_map;
+	}
+
+	private function build_non_foe_topic_poster_sql(string $topic_alias = 't'): string
+	{
+		$foe_user_id_map = $this->get_current_user_foe_id_map();
+		if (empty($foe_user_id_map))
+		{
+			return '';
+		}
+
+		$foe_user_ids = array_map('intval', array_keys($foe_user_id_map));
+		if (empty($foe_user_ids))
+		{
+			return '';
+		}
+
+		return ' AND ' . $this->db->sql_in_set($topic_alias . '.topic_poster', $foe_user_ids, true);
+	}
+
+	private function get_current_user_foe_id_map(): array
+	{
+		if ($this->foe_user_id_map !== null)
+		{
+			return $this->foe_user_id_map;
+		}
+
+		$this->foe_user_id_map = [];
+		$current_user_id = (int) ($this->user->data['user_id'] ?? ANONYMOUS);
+		if ($current_user_id === ANONYMOUS)
+		{
+			return $this->foe_user_id_map;
+		}
+
+		$sql = 'SELECT zebra_id
+			FROM ' . ZEBRA_TABLE . '
+			WHERE user_id = ' . $current_user_id . '
+				AND foe = 1';
+		$result = $this->db->sql_query($sql);
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$foe_user_id = (int) ($row['zebra_id'] ?? 0);
+			if ($foe_user_id > 0)
+			{
+				$this->foe_user_id_map[$foe_user_id] = true;
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		return $this->foe_user_id_map;
 	}
 
 	/**
