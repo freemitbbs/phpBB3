@@ -1,0 +1,4 @@
+freemitbbs_videoupload_upload:
+    path: /videoupload/upload
+    defaults: { _controller: freemitbbs.videoupload.controller.upload:handle }
+    methods: [POST]

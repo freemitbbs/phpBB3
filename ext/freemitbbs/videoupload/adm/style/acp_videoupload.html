@@ -1,0 +1,111 @@
+<!-- INCLUDE overall_header.html -->
+
+<a name="maincontent"></a>
+<h1>{L_ACP_VIDEOUPLOAD}</h1>
+<p>{L_VIDEOUPLOAD_EXPLAIN}</p>
+
+<form id="acp_videoupload" method="post" action="{U_ACTION}">
+	<fieldset>
+		<legend>{L_VIDEOUPLOAD_FIELDSET_GENERAL}</legend>
+		<dl>
+			<dt>
+				<label for="videoupload_enabled">{L_VIDEOUPLOAD_ENABLED}</label><br />
+				<span>{L_VIDEOUPLOAD_ENABLED_EXPLAIN}</span>
+			</dt>
+			<dd>
+				<label><input type="radio" class="radio" name="videoupload_enabled" value="1"<!-- IF VIDEOUPLOAD_ENABLED --> checked="checked"<!-- ENDIF --> /> {L_YES}</label>
+				<label><input type="radio" class="radio" name="videoupload_enabled" value="0"<!-- IF not VIDEOUPLOAD_ENABLED --> checked="checked"<!-- ENDIF --> /> {L_NO}</label>
+			</dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="videoupload_max_size_mb">{L_VIDEOUPLOAD_MAX_SIZE_MB}</label><br />
+				<span>{L_VIDEOUPLOAD_MAX_SIZE_MB_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="1" max="2048" id="videoupload_max_size_mb" name="videoupload_max_size_mb" value="{VIDEOUPLOAD_MAX_SIZE_MB}" class="inputbox autowidth" /></dd>
+		</dl>
+	</fieldset>
+
+	<fieldset>
+		<legend>{L_VIDEOUPLOAD_FIELDSET_S3}</legend>
+		<dl>
+			<dt>
+				<label for="videoupload_s3_endpoint">{L_VIDEOUPLOAD_S3_ENDPOINT}</label><br />
+				<span>{L_VIDEOUPLOAD_S3_ENDPOINT_EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="videoupload_s3_endpoint" name="videoupload_s3_endpoint" value="{VIDEOUPLOAD_S3_ENDPOINT}" class="inputbox" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="videoupload_s3_region">{L_VIDEOUPLOAD_S3_REGION}</label><br />
+				<span>{L_VIDEOUPLOAD_S3_REGION_EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="videoupload_s3_region" name="videoupload_s3_region" value="{VIDEOUPLOAD_S3_REGION}" class="inputbox" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="videoupload_s3_bucket">{L_VIDEOUPLOAD_S3_BUCKET}</label><br />
+				<span>{L_VIDEOUPLOAD_S3_BUCKET_EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="videoupload_s3_bucket" name="videoupload_s3_bucket" value="{VIDEOUPLOAD_S3_BUCKET}" class="inputbox" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="videoupload_s3_access_key">{L_VIDEOUPLOAD_S3_ACCESS_KEY}</label><br />
+				<span>{L_VIDEOUPLOAD_S3_ACCESS_KEY_EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="videoupload_s3_access_key" name="videoupload_s3_access_key" value="{VIDEOUPLOAD_S3_ACCESS_KEY}" class="inputbox" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="videoupload_s3_secret_key">{L_VIDEOUPLOAD_S3_SECRET_KEY}</label><br />
+				<span>{L_VIDEOUPLOAD_S3_SECRET_KEY_EXPLAIN}</span>
+			</dt>
+			<dd>
+				<input type="password" id="videoupload_s3_secret_key" name="videoupload_s3_secret_key" value="" class="inputbox" autocomplete="new-password" />
+				<!-- IF S_VIDEOUPLOAD_SECRET_CONFIGURED -->
+				<br /><label><input type="checkbox" name="videoupload_s3_secret_key_clear" value="1" /> {L_VIDEOUPLOAD_S3_SECRET_KEY_CLEAR}</label>
+				<!-- ENDIF -->
+			</dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="videoupload_s3_path_prefix">{L_VIDEOUPLOAD_S3_PATH_PREFIX}</label><br />
+				<span>{L_VIDEOUPLOAD_S3_PATH_PREFIX_EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="videoupload_s3_path_prefix" name="videoupload_s3_path_prefix" value="{VIDEOUPLOAD_S3_PATH_PREFIX}" class="inputbox" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="videoupload_s3_public_base_url">{L_VIDEOUPLOAD_S3_PUBLIC_BASE_URL}</label><br />
+				<span>{L_VIDEOUPLOAD_S3_PUBLIC_BASE_URL_EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="videoupload_s3_public_base_url" name="videoupload_s3_public_base_url" value="{VIDEOUPLOAD_S3_PUBLIC_BASE_URL}" class="inputbox" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="videoupload_s3_use_path_style">{L_VIDEOUPLOAD_S3_USE_PATH_STYLE}</label><br />
+				<span>{L_VIDEOUPLOAD_S3_USE_PATH_STYLE_EXPLAIN}</span>
+			</dt>
+			<dd>
+				<label><input type="radio" class="radio" name="videoupload_s3_use_path_style" value="1"<!-- IF VIDEOUPLOAD_S3_USE_PATH_STYLE --> checked="checked"<!-- ENDIF --> /> {L_YES}</label>
+				<label><input type="radio" class="radio" name="videoupload_s3_use_path_style" value="0"<!-- IF not VIDEOUPLOAD_S3_USE_PATH_STYLE --> checked="checked"<!-- ENDIF --> /> {L_NO}</label>
+			</dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="videoupload_s3_acl">{L_VIDEOUPLOAD_S3_ACL}</label><br />
+				<span>{L_VIDEOUPLOAD_S3_ACL_EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="videoupload_s3_acl" name="videoupload_s3_acl" value="{VIDEOUPLOAD_S3_ACL}" class="inputbox" /></dd>
+		</dl>
+	</fieldset>
+
+	<fieldset class="submit-buttons">
+		{S_FORM_TOKEN}
+		<input class="button1" type="submit" id="submit" name="submit" value="{L_SUBMIT}" />
+		<input class="button2" type="reset" id="reset" name="reset" value="{L_RESET}" />
+	</fieldset>
+</form>
+
+<!-- INCLUDE overall_footer.html -->

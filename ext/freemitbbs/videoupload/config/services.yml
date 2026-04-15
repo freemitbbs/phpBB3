@@ -1,0 +1,26 @@
+services:
+    freemitbbs.videoupload.s3_uploader:
+        class: freemitbbs\videoupload\service\s3_uploader
+        arguments:
+            - '@config'
+
+    freemitbbs.videoupload.listener:
+        class: freemitbbs\videoupload\event\listener
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@language'
+            - '@controller.helper'
+            - '@user'
+        tags:
+            - { name: event.listener }
+
+    freemitbbs.videoupload.controller.upload:
+        class: freemitbbs\videoupload\controller\upload
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@request'
+            - '@user'
+            - '@language'
+            - '@freemitbbs.videoupload.s3_uploader'

@@ -722,6 +722,7 @@ $lang = array_merge($lang, array(
 	'SEARCH_NEW'				=> 'New posts',
 	'SEARCH_POSTS_BY'			=> 'Search posts by',
 	'SEARCH_SELF'				=> 'Your posts',
+	'SEARCH_SELF_TOPICS'		=> 'Your topics',
 	'SEARCH_TOPIC'				=> 'Search this topic…',
 	'SEARCH_UNANSWERED'			=> 'Unanswered topics',
 	'SEARCH_UNREAD'				=> 'Unread posts',
