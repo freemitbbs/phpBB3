@@ -774,9 +774,29 @@ class listener implements EventSubscriberInterface
 			return [];
 		}
 
-		$excluded_topic_ids = $this->get_index_summary_topic_id_map();
-		$filtered_topics = [];
+		$filtered_topics = $this->exclude_topics_present_in_index_summary($topics);
+		if (count($filtered_topics) > $forum_limit)
+		{
+			$filtered_topics = array_slice($filtered_topics, 0, $forum_limit);
+		}
 
+		return $filtered_topics;
+	}
+
+	protected function exclude_topics_present_in_index_summary(array $topics): array
+	{
+		if (empty($topics))
+		{
+			return [];
+		}
+
+		$excluded_topic_ids = $this->get_index_summary_topic_id_map();
+		if (empty($excluded_topic_ids))
+		{
+			return array_values($topics);
+		}
+
+		$filtered_topics = [];
 		foreach ($topics as $topic)
 		{
 			$topic_id = (int) ($topic['topic_id'] ?? 0);
@@ -786,10 +806,6 @@ class listener implements EventSubscriberInterface
 			}
 
 			$filtered_topics[] = $topic;
-			if (count($filtered_topics) >= $forum_limit)
-			{
-				break;
-			}
 		}
 
 		return $filtered_topics;
@@ -886,6 +902,8 @@ class listener implements EventSubscriberInterface
 
 	protected function build_category_rows_html(array $topics): string
 	{
+		$topics = $this->exclude_topics_present_in_index_summary($topics);
+
 		if (empty($topics))
 		{
 			return '<li class="row bg1 toptopics-category-empty">'

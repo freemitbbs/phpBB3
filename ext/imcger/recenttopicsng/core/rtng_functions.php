@@ -19,6 +19,7 @@ class rtng_functions
 	private int $topics_start;
 	private int $topics_per_page;
 	private int $topics_page_number;
+	private ?array $toptopics_index_topic_ids;
 
 	public function __construct
 	(
@@ -36,11 +37,13 @@ class rtng_functions
 		protected \imcger\recenttopicsng\controller\controller_common $ctrl_common,
 		protected $root_path,
 		protected $phpEx,
+		protected $toptopics_ranker = null,
 	)
 	{
 		$this->topics_start			= 0;
 		$this->topics_per_page		= 0;
 		$this->topics_page_number	= 0;
+		$this->toptopics_index_topic_ids = null;
 	}
 
 	/**
@@ -91,7 +94,7 @@ class rtng_functions
 
 		$rtng_start = $this->request->variable($tpl_loopname . '_start', 0);
 
-		$excluded_topics = explode(',', $this->config['rtng_anti_topics']);
+		$excluded_topics = $this->get_effective_excluded_topics($tpl_loopname);
 
 		$min_topic_level = $this->config['rtng_min_topic_level'];
 
@@ -366,6 +369,122 @@ class rtng_functions
 		extract($this->dispatcher->trigger_event('imcger.recenttopicsng.sql_pull_topics_list', compact($vars)));
 
 		return $sql_array;
+	}
+
+	private function get_effective_excluded_topics(string $tpl_loopname): array
+	{
+		$excluded_topic_map = $this->parse_topic_id_csv_to_map((string) ($this->config['rtng_anti_topics'] ?? ''));
+
+		if ($this->should_exclude_index_toptopics_from_rtng($tpl_loopname))
+		{
+			foreach ($this->get_index_toptopics_topic_ids() as $topic_id)
+			{
+				$excluded_topic_map[$topic_id] = true;
+			}
+		}
+
+		$excluded_topics = array_keys($excluded_topic_map);
+		sort($excluded_topics);
+
+		// Keep RTNG's historical behavior when no IDs are excluded.
+		return !empty($excluded_topics) ? $excluded_topics : [0];
+	}
+
+	private function should_exclude_index_toptopics_from_rtng(string $tpl_loopname): bool
+	{
+		if ($tpl_loopname !== 'rtng_topics')
+		{
+			return false;
+		}
+
+		if (!$this->toptopics_ranker || !method_exists($this->toptopics_ranker, 'get_topics'))
+		{
+			return false;
+		}
+
+		return ((string) ($this->user->page['page_name'] ?? '')) === 'index.php';
+	}
+
+	private function get_index_toptopics_topic_ids(): array
+	{
+		if ($this->toptopics_index_topic_ids !== null)
+		{
+			return $this->toptopics_index_topic_ids;
+		}
+
+		$this->toptopics_index_topic_ids = [];
+		$index_limit = isset($this->config['toptopics_index_limit']) ? max(0, (int) $this->config['toptopics_index_limit']) : 0;
+		if ($index_limit <= 0)
+		{
+			return $this->toptopics_index_topic_ids;
+		}
+
+		$forum_ids = $this->get_toptopics_index_forum_ids();
+		if (empty($forum_ids))
+		{
+			return $this->toptopics_index_topic_ids;
+		}
+
+		$topics = $this->toptopics_ranker->get_topics($forum_ids, $index_limit);
+		$topic_id_map = [];
+		foreach ($topics as $topic)
+		{
+			$topic_id = (int) ($topic['topic_id'] ?? 0);
+			if ($topic_id > 0)
+			{
+				$topic_id_map[$topic_id] = true;
+			}
+		}
+
+		$this->toptopics_index_topic_ids = array_keys($topic_id_map);
+		sort($this->toptopics_index_topic_ids);
+		return $this->toptopics_index_topic_ids;
+	}
+
+	private function get_toptopics_index_forum_ids(): array
+	{
+		$forum_ids = [];
+		$forum_list_ary = $this->auth->acl_getf('f_list');
+		foreach ($this->auth->acl_getf('f_read') as $forum_id => $allowed)
+		{
+			if (!empty($allowed['f_read']) && !empty($forum_list_ary[$forum_id]['f_list']))
+			{
+				$forum_ids[] = (int) $forum_id;
+			}
+		}
+
+		$forum_ids = array_values(array_unique($forum_ids));
+		$excluded_forum_map = $this->parse_topic_id_csv_to_map((string) ($this->config['toptopics_index_excluded_forum_ids'] ?? ''));
+		if (!empty($excluded_forum_map))
+		{
+			$forum_ids = array_values(array_filter($forum_ids, static function ($forum_id) use ($excluded_forum_map) {
+				return !isset($excluded_forum_map[$forum_id]);
+			}));
+		}
+
+		sort($forum_ids);
+		return $forum_ids;
+	}
+
+	private function parse_topic_id_csv_to_map(string $csv): array
+	{
+		$csv = preg_replace('/\s+/', '', trim($csv));
+		if ($csv === '')
+		{
+			return [];
+		}
+
+		$id_map = [];
+		foreach (explode(',', $csv) as $part)
+		{
+			$id = (int) $part;
+			if ($id > 0)
+			{
+				$id_map[$id] = true;
+			}
+		}
+
+		return $id_map;
 	}
 
 	/**
