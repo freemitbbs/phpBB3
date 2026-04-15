@@ -12,20 +12,20 @@
 				<ul class="dropdown-contents" role="menu">
 					<!-- EVENT navbar_header_quick_links_before -->
 
-					<!-- IF S_DISPLAY_SEARCH -->
-						<li class="separator"></li>
-						<!-- IF S_REGISTERED_USER -->
-							<li>
-								<a href="{U_SEARCH_SELF}" role="menuitem">
-									<i class="icon fa-file-o fa-fw icon-gray" aria-hidden="true"></i><span>{L_SEARCH_SELF}</span>
-								</a>
-							</li>
-							<li>
-								<a href="{U_SEARCH_SELF}&amp;sr=topics" role="menuitem">
-									<i class="icon fa-file-o fa-fw icon-blue" aria-hidden="true"></i><span>{L_SEARCH_SELF_TOPICS}</span>
-								</a>
-							</li>
-						<!-- ENDIF -->
+						<!-- IF S_DISPLAY_SEARCH -->
+							<li class="separator"></li>
+							<!-- IF S_REGISTERED_USER -->
+								<li>
+									<a href="{U_SEARCH_SELF}&amp;sr=posts" role="menuitem">
+										<i class="icon fa-file-o fa-fw icon-gray" aria-hidden="true"></i><span>{L_SEARCH_SELF}</span>
+									</a>
+								</li>
+								<li>
+									<a href="{U_SEARCH_SELF}&amp;sr=topics" role="menuitem">
+										<i class="icon fa-file-o fa-fw icon-blue" aria-hidden="true"></i><span>{L_SEARCH_SELF_TOPICS}</span>
+									</a>
+								</li>
+							<!-- ENDIF -->
 						<!-- IF S_USER_LOGGED_IN -->
 							<li>
 								<a href="{U_SEARCH_NEW}" role="menuitem">

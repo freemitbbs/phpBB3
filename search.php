@@ -27,6 +27,7 @@ $user->setup('search');
 // Define initial vars
 $mode			= $request->variable('mode', '');
 $search_id		= $request->variable('search_id', '');
+$is_egosearch	= ($search_id === 'egosearch');
 $start			= max($request->variable('start', 0), 0);
 $post_id		= $request->variable('p', 0);
 $topic_id		= $request->variable('t', 0);
@@ -530,10 +531,12 @@ if ($keywords || $author || $author_id || $search_id || $submit)
 				}
 			break;
 
-			case 'egosearch':
-				$l_search_title = $user->lang['SEARCH_SELF'];
-			break;
-		}
+				case 'egosearch':
+					$l_search_title = ($show_results === 'topics' && isset($user->lang['SEARCH_SELF_TOPICS']))
+						? $user->lang['SEARCH_SELF_TOPICS']
+						: $user->lang['SEARCH_SELF'];
+				break;
+			}
 
 		$template->assign_block_vars('navlinks', array(
 			'BREADCRUMB_NAME'	=> $l_search_title,
@@ -620,11 +623,15 @@ if ($keywords || $author || $author_id || $search_id || $submit)
 	{
 		$total_match_count = $search->keyword_search($show_results, $search_fields, $search_terms, $sort_by_sql, $sort_key, $sort_dir, $sort_days, $ex_fid_ary, $m_approve_posts_fid_sql, $topic_id, $author_id_ary, $sql_author_match, $id_ary, $start, $per_page);
 	}
-	else if (count($author_id_ary))
-	{
-		$firstpost_only = ($search_fields === 'firstpost' || $search_fields == 'titleonly') ? true : false;
-		$total_match_count = $search->author_search($show_results, $firstpost_only, $sort_by_sql, $sort_key, $sort_dir, $sort_days, $ex_fid_ary, $m_approve_posts_fid_sql, $topic_id, $author_id_ary, $sql_author_match, $id_ary, $start, $per_page);
-	}
+		else if (count($author_id_ary))
+		{
+			$firstpost_only = ($search_fields === 'firstpost' || $search_fields == 'titleonly') ? true : false;
+			if ($is_egosearch && $show_results === 'topics')
+			{
+				$firstpost_only = true;
+			}
+			$total_match_count = $search->author_search($show_results, $firstpost_only, $sort_by_sql, $sort_key, $sort_dir, $sort_days, $ex_fid_ary, $m_approve_posts_fid_sql, $topic_id, $author_id_ary, $sql_author_match, $id_ary, $start, $per_page);
+		}
 
 	/**
 	* Event to search otherwise than by keywords or author
