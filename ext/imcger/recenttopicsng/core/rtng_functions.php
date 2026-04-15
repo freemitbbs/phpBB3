@@ -20,6 +20,7 @@ class rtng_functions
 	private int $topics_per_page;
 	private int $topics_page_number;
 	private ?array $toptopics_index_topic_ids;
+	private ?array $index_topic_ids_for_dedupe;
 
 	public function __construct
 	(
@@ -44,6 +45,7 @@ class rtng_functions
 		$this->topics_per_page		= 0;
 		$this->topics_page_number	= 0;
 		$this->toptopics_index_topic_ids = null;
+		$this->index_topic_ids_for_dedupe = null;
 	}
 
 	/**
@@ -194,6 +196,79 @@ class rtng_functions
 		);
 
 		$this->fill_template($icons, $tpl_loopname, $topic_tracking_info, $topics_count, $topic_list);
+	}
+
+	public function get_index_topic_ids_for_dedupe(string $tpl_loopname = 'rtng_topics', array $additional_excluded_topic_ids = []): array
+	{
+		if ($this->index_topic_ids_for_dedupe !== null && empty($additional_excluded_topic_ids))
+		{
+			return $this->index_topic_ids_for_dedupe;
+		}
+
+		$this->index_topic_ids_for_dedupe = [];
+		$this->user_setting = $this->ctrl_common->get_user_setting();
+
+		if (!($this->user_setting['user_rtng_enable'] && $this->auth->acl_get('u_rtng_view')))
+		{
+			return $this->index_topic_ids_for_dedupe;
+		}
+
+		if (!in_array((string) $this->user_setting['user_rtng_location'], ['RTNG_TOP', 'RTNG_BOTTOM', 'RTNG_SIDE'], true))
+		{
+			return $this->index_topic_ids_for_dedupe;
+		}
+
+		$forum_id_list = $this->getforumlist();
+		if (empty($forum_id_list))
+		{
+			return $this->index_topic_ids_for_dedupe;
+		}
+
+		$this->topics_per_page = max(1, (int) $this->user_setting['user_rtng_index_topics_qty']);
+		$this->topics_page_number = max(1, (int) $this->user_setting['user_rtng_index_page_qty']);
+		$rtng_start = $this->request->variable($tpl_loopname . '_start', 0);
+		$excluded_topics = $this->get_effective_excluded_topics($tpl_loopname, $additional_excluded_topic_ids);
+		$min_topic_level = (int) $this->config['rtng_min_topic_level'];
+
+		if ((int) $this->config['rtng_all_topics'] == 0)
+		{
+			$total_topics_limit = $this->topics_per_page * $this->topics_page_number;
+		}
+		else
+		{
+			$sql_array = $this->get_allowed_topics_sql($excluded_topics, $min_topic_level, $forum_id_list);
+			$count_sql_array = $sql_array;
+			$count_sql_array['SELECT'] = 'COUNT(t.topic_id) as topic_count';
+			unset($count_sql_array['ORDER_BY']);
+			unset($count_sql_array['LEFT_JOIN']);
+			$sql = $this->db->sql_build_query('SELECT', $count_sql_array);
+
+			$result = $this->db->sql_query($sql);
+			$total_topics_limit = (int) $this->db->sql_fetchfield('topic_count');
+			$this->db->sql_freeresult($result);
+		}
+
+		if ($total_topics_limit < 1)
+		{
+			return $this->index_topic_ids_for_dedupe;
+		}
+
+		$obtain_icons = false;
+		$forums = [];
+		$topic_list = [];
+		$this->gettopiclist($obtain_icons, $forums, $rtng_start, $total_topics_limit, $excluded_topics, $forum_id_list, $topic_list);
+
+		$topic_list = array_values(array_unique(array_filter(array_map('intval', $topic_list), static function ($topic_id) {
+			return $topic_id > 0;
+		})));
+		sort($topic_list);
+
+		if (empty($additional_excluded_topic_ids))
+		{
+			$this->index_topic_ids_for_dedupe = $topic_list;
+		}
+
+		return $topic_list;
 	}
 
 	/**
@@ -371,11 +446,20 @@ class rtng_functions
 		return $sql_array;
 	}
 
-	private function get_effective_excluded_topics(string $tpl_loopname): array
+	private function get_effective_excluded_topics(string $tpl_loopname, array $additional_excluded_topic_ids = []): array
 	{
 		$excluded_topic_map = $this->parse_topic_id_csv_to_map((string) ($this->config['rtng_anti_topics'] ?? ''));
 
-		if ($this->should_exclude_index_toptopics_from_rtng($tpl_loopname))
+		foreach ($additional_excluded_topic_ids as $topic_id)
+		{
+			$topic_id = (int) $topic_id;
+			if ($topic_id > 0)
+			{
+				$excluded_topic_map[$topic_id] = true;
+			}
+		}
+
+		if (empty($additional_excluded_topic_ids) && $this->should_exclude_index_toptopics_from_rtng($tpl_loopname))
 		{
 			foreach ($this->get_index_toptopics_topic_ids() as $topic_id)
 			{

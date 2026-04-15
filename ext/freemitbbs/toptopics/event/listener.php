@@ -17,6 +17,7 @@ class listener implements EventSubscriberInterface
 	protected \freemitbbs\toptopics\service\ranker $ranker;
 	protected \freemitbbs\toptopics\service\cache_invalidator $cache_invalidator;
 	protected \freemitbbs\toptopics\service\reputation $reputation;
+	protected $recenttopicsng_functions = null;
 	protected $topicpreview_data;
 	protected $topicpreview_renderer;
 	protected $collapsible_operator;
@@ -36,6 +37,7 @@ class listener implements EventSubscriberInterface
 	protected ?array $index_summary_topic_ids = null;
 	protected ?int $index_category_candidate_limit = null;
 	protected ?array $index_excluded_forum_id_map = null;
+	protected ?array $index_recenttopics_topic_id_map = null;
 
 	public function __construct(
 		\phpbb\auth\auth $auth,
@@ -791,6 +793,12 @@ class listener implements EventSubscriberInterface
 		}
 
 		$excluded_topic_ids = $this->get_index_summary_topic_id_map();
+		$recenttopics_topic_ids = $this->get_index_recenttopics_topic_id_map();
+		if (!empty($recenttopics_topic_ids))
+		{
+			$excluded_topic_ids += $recenttopics_topic_ids;
+		}
+
 		if (empty($excluded_topic_ids))
 		{
 			return array_values($topics);
@@ -809,6 +817,77 @@ class listener implements EventSubscriberInterface
 		}
 
 		return $filtered_topics;
+	}
+
+	protected function get_index_recenttopics_topic_id_map(): array
+	{
+		if ($this->index_recenttopics_topic_id_map !== null)
+		{
+			return $this->index_recenttopics_topic_id_map;
+		}
+
+		$this->index_recenttopics_topic_id_map = [];
+		$recenttopicsng_functions = $this->get_recenttopicsng_functions_service();
+		if (empty($recenttopicsng_functions)
+			|| !method_exists($recenttopicsng_functions, 'get_index_topic_ids_for_dedupe'))
+		{
+			return $this->index_recenttopics_topic_id_map;
+		}
+
+		try
+		{
+			$topic_ids = $recenttopicsng_functions->get_index_topic_ids_for_dedupe(
+				'rtng_topics',
+				array_keys($this->get_index_summary_topic_id_map())
+			);
+		}
+		catch (\Throwable $exception)
+		{
+			return $this->index_recenttopics_topic_id_map;
+		}
+
+		if (!is_array($topic_ids))
+		{
+			return $this->index_recenttopics_topic_id_map;
+		}
+
+		foreach ($topic_ids as $topic_id)
+		{
+			$topic_id = (int) $topic_id;
+			if ($topic_id > 0)
+			{
+				$this->index_recenttopics_topic_id_map[$topic_id] = true;
+			}
+		}
+
+		return $this->index_recenttopics_topic_id_map;
+	}
+
+	protected function get_recenttopicsng_functions_service()
+	{
+		if ($this->recenttopicsng_functions !== null)
+		{
+			return $this->recenttopicsng_functions;
+		}
+
+		global $phpbb_container;
+		if (empty($phpbb_container)
+			|| !method_exists($phpbb_container, 'has')
+			|| !$phpbb_container->has('imcger.recenttopicsng.functions'))
+		{
+			return null;
+		}
+
+		try
+		{
+			$this->recenttopicsng_functions = $phpbb_container->get('imcger.recenttopicsng.functions');
+		}
+		catch (\Throwable $exception)
+		{
+			return null;
+		}
+
+		return $this->recenttopicsng_functions;
 	}
 
 	protected function get_topic_override_state(int $topic_id): string
