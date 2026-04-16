@@ -34,17 +34,26 @@
 
 	function isAudioUpload(file, url) {
 		var audioOnlyExtensions = ['.weba', '.mp3', '.m4a', '.aac', '.wav', '.oga', '.opus', '.flac'];
+		var videoExtensions = ['.mp4', '.webm'];
 		var mimeType = file && typeof file.type === 'string' ? file.type.toLowerCase() : '';
 
-		if (mimeType.indexOf('audio/') === 0) {
-			return true;
+		if (hasAnyExtension(url, videoExtensions)) {
+			return false;
+		}
+
+		if (hasAnyExtension(url, ['.ogg'])) {
+			return mimeType === 'audio/ogg' || mimeType === 'audio/vorbis';
 		}
 
 		if (hasAnyExtension(url, audioOnlyExtensions)) {
 			return true;
 		}
 
-		if (hasAnyExtension(url, ['.ogg']) && mimeType === 'audio/ogg') {
+		if (mimeType.indexOf('video/') === 0) {
+			return false;
+		}
+
+		if (mimeType.indexOf('audio/') === 0) {
 			return true;
 		}
 
