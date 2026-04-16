@@ -56,6 +56,7 @@ class ranker
 	protected string $scope_snapshots_table;
 	protected string $scope_forums_table;
 	protected ?bool $has_post_reactions_table = null;
+	protected ?array $foe_user_id_map = null;
 
 	public function __construct(
 		\phpbb\auth\auth $auth,
@@ -103,15 +104,19 @@ class ranker
 		$visibility_scope = $this->get_visibility_cache_scope($forum_ids);
 		if ($cache_ttl > 0 && $this->is_materializable_visibility_scope($visibility_scope))
 		{
-			return $this->get_materialized_scope_topics($forum_ids, $limit, $options);
+			return $this->exclude_foe_authored_topics(
+				$this->get_materialized_scope_topics($forum_ids, $limit, $options)
+			);
 		}
 		else if ($cache_ttl > 0 && $this->can_merge_public_snapshot_with_user_delta($visibility_scope))
 		{
-			return $this->get_public_snapshot_with_user_delta(
-				$forum_ids,
-				$limit,
-				$options,
-				(int) $visibility_scope['user_id']
+			return $this->exclude_foe_authored_topics(
+				$this->get_public_snapshot_with_user_delta(
+					$forum_ids,
+					$limit,
+					$options,
+					(int) $visibility_scope['user_id']
+				)
 			);
 		}
 
@@ -122,7 +127,7 @@ class ranker
 			$cached_topics = $this->cache->get($cache_key);
 			if ($cached_topics !== false && is_array($cached_topics))
 			{
-				return $cached_topics;
+				return $this->exclude_foe_authored_topics($cached_topics);
 			}
 		}
 
@@ -133,7 +138,7 @@ class ranker
 			$this->cache->put($cache_key, $ranked_topics, $cache_ttl);
 		}
 
-		return $ranked_topics;
+		return $this->exclude_foe_authored_topics($ranked_topics);
 	}
 
 	public function get_topics_for_scopes(array $scopes): array
@@ -198,7 +203,7 @@ class ranker
 			$cached_topics = $this->get_existing_materialized_scope_topics($scope['forum_ids'], $scope['limit'], $options_hash);
 			if ($cached_topics !== null)
 			{
-				$topics_by_scope[$scope_id] = $cached_topics;
+				$topics_by_scope[$scope_id] = $this->exclude_foe_authored_topics($cached_topics);
 				continue;
 			}
 
@@ -239,23 +244,28 @@ class ranker
 			foreach ($missing_scopes as $scope_id => $scope)
 			{
 				$candidate_lookup = array_fill_keys($scope_candidate_ids[$scope_id], true);
-				$scope_topics = [];
+					$scope_topics = [];
 
-				if (!empty($candidate_lookup))
-				{
-					foreach ($ranked_topics as $topic)
+					if (!empty($candidate_lookup))
 					{
-						$topic_id = (int) ($topic['topic_id'] ?? 0);
-						if ($topic_id > 0 && isset($candidate_lookup[$topic_id]))
+						foreach ($ranked_topics as $topic)
 						{
-							$scope_topics[] = $topic;
-							if (count($scope_topics) >= $scope['limit'])
+							$topic_id = (int) ($topic['topic_id'] ?? 0);
+							if ($topic_id > 0 && isset($candidate_lookup[$topic_id]))
 							{
-								break;
+								if ($this->is_topic_authored_by_foe($topic))
+								{
+									continue;
+								}
+
+								$scope_topics[] = $topic;
+								if (count($scope_topics) >= $scope['limit'])
+								{
+									break;
+								}
 							}
 						}
 					}
-				}
 
 				$topics_by_scope[$scope_id] = $scope_topics;
 
@@ -281,6 +291,88 @@ class ranker
 		}
 
 		return $topics_by_scope;
+	}
+
+	protected function exclude_foe_authored_topics(array $topics): array
+	{
+		if (empty($topics))
+		{
+			return [];
+		}
+
+		$foe_user_id_map = $this->get_current_user_foe_id_map();
+		if (empty($foe_user_id_map))
+		{
+			return array_values($topics);
+		}
+
+		$filtered_topics = [];
+		foreach ($topics as $topic)
+		{
+			if ($this->is_topic_authored_by_foe($topic))
+			{
+				continue;
+			}
+
+			$filtered_topics[] = $topic;
+		}
+
+		return $filtered_topics;
+	}
+
+	protected function is_topic_authored_by_foe(array $topic): bool
+	{
+		$foe_user_id_map = $this->get_current_user_foe_id_map();
+		if (empty($foe_user_id_map))
+		{
+			return false;
+		}
+
+		$topic_poster = (int) ($topic['topic_poster'] ?? 0);
+		if ($topic_poster > 0 && !empty($foe_user_id_map[$topic_poster]))
+		{
+			return true;
+		}
+
+		$topic_last_poster = (int) ($topic['topic_last_poster_id'] ?? 0);
+		if ($topic_last_poster > 0 && !empty($foe_user_id_map[$topic_last_poster]))
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+	protected function get_current_user_foe_id_map(): array
+	{
+		if ($this->foe_user_id_map !== null)
+		{
+			return $this->foe_user_id_map;
+		}
+
+		$this->foe_user_id_map = [];
+		$current_user_id = (int) ($this->user->data['user_id'] ?? ANONYMOUS);
+		if ($current_user_id === ANONYMOUS)
+		{
+			return $this->foe_user_id_map;
+		}
+
+		$sql = 'SELECT zebra_id
+			FROM ' . ZEBRA_TABLE . '
+			WHERE user_id = ' . $current_user_id . '
+				AND foe = 1';
+		$result = $this->db->sql_query($sql);
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$foe_user_id = (int) ($row['zebra_id'] ?? 0);
+			if ($foe_user_id > 0)
+			{
+				$this->foe_user_id_map[$foe_user_id] = true;
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		return $this->foe_user_id_map;
 	}
 
 	public function has_stale_materialized_scopes(int $max_scopes = 1): bool

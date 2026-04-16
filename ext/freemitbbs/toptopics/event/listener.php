@@ -87,12 +87,14 @@ class listener implements EventSubscriberInterface
 
 	public static function getSubscribedEvents()
 	{
-			return [
-				'core.user_setup' => 'load_language_on_setup',
-				'core.permissions' => 'add_permissions',
-				'core.viewtopic_modify_post_data' => 'prefetch_dislikes',
-				'core.viewtopic_modify_post_row' => 'modify_post_row',
-				'core.viewtopic_modify_page_title' => 'viewtopic_admin_override',
+				return [
+					'core.user_setup' => 'load_language_on_setup',
+					'core.permissions' => 'add_permissions',
+					'core.viewforum_get_topic_ids_data' => 'viewforum_exclude_foe_topics',
+					'core.viewforum_get_announcement_topic_ids_data' => 'viewforum_exclude_foe_topics',
+					'core.viewtopic_modify_post_data' => 'prefetch_dislikes',
+					'core.viewtopic_modify_post_row' => 'modify_post_row',
+					'core.viewtopic_modify_page_title' => 'viewtopic_admin_override',
 				'core.display_forums_before' => 'index_category_blocks',
 				'core.display_forums_modify_category_template_vars' => 'display_forums_modify_category_template_vars',
 				'core.report_post_auth' => 'report_post_auth',
@@ -430,9 +432,27 @@ class listener implements EventSubscriberInterface
 				}
 			}
 
-			$this->index_category_blocks[$category_id]['rows_html'] = $this->build_category_rows_html($category_topics);
-			unset($this->index_category_blocks[$category_id]['topic_ids']);
+				$this->index_category_blocks[$category_id]['rows_html'] = $this->build_category_rows_html($category_topics);
+				unset($this->index_category_blocks[$category_id]['topic_ids']);
+			}
 		}
+
+	public function viewforum_exclude_foe_topics($event): void
+	{
+		$sql_ary = $event['sql_ary'] ?? null;
+		if (!is_array($sql_ary) || empty($sql_ary['WHERE']))
+		{
+			return;
+		}
+
+		$non_foe_topic_sql = $this->build_non_foe_topic_sql('t');
+		if ($non_foe_topic_sql === '')
+		{
+			return;
+		}
+
+		$sql_ary['WHERE'] .= $non_foe_topic_sql;
+		$event['sql_ary'] = $sql_ary;
 	}
 
 	public function display_forums_modify_category_template_vars($event): void
@@ -1397,7 +1417,9 @@ class listener implements EventSubscriberInterface
 		foreach ($topics as $topic)
 		{
 			$topic_poster = (int) ($topic['topic_poster'] ?? 0);
-			if ($topic_poster > 0 && isset($foe_user_id_map[$topic_poster]))
+			$topic_last_poster = (int) ($topic['topic_last_poster_id'] ?? 0);
+			if (($topic_poster > 0 && isset($foe_user_id_map[$topic_poster]))
+				|| ($topic_last_poster > 0 && isset($foe_user_id_map[$topic_last_poster])))
 			{
 				continue;
 			}
@@ -1438,6 +1460,26 @@ class listener implements EventSubscriberInterface
 		$this->db->sql_freeresult($result);
 
 		return $this->foe_user_id_map;
+	}
+
+	protected function build_non_foe_topic_sql(string $topic_alias = 't'): string
+	{
+		$foe_user_id_map = $this->get_current_user_foe_id_map();
+		if (empty($foe_user_id_map))
+		{
+			return '';
+		}
+
+		$foe_user_ids = array_map('intval', array_keys($foe_user_id_map));
+		if (empty($foe_user_ids))
+		{
+			return '';
+		}
+
+		return ' AND '
+			. $this->db->sql_in_set($topic_alias . '.topic_poster', $foe_user_ids, true)
+			. ' AND '
+			. $this->db->sql_in_set($topic_alias . '.topic_last_poster_id', $foe_user_ids, true);
 	}
 
 	protected function assign_topicpreview_template_vars(array $topicpreview): void

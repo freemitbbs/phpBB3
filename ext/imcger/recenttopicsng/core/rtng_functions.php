@@ -598,7 +598,10 @@ class rtng_functions
 			return '';
 		}
 
-		return ' AND ' . $this->db->sql_in_set($topic_alias . '.topic_poster', $foe_user_ids, true);
+		return ' AND '
+			. $this->db->sql_in_set($topic_alias . '.topic_poster', $foe_user_ids, true)
+			. ' AND '
+			. $this->db->sql_in_set($topic_alias . '.topic_last_poster_id', $foe_user_ids, true);
 	}
 
 	private function get_current_user_foe_id_map(): array
@@ -668,10 +671,11 @@ class rtng_functions
 					'FROM' => [TOPICS_POSTED_TABLE => 'tp', ],
 					'ON' => 'tp.topic_id = t.topic_id AND tp.user_id = ' . (int) $this->user->data['user_id'],
 				],
-			],
-			'WHERE'     => $this->db->sql_in_set('t.topic_id', $topic_list),
-			'ORDER_BY'  => 't.' . $sort_topics . ' DESC',
-		];
+				],
+				'WHERE'     => $this->db->sql_in_set('t.topic_id', $topic_list)
+					. $this->build_non_foe_topic_poster_sql('t'),
+				'ORDER_BY'  => 't.' . $sort_topics . ' DESC',
+			];
 
 		if ($this->config['rtng_parents'])
 		{

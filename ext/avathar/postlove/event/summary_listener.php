@@ -297,6 +297,10 @@ class summary_listener implements EventSubscriberInterface
 		}
 
 		$foe_user_id_map = $this->get_current_user_foe_id_map();
+		$foe_user_ids = array_map('intval', array_keys($foe_user_id_map));
+		$non_foe_poster_sql = !empty($foe_user_ids)
+			? ' AND ' . $this->db->sql_in_set(POSTS_TABLE . '.poster_id', $foe_user_ids, true)
+			: '';
 
 		// find all the visible, liked posts in the given period
 		$sql = 'SELECT '. USERS_TABLE . '.user_id, '. USERS_TABLE . '.username, '. USERS_TABLE . '.user_colour,
@@ -316,11 +320,12 @@ class summary_listener implements EventSubscriberInterface
 						AND post_id NOT IN (' . implode(",", $post_list) . ')
 						GROUP BY post_id
 					) AS liked_posts
-			LEFT JOIN ' . POSTS_TABLE .   ' ON post = post_id
-			WHERE  ' . $this->content_visibility->get_forums_visibility_sql('post', $forum_ary, POSTS_TABLE .'.') . '
-			)AS most_liked_posts
-		LEFT JOIN ' . TOPICS_TABLE .  ' ON most_liked_posts.topic_id = '  . TOPICS_TABLE . '.topic_id
-		LEFT JOIN ' . USERS_TABLE .   ' ON most_liked_posts.poster_id = ' . USERS_TABLE .  '.user_id
+				LEFT JOIN ' . POSTS_TABLE .   ' ON post = post_id
+				WHERE  ' . $this->content_visibility->get_forums_visibility_sql('post', $forum_ary, POSTS_TABLE .'.') . '
+				' . $non_foe_poster_sql . '
+				)AS most_liked_posts
+			LEFT JOIN ' . TOPICS_TABLE .  ' ON most_liked_posts.topic_id = '  . TOPICS_TABLE . '.topic_id
+			LEFT JOIN ' . USERS_TABLE .   ' ON most_liked_posts.poster_id = ' . USERS_TABLE .  '.user_id
 		LEFT JOIN ' . FORUMS_TABLE .  ' ON ' . TOPICS_TABLE . '.forum_id = '  . FORUMS_TABLE . '.forum_id
 		WHERE topic_status <> ' . ITEM_MOVED . '
 		ORDER BY sum_likes DESC, post_time DESC';
@@ -428,11 +433,18 @@ class summary_listener implements EventSubscriberInterface
 			return array();
 		}
 
+		$foe_user_id_map = $this->get_current_user_foe_id_map();
+		$foe_user_ids = array_map('intval', array_keys($foe_user_id_map));
+		$non_foe_liker_sql = !empty($foe_user_ids)
+			? ' AND ' . $this->db->sql_in_set('u.user_id', $foe_user_ids, true)
+			: '';
+
 		$sql = 'SELECT pl.post_id, u.user_id, u.username, u.user_colour
 			FROM ' . $this->table_prefix . 'posts_likes pl
 			JOIN ' . USERS_TABLE . ' u ON u.user_id = pl.user_id
 			WHERE ' . $this->db->sql_in_set('pl.post_id', $post_ids) . '
 				AND pl.liketime > ' . (int) $period_start_time . '
+				' . $non_foe_liker_sql . '
 			ORDER BY pl.post_id ASC, pl.liketime ASC';
 		$result = $this->db->sql_query($sql);
 
