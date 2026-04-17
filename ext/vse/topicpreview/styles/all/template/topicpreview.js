@@ -22,27 +22,135 @@
 			}, options),
 			previewTimeout,
 			hideTimeout,
+			hoverToken = 0,
+			activeTarget = null,
+			previewCache = {},
+			requestCache = {},
 			previewContainer = $('<div id="topic_preview" class="topic_preview_container"></div>').css('width', settings.width).appendTo('body');
 
 		// Do not allow delay times less than 300 ms to prevent tooltip madness
 		settings.delay = Math.max(settings.delay, 300);
 
-		$('.topic_preview_avatar')
-			// Add rtl class for right-to-left languages to avatar images
-			.toggleClass('rtl', (settings.dir === 'rtl'))
-			.children('img')
-			.brokenImage({})
-		;
+		var enhancePreviewContent = function(scope) {
+			scope.find('.topic_preview_avatar')
+				.toggleClass('rtl', (settings.dir === 'rtl'))
+				.children('img')
+				.brokenImage({})
+			;
+		};
+
+		var getPreviewNode = function(obj) {
+			return obj.closest('li, tr').find('.topic_preview_content').first();
+		};
+
+		var buildPreviewUrl = function(topicId) {
+			if (!topicId || typeof window.topicPreviewPath === 'undefined') {
+				return '';
+			}
+
+			return window.topicPreviewPath + topicId;
+		};
+
+		var getPreviewUrl = function(obj) {
+			var previewNode = getPreviewNode(obj);
+			return previewNode.data('topicPreviewUrl') || buildPreviewUrl(previewNode.data('topicPreviewId'));
+		};
+
+		var getInlinePreviewContent = function(obj) {
+			var previewNode = getPreviewNode(obj);
+			return previewNode.length ? (previewNode.html() || '') : '';
+		};
+
+		var extractPreviewContent = function(html) {
+			var parsed = $('<div></div>').append($.parseHTML(html, document, true));
+			var content = parsed.find('.topic_preview_content').first();
+			return content.length ? content.html() : html;
+		};
+
+		var fetchPreviewContent = function(obj) {
+			var url = getPreviewUrl(obj);
+			var deferred;
+			var inlineContent;
+
+			if (!url) {
+				inlineContent = getInlinePreviewContent(obj);
+				return $.Deferred().resolve(inlineContent).promise();
+			}
+
+			if (Object.prototype.hasOwnProperty.call(previewCache, url)) {
+				return $.Deferred().resolve(previewCache[url]).promise();
+			}
+
+			if (requestCache[url]) {
+				return requestCache[url];
+			}
+
+			deferred = $.Deferred();
+			requestCache[url] = deferred.promise();
+
+			$.ajax({
+				url: url,
+				method: 'GET',
+				dataType: 'html',
+				cache: true
+			}).done(function(response) {
+				var content = extractPreviewContent(response);
+				previewCache[url] = content;
+				deferred.resolve(content);
+			}).fail(function() {
+				previewCache[url] = '';
+				deferred.resolve('');
+			}).always(function() {
+				delete requestCache[url];
+			});
+
+			return requestCache[url];
+		};
+
+		var showPreviewContainer = function(obj, content) {
+			previewContainer.html('<div class="topic_preview_scrollable">' + content + '</div>');
+			previewContainer.find('img.postimage').removeClass('postimage');
+			enhancePreviewContent(previewContainer);
+
+			var pointerOffset = 8;
+			var previewTop = obj.offset().top - previewContainer.outerHeight(true) - pointerOffset;
+			previewContainer.toggleClass('invert', !topEdgeDetect(previewTop));
+			previewTop = topEdgeDetect(previewTop) ? previewTop : obj.offset().top + settings.position.top;
+
+			previewContainer
+				.stop(true, true)
+				.css({
+					top: previewTop + 'px',
+					left: obj.offset().left + settings.position.left + (settings.dir === 'rtl' ? (obj.width() - previewContainer.width()) : 0) + 'px'
+				})
+				.fadeIn('fast')
+			;
+
+			previewContainer
+				.off('mouseenter mouseleave')
+				.on('mouseenter', function() {
+					if (hideTimeout) {
+						clearTimeout(hideTimeout);
+						hideTimeout = undefined;
+					}
+				})
+				.on('mouseleave', function() {
+					hideTopicPreview.call(obj);
+				})
+			;
+		};
 
 		// Display the topic preview tooltip
 		var showTopicPreview = function() {
 			var obj = $(this);
+			var url = getPreviewUrl(obj);
+			var inlineContent = '';
 
-			// Grab tooltip content
-			var content = obj.closest('li, tr').find('.topic_preview_content').html();
+			if (!url) {
+				inlineContent = getInlinePreviewContent(obj);
+			}
 
-			// Proceed only if there is content to display
-			if (content === undefined || content === '') {
+			if (!url && !inlineContent) {
 				return false;
 			}
 
@@ -56,6 +164,9 @@
 				hideTimeout = undefined;
 			}
 
+			activeTarget = obj.get(0);
+			var token = ++hoverToken;
+
 			// remove original titles to prevent overlap
 			obj.removeAttr('title')
 				.clearTitles('dt')
@@ -63,52 +174,23 @@
 			;
 
 			previewTimeout = setTimeout(function() {
-				// clear the timeout var after delay and function begins to execute
 				previewTimeout = undefined;
 
-				// Fill the topic preview with scrollable content
-				previewContainer.html('<div class="topic_preview_scrollable">' + content + '</div>');
+				fetchPreviewContent(obj).done(function(content) {
+					if (!content || token !== hoverToken || activeTarget !== obj.get(0)) {
+						return;
+					}
 
-				// Remove postimage class from images to prevent lightbox extension styling
-				previewContainer.find('img.postimage').removeClass('postimage');
-
-				// Pointer offset
-				var pointerOffset = 8;
-
-				// Window top-edge detection, invert topic preview if needed
-				var previewTop = obj.offset().top - previewContainer.outerHeight(true) - pointerOffset;
-				previewContainer.toggleClass('invert', !topEdgeDetect(previewTop));
-				previewTop = topEdgeDetect(previewTop) ? previewTop : obj.offset().top + settings.position.top;
-
-				// Display the topic preview positioned relative to the hover object
-				previewContainer
-					.stop(true, true) // stop any running animations first
-					.css({
-						top: previewTop + 'px',
-						left: obj.offset().left + settings.position.left + (settings.dir === 'rtl' ? (obj.width() - previewContainer.width()) : 0) + 'px'
-					})
-					.fadeIn('fast') // display the topic preview with a fadein
-				;
-
-				// Add hover handlers to the preview container to keep it visible
-				previewContainer
-					.off('mouseenter mouseleave') // Remove any existing handlers
-					.on('mouseenter', function() {
-						if (hideTimeout) {
-							clearTimeout(hideTimeout);
-							hideTimeout = undefined;
-						}
-					})
-					.on('mouseleave', function() {
-						hideTopicPreview.call(obj);
-					})
-				;
-			}, settings.delay); // Use a delay before showing in topic preview
+					showPreviewContainer(obj, content);
+				});
+			}, settings.delay);
 		};
 
 		// Hide the topic preview tooltip
 		var hideTopicPreview = function() {
 			var obj = $(this);
+			activeTarget = null;
+			hoverToken++;
 
 			// clear any existing timeouts
 			if (previewTimeout) {
@@ -155,6 +237,8 @@
 				.on('click', function() {
 					// Remove the topic preview immediately on click as failsafe
 					previewContainer.hide();
+					activeTarget = null;
+					hoverToken++;
 					// clear any existing timeouts
 					if (previewTimeout) {
 						clearTimeout(previewTimeout);
@@ -223,3 +307,30 @@
 	});
 
 })(jQuery); // Avoid conflicts with other libraries
+
+jQuery(function($) {
+	'use strict';
+
+	if (typeof $.fn.topicPreview !== 'function') {
+		return;
+	}
+
+	if (typeof window.topicPreviewOptions === 'undefined') {
+		return;
+	}
+
+	var targets = [];
+
+	$('.topic_preview_content').each(function() {
+		var title = $(this).closest('li, tr').find('.topictitle').first();
+		if (title.length) {
+			targets.push(title.get(0));
+		}
+	});
+
+	if (!targets.length) {
+		return;
+	}
+
+	$(Array.from(new Set(targets))).topicPreview(window.topicPreviewOptions);
+});

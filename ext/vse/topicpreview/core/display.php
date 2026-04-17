@@ -112,6 +112,40 @@ class display extends base
 			return $block;
 		}
 
+		$topic_id = (int) ($row['topic_id'] ?? 0);
+		if ($topic_id <= 0)
+		{
+			return $block;
+		}
+
+		$block['U_TOPIC_PREVIEW'] = $this->build_preview_url($topic_id);
+		$block['TOPIC_PREVIEW_TOPIC_ID'] = $topic_id;
+
+		return $block;
+	}
+
+	/**
+	 * Build preview content for a single topic on demand.
+	 *
+	 * @param array $row Topic row data
+	 * @param array $block Template vars array
+	 *
+	 * @return array Template vars array
+	 */
+	public function build_topic_preview_content($row, $block = [])
+	{
+		if (!$this->is_enabled())
+		{
+			return $block;
+		}
+
+		$topic_id = (int) ($row['topic_id'] ?? 0);
+		if ($topic_id > 0)
+		{
+			$block['U_TOPIC_PREVIEW'] = $this->build_preview_url($topic_id);
+			$block['TOPIC_PREVIEW_TOPIC_ID'] = $topic_id;
+		}
+
 		$block = array_merge($block, array(
 			'TOPIC_PREVIEW_FIRST_POST'		=> $this->get_text_helper($row, 'first_post_text'),
 			'TOPIC_PREVIEW_LAST_POST'		=> $this->get_text_helper($row, 'last_post_text'),
@@ -134,6 +168,49 @@ class display extends base
 		extract($this->dispatcher->trigger_event('vse.topicpreview.display_topic_preview', compact($vars)));
 
 		return $block;
+	}
+
+	/**
+	 * Render a single topic preview as HTML for AJAX responses.
+	 *
+	 * @param array $row Topic row data
+	 *
+	 * @return string
+	 */
+	public function render_topic_preview_html($row)
+	{
+		$block = $this->build_topic_preview_content($row);
+		$first_post = $block['TOPIC_PREVIEW_FIRST_POST'] ?? '';
+		$last_post = $block['TOPIC_PREVIEW_LAST_POST'] ?? '';
+
+		if ($first_post === '' && $last_post === '')
+		{
+			return '';
+		}
+
+		$html = '<div class="topic_preview_content">';
+		$html .= $this->render_topic_preview_post_html(
+			$this->language->lang('FIRST_POST'),
+			$block['TOPIC_PREVIEW_FIRST_AVATAR'] ?? '',
+			$first_post,
+			'first',
+			$last_post !== ''
+		);
+
+		if ($last_post !== '')
+		{
+			$html .= $this->render_topic_preview_post_html(
+				$this->language->lang('LAST_POST'),
+				$block['TOPIC_PREVIEW_LAST_AVATAR'] ?? '',
+				$last_post,
+				'last',
+				true
+			);
+		}
+
+		$html .= '</div>';
+
+		return $html;
 	}
 
 	/**
@@ -230,7 +307,7 @@ class display extends base
 			return $this->user->style['topic_preview_theme'];
 		}
 
-		return false;
+		return 'light';
 	}
 
 	/**
@@ -241,5 +318,77 @@ class display extends base
 	public function set_attachments_cache($attachments)
 	{
 		$this->attachments_cache = $attachments;
+	}
+
+	/**
+	 * Build the lazy preview endpoint URL.
+	 *
+	 * @param int $topic_id Topic ID
+	 *
+	 * @return string
+	 */
+	protected function build_preview_url($topic_id)
+	{
+		return append_sid($this->root_path . 'app.php/topicpreview/' . (int) $topic_id);
+	}
+
+	/**
+	 * Render one preview post block.
+	 *
+	 * @param string $title
+	 * @param mixed  $avatar
+	 * @param string $post_text
+	 * @param string $post_class
+	 * @param bool   $show_title
+	 *
+	 * @return string
+	 */
+	protected function render_topic_preview_post_html($title, $avatar, $post_text, $post_class, $show_title)
+	{
+		$html = '<div class="topic_preview_section">';
+		if ($show_title)
+		{
+			$html .= '<strong class="topic_preview_section_title">' . htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</strong>';
+		}
+
+		$html .= '<div class="topic_preview_post">';
+		if (!empty($avatar))
+		{
+			$html .= '<div class="topic_preview_avatar">' . $this->render_topic_preview_avatar_html($avatar) . '</div>';
+		}
+
+		$html .= '<div class="topic_preview_' . htmlspecialchars($post_class, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">' . $post_text . '</div>';
+		$html .= '</div></div>';
+
+		return $html;
+	}
+
+	/**
+	 * Render preview avatar markup.
+	 *
+	 * @param mixed $avatar
+	 *
+	 * @return string
+	 */
+	protected function render_topic_preview_avatar_html($avatar)
+	{
+		if (is_array($avatar))
+		{
+			$src = $avatar['src'] ?? $avatar['AVATAR_SRC'] ?? '';
+			if ($src !== '')
+			{
+				$alt = $avatar['alt'] ?? $avatar['ALT'] ?? '';
+				$width = isset($avatar['width']) ? ' width="' . (int) $avatar['width'] . '"' : '';
+				$height = isset($avatar['height']) ? ' height="' . (int) $avatar['height'] . '"' : '';
+				return '<img src="' . htmlspecialchars($src, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '" alt="' . htmlspecialchars($alt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"' . $width . $height . ' />';
+			}
+		}
+
+		if (is_string($avatar) && $avatar !== '' && $avatar !== self::NO_AVATAR)
+		{
+			return $avatar;
+		}
+
+		return '<div class="topic_preview_no_avatar"></div>';
 	}
 }

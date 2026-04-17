@@ -132,6 +132,36 @@ class data extends base
 	}
 
 	/**
+	 * Fetch the data needed to render a single topic preview on demand.
+	 *
+	 * @param int $topic_id Topic ID
+	 *
+	 * @return array|false Topic preview row or false when not found
+	 */
+	public function get_topic_preview_row($topic_id)
+	{
+		$topic_id = (int) $topic_id;
+		if (!$this->is_enabled() || $topic_id <= 0)
+		{
+			return false;
+		}
+
+		$sql_array = array(
+			'SELECT'	=> 't.topic_id, t.forum_id, t.topic_visibility, t.topic_attachment, t.topic_first_post_id, t.topic_last_post_id, t.topic_poster, t.topic_last_poster_id' . $this->tp_sql_select(),
+			'FROM'		=> array(TOPICS_TABLE => 't'),
+			'LEFT_JOIN'	=> $this->tp_sql_join()['LEFT_JOIN'],
+			'WHERE'		=> 't.topic_id = ' . $topic_id,
+		);
+
+		$sql = $this->db->sql_build_query('SELECT', $sql_array);
+		$result = $this->db->sql_query($sql);
+		$row = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+
+		return $row;
+	}
+
+	/**
 	 * Build select statement for user avatar fields, e.g.:
 	 * ', fpu.user_avatar AS fp_user_avatar
 	 *  , fpu.user_avatar_type AS fp_user_avatar_type

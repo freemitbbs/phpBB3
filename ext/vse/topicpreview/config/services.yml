@@ -14,6 +14,14 @@ services:
             - '@user'
             - '@dbal.conn'
 
+    vse.topicpreview.controller.preview:
+        class: vse\topicpreview\controller\preview_controller
+        arguments:
+            - '@auth'
+            - '@content.visibility'
+            - '@vse.topicpreview.data'
+            - '@vse.topicpreview.display'
+
     vse.topicpreview.display:
         class: vse\topicpreview\core\display
         arguments:

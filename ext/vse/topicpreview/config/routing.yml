@@ -1,0 +1,5 @@
+vse_topicpreview_preview:
+    path: /topicpreview/{topic_id}
+    defaults: { _controller: vse.topicpreview.controller.preview:show }
+    requirements:
+        topic_id: \d+

@@ -1101,68 +1101,13 @@ class listener implements EventSubscriberInterface
 
 	protected function build_topic_preview_html(array $topic): string
 	{
-		$preview = !empty($topic['topic_preview']) && is_array($topic['topic_preview'])
-			? $topic['topic_preview']
-			: [];
-		$first_post = (string) ($preview['TOPIC_PREVIEW_FIRST_POST'] ?? '');
-		if ($first_post === '')
+		$topic_id = (int) ($topic['topic_id'] ?? 0);
+		if ($topic_id <= 0 || !$this->is_topic_preview_enabled())
 		{
 			return '';
 		}
 
-		$html = '<div class="topic_preview_content" style="display: none;">';
-		$html .= $this->build_topic_preview_post_html(
-			!empty($preview['TOPIC_PREVIEW_LAST_POST']) ? $this->language->lang('FIRST_POST') : '',
-			$preview['TOPIC_PREVIEW_FIRST_AVATAR'] ?? '',
-			$first_post,
-			'first',
-			!empty($preview['TOPIC_PREVIEW_LAST_POST'])
-		);
-
-		if (!empty($preview['TOPIC_PREVIEW_LAST_POST']))
-		{
-			$html .= $this->build_topic_preview_post_html(
-				$this->language->lang('LAST_POST'),
-				$preview['TOPIC_PREVIEW_LAST_AVATAR'] ?? '',
-				(string) $preview['TOPIC_PREVIEW_LAST_POST'],
-				'last',
-				true
-			);
-		}
-
-		$html .= '</div>';
-
-		return $html;
-	}
-
-	protected function build_topic_preview_post_html(string $title, $avatar, string $post_text, string $post_class, bool $show_title): string
-	{
-		$html = '<div class="topic_preview_section">';
-		if ($show_title && $title !== '')
-		{
-			$html .= '<strong class="topic_preview_section_title">' . $this->escape_text($title) . '</strong>';
-		}
-
-		$html .= '<div class="topic_preview_post">';
-		if ($avatar !== '')
-		{
-			$html .= '<div class="topic_preview_avatar">' . $this->render_topic_preview_avatar_html($avatar) . '</div>';
-		}
-
-		$html .= '<div class="topic_preview_' . $this->escape_attr($post_class) . '">' . $post_text . '</div>';
-		$html .= '</div></div>';
-
-		return $html;
-	}
-
-	protected function render_topic_preview_avatar_html($avatar): string
-	{
-		if (is_string($avatar) && $avatar !== '' && $avatar !== 'no-avatar')
-		{
-			return $avatar;
-		}
-
-		return '<div class="topic_preview_no_avatar"></div>';
+		return '<div class="topic_preview_content" data-topic-preview-id="' . $topic_id . '" style="display: none;"></div>';
 	}
 
 	protected function refresh_reputation_for_visibility_event($event): void
@@ -1424,9 +1369,10 @@ class listener implements EventSubscriberInterface
 				'S_UNREAD_TOPIC' => !empty($topic['unread_topic']),
 			];
 
-			if (!empty($topic['topic_preview']) && is_array($topic['topic_preview']))
+			$topic_id = (int) ($topic['topic_id'] ?? 0);
+			if ($topic_id > 0 && $this->is_topic_preview_enabled())
 			{
-				$topic_row = array_merge($topic_row, $topic['topic_preview']);
+				$topic_row['TOPIC_PREVIEW_TOPIC_ID'] = $topic_id;
 			}
 
 			$this->template->assign_block_vars('top_topics', $topic_row);
@@ -1750,7 +1696,7 @@ class listener implements EventSubscriberInterface
 
 	protected function get_topicpreview_context(): array
 	{
-		$theme = false;
+		$theme = 'light';
 		$style_theme = $this->user->style['topic_preview_theme'] ?? '';
 		if ($style_theme && file_exists($this->root_path . 'ext/vse/topicpreview/styles/all/theme/' . $style_theme . '.css'))
 		{
@@ -1796,12 +1742,24 @@ class listener implements EventSubscriberInterface
 		$topics = $this->add_topic_tracking($topics);
 		$topics = $this->add_topic_display_state($topics);
 
-		if ($with_previews)
+		return $topics;
+	}
+
+	protected function build_topic_preview_url(array $topic): string
+	{
+		$topic_id = (int) ($topic['topic_id'] ?? 0);
+		if ($topic_id <= 0 || !$this->is_topic_preview_enabled())
 		{
-			$topics = $this->add_topic_previews($topics, $topicpreview ?? $this->get_topicpreview_context());
+			return '';
 		}
 
-		return $topics;
+		return append_sid($this->root_path . 'app.php/topicpreview/' . $topic_id);
+	}
+
+	protected function is_topic_preview_enabled(): bool
+	{
+		$topicpreview = $this->get_topicpreview_context();
+		return !empty($topicpreview['enabled']);
 	}
 
 	protected function invalidate_rank_cache_for_forums(array $forum_ids): void

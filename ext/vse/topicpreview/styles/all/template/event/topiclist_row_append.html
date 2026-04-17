@@ -10,7 +10,7 @@
 	top_five_topic	display topic preview in Top Five extension - deprecated @v2.2.1
 #}
 {% for context in [topicrow, searchresults, similar, recent_topics, rtng, top_five_topic] %}
-	{% if context.TOPIC_PREVIEW_FIRST_POST %}
+	{% if context.U_TOPIC_PREVIEW %}
 		{{ macro.renderTopicPreview(context) }}
 	{% endif %}
 {% endfor %}

@@ -588,6 +588,11 @@ if ($keywords || $author || $author_id || $search_id || $submit)
 			// Only return up to $total_matches_limit+1 ids (the last one will be removed later)
 			$id_ary = array_keys(get_unread_topics($user->data['user_id'], $sql_where, $sql_sort, $total_matches_limit + 1));
 		}
+		else if ($search_id == 'egosearch')
+		{
+			// Keep egosearch in pagination URLs so "Your topics" stays on the
+			// first-post-only path instead of degrading into a generic author search.
+		}
 		else
 		{
 			$search_id = '';
@@ -608,9 +613,10 @@ if ($keywords || $author || $author_id || $search_id || $submit)
 
 			$id_ary = array_slice($id_ary, $start, $per_page);
 		}
-		else
+		else if ($search_id !== 'egosearch')
 		{
-			// Set $start to 0 if no matches were found
+			// Set $start to 0 if no matches were found. Egosearch is resolved
+			// later through author_search(), so keep the requested page offset.
 			$start = 0;
 		}
 	}

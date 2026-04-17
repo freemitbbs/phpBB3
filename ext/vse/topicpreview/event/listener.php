@@ -45,57 +45,13 @@ class listener implements EventSubscriberInterface
 	public static function getSubscribedEvents()
 	{
 		return array(
-			// viewforum.php events
-			'core.viewforum_get_topic_data'			=> 'modify_sql_array',
-			'core.viewforum_get_shadowtopic_data'	=> 'modify_sql_array',
-			'core.viewforum_modify_topics_data'		=> 'load_attachments',
-			'core.viewforum_modify_topicrow'		=> 'display_topic_previews',
-
-			// search.php events
-			'core.search_get_topic_data'			=> 'modify_sql_string',
-			'core.search_modify_rowset'				=> 'load_attachments',
-			'core.search_modify_tpl_ary'			=> 'display_topic_previews',
-
-			// Custom events for integration with Precise Similar Topics
-			'vse.similartopics.get_topic_data'		=> 'modify_sql_array',
-			'vse.similartopics.modify_rowset'		=> 'load_attachments',
-			'vse.similartopics.modify_topicrow'		=> 'display_topic_previews',
-
-			// Custom events for integration with Recent Topics
-			'paybas.recenttopics.sql_pull_topics_data'	=> 'modify_sql_array',
-			'paybas.recenttopics.modify_topics_list'	=> 'load_attachments',
+			'core.viewforum_modify_topicrow'			=> 'display_topic_previews',
+			'core.search_modify_tpl_ary'				=> 'display_topic_previews',
+			'vse.similartopics.modify_topicrow'			=> 'display_topic_previews',
 			'paybas.recenttopics.modify_tpl_ary'		=> 'display_topic_previews',
-
-			// Custom events for integration with Recent Topics NG
-			'imcger.recenttopicsng.sql_pull_topics_data'=> 'modify_sql_array',
-			'imcger.recenttopicsng.modify_topics_list'	=> 'load_attachments',
 			'imcger.recenttopicsng.modify_tpl_ary'		=> 'display_topic_previews',
-
-			// Custom events for integration with Top Five
-			'rmcgirr83.topfive.sql_pull_topics_data'	=> 'modify_sql_array',
 			'rmcgirr83.topfive.modify_tpl_ary'			=> 'display_topic_previews',
 		);
-	}
-
-	/**
-	 * Modify an SQL array to get post text for topic previews
-	 *
-	 * @param \phpbb\event\data $event The event object
-	 */
-	public function modify_sql_array($event)
-	{
-		$event['sql_array'] = $this->preview_data->modify_sql($event['sql_array'], 'SELECT');
-	}
-
-	/**
-	 * Modify SQL strings to get post text for topic previews (search results)
-	 *
-	 * @param \phpbb\event\data $event The event object
-	 */
-	public function modify_sql_string($event)
-	{
-		$event['sql_select'] = $this->preview_data->modify_sql($event['sql_select'], 'SELECT');
-		$event['sql_from'] = $this->preview_data->modify_sql($event['sql_from'], 'JOIN');
 	}
 
 	/**
@@ -107,19 +63,5 @@ class listener implements EventSubscriberInterface
 	{
 		$block = $event['topic_row'] ? 'topic_row' : 'tpl_ary';
 		$event[$block] = $this->preview_display->display_topic_preview($event['row'], $event[$block]);
-	}
-
-	/**
-	 * Load attachments before processing topics
-	 *
-	 * @param \phpbb\event\data $event The event object
-	 */
-	public function load_attachments($event)
-	{
-		$attachments = $this->preview_data->get_attachments_for_topics($event['rowset']);
-		if (!empty($attachments))
-		{
-			$this->preview_display->set_attachments_cache($attachments);
-		}
 	}
 }
