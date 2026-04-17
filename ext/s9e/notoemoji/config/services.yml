@@ -1,5 +1,0 @@
-services:
-  s9e.notoemoji.listener:
-    class: s9e\notoemoji\listener
-    tags:
-      - { name: event.listener }
