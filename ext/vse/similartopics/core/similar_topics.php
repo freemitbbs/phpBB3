@@ -80,6 +80,9 @@ class similar_topics
 	/** @var string String of custom ignore words */
 	protected $ignore_words;
 
+	/** @var bool|null Whether the shadow search-title path is migration-ready */
+	protected $search_title_index_available;
+
 	/**
 	 * Constructor
 	 *
@@ -451,12 +454,14 @@ class similar_topics
 				return [];
 			}
 
-			if ($prefer_fulltext && $this->similartopics->is_fulltext(self::SEARCH_TITLE_COLUMN))
+			$search_column = $this->can_use_search_title_index() ? self::SEARCH_TITLE_COLUMN : 'topic_title';
+
+			if ($prefer_fulltext && $search_column === self::SEARCH_TITLE_COLUMN && $this->similartopics->is_fulltext(self::SEARCH_TITLE_COLUMN))
 			{
 				return $this->similartopics->get_query($topic_id, $search_text, $this->config['similar_topics_time'], $sensitivity, self::SEARCH_TITLE_COLUMN);
 			}
 
-			return $this->similartopics->get_term_query($topic_id, explode(' ', $search_text), $this->config['similar_topics_time'], $sensitivity, self::SEARCH_TITLE_COLUMN);
+			return $this->similartopics->get_term_query($topic_id, explode(' ', $search_text), $this->config['similar_topics_time'], $sensitivity, $search_column);
 		}
 
 		$terms = $this->stop_word_helper->get_search_terms($text, true);
@@ -480,7 +485,7 @@ class similar_topics
 		$this->configure_stop_word_helper();
 
 		$topic_id = (int) $topic_id;
-		if ($topic_id <= 0)
+		if ($topic_id <= 0 || !$this->can_use_search_title_index())
 		{
 			return;
 		}
@@ -491,6 +496,18 @@ class similar_topics
 			SET " . self::SEARCH_TITLE_COLUMN . " = '" . $this->db->sql_escape($search_title) . "'
 			WHERE topic_id = $topic_id";
 		$this->db->sql_query($sql);
+	}
+
+	protected function can_use_search_title_index()
+	{
+		if ($this->search_title_index_available !== null)
+		{
+			return $this->search_title_index_available;
+		}
+
+		$this->search_title_index_available = $this->config->offsetExists('similar_topics_search_title_ready')
+			&& !empty($this->config['similar_topics_search_title_ready']);
+		return $this->search_title_index_available;
 	}
 
 	/**
