@@ -35,7 +35,7 @@ interface driver_interface
 	 * @param float  $sensitivity The search score weighting
 	 * @return array An SQL query array
 	 */
-	public function get_query($topic_id, $topic_title, $length, $sensitivity);
+	public function get_query($topic_id, $topic_title, $length, $sensitivity, $column = 'topic_title');
 
 	/**
 	 * Generate a token-based SQL query for similar topic searches.
@@ -48,7 +48,7 @@ interface driver_interface
 	 * @param float $sensitivity The search score weighting
 	 * @return array An SQL query array
 	 */
-	public function get_term_query($topic_id, array $terms, $length, $sensitivity);
+	public function get_term_query($topic_id, array $terms, $length, $sensitivity, $column = 'topic_title');
 
 	/**
 	 * Check for database support

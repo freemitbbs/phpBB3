@@ -13,6 +13,7 @@ namespace vse\similartopics\controller;
 use phpbb\exception\http_exception;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use phpbb\request\request;
+use vse\similartopics\core\search_title_builder;
 use vse\similartopics\core\similar_topics;
 
 class ajax_controller
@@ -48,10 +49,11 @@ class ajax_controller
 			throw new http_exception(403, 'NO_AUTH_OPERATION');
 		}
 
-		$query = $this->request->variable('q', '', true);
+		$query = trim($this->request->variable('q', '', true));
 		$forum_id = $this->request->variable('f', 0);
+		$minimum_length = search_title_builder::has_cjk_characters($query) ? 2 : 3;
 
-		if (utf8_strlen($query) < 3 || !$this->similar_topics->is_dynamic_available())
+		if (utf8_strlen($query) < $minimum_length || !$this->similar_topics->is_dynamic_available())
 		{
 			return new JsonResponse(['topics' => []]);
 		}

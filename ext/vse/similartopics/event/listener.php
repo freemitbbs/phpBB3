@@ -56,6 +56,7 @@ class listener implements EventSubscriberInterface
 			'core.viewtopic_modify_page_title'		=> 'display_similar_topics',
 			'core.permissions'						=> 'add_permissions',
 			'core.posting_modify_template_vars'		=> 'dynamic_similar_topics',
+			'core.submit_post_end'					=> 'sync_search_title',
 		];
 	}
 
@@ -117,5 +118,23 @@ class listener implements EventSubscriberInterface
 
 		$this->template->assign_vars($tpl_ary);
 		$this->similar_topics->add_language();
+	}
+
+	/**
+	 * Keep the shadow full-text title in sync after topic submissions.
+	 *
+	 * @param \phpbb\event\data $event
+	 * @return void
+	 */
+	public function sync_search_title($event)
+	{
+		$data = $event['data'];
+		$topic_id = isset($data['topic_id']) ? (int) $data['topic_id'] : 0;
+		$title = isset($data['topic_title']) ? $data['topic_title'] : $event['subject'];
+
+		if ($topic_id > 0 && $title !== '')
+		{
+			$this->similar_topics->update_search_title_index($topic_id, $title);
+		}
 	}
 }

@@ -47,8 +47,10 @@ class oracle implements driver_interface
 	/**
 	 * {@inheritdoc}
 	 */
-	public function get_query($topic_id, $topic_title, $length, $sensitivity)
+	public function get_query($topic_id, $topic_title, $length, $sensitivity, $column = 'topic_title')
 	{
+		$column = preg_replace('#[^a-z0-9_]#i', '', $column) ?: 'topic_title';
+
 		// Clean and prepare the search terms for Oracle Text
 		$search_terms = $this->prepare_search_terms($topic_title);
 
@@ -65,7 +67,7 @@ class oracle implements driver_interface
 					'ON'	=> 'f.forum_id = t.forum_id',
 				),
 			),
-			'WHERE'		=> "CONTAINS(t.topic_title, '" . $this->db->sql_escape($search_terms) . "', 1) > 0
+			'WHERE'		=> "CONTAINS(t.$column, '" . $this->db->sql_escape($search_terms) . "', 1) > 0
 				AND SCORE(1) >= " . (float) $sensitivity . '
 				AND t.topic_status <> ' . ITEM_MOVED . '
 				AND t.topic_visibility = ' . ITEM_APPROVED . '
@@ -77,14 +79,15 @@ class oracle implements driver_interface
 	/**
 	 * {@inheritdoc}
 	 */
-	public function get_term_query($topic_id, array $terms, $length, $sensitivity)
+	public function get_term_query($topic_id, array $terms, $length, $sensitivity, $column = 'topic_title')
 	{
+		$column = preg_replace('#[^a-z0-9_]#i', '', $column) ?: 'topic_title';
 		$like_conditions = array();
 		$score_parts = array();
 
 		foreach (array_unique(array_filter(array_map('trim', $terms))) as $term)
 		{
-			$like = "t.topic_title LIKE '%" . $this->db->sql_escape($term) . "%'";
+			$like = "t.$column LIKE '%" . $this->db->sql_escape($term) . "%'";
 			$like_conditions[] = $like;
 			$score_parts[] = "CASE WHEN $like THEN 1 ELSE 0 END";
 		}

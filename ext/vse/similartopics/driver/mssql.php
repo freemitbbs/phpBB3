@@ -47,11 +47,13 @@ class mssql implements driver_interface
 	/**
 	 * {@inheritdoc}
 	 */
-	public function get_query($topic_id, $topic_title, $length, $sensitivity)
+	public function get_query($topic_id, $topic_title, $length, $sensitivity, $column = 'topic_title')
 	{
-		if ($this->is_fulltext('topic_title', TOPICS_TABLE))
+		$column = preg_replace('#[^a-z0-9_]#i', '', $column) ?: 'topic_title';
+
+		if ($this->is_fulltext($column, TOPICS_TABLE))
 		{
-			$search_condition = "CONTAINS(t.topic_title, '" . $this->db->sql_escape(str_replace(' ', ' AND ', $topic_title)) . "')";
+			$search_condition = "CONTAINS(t.$column, '" . $this->db->sql_escape(str_replace(' ', ' AND ', $topic_title)) . "')";
 		}
 		else
 		{
@@ -61,12 +63,12 @@ class mssql implements driver_interface
 				$word = trim($word);
 				if (utf8_strlen($word) > 2)
 				{
-					$like_conditions[] = "t.topic_title LIKE '%" . $this->db->sql_escape($word) . "%'";
+					$like_conditions[] = "t.$column LIKE '%" . $this->db->sql_escape($word) . "%'";
 				}
 			}
 			$search_condition = !empty($like_conditions)
 				? '(' . implode(' OR ', $like_conditions) . ')'
-				: "t.topic_title LIKE '%" . $this->db->sql_escape($topic_title) . "%'";
+				: "t.$column LIKE '%" . $this->db->sql_escape($topic_title) . "%'";
 		}
 
 		return array(
@@ -93,14 +95,15 @@ class mssql implements driver_interface
 	/**
 	 * {@inheritdoc}
 	 */
-	public function get_term_query($topic_id, array $terms, $length, $sensitivity)
+	public function get_term_query($topic_id, array $terms, $length, $sensitivity, $column = 'topic_title')
 	{
+		$column = preg_replace('#[^a-z0-9_]#i', '', $column) ?: 'topic_title';
 		$like_conditions = array();
 		$score_parts = array();
 
 		foreach (array_unique(array_filter(array_map('trim', $terms))) as $term)
 		{
-			$like = "t.topic_title LIKE '%" . $this->db->sql_escape($term) . "%'";
+			$like = "t.$column LIKE '%" . $this->db->sql_escape($term) . "%'";
 			$like_conditions[] = $like;
 			$score_parts[] = "CASE WHEN $like THEN 1 ELSE 0 END";
 		}

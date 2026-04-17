@@ -200,6 +200,8 @@ $lang = array_merge($lang, array(
 	'SMILIES_LIMIT'					=> '每个帖子中的最大表情数量',
 	'SMILIES_LIMIT_EXPLAIN'			=> '设置为 0 则不作限制。',
 	'SMILIES_PER_PAGE'				=> '每页表情数量',
+	'TOPIC_TITLE_CHAR_LIMIT'		=> '主题标题最大字符数',
+	'TOPIC_TITLE_CHAR_LIMIT_EXPLAIN'=> '新主题标题和拆分主题标题允许使用的最大字符数。',
 	'TOPICS_PER_PAGE'				=> '每页主题数',
 ));
 

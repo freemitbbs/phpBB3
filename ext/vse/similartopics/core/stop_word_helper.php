@@ -109,8 +109,6 @@ class stop_word_helper
 	 */
 	public function get_search_terms($text, $filter_short = false)
 	{
-		// Strip HTML entities
-		$text = str_replace(['&quot;', '&amp;'], '', $text);
 		$terms = $this->make_word_array($text, $filter_short);
 
 		if ($this->use_localized || !empty($this->additional_ignore))
@@ -130,7 +128,26 @@ class stop_word_helper
 	 */
 	public function has_cjk_characters($text)
 	{
-		return (bool) preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/u', $text);
+		return search_title_builder::has_cjk_characters($text);
+	}
+
+	/**
+	 * Build normalized text for the shadow full-text search column.
+	 *
+	 * @param string $text
+	 * @return string
+	 */
+	public function build_index_text($text)
+	{
+		$terms = $this->make_word_array($text, false);
+
+		if ($this->use_localized || !empty($this->additional_ignore))
+		{
+			$this->load_ignore_words();
+			$terms = array_filter($terms, [$this, 'filter_ignore_words']);
+		}
+
+		return implode(' ', array_values(array_unique($terms)));
 	}
 
 	/**
@@ -185,7 +202,36 @@ class stop_word_helper
 			include current($files);
 		}
 
+		$txt_path = $this->extension_manager->get_extension_path('vse/similartopics', true)
+			. 'language/' . $this->user->lang_name . '/search_ignore_bigrams.txt';
+
+		if (file_exists($txt_path))
+		{
+			$words = array_merge($words, $this->load_word_list_file($txt_path));
+		}
+
 		return $words;
+	}
+
+	/**
+	 * Load whitespace-delimited ignore words from a UTF-8 text file.
+	 *
+	 * Lines beginning with "#" are treated as comments.
+	 *
+	 * @param string $path
+	 * @return array
+	 */
+	protected function load_word_list_file($path)
+	{
+		$text = @file_get_contents($path);
+		if ($text === false || $text === '')
+		{
+			return [];
+		}
+
+		$text = preg_replace('/^\s*#.*$/m', '', $text);
+
+		return preg_split('/[\s\x{3000}]+/u', $text, -1, PREG_SPLIT_NO_EMPTY);
 	}
 
 	/**
@@ -197,81 +243,7 @@ class stop_word_helper
 	 */
 	protected function make_word_array($text, $filter_short = false)
 	{
-		$text = trim(preg_replace('#[^\p{L}\p{N}]+#u', ' ', $text));
-		if ($text === '')
-		{
-			return [];
-		}
-
-		$segments = preg_split('/\s+/u', utf8_strtolower($text), -1, PREG_SPLIT_NO_EMPTY);
-		$words = [];
-
-		foreach ($segments as $segment)
-		{
-			$words = array_merge($words, $this->tokenize_segment($segment, $filter_short));
-		}
-
-		return $words;
-	}
-
-	/**
-	 * Tokenize a segment into search terms.
-	 *
-	 * @param string $segment
-	 * @param bool $filter_short
-	 * @return array
-	 */
-	protected function tokenize_segment($segment, $filter_short = false)
-	{
-		$parts = [];
-		preg_match_all('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]+|[^\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}\s]+/u', $segment, $parts);
-
-		$tokens = [];
-		foreach ($parts[0] as $part)
-		{
-			if ($this->has_cjk_characters($part))
-			{
-				$tokens = array_merge($tokens, $this->make_cjk_ngrams($part));
-				continue;
-			}
-
-			if (!$filter_short || utf8_strlen($part) >= 3)
-			{
-				$tokens[] = $part;
-			}
-		}
-
-		return $tokens;
-	}
-
-	/**
-	 * Build overlapping bigrams for a contiguous CJK string.
-	 *
-	 * @param string $text
-	 * @return array
-	 */
-	protected function make_cjk_ngrams($text)
-	{
-		$chars = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY);
-		$count = count($chars);
-
-		if ($count <= 1)
-		{
-			return $chars;
-		}
-
-		if ($count === 2)
-		{
-			return [$text];
-		}
-
-		$ngrams = [];
-		for ($i = 0; $i < $count - 1; $i++)
-		{
-			$ngrams[] = $chars[$i] . $chars[$i + 1];
-		}
-
-		return $ngrams;
+		return search_title_builder::tokenize($text, $filter_short);
 	}
 
 	/**

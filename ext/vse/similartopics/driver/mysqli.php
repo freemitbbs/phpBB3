@@ -50,11 +50,13 @@ class mysqli implements driver_interface
 	/**
 	 * {@inheritdoc}
 	 */
-	public function get_query($topic_id, $topic_title, $length, $sensitivity)
+	public function get_query($topic_id, $topic_title, $length, $sensitivity, $column = 'topic_title')
 	{
+		$column = preg_replace('#[^a-z0-9_]#i', '', $column) ?: 'topic_title';
+
 		return array(
 			'SELECT'	=> "f.forum_id, f.forum_name, t.*,
-				MATCH (t.topic_title) AGAINST ('" . $this->db->sql_escape($topic_title) . "') AS score",
+				MATCH (t.$column) AGAINST ('" . $this->db->sql_escape($topic_title) . "') AS score",
 
 			'FROM'		=> array(
 				TOPICS_TABLE	=> 't',
@@ -65,7 +67,7 @@ class mysqli implements driver_interface
 					'ON'	=> 'f.forum_id = t.forum_id',
 				),
 			),
-			'WHERE'		=> "MATCH (t.topic_title) AGAINST ('" . $this->db->sql_escape($topic_title) . "') >= " . (float) $sensitivity . '
+			'WHERE'		=> "MATCH (t.$column) AGAINST ('" . $this->db->sql_escape($topic_title) . "') >= " . (float) $sensitivity . '
 				AND t.topic_status <> ' . ITEM_MOVED . '
 				AND t.topic_visibility = ' . ITEM_APPROVED . '
 				AND t.topic_time > (UNIX_TIMESTAMP() - ' . (int) $length . ')
@@ -76,14 +78,15 @@ class mysqli implements driver_interface
 	/**
 	 * {@inheritdoc}
 	 */
-	public function get_term_query($topic_id, array $terms, $length, $sensitivity)
+	public function get_term_query($topic_id, array $terms, $length, $sensitivity, $column = 'topic_title')
 	{
+		$column = preg_replace('#[^a-z0-9_]#i', '', $column) ?: 'topic_title';
 		$like_conditions = [];
 		$score_parts = [];
 
 		foreach (array_unique(array_filter(array_map('trim', $terms))) as $term)
 		{
-			$like = "t.topic_title LIKE '%" . $this->db->sql_escape($term) . "%'";
+			$like = "t.$column LIKE '%" . $this->db->sql_escape($term) . "%'";
 			$like_conditions[] = $like;
 			$score_parts[] = "CASE WHEN $like THEN 1 ELSE 0 END";
 		}

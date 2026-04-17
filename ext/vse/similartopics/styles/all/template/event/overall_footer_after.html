@@ -35,9 +35,17 @@
 		});
 	}
 
-	// AJAX search for similar topics (minimum 3 characters)
+	function hasCjkCharacters(query) {
+		return /[\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(query);
+	}
+
+	function getMinimumQueryLength(query) {
+		return hasCjkCharacters(query) ? 2 : 3;
+	}
+
+	// AJAX search for similar topics
 	function searchSimilarTopics(query) {
-		if (query.length < 3) {
+		if (query.length < getMinimumQueryLength(query)) {
 			hideDropdown();
 			return;
 		}

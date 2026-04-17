@@ -211,6 +211,7 @@ class acp_board
 						'smilies_per_page'		=> array('lang' => 'SMILIES_PER_PAGE',		'validate' => 'int:1:9999',		'type' => 'number:1:9999', 'explain' => false),
 						'hot_threshold'			=> array('lang' => 'HOT_THRESHOLD',			'validate' => 'int:0:9999',		'type' => 'number:0:9999', 'explain' => true),
 						'max_poll_options'		=> array('lang' => 'MAX_POLL_OPTIONS',		'validate' => 'int:2:127',	'type' => 'number:2:127', 'explain' => false),
+						'max_topic_title_chars'	=> array('lang' => 'TOPIC_TITLE_CHAR_LIMIT',	'validate' => 'int:1:255',		'type' => 'number:1:255', 'explain' => true),
 						'max_post_chars'		=> array('lang' => 'CHAR_LIMIT',			'validate' => 'int:0:999999',		'type' => 'number:0:999999', 'explain' => true),
 						'min_post_chars'		=> array('lang' => 'MIN_CHAR_LIMIT',		'validate' => 'int:1:999999',		'type' => 'number:1:999999', 'explain' => true),
 						'max_post_smilies'		=> array('lang' => 'SMILIES_LIMIT',			'validate' => 'int:0:9999',		'type' => 'number:0:9999', 'explain' => true),
@@ -494,7 +495,15 @@ class acp_board
 		}
 
 		$this->new_config = clone $config;
+		if (!isset($this->new_config['max_topic_title_chars']))
+		{
+			$this->new_config['max_topic_title_chars'] = 50;
+		}
 		$cfg_array = (isset($_REQUEST['config'])) ? $request->variable('config', array('' => ''), true) : $this->new_config;
+		if (!isset($cfg_array['max_topic_title_chars']))
+		{
+			$cfg_array['max_topic_title_chars'] = $this->new_config['max_topic_title_chars'];
+		}
 		$error = array();
 
 		// Prevalidate allowed URL schemes

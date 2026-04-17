@@ -181,7 +181,7 @@ class similar_topics_admin
 			{
 				$ts_name = $this->request->variable('pst_postgres_ts_name', ($this->config['pst_postgres_ts_name'] ?: 'simple'));
 				$this->config->set('pst_postgres_ts_name', $ts_name);
-				$this->similartopics->create_fulltext_index('topic_title');
+				$this->similartopics->create_fulltext_index(\vse\similartopics\core\similar_topics::SEARCH_TITLE_COLUMN);
 			}
 
 			$this->cache->destroy('sql', TOPICS_TABLE);
@@ -216,7 +216,7 @@ class similar_topics_admin
 			'PST_WORDS'       => $this->isset_or_default($this->config_text_get('similar_topics_words'), ''),
 			'PST_TIME'        => $this->get_pst_time($this->config['similar_topics_time'], $this->config['similar_topics_type']),
 			'PST_SENSITIVITY' => $this->similartopics && $this->similartopics->get_engine() === 'innodb' ? 1 : 5,
-			'S_PST_NO_COMPAT' => $this->similartopics === null || !$this->similartopics->is_fulltext('topic_title'),
+			'S_PST_NO_COMPAT' => $this->similartopics === null || !$this->similartopics->is_fulltext(\vse\similartopics\core\similar_topics::SEARCH_TITLE_COLUMN),
 			'U_ACTION'        => $this->u_action,
 		));
 

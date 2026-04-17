@@ -47,22 +47,23 @@ class sqlite3 implements driver_interface
 	/**
 	 * {@inheritdoc}
 	 */
-	public function get_query($topic_id, $topic_title, $length, $sensitivity)
+	public function get_query($topic_id, $topic_title, $length, $sensitivity, $column = 'topic_title')
 	{
-		return $this->get_term_query($topic_id, explode(' ', $topic_title), $length, $sensitivity);
+		return $this->get_term_query($topic_id, explode(' ', $topic_title), $length, $sensitivity, $column);
 	}
 
 	/**
 	 * {@inheritdoc}
 	 */
-	public function get_term_query($topic_id, array $terms, $length, $sensitivity)
+	public function get_term_query($topic_id, array $terms, $length, $sensitivity, $column = 'topic_title')
 	{
+		$column = preg_replace('#[^a-z0-9_]#i', '', $column) ?: 'topic_title';
 		$like_conditions = array();
 		$score_parts = array();
 
 		foreach (array_unique(array_filter(array_map('trim', $terms))) as $term)
 		{
-			$like = "t.topic_title LIKE '%" . $this->db->sql_escape($term) . "%'";
+			$like = "t.$column LIKE '%" . $this->db->sql_escape($term) . "%'";
 			$like_conditions[] = $like;
 			$score_parts[] = "CASE WHEN $like THEN 1 ELSE 0 END";
 		}

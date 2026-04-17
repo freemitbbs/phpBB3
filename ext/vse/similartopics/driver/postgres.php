@@ -57,11 +57,12 @@ class postgres implements driver_interface
 	/**
 	 * {@inheritdoc}
 	 */
-	public function get_query($topic_id, $topic_title, $length, $sensitivity)
+	public function get_query($topic_id, $topic_title, $length, $sensitivity, $column = 'topic_title')
 	{
+		$column = preg_replace('#[^a-z0-9_]#i', '', $column) ?: 'topic_title';
 		$ts_name = $this->db->sql_escape($this->ts_name);
 		$ts_query_text = $this->db->sql_escape(preg_replace(['/\s+/', '/\'/'], ['|', ''], $topic_title));
-		$ts_rank_cd = "ts_rank_cd('{1,1,1,1}', to_tsvector('$ts_name', t.topic_title), to_tsquery('$ts_name', '$ts_query_text'), 32)";
+		$ts_rank_cd = "ts_rank_cd('{1,1,1,1}', to_tsvector('$ts_name', t.$column), to_tsquery('$ts_name', '$ts_query_text'), 32)";
 
 		return array(
 			'SELECT'	=> "f.forum_id, f.forum_name, t.*, $ts_rank_cd AS score",
@@ -74,7 +75,7 @@ class postgres implements driver_interface
 					'ON'	=> 'f.forum_id = t.forum_id',
 				),
 			),
-			'WHERE'		=> "to_tsquery('$ts_name', '$ts_query_text') @@ to_tsvector('$ts_name', t.topic_title) AND $ts_rank_cd >= " . (float) $sensitivity . '
+			'WHERE'		=> "to_tsquery('$ts_name', '$ts_query_text') @@ to_tsvector('$ts_name', t.$column) AND $ts_rank_cd >= " . (float) $sensitivity . '
 				AND t.topic_status <> ' . ITEM_MOVED . '
 				AND t.topic_visibility = ' . ITEM_APPROVED . '
 				AND t.topic_time > (extract(epoch from current_timestamp)::integer - ' . (int) $length . ')
@@ -86,14 +87,15 @@ class postgres implements driver_interface
 	/**
 	 * {@inheritdoc}
 	 */
-	public function get_term_query($topic_id, array $terms, $length, $sensitivity)
+	public function get_term_query($topic_id, array $terms, $length, $sensitivity, $column = 'topic_title')
 	{
+		$column = preg_replace('#[^a-z0-9_]#i', '', $column) ?: 'topic_title';
 		$like_conditions = [];
 		$score_parts = [];
 
 		foreach (array_unique(array_filter(array_map('trim', $terms))) as $term)
 		{
-			$like = "t.topic_title LIKE '%" . $this->db->sql_escape($term) . "%'";
+			$like = "t.$column LIKE '%" . $this->db->sql_escape($term) . "%'";
 			$like_conditions[] = $like;
 			$score_parts[] = "CASE WHEN $like THEN 1 ELSE 0 END";
 		}

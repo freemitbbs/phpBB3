@@ -27,6 +27,8 @@ use vse\similartopics\driver\manager as similartopics_manager;
 
 class similar_topics
 {
+	public const SEARCH_TITLE_COLUMN = 'similar_topic_search_title';
+
 	/** @var auth */
 	protected $auth;
 
@@ -194,6 +196,8 @@ class similar_topics
 			return;
 		}
 
+		$this->configure_stop_word_helper();
+		$is_cjk_query = $this->stop_word_helper->has_cjk_characters($topic_data['topic_title']);
 		$sql_array = $this->build_search_query((int) $topic_data['topic_id'], $topic_data['topic_title']);
 
 		// If there are no usable search terms, no need to continue
@@ -202,67 +206,28 @@ class similar_topics
 			return;
 		}
 
-		// Add topic tracking data to the query (only if query caching is off)
-		if ($this->user->data['is_registered'] && $this->config['load_db_lastread'] && !$this->config['similar_topics_cache'])
+		$tracking_topics = [];
+		$this->apply_tracking_query_modifiers($sql_array, $tracking_topics);
+
+		if (!$this->apply_forum_filters($sql_array, $topic_data['similar_topic_forums']))
 		{
-			$sql_array['LEFT_JOIN'][] = array('FROM' => array(TOPICS_TRACK_TABLE => 'tt'), 'ON' => 'tt.topic_id = t.topic_id AND tt.user_id = ' . $this->user->data['user_id']);
-			$sql_array['LEFT_JOIN'][] = array('FROM' => array(FORUMS_TRACK_TABLE => 'ft'), 'ON' => 'ft.forum_id = f.forum_id AND ft.user_id = ' . $this->user->data['user_id']);
-			$sql_array['SELECT'] .= ', tt.mark_time, ft.mark_time as f_mark_time';
-		}
-		else if ($this->config['load_anon_lastread'] || $this->user->data['is_registered'])
-		{
-			// Cookie based tracking copied from search.php
-			$tracking_topics = $this->request->variable($this->config['cookie_name'] . '_track', '', true, \phpbb\request\request_interface::COOKIE);
-			$tracking_topics = $tracking_topics ? tracking_unserialize($tracking_topics) : array();
+			return;
 		}
 
-		// We need to exclude passworded forums, so we do not leak the topic title
-		$passworded_forums = $this->user->get_passworded_forums();
+		$rowset = $this->execute_similar_topics_query($this->apply_search_query_event($sql_array), $this->config['similar_topics_limit'], $this->config['similar_topics_cache']);
 
-		// See if the admin set this forum to only search a specific group of other forums, and include them
-		if (!empty($topic_data['similar_topic_forums']))
+		if (empty($rowset) && $is_cjk_query && $this->similartopics->is_fulltext(self::SEARCH_TITLE_COLUMN))
 		{
-			// Remove any passworded forums from this group of forums we will be searching
-			$included_forums = array_diff(json_decode($topic_data['similar_topic_forums'], true), $passworded_forums);
-			// if there's nothing left to display (user has no access to the forums we want to search)
-			if (empty($included_forums))
+			$fallback_sql_array = $this->build_search_query((int) $topic_data['topic_id'], $topic_data['topic_title'], false);
+			if (!empty($fallback_sql_array))
 			{
-				return;
+				$this->apply_tracking_query_modifiers($fallback_sql_array, $tracking_topics);
+				if ($this->apply_forum_filters($fallback_sql_array, $topic_data['similar_topic_forums']))
+				{
+					$rowset = $this->execute_similar_topics_query($this->apply_search_query_event($fallback_sql_array), $this->config['similar_topics_limit'], $this->config['similar_topics_cache']);
+				}
 			}
-
-			$sql_array['WHERE'] .= ' AND ' . $this->db->sql_in_set('f.forum_id', $included_forums);
 		}
-		// Otherwise, exclude any ignored forums
-		else
-		{
-			// Remove any passworded forums
-			if (count($passworded_forums))
-			{
-				$sql_array['WHERE'] .= ' AND ' . $this->db->sql_in_set('f.forum_id', $passworded_forums, true);
-			}
-
-			$sql_array['WHERE'] .= ' AND f.similar_topics_ignore = 0';
-		}
-
-		/**
-		 * Event to modify the sql_array for similar topics
-		 *
-		 * @event vse.similartopics.get_topic_data
-		 * @var array sql_array SQL array to get similar topics data
-		 * @since 1.3.0
-		 */
-		$vars = array('sql_array');
-		extract($this->dispatcher->trigger_event('vse.similartopics.get_topic_data', compact($vars)));
-
-		$rowset = array();
-
-		$sql = $this->db->sql_build_query('SELECT', $sql_array);
-		$result = $this->db->sql_query_limit($sql, $this->config['similar_topics_limit'], 0, $this->config['similar_topics_cache']);
-		while ($row = $this->db->sql_fetchrow($result))
-		{
-			$rowset[(int) $row['topic_id']] = $row;
-		}
-		$this->db->sql_freeresult($result);
 
 		// Grab icons
 		$icons = $this->cache->obtain_icons();
@@ -409,6 +374,8 @@ class similar_topics
 	 */
 	public function search_similar_topics_ajax($query, $forum_id = 0)
 	{
+		$this->configure_stop_word_helper();
+		$is_cjk_query = $this->stop_word_helper->has_cjk_characters($query);
 		$sql_array = $this->build_search_query(0, $query);
 
 		if (empty($sql_array))
@@ -427,31 +394,24 @@ class similar_topics
 			$this->db->sql_freeresult($result);
 		}
 
-		$passworded_forums = $this->user->get_passworded_forums();
-
-		if (!empty($similar_topic_forums))
+		if (!$this->apply_forum_filters($sql_array, $similar_topic_forums))
 		{
-			$included_forums = array_diff(json_decode($similar_topic_forums, true), $passworded_forums);
-			if (empty($included_forums))
-			{
-				return [];
-			}
-			$sql_array['WHERE'] .= ' AND ' . $this->db->sql_in_set('f.forum_id', $included_forums);
-		}
-		else
-		{
-			if (count($passworded_forums))
-			{
-				$sql_array['WHERE'] .= ' AND ' . $this->db->sql_in_set('f.forum_id', $passworded_forums, true);
-			}
-			$sql_array['WHERE'] .= ' AND f.similar_topics_ignore = 0';
+			return [];
 		}
 
 		$topics = [];
-		$sql = $this->db->sql_build_query('SELECT', $sql_array);
-		$result = $this->db->sql_query_limit($sql, 5);
+		$rowset = $this->execute_similar_topics_query($sql_array, 5);
 
-		while ($row = $this->db->sql_fetchrow($result))
+		if (empty($rowset) && $is_cjk_query && $this->similartopics->is_fulltext(self::SEARCH_TITLE_COLUMN))
+		{
+			$fallback_sql_array = $this->build_search_query(0, $query, false);
+			if (!empty($fallback_sql_array) && $this->apply_forum_filters($fallback_sql_array, $similar_topic_forums))
+			{
+				$rowset = $this->execute_similar_topics_query($fallback_sql_array, 5);
+			}
+		}
+
+		foreach ($rowset as $row)
 		{
 			if ($this->auth->acl_get('f_read', (int) $row['forum_id']))
 			{
@@ -462,7 +422,6 @@ class similar_topics
 				];
 			}
 		}
-		$this->db->sql_freeresult($result);
 
 		return $topics;
 	}
@@ -478,10 +437,27 @@ class similar_topics
 	 * @param string $text
 	 * @return array
 	 */
-	protected function build_search_query($topic_id, $text)
+	protected function build_search_query($topic_id, $text, $prefer_fulltext = true)
 	{
-		$this->stop_word_helper->set_use_localized($this->get_localized_ignore_words());
-		$this->stop_word_helper->set_additional_ignore_words($this->get_additional_ignore_words());
+		$sensitivity = $this->config->offsetExists('similar_topics_sense')
+			? number_format($this->config['similar_topics_sense'] / 10, 1, '.', '')
+			: '0.5';
+
+		if ($this->stop_word_helper->has_cjk_characters($text))
+		{
+			$search_text = $this->stop_word_helper->build_index_text($text);
+			if ($search_text === '')
+			{
+				return [];
+			}
+
+			if ($prefer_fulltext && $this->similartopics->is_fulltext(self::SEARCH_TITLE_COLUMN))
+			{
+				return $this->similartopics->get_query($topic_id, $search_text, $this->config['similar_topics_time'], $sensitivity, self::SEARCH_TITLE_COLUMN);
+			}
+
+			return $this->similartopics->get_term_query($topic_id, explode(' ', $search_text), $this->config['similar_topics_time'], $sensitivity, self::SEARCH_TITLE_COLUMN);
+		}
 
 		$terms = $this->stop_word_helper->get_search_terms($text, true);
 		if (empty($terms))
@@ -489,16 +465,136 @@ class similar_topics
 			return [];
 		}
 
-		$sensitivity = $this->config->offsetExists('similar_topics_sense')
-			? number_format($this->config['similar_topics_sense'] / 10, 1, '.', '')
-			: '0.5';
+		return $this->similartopics->get_query($topic_id, implode(' ', $terms), $this->config['similar_topics_time'], $sensitivity);
+	}
 
-		if ($this->stop_word_helper->has_cjk_characters($text))
+	/**
+	 * Sync the shadow full-text search title for a topic.
+	 *
+	 * @param int $topic_id
+	 * @param string $title
+	 * @return void
+	 */
+	public function update_search_title_index($topic_id, $title)
+	{
+		$this->configure_stop_word_helper();
+
+		$topic_id = (int) $topic_id;
+		if ($topic_id <= 0)
 		{
-			return $this->similartopics->get_term_query($topic_id, $terms, $this->config['similar_topics_time'], $sensitivity);
+			return;
 		}
 
-		return $this->similartopics->get_query($topic_id, implode(' ', $terms), $this->config['similar_topics_time'], $sensitivity);
+		$search_title = $this->stop_word_helper->build_index_text($title);
+
+		$sql = 'UPDATE ' . TOPICS_TABLE . "
+			SET " . self::SEARCH_TITLE_COLUMN . " = '" . $this->db->sql_escape($search_title) . "'
+			WHERE topic_id = $topic_id";
+		$this->db->sql_query($sql);
+	}
+
+	/**
+	 * Configure the stop-word helper using the active localized and custom ignore words.
+	 *
+	 * @return void
+	 */
+	protected function configure_stop_word_helper()
+	{
+		$this->stop_word_helper->set_use_localized($this->get_localized_ignore_words());
+		$this->stop_word_helper->set_additional_ignore_words($this->get_additional_ignore_words());
+	}
+
+	/**
+	 * Apply topic tracking joins to a similar-topics query.
+	 *
+	 * @param array $sql_array
+	 * @param array $tracking_topics
+	 * @return void
+	 */
+	protected function apply_tracking_query_modifiers(array &$sql_array, array &$tracking_topics)
+	{
+		if ($this->user->data['is_registered'] && $this->config['load_db_lastread'] && !$this->config['similar_topics_cache'])
+		{
+			$sql_array['LEFT_JOIN'][] = array('FROM' => array(TOPICS_TRACK_TABLE => 'tt'), 'ON' => 'tt.topic_id = t.topic_id AND tt.user_id = ' . $this->user->data['user_id']);
+			$sql_array['LEFT_JOIN'][] = array('FROM' => array(FORUMS_TRACK_TABLE => 'ft'), 'ON' => 'ft.forum_id = f.forum_id AND ft.user_id = ' . $this->user->data['user_id']);
+			$sql_array['SELECT'] .= ', tt.mark_time, ft.mark_time as f_mark_time';
+		}
+		else if ($this->config['load_anon_lastread'] || $this->user->data['is_registered'])
+		{
+			// Cookie based tracking copied from search.php
+			$tracking_topics = $this->request->variable($this->config['cookie_name'] . '_track', '', true, \phpbb\request\request_interface::COOKIE);
+			$tracking_topics = $tracking_topics ? tracking_unserialize($tracking_topics) : array();
+		}
+	}
+
+	/**
+	 * Apply forum visibility filters to a similar-topics query.
+	 *
+	 * @param array $sql_array
+	 * @param string|null $similar_topic_forums
+	 * @return bool
+	 */
+	protected function apply_forum_filters(array &$sql_array, $similar_topic_forums = null)
+	{
+		$passworded_forums = $this->user->get_passworded_forums();
+
+		if (!empty($similar_topic_forums))
+		{
+			$included_forums = array_diff(json_decode($similar_topic_forums, true), $passworded_forums);
+			if (empty($included_forums))
+			{
+				return false;
+			}
+
+			$sql_array['WHERE'] .= ' AND ' . $this->db->sql_in_set('f.forum_id', $included_forums);
+			return true;
+		}
+
+		if (count($passworded_forums))
+		{
+			$sql_array['WHERE'] .= ' AND ' . $this->db->sql_in_set('f.forum_id', $passworded_forums, true);
+		}
+
+		$sql_array['WHERE'] .= ' AND f.similar_topics_ignore = 0';
+		return true;
+	}
+
+	/**
+	 * Allow extensions to modify a similar-topics search query.
+	 *
+	 * @param array $sql_array
+	 * @return array
+	 */
+	protected function apply_search_query_event(array $sql_array)
+	{
+		$vars = array('sql_array');
+		extract($this->dispatcher->trigger_event('vse.similartopics.get_topic_data', compact($vars)));
+
+		return $sql_array;
+	}
+
+	/**
+	 * Execute a similar-topics search query and return a rowset.
+	 *
+	 * @param array $sql_array
+	 * @param int $limit
+	 * @param int $cache
+	 * @return array
+	 */
+	protected function execute_similar_topics_query(array $sql_array, $limit, $cache = 0)
+	{
+		$rowset = [];
+		$sql = $this->db->sql_build_query('SELECT', $sql_array);
+		$result = $this->db->sql_query_limit($sql, (int) $limit, 0, (int) $cache);
+
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$rowset[(int) $row['topic_id']] = $row;
+		}
+
+		$this->db->sql_freeresult($result);
+
+		return $rowset;
 	}
 
 	/**
