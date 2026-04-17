@@ -1,1 +1,81 @@
+<script>
+window.postimage = window.postimage || {};
+window.postimage.opt = window.postimage.opt || {};
+
+(function(lang) {
+	lang = (lang || '').toLowerCase();
+
+	if (lang === 'zh-cmn-hans' || lang.indexOf('zh-hans') !== -1 || lang === 'zh-cn' || lang === 'zh-sg')
+	{
+		window.postimage.opt.lang = 'zh-cn';
+		window.postimage.opt.customtext = '将图片添加到帖子';
+	}
+	else if (lang === 'zh-cmn-hant' || lang.indexOf('zh-hant') !== -1 || lang === 'zh-hk' || lang === 'zh-tw' || lang === 'zh-mo')
+	{
+		window.postimage.opt.lang = 'zh-hk';
+		window.postimage.opt.customtext = '將圖片加入貼文';
+	}
+})(document.documentElement.lang);
+
+function postimage_customize() {
+	return window.postimage;
+}
+</script>
 <script type="text/javascript" src="//mod.postimage.org/phpbb3.js" charset="utf-8"></script>
+<script>
+(function() {
+	var lang = (document.documentElement.lang || '').toLowerCase();
+	var label = '';
+
+	if (lang === 'zh-cmn-hans' || lang.indexOf('zh-hans') !== -1 || lang === 'zh-cn' || lang === 'zh-sg')
+	{
+		label = '将图片添加到帖子';
+	}
+	else if (lang === 'zh-cmn-hant' || lang.indexOf('zh-hant') !== -1 || lang === 'zh-hk' || lang === 'zh-tw' || lang === 'zh-mo')
+	{
+		label = '將圖片加入貼文';
+	}
+
+	if (!label)
+	{
+		return;
+	}
+
+	function relabel(root) {
+		var nodes = (root || document).querySelectorAll('a[aria-label], a');
+		nodes.forEach(function(node) {
+			var text = (node.textContent || '').trim();
+			var aria = node.getAttribute('aria-label') || '';
+			if (text === 'Add image to post' || aria === 'Add image to post')
+			{
+				node.textContent = label;
+				node.setAttribute('aria-label', label);
+			}
+		});
+	}
+
+	function init() {
+		relabel(document);
+		new MutationObserver(function(mutations) {
+			mutations.forEach(function(mutation) {
+				mutation.addedNodes.forEach(function(node) {
+					if (node.nodeType === 1)
+					{
+						relabel(node);
+					}
+				});
+			});
+		}).observe(document.body, {childList: true, subtree: true});
+	}
+
+	if (document.readyState === 'loading')
+	{
+		document.addEventListener('DOMContentLoaded', init);
+		window.addEventListener('load', init);
+	}
+	else
+	{
+		init();
+	}
+})();
+</script>
