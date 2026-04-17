@@ -6,6 +6,8 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 class listener implements EventSubscriberInterface
 {
+	private const USER_OPTION_HIDE_FORUM_SUMMARY = 20;
+
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
 	protected \phpbb\db\driver\driver_interface $db;
@@ -90,6 +92,8 @@ class listener implements EventSubscriberInterface
 				return [
 					'core.user_setup' => 'load_language_on_setup',
 					'core.permissions' => 'add_permissions',
+					'core.ucp_prefs_personal_data' => 'ucp_prefs_personal_data',
+					'core.ucp_prefs_personal_update_data' => 'ucp_prefs_personal_update_data',
 					'core.viewforum_get_topic_ids_data' => 'viewforum_exclude_foe_topics',
 					'core.viewforum_get_announcement_topic_ids_data' => 'viewforum_exclude_foe_topics',
 					'core.viewtopic_modify_post_data' => 'prefetch_dislikes',
@@ -120,6 +124,30 @@ class listener implements EventSubscriberInterface
 		$permissions = $event['permissions'];
 		$permissions['u_toptopics_dislike'] = ['lang' => 'ACL_U_TOPTOPICS_DISLIKE', 'cat' => 'misc'];
 		$event['permissions'] = $permissions;
+	}
+
+	public function ucp_prefs_personal_data($event): void
+	{
+		$data = $event['data'];
+		$data['toptopics_show_forum_summary'] = $this->request->variable(
+			'toptopics_show_forum_summary',
+			!$this->user_hides_forum_summary()
+		);
+		$event['data'] = $data;
+
+		$this->template->assign_var('S_TOPTOPICS_SHOW_FORUM_SUMMARY', $data['toptopics_show_forum_summary']);
+	}
+
+	public function ucp_prefs_personal_update_data($event): void
+	{
+		$data = $event['data'];
+		$sql_ary = $event['sql_ary'];
+		$sql_ary['user_options'] = phpbb_optionset(
+			self::USER_OPTION_HIDE_FORUM_SUMMARY,
+			!(bool) ($data['toptopics_show_forum_summary'] ?? true),
+			(int) $sql_ary['user_options']
+		);
+		$event['sql_ary'] = $sql_ary;
 	}
 
 	public function prefetch_dislikes($event)
@@ -492,7 +520,7 @@ class listener implements EventSubscriberInterface
 
 	public function forum_page_summary($event)
 	{
-		if ($this->user->data['is_bot'])
+		if ($this->user->data['is_bot'] || $this->user_hides_forum_summary())
 		{
 			return;
 		}
@@ -711,6 +739,11 @@ class listener implements EventSubscriberInterface
 		}
 
 		return $this->index_summary_topics;
+	}
+
+	protected function user_hides_forum_summary(): bool
+	{
+		return phpbb_optionget(self::USER_OPTION_HIDE_FORUM_SUMMARY, (int) $this->user->data['user_options']);
 	}
 
 	protected function get_index_summary_topic_id_map(): array

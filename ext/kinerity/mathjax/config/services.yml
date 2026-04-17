@@ -1,0 +1,5 @@
+services:
+    kinerity.mathjax.listener:
+        class: kinerity\mathjax\event\main_listener
+        tags:
+            - { name: event.listener }

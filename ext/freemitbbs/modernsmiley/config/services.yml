@@ -1,0 +1,21 @@
+parameters:
+    tables.freemitbbs.modernsmiley.smilies: '%core.table_prefix%smilies'
+    tables.freemitbbs.modernsmiley.modern_smiley_map: '%core.table_prefix%modern_smiley_map'
+
+services:
+    freemitbbs.modernsmiley.mapper:
+        class: freemitbbs\modernsmiley\service\mapper
+        arguments:
+            - '@dbal.conn'
+            - '@config'
+            - '%tables.freemitbbs.modernsmiley.smilies%'
+            - '%tables.freemitbbs.modernsmiley.modern_smiley_map%'
+
+    freemitbbs.modernsmiley.listener:
+        class: freemitbbs\modernsmiley\event\listener
+        arguments:
+            - '@freemitbbs.modernsmiley.mapper'
+            - '@language'
+            - '@template'
+        tags:
+            - { name: event.listener }

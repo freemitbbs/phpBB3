@@ -1,0 +1,137 @@
+<!-- INCLUDE overall_header.html -->
+
+<a id="maincontent"></a>
+<h1>{L_ACP_MODERNSMILEY}</h1>
+<p>{L_MODERNSMILEY_EXPLAIN}</p>
+
+<form id="acp_modernsmiley" method="post" action="{U_ACTION}">
+	<fieldset>
+		<legend>{L_MODERNSMILEY_ASSET_FIELDSET}</legend>
+		<p>{L_MODERNSMILEY_ASSET_EXPLAIN}</p>
+		<dl>
+			<dt><label for="asset_url_pattern">{L_MODERNSMILEY_ASSET_URL_PATTERN}</label><br><span>{L_MODERNSMILEY_ASSET_URL_PATTERN_EXPLAIN}</span></dt>
+			<dd><input class="text large" type="text" id="asset_url_pattern" name="asset_url_pattern" value="{ASSET_URL_PATTERN}" size="80" maxlength="255" /></dd>
+		</dl>
+		<dl>
+			<dt><label for="asset_fallback_url_pattern">{L_MODERNSMILEY_ASSET_FALLBACK_URL_PATTERN}</label><br><span>{L_MODERNSMILEY_ASSET_FALLBACK_URL_PATTERN_EXPLAIN}</span></dt>
+			<dd><input class="text large" type="text" id="asset_fallback_url_pattern" name="asset_fallback_url_pattern" value="{ASSET_FALLBACK_URL_PATTERN}" size="80" maxlength="255" /></dd>
+		</dl>
+		<dl>
+			<dt>{L_MODERNSMILEY_ASSET_SAMPLE}</dt>
+			<dd><code>{ASSET_URL_SAMPLE}</code></dd>
+		</dl>
+		<dl>
+			<dt>{L_MODERNSMILEY_ASSET_FALLBACK_SAMPLE}</dt>
+			<dd><!-- IF ASSET_FALLBACK_URL_SAMPLE --><code>{ASSET_FALLBACK_URL_SAMPLE}</code><!-- ELSE -->&mdash;<!-- ENDIF --></dd>
+		</dl>
+		<dl>
+			<dt><label for="hover_asset_url_pattern">{L_MODERNSMILEY_HOVER_ASSET_URL_PATTERN}</label><br><span>{L_MODERNSMILEY_HOVER_ASSET_URL_PATTERN_EXPLAIN}</span></dt>
+			<dd><input class="text large" type="text" id="hover_asset_url_pattern" name="hover_asset_url_pattern" value="{HOVER_ASSET_URL_PATTERN}" size="80" maxlength="255" /></dd>
+		</dl>
+		<dl>
+			<dt><label for="hover_asset_fallback_url_pattern">{L_MODERNSMILEY_HOVER_ASSET_FALLBACK_URL_PATTERN}</label><br><span>{L_MODERNSMILEY_HOVER_ASSET_FALLBACK_URL_PATTERN_EXPLAIN}</span></dt>
+			<dd><input class="text large" type="text" id="hover_asset_fallback_url_pattern" name="hover_asset_fallback_url_pattern" value="{HOVER_ASSET_FALLBACK_URL_PATTERN}" size="80" maxlength="255" /></dd>
+		</dl>
+		<dl>
+			<dt>{L_MODERNSMILEY_HOVER_ASSET_SAMPLE}</dt>
+			<dd><!-- IF HOVER_ASSET_URL_SAMPLE --><code>{HOVER_ASSET_URL_SAMPLE}</code><!-- ELSE -->&mdash;<!-- ENDIF --></dd>
+		</dl>
+		<dl>
+			<dt>{L_MODERNSMILEY_HOVER_ASSET_FALLBACK_SAMPLE}</dt>
+			<dd><!-- IF HOVER_ASSET_FALLBACK_URL_SAMPLE --><code>{HOVER_ASSET_FALLBACK_URL_SAMPLE}</code><!-- ELSE -->&mdash;<!-- ENDIF --></dd>
+		</dl>
+	</fieldset>
+
+	<fieldset class="tabulated">
+		<legend>{L_MODERNSMILEY_FIELDSET}</legend>
+		<table class="table1 zebra-table">
+			<thead>
+				<tr>
+					<th>{L_MODERNSMILEY_LEGACY}</th>
+					<th>{L_MODERNSMILEY_CODES}</th>
+					<th>{L_MODERNSMILEY_EMOTIONS}</th>
+					<th>{L_MODERNSMILEY_POSTING}</th>
+					<th>{L_MODERNSMILEY_ORDER}</th>
+					<th>{L_MODERNSMILEY_EMOJI_SEQ}</th>
+					<th>{L_MODERNSMILEY_PREVIEW}</th>
+					<th>{L_DELETE}</th>
+				</tr>
+			</thead>
+			<tbody>
+			<!-- BEGIN smilies -->
+				<tr>
+					<td style="text-align:center;">
+						<input type="hidden" name="smiley_id[{smilies.ROW_ID}]" value="{smilies.SMILEY_ID}" />
+						<img src="{smilies.IMG_SRC}" alt="{smilies.CODE}" title="{smilies.CODE}" />
+						<div>[#{smilies.SMILEY_ID}]</div>
+						<div>[{smilies.SMILEY_URL}]</div>
+					</td>
+					<td><input class="text post" type="text" name="code[{smilies.ROW_ID}]" value="{smilies.CODE}" size="14" maxlength="50" /></td>
+					<td><input class="text post" type="text" name="emotion[{smilies.ROW_ID}]" value="{smilies.EMOTION}" size="20" maxlength="255" /></td>
+					<td style="text-align:center;"><input type="checkbox" class="radio" name="display_on_posting[{smilies.ROW_ID}]" value="1"<!-- IF smilies.DISPLAY_ON_POSTING --> checked="checked"<!-- ENDIF --> /></td>
+					<td><input class="text post" type="number" min="1" max="9999" name="smiley_order[{smilies.ROW_ID}]" value="{smilies.SMILEY_ORDER}" /></td>
+					<td>
+						<input class="text post" type="text" name="emoji_seq[{smilies.ROW_ID}]" value="{smilies.EMOJI_SEQ}" size="24" maxlength="191" />
+						<div>{L_MODERNSMILEY_EMOJI_SEQ_EXPLAIN}</div>
+					</td>
+					<td style="text-align:center;">
+						<!-- IF smilies.EMOJI_PREVIEW -->
+							<img src="{smilies.EMOJI_PREVIEW}" alt="{smilies.EMOJI_SEQ}" title="{smilies.EMOJI_SEQ}" class="emoji smilies" />
+						<!-- ELSE -->
+							&mdash;
+						<!-- ENDIF -->
+					</td>
+					<td style="text-align:center;"><input type="checkbox" class="radio" name="delete_smiley[{smilies.ROW_ID}]" value="1" /></td>
+				</tr>
+			<!-- BEGINELSE -->
+				<tr class="row3">
+					<td colspan="8">{L_ACP_NO_ITEMS}</td>
+				</tr>
+			<!-- END smilies -->
+			</tbody>
+		</table>
+	</fieldset>
+
+	<fieldset class="tabulated">
+		<legend>{L_MODERNSMILEY_NEW_FIELDSET}</legend>
+		<p>{L_MODERNSMILEY_NEW_EXPLAIN}</p>
+		<table class="table1 zebra-table">
+			<thead>
+				<tr>
+					<th>{L_MODERNSMILEY_LEGACY}</th>
+					<th>{L_MODERNSMILEY_CODES}</th>
+					<th>{L_MODERNSMILEY_EMOTIONS}</th>
+					<th>{L_MODERNSMILEY_POSTING}</th>
+					<th>{L_MODERNSMILEY_ORDER}</th>
+					<th>{L_MODERNSMILEY_EMOJI_SEQ}</th>
+					<th>{L_MODERNSMILEY_PREVIEW}</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td style="text-align:center;">
+						<img src="{DEFAULT_PLACEHOLDER_SRC}" alt="{DEFAULT_PLACEHOLDER_URL}" title="{DEFAULT_PLACEHOLDER_URL}" />
+						<div>[{DEFAULT_PLACEHOLDER_URL}]</div>
+					</td>
+					<td><input class="text post" type="text" name="new_code" value="" size="14" maxlength="50" /></td>
+					<td><input class="text post" type="text" name="new_emotion" value="" size="20" maxlength="255" /></td>
+					<td style="text-align:center;"><input type="checkbox" class="radio" name="new_display_on_posting" value="1" checked="checked" /></td>
+					<td><input class="text post" type="number" min="1" max="9999" name="new_smiley_order" value="{NEXT_DISPLAY_ORDER}" /></td>
+					<td>
+						<input class="text post" type="text" name="new_emoji_seq" value="" size="24" maxlength="191" />
+						<div>{L_MODERNSMILEY_NEW_SEQ_EXPLAIN}</div>
+					</td>
+					<td style="text-align:center;">{L_MODERNSMILEY_NEW_PREVIEW_HINT}</td>
+				</tr>
+			</tbody>
+		</table>
+	</fieldset>
+
+	<fieldset class="submit-buttons">
+		{S_FORM_TOKEN}
+		<input class="button1" type="submit" id="submit" name="submit" value="{L_SUBMIT}" />
+		<input class="button2" type="reset" id="reset" name="reset" value="{L_RESET}" />
+	</fieldset>
+</form>
+
+<!-- INCLUDE overall_footer.html -->

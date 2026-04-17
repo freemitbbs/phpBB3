@@ -25,6 +25,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 class main_listener implements EventSubscriberInterface
 {
 	private const USER_OPTION_HIDE_SUMMARY = 18;
+	private const USER_OPTION_HIDE_FORUM_SUMMARY = 19;
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
@@ -98,9 +99,14 @@ class main_listener implements EventSubscriberInterface
 			'postlove_show_summary',
 			!$this->user_hides_summary()
 		);
+		$data['postlove_show_forum_summary'] = $this->request->variable(
+			'postlove_show_forum_summary',
+			!$this->user_hides_forum_summary()
+		);
 		$event['data'] = $data;
 
 		$this->template->assign_var('S_POSTLOVE_SHOW_SUMMARY', $data['postlove_show_summary']);
+		$this->template->assign_var('S_POSTLOVE_SHOW_FORUM_SUMMARY', $data['postlove_show_forum_summary']);
 	}
 
 	/**
@@ -115,6 +121,11 @@ class main_listener implements EventSubscriberInterface
 		$sql_ary['user_options'] = phpbb_optionset(
 			self::USER_OPTION_HIDE_SUMMARY,
 			!(bool) $data['postlove_show_summary'],
+			(int) $sql_ary['user_options']
+		);
+		$sql_ary['user_options'] = phpbb_optionset(
+			self::USER_OPTION_HIDE_FORUM_SUMMARY,
+			!(bool) ($data['postlove_show_forum_summary'] ?? true),
 			(int) $sql_ary['user_options']
 		);
 		$event['sql_ary'] = $sql_ary;
@@ -349,5 +360,10 @@ class main_listener implements EventSubscriberInterface
 	protected function user_hides_summary(): bool
 	{
 		return phpbb_optionget(self::USER_OPTION_HIDE_SUMMARY, (int) $this->user->data['user_options']);
+	}
+
+	protected function user_hides_forum_summary(): bool
+	{
+		return phpbb_optionget(self::USER_OPTION_HIDE_FORUM_SUMMARY, (int) $this->user->data['user_options']);
 	}
 }

@@ -61,6 +61,8 @@ $lang = array_merge($lang, array(
 	),
 	'POSTLOVE_SHOW_SUMMARY'			=> 'Show the most liked posts sections',
 	'POSTLOVE_SHOW_SUMMARY_EXPLAIN'	=> 'Allow the most liked posts summaries to appear on index and forum pages.',
+	'POSTLOVE_SHOW_FORUM_SUMMARY'			=> 'Show the most liked posts section on forum pages',
+	'POSTLOVE_SHOW_FORUM_SUMMARY_EXPLAIN'	=> 'Allow the forum-level most liked posts summary to appear on individual forum pages.',
 	'POSTLOVE_HIDE' 			=> 'Hide Like icons and summaries',
 	'ACL_U_POSTLOVE'			=> 'Post Love: Can like posts',
 	'ACL_U_POSTLOVE_SUMMARY'	=> 'Post Love: Can see most liked posts summary',

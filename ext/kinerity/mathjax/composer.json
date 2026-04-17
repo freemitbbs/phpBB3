@@ -1,0 +1,43 @@
+{
+    "name": "kinerity/mathjax",
+    "type": "phpbb-extension",
+    "description": "This extension makes it possible to write formulas in LaTeX notation through the integration of MathJax.",
+    "keywords": [
+        "math",
+        "MathJax",
+        "LaTeX",
+        "phpBB"
+    ],
+    "version": "1.2.2",
+    "time": "2025-08-04",
+    "license": "GPL-2.0-only",
+    "authors": [
+        {
+            "name": "Thorsten Ahlers",
+            "homepage": "https://github.com/IMC-GER",
+            "role": "Developer"
+        },
+        {
+            "name": "Kailey",
+            "homepage": "https://www.techierambles.com/community/",
+            "role": "Previous Developer"
+        }
+    ],
+    "require": {
+        "php": ">=7.4.0",
+        "phpbb/phpbb": ">=3.3.0,<4.0.0@dev",
+        "composer/installers": "~1.0.0"
+    },
+    "extra": {
+        "display-name": "MathJax",
+        "soft-require": {
+            "phpbb/phpbb": ">=3.3.0,<4.0.0@dev"
+        },
+        "version-check": {
+            "host": "www.phpbb.com",
+            "directory": "/customise/db/extension/mathjax_2",
+            "filename": "version_check",
+            "ssl": true
+        }
+    }
+}

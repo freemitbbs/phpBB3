@@ -32,6 +32,7 @@ class summary_listener implements EventSubscriberInterface
 	private const SECONDS_PER_HOUR = self::SECONDS_PER_MINUTE * 60;
 	private const SECONDS_PER_DAY = self::SECONDS_PER_HOUR * 24;
 	private const USER_OPTION_HIDE_SUMMARY = 18;
+	private const USER_OPTION_HIDE_FORUM_SUMMARY = 19;
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
@@ -154,6 +155,7 @@ class summary_listener implements EventSubscriberInterface
 		if ($this->user->data['is_bot'] || // we dont want bots to see summaries
 			 !$this->auth->acl_get('u_postlove_summary') || // user group not allowed to see summary
 			 $this->user_hides_summary() || // user disabled the summary in UCP
+			 $this->user_hides_forum_summary() || // user disabled forum summaries in UCP
 			 (isset($this->user->profile_fields['pf_postlove_hide']) && $this->user->profile_fields['pf_postlove_hide']) // user doesnt want
 			)
 		{
@@ -549,6 +551,11 @@ class summary_listener implements EventSubscriberInterface
 	protected function user_hides_summary(): bool
 	{
 		return phpbb_optionget(self::USER_OPTION_HIDE_SUMMARY, (int) $this->user->data['user_options']);
+	}
+
+	protected function user_hides_forum_summary(): bool
+	{
+		return phpbb_optionget(self::USER_OPTION_HIDE_FORUM_SUMMARY, (int) $this->user->data['user_options']);
 	}
 
 	protected function build_post_excerpt(array $row): string
