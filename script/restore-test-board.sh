@@ -58,7 +58,7 @@ mysql_exec() {
 
 	local -a args
 
-	args=("$MYSQL_BIN")
+	args=()
 
 	if [[ -n "$TEST_DB_SOCKET" ]]; then
 		args+=("--socket=$TEST_DB_SOCKET")
@@ -78,7 +78,11 @@ mysql_exec() {
 		args+=("$database")
 	fi
 
-	"$MYSQL_BIN" "${args[@]}" "$@"
+	if [[ -n "$TEST_DB_PASSWORD" ]]; then
+		MYSQL_PWD="$TEST_DB_PASSWORD" "$MYSQL_BIN" "${args[@]}" "$@"
+	else
+		"$MYSQL_BIN" "${args[@]}" "$@"
+	fi
 }
 
 mysql_quote_ident() {
