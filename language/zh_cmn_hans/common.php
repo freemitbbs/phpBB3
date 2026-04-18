@@ -326,6 +326,7 @@ $lang = array_merge($lang, array(
 	'GROUP_ERR_USERNAME'		=> '没有指定用户组名称。',
 	'GROUP_ERR_USER_LONG'		=> '用户组名称过长，不能超过60个字符。',
 	'GUEST'						=> '游客',
+	'INTERNAL_ERROR_OCCURRED'	=> '当读取页面的时候发生内部错误。如果错误一直存在，请联络 %s论坛管理员%s 。',
 	'GUEST_USERS_ONLINE'		=> array(
 		1	=> '有 %d 访客在线',
 	),

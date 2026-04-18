@@ -80,6 +80,8 @@ class kernel_exception_subscriber implements EventSubscriberInterface
 	public function on_kernel_exception(GetResponseForExceptionEvent $event)
 	{
 		$exception = $event->getException();
+		$context = null;
+		$should_report = !($exception instanceof NotFoundHttpException);
 
 		$message = $exception->getMessage();
 		$this->type_caster->set_var($message, $message, 'string', true, false);
@@ -102,9 +104,26 @@ class kernel_exception_subscriber implements EventSubscriberInterface
 		// Show <strong> text in bold
 		$message = preg_replace('#&lt;(/?strong)&gt;#i', '<$1>', $message);
 
+		if ($should_report)
+		{
+			$context = \phpbb_build_runtime_error_context('php_kernel_exception', array(
+				'exception_class'	=> get_class($exception),
+				'message'			=> $message,
+				'file'				=> \phpbb_filter_root_path($exception->getFile()),
+				'line'				=> (int) $exception->getLine(),
+				'trace'				=> $exception->getTraceAsString(),
+			));
+			\phpbb_write_runtime_error_log($context);
+		}
+
 		if (!$event->getRequest()->isXmlHttpRequest())
 		{
 			page_header($this->language->lang('INFORMATION'));
+
+			if ($context)
+			{
+				$message .= \phpbb_build_runtime_error_public_block($context);
+			}
 
 			$this->template->assign_vars(array(
 				'MESSAGE_TITLE' => $this->language->lang('INFORMATION'),
@@ -126,6 +145,13 @@ class kernel_exception_subscriber implements EventSubscriberInterface
 			if (!empty($message))
 			{
 				$data['message'] = $message;
+			}
+
+			if ($context)
+			{
+				$data['error_id'] = $context['error_id'];
+				$data['request'] = $context['request_uri'];
+				$data['time_utc'] = $context['time_utc'];
 			}
 
 			if ($this->debug)

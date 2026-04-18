@@ -3,6 +3,7 @@ services:
         class: freemitbbs\videoupload\service\s3_uploader
         arguments:
             - '@config'
+            - '@service_container'
 
     freemitbbs.videoupload.listener:
         class: freemitbbs\videoupload\event\listener

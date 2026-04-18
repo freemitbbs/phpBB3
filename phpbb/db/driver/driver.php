@@ -1055,19 +1055,7 @@ abstract class driver implements driver_interface
 	*/
 	protected function build_sql_error_context($sql, $user = null, $auth = null)
 	{
-		$request_uri = '';
-		if (!empty($_SERVER['REQUEST_URI']))
-		{
-			$request_uri = $_SERVER['REQUEST_URI'];
-		}
-		else if (!empty($_SERVER['SCRIPT_NAME']))
-		{
-			$request_uri = $_SERVER['SCRIPT_NAME'];
-			if (!empty($_SERVER['QUERY_STRING']))
-			{
-				$request_uri .= '?' . $_SERVER['QUERY_STRING'];
-			}
-		}
+		$request_uri = $this->get_request_uri();
 
 		return array(
 			'error_id'			=> $this->generate_sql_error_id(),
@@ -1076,17 +1064,80 @@ abstract class driver implements driver_interface
 			'db_name'			=> $this->dbname,
 			'db_error_message'	=> isset($this->sql_error_returned['message']) ? $this->sql_error_returned['message'] : '',
 			'db_error_code'		=> isset($this->sql_error_returned['code']) ? $this->sql_error_returned['code'] : '',
-			'request_method'	=> isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : '',
+			'request_method'	=> $this->get_server_var('REQUEST_METHOD', ''),
 			'request_uri'		=> $request_uri ?: '-',
-			'referrer'			=> isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '',
-			'remote_addr'		=> isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '',
-			'forwarded_for'		=> isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : '',
-			'user_agent'		=> isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '',
+			'referrer'			=> $this->get_header_var('referer', ''),
+			'remote_addr'		=> $this->get_server_var('REMOTE_ADDR', ''),
+			'forwarded_for'		=> $this->get_header_var('x-forwarded-for', ''),
+			'user_agent'		=> $this->get_header_var('user-agent', ''),
 			'user_id'			=> (is_object($user) && isset($user->data['user_id'])) ? (int) $user->data['user_id'] : 0,
 			'username'			=> (is_object($user) && isset($user->data['username'])) ? $user->data['username'] : '',
 			'is_admin'			=> (is_object($auth) && method_exists($auth, 'acl_get')) ? (int) $auth->acl_get('a_') : 0,
 			'sql'				=> (string) $sql,
 		);
+	}
+
+	/**
+	* Get a server variable without touching deactivated superglobals.
+	*
+	* @param string $name
+	* @param string $default
+	* @return string
+	*/
+	protected function get_server_var($name, $default = '')
+	{
+		global $request;
+
+		if (!empty($request) && is_object($request) && method_exists($request, 'server'))
+		{
+			return $request->server($name, $default);
+		}
+
+		$var = getenv($name);
+		return ($var !== false && $var !== null) ? $var : $default;
+	}
+
+	/**
+	* Get a request header without touching deactivated superglobals.
+	*
+	* @param string $name
+	* @param string $default
+	* @return string
+	*/
+	protected function get_header_var($name, $default = '')
+	{
+		global $request;
+
+		if (!empty($request) && is_object($request) && method_exists($request, 'header'))
+		{
+			return $request->header($name, $default);
+		}
+
+		$var = getenv('HTTP_' . strtoupper(str_replace('-', '_', $name)));
+		return ($var !== false && $var !== null) ? $var : $default;
+	}
+
+	/**
+	* Build a request URI without touching deactivated superglobals.
+	*
+	* @return string
+	*/
+	protected function get_request_uri()
+	{
+		$request_uri = $this->get_server_var('REQUEST_URI', '');
+		if ($request_uri !== '')
+		{
+			return $request_uri;
+		}
+
+		$script_name = $this->get_server_var('SCRIPT_NAME', '');
+		if ($script_name === '')
+		{
+			return '';
+		}
+
+		$query_string = $this->get_server_var('QUERY_STRING', '');
+		return $query_string !== '' ? $script_name . '?' . $query_string : $script_name;
 	}
 
 	/**

@@ -329,6 +329,7 @@ $lang = array_merge($lang, array(
 	'GROUP_ERR_USERNAME'		=> 'No group name specified.',
 	'GROUP_ERR_USER_LONG'		=> 'Group names cannot exceed 60 characters. The specified group name is too long.',
 	'GUEST'						=> 'Guest',
+	'INTERNAL_ERROR_OCCURRED'	=> 'An internal error occurred while fetching this page. Please contact the %sBoard Administrator%s if this problem persists.',
 	'GUEST_USERS_ONLINE'		=> array(
 		1	=> 'There is %d guest user online',
 		2	=> 'There are %d guest users online',

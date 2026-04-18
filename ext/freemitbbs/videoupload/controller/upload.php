@@ -212,23 +212,7 @@ class upload
 
 	protected function has_storage_config(): bool
 	{
-		$required = [
-			'videoupload_s3_endpoint',
-			'videoupload_s3_region',
-			'videoupload_s3_bucket',
-			'videoupload_s3_access_key',
-			'videoupload_s3_secret_key',
-		];
-
-		foreach ($required as $key)
-		{
-			if (trim((string) ($this->config[$key] ?? '')) === '')
-			{
-				return false;
-			}
-		}
-
-		return true;
+		return $this->s3_uploader->has_storage_config();
 	}
 
 	protected function format_size(int $bytes): string
