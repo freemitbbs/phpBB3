@@ -1,0 +1,3 @@
+services:
+    freemitbbs.s3storage.object_store:
+        class: freemitbbs\s3storage\service\s3_object_store
