@@ -252,11 +252,29 @@ class summary_listener implements EventSubscriberInterface
 
 		// Display order requested by UI: ever -> year -> month -> week -> today.
 		$display_order = array('LIKES_EVER', 'LIKES_THIS_YEAR', 'LIKES_THIS_MONTH', 'LIKES_THIS_WEEK', 'LIKES_TODAY');
+		$summary_rows = array();
 		foreach ($display_order as $period_key)
 		{
 			foreach ($rows_by_period[$period_key] as $tpl_ary)
 			{
+				$summary_rows[] = $tpl_ary;
 				$this->template->assign_block_vars('most_liked_posts', $tpl_ary);
+			}
+		}
+
+		if (!empty($summary_rows))
+		{
+			$this->template->assign_block_vars('postlove_summary_sections', array(
+				'PANEL_ID' => 'liked_posts',
+				'STORAGE_KEY' => 'postlove.summary.collapsed',
+				'TITLE' => $this->language->lang('POST_OF_THE_DAY'),
+				'ICON' => 'fa-heart',
+				'S_COLLAPSIBLE' => true,
+			));
+
+			foreach ($summary_rows as $tpl_ary)
+			{
+				$this->template->assign_block_vars('postlove_summary_sections.posts', $tpl_ary);
 			}
 		}
 

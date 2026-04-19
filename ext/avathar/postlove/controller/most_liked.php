@@ -63,21 +63,25 @@ class most_liked
 		$periods = [
 			[
 				'block' => 'most_liked_week',
+				'title_lang' => 'POSTLOVE_MOST_LIKED_THIS_WEEK',
 				'start' => $period_starts['week'],
 				'likes_lang' => 'LIKES_THIS_WEEK',
 			],
 			[
 				'block' => 'most_liked_month',
+				'title_lang' => 'POSTLOVE_MOST_LIKED_THIS_MONTH',
 				'start' => $period_starts['month'],
 				'likes_lang' => 'LIKES_THIS_MONTH',
 			],
 			[
 				'block' => 'most_liked_year',
+				'title_lang' => 'POSTLOVE_MOST_LIKED_THIS_YEAR',
 				'start' => $period_starts['year'],
 				'likes_lang' => 'LIKES_THIS_YEAR',
 			],
 			[
 				'block' => 'most_liked_ever',
+				'title_lang' => 'POSTLOVE_MOST_LIKED_TOTAL',
 				'start' => $period_starts['ever'],
 				'likes_lang' => 'LIKES_EVER',
 			],
@@ -86,9 +90,14 @@ class most_liked
 		$shown_post_ids = [];
 		foreach ($periods as $period)
 		{
+			$this->template->assign_block_vars('postlove_summary_sections', [
+				'TITLE' => $this->language->lang($period['title_lang']),
+			]);
+
 			foreach ($this->most_liked_posts->get_top_posts($forum_ids, $limit, $period['start'], $period['likes_lang'], array_keys($shown_post_ids)) as $row)
 			{
 				$this->template->assign_block_vars($period['block'], $row);
+				$this->template->assign_block_vars('postlove_summary_sections.posts', $row);
 				if (!empty($row['POST_ID']))
 				{
 					$shown_post_ids[(int) $row['POST_ID']] = true;
