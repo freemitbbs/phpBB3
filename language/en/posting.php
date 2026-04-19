@@ -220,6 +220,7 @@ $lang = array_merge($lang, array(
 	'POST_EDITED_MOD'			=> 'This post has been edited successfully, but it will need to be approved by a moderator before it is publicly viewable.',
 	'POST_GLOBAL'				=> 'Global',
 	'POST_ICON'					=> 'Post icon',
+	'POSTING_PERMISSIONS'		=> 'Formatting permissions',
 	'POST_NORMAL'				=> 'Normal',
 	'POST_REVIEW'				=> 'Post review',
 	'POST_REVIEW_EDIT'			=> 'Post review',

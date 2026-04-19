@@ -60,18 +60,21 @@
 		<!-- ENDIF -->
 		<!-- EVENT posting_editor_smilies_after -->
 		<!-- IF BBCODE_STATUS -->
-		<div class="bbcode-status">
+		<details class="bbcode-status posting-permissions-status">
 			<!-- IF .smiley --><hr /><!-- ENDIF -->
-			{BBCODE_STATUS}<br />
-			<!-- IF S_BBCODE_ALLOWED -->
-				{IMG_STATUS}<br />
-				<!-- IF S_BBCODE_FLASH -->
-				{FLASH_STATUS}<br />
+			<summary>{L_POSTING_PERMISSIONS}</summary>
+			<div class="posting-permissions-status-list">
+				{BBCODE_STATUS}<br />
+				<!-- IF S_BBCODE_ALLOWED -->
+					{IMG_STATUS}<br />
+					<!-- IF S_BBCODE_FLASH -->
+					{FLASH_STATUS}<br />
+					<!-- ENDIF -->
+					{URL_STATUS}<br />
 				<!-- ENDIF -->
-				{URL_STATUS}<br />
-			<!-- ENDIF -->
-			{SMILIES_STATUS}
-		</div>
+				{SMILIES_STATUS}
+			</div>
+		</details>
 		<!-- ENDIF -->
 		<!-- EVENT posting_editor_bbcode_status_after -->
 		<!-- IF S_EDIT_DRAFT || S_DISPLAY_REVIEW -->

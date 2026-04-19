@@ -1,13 +1,17 @@
+{# Render after core jumpbox so return/jump controls stay above Similar Topics. #}
 {# based on prosilver search_results.html lines 61-161 #}
 {% if loops.similar|length %}
-	<div class="bg-primary bg-gradient forumbg  mb-3 rounded-3 py-1 px-2">
+	{% INCLUDECSS '@vse_similartopics/similar_topics_collapse.css' %}
+	{% INCLUDEJS '@vse_similartopics/js/similar_topics_collapse.js' %}
+	<div class="bg-primary bg-gradient forumbg similartopics-panel mb-3 rounded-3 py-1 px-2" data-similartopics-collapsible="1" data-storage-key="vse.similartopics.collapsed">
+			<a href="#" class="similartopics-collapse-btn" title="{{ lang('COLLAPSE_VIEW') }}" aria-label="{{ lang('COLLAPSE_VIEW') }}" aria-expanded="true" data-title-collapse="{{ lang('COLLAPSE_VIEW') }}" data-title-expand="{{ lang('EXPAND_VIEW') }}" style="display: none;"><i class="fa fa-minus-square" aria-hidden="true"></i><span class="visually-hidden">{{ lang('COLLAPSE_VIEW') }}</span></a>
 			<ul class="header row flex-nowrap gx-0 list-unstyled my-1">
 				<li class="col-md-7 text-center text-md-start text-white text-uppercase"><div class="list-inner">{{ lang('SIMILAR_TOPICS') }}</div></li>
 				<li class="posts d-none d-md-block col-md-1 text-center text-white text-uppercase">{{ lang('REPLIES') }}</li>
 				<li class="views d-none d-md-block col-md-1 text-center text-white text-uppercase">{{ lang('VIEWS') }}</li>
 				<li class="lastpost d-none d-md-block col-md-3 text-start text-white text-uppercase"><span>{{ lang('LAST_POST') }}</span></li>
 			</ul>
-			<ul class="bg-body topiclist topics list-unstyled mb-1">
+			<ul class="bg-body topiclist topics similartopics-content list-unstyled mb-1">
 
 				{% for similar in loops.similar %}
 					{% EVENT search_results_topic_before %}

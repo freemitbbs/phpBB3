@@ -1,5 +1,10 @@
+{# Render after core jumpbox so return/jump controls stay above Similar Topics. #}
 {% if loops.similar|length %}
+	{% INCLUDECSS '@vse_similartopics/similar_topics_collapse.css' %}
+	{% INCLUDEJS '@vse_similartopics/js/similar_topics_collapse.js' %}
 
+	<div class="similartopics-panel" data-similartopics-collapsible="1" data-storage-key="vse.similartopics.collapsed">
+	<a href="#" class="similartopics-collapse-btn" title="{{ lang('COLLAPSE_VIEW') }}" aria-label="{{ lang('COLLAPSE_VIEW') }}" aria-expanded="true" data-title-collapse="{{ lang('COLLAPSE_VIEW') }}" data-title-expand="{{ lang('EXPAND_VIEW') }}" style="display: none;"><i class="fa fa-minus-square" aria-hidden="true"></i><span class="sr-only">{{ lang('COLLAPSE_VIEW') }}</span></a>
 	<table class="tablebg" width="100%" cellspacing="1">
 	<tr>
 		<th width="4%" nowrap="nowrap">&nbsp;</th>
@@ -11,7 +16,7 @@
 	</tr>
 	{% for similar in loops.similar %}
 		{% EVENT search_results_topic_before %}
-		<tr valign="middle">
+		<tr class="similartopics-content-row" valign="middle">
 			<td class="row1" width="25" align="center">{{ similar.TOPIC_FOLDER_IMG }}</td>
 			<td class="row1" width="25" align="center">
 			{% if similar.TOPIC_ICON_IMG %}
@@ -57,5 +62,6 @@
 	{% endfor %}
 	</table>
 	<br clear="all" />
+	</div>
 
 {% endif %}

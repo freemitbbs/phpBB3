@@ -1,28 +1,31 @@
-{# based on prosilver search_results.html lines 61-161 #}
+{# Render after core jumpbox so return/jump controls stay above Similar Topics. #}
 {% if loops.similar|length %}
-	<div class="forumbg">
+	{% INCLUDECSS '@vse_similartopics/similar_topics_collapse.css' %}
+	{% INCLUDEJS '@vse_similartopics/js/similar_topics_collapse.js' %}
+	<div class="forumbg similartopics-panel" data-similartopics-collapsible="1" data-storage-key="vse.similartopics.collapsed">
+		<a href="#" class="similartopics-collapse-btn" title="{{ lang('COLLAPSE_VIEW') }}" aria-label="{{ lang('COLLAPSE_VIEW') }}" aria-expanded="true" data-title-collapse="{{ lang('COLLAPSE_VIEW') }}" data-title-expand="{{ lang('EXPAND_VIEW') }}" style="display: none;"><i class="fa fa-minus-square" aria-hidden="true"></i><span class="sr-only">{{ lang('COLLAPSE_VIEW') }}</span></a>
 
 		<div class="inner">
 			<ul class="topiclist">
 				<li class="header">
 					<dl class="row-item">
 						<dt><div class="list-inner">{{ lang('SIMILAR_TOPICS') }}</div></dt>
-						<dd class="posts">{{ lang('REPLIES') }}</dd>
-						<dd class="views">{{ lang('VIEWS') }}</dd>
+						<dd class="posts">{{ lang('STATISTICS') }}</dd>
 						<dd class="lastpost"><span>{{ lang('LAST_POST') }}</span></dd>
-						{% EVENT search_results_topic_header_lastpost_after %}
 					</dl>
 				</li>
 			</ul>
-			<ul class="topiclist topics">
+			<ul class="topiclist topics similartopics-content">
 
 				{% for similar in loops.similar %}
 					{% EVENT search_results_topic_before %}
 					<li class="row{% if similar.S_ROW_COUNT is even %} bg1{% else %} bg2{% endif %}">
-						<dl class="row-item {{ similar.TOPIC_IMG_STYLE }}">
-							<dt{% if similar.TOPIC_ICON_IMG %} style="background-image: url({{ T_ICONS_PATH ~ similar.TOPIC_ICON_IMG }}); background-repeat: no-repeat;"{% endif %} title="{{ similar.TOPIC_FOLDER_IMG_ALT }}">
+						<dl title="{{ similar.TOPIC_FOLDER_IMG_ALT }}">
+							<dt class="icon {{ similar.TOPIC_IMG_STYLE }}">{% if similar.TOPIC_ICON_IMG %}<img src="{{ T_ICONS_PATH ~ similar.TOPIC_ICON_IMG }}" alt="" title="" />{% endif %}</dt>
+							<dd>
 								{% if similar.S_UNREAD_TOPIC and not S_IS_BOT %}<a href="{{ similar.U_NEWEST_POST }}" class="row-item-link"></a>{% endif %}
 								<div class="list-inner">
+
 									{% EVENT topiclist_row_prepend %}
 									{% if similar.S_UNREAD_TOPIC and not S_IS_BOT %}
 										<a class="unread" href="{{ similar.U_NEWEST_POST }}">
@@ -35,28 +38,30 @@
 											<i class="icon fa-question fa-fw icon-blue" aria-hidden="true"></i><span class="sr-only">{{ lang('TOPIC_UNAPPROVED') }}</span>
 										</a>
 									{% endif %}
+									{% if similar.S_TOPIC_DELETED %}
+										<a href="{{ similar.U_MCP_QUEUE }}" title="{{ lang('TOPIC_DELETED') }}">
+											<i class="icon fa-recycle fa-fw icon-green" aria-hidden="true"></i><span class="sr-only">{{ lang('TOPIC_DELETED') }}</span>
+										</a>
+									{% endif %}
 									{% if similar.S_TOPIC_REPORTED %}
 										<a href="{{ similar.U_MCP_REPORT }}" title="{{ lang('TOPIC_REPORTED') }}">
 											<i class="icon fa-exclamation fa-fw icon-red" aria-hidden="true"></i><span class="sr-only">{{ lang('TOPIC_REPORTED') }}</span>
 										</a>
 									{% endif %}
-									<br>
-									{% EVENT topiclist_row_topic_title_after %}
+									<br />
 
 									{% if not S_IS_BOT %}
 										<div class="responsive-show" style="display: none;">
-											{{ lang('LAST_POST') }} {{ lang('POST_BY_AUTHOR') }} {% EVENT search_results_last_post_author_username_prepend %}{{ similar.LAST_POST_AUTHOR_FULL }}{% EVENT search_results_last_post_author_username_append %} &laquo; <a href="{{ similar.U_LAST_POST }}" title="{{ lang('GOTO_LAST_POST') }}"><time datetime="{{ similar.LAST_POST_TIME_RFC3339 }}">{{ similar.LAST_POST_TIME }}</time></a>
-											<br>{{ lang('POSTED') }} {{ lang('IN') }} <a href="{{ similar.U_VIEW_FORUM }}">{{ similar.FORUM_TITLE }}</a>
+											{{ lang('LAST_POST') }} {{ lang('POST_BY_AUTHOR') }} {% EVENT search_results_last_post_author_username_prepend %}{{ similar.LAST_POST_AUTHOR_FULL }}{% EVENT search_results_topic_author_username_append %} &laquo; <a href="{{ similar.U_LAST_POST }}" title="{{ lang('GOTO_LAST_POST') }}">{{ similar.LAST_POST_TIME }}</a>
+											<br />{{ lang('POSTED') }} {{ lang('IN') }} <a href="{{ similar.U_VIEW_FORUM }}">{{ similar.FORUM_TITLE }}</a>
 										</div>
 										{% if similar.TOPIC_REPLIES %}<span class="responsive-show left-box" style="display: none;">{{ lang('REPLIES') ~ lang('COLON') }} <strong>{{ similar.TOPIC_REPLIES }}</strong></span>{% endif %}
 									{% endif %}
 
-									<div class="responsive-hide left-box">
+									<div class="responsive-hide">
 										{% if similar.S_HAS_POLL %}<i class="icon fa-bar-chart fa-fw" aria-hidden="true"></i>{% endif %}
 										{% if similar.ATTACH_ICON_IMG %}<i class="icon fa-paperclip fa-fw" aria-hidden="true"></i>{% endif %}
-										{% EVENT topiclist_row_topic_by_author_before %}
-										{{ lang('POST_BY_AUTHOR') }} {% EVENT search_results_topic_author_username_prepend %}{{ similar.TOPIC_AUTHOR_FULL }}{% EVENT search_results_topic_author_username_append %} &raquo; <time datetime="{{ similar.FIRST_POST_TIME_RFC3339 }}">{{ similar.FIRST_POST_TIME }}</time> &raquo; {{ lang('IN') }} <a href="{{ similar.U_VIEW_FORUM }}">{{ similar.FORUM_TITLE }}</a>
-										{% EVENT topiclist_row_topic_by_author_after %}
+										{{ lang('POST_BY_AUTHOR') }} {% EVENT search_results_last_post_author_username_prepend %}{{ similar.TOPIC_AUTHOR_FULL }}{% EVENT search_results_topic_author_username_append %} &raquo; {{ similar.FIRST_POST_TIME }} &raquo; {{ lang('IN') }} <a href="{{ similar.U_VIEW_FORUM }}">{{ similar.FORUM_TITLE }}</a>
 									</div>
 
 									{% if similar.pagination|length %}
@@ -74,23 +79,23 @@
 											</ul>
 										</div>
 									{% endif %}
+									{% EVENT topiclist_row_topic_title_after %}
 
 									{% EVENT topiclist_row_append %}
 								</div>
-							</dt>
+							</dd>
 							<dd class="posts">{{ similar.TOPIC_REPLIES }} <dfn>{{ lang('REPLIES') }}</dfn></dd>
 							<dd class="views">{{ similar.TOPIC_VIEWS }} <dfn>{{ lang('VIEWS') }}</dfn></dd>
 							<dd class="lastpost">
-								<span><dfn>{{ lang('LAST_POST') }} </dfn>{{ lang('POST_BY_AUTHOR') }} {% EVENT search_results_last_post_author_username_prepend %}{{ similar.LAST_POST_AUTHOR_FULL }}{% EVENT search_results_last_post_author_username_append %}
-									{% if not S_IS_BOT %}
-										<a href="{{ similar.U_LAST_POST }}" title="{{ lang('GOTO_LAST_POST') }}">
-											<i class="icon fa-external-link-square fa-fw icon-lightgray icon-md" aria-hidden="true"></i><span class="sr-only">{{ VIEW_LATEST_POST }}</span>
-										</a>
-									{% endif %}
-									<br><time datetime="{{ similar.LAST_POST_TIME_RFC3339 }}">{{ similar.LAST_POST_TIME }}</time>
-								</span>
+						<span><dfn>{{ lang('LAST_POST') }} </dfn>{{ lang('POST_BY_AUTHOR') }} {% EVENT search_results_last_post_author_username_prepend %}{{ similar.LAST_POST_AUTHOR_FULL }}{% EVENT search_results_topic_author_username_append %}
+							{% if not S_IS_BOT %}
+								<a href="{{ similar.U_LAST_POST }}" title="{{ lang('GOTO_LAST_POST') }}">
+									<i class="icon fa-external-link-square fa-fw icon-lightgray icon-md" aria-hidden="true"></i><span class="sr-only">{{ VIEW_LATEST_POST }}</span>
+								</a>
+							{% endif %}
+							<br />{{ similar.LAST_POST_TIME }}
+						</span>
 							</dd>
-							{% EVENT search_results_topic_row_lastpost_after %}
 						</dl>
 					</li>
 					{% EVENT search_results_topic_after %}

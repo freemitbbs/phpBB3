@@ -1,0 +1,59 @@
+.similartopics-panel {
+	position: relative;
+}
+
+.similartopics-panel .similartopics-collapse-btn {
+	position: absolute;
+	top: 0.65em;
+	right: 10px;
+	z-index: 2;
+	display: block;
+	float: none;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: #fff !important;
+	font: inherit;
+	font-size: 1rem !important;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.similartopics-panel .similartopics-collapse-btn:visited,
+.similartopics-panel .similartopics-collapse-btn:hover,
+.similartopics-panel .similartopics-collapse-btn:focus,
+.similartopics-panel .similartopics-collapse-btn:active {
+	border: 0;
+	background: transparent !important;
+	box-shadow: none;
+	color: #fff !important;
+	outline: none;
+	text-decoration: none;
+}
+
+.rtl .similartopics-panel .similartopics-collapse-btn {
+	right: auto;
+	left: 10px;
+}
+
+.similartopics-panel .topiclist li.header dd.lastpost span,
+.similartopics-panel ul.header .lastpost,
+.similartopics-panel > .header,
+.similartopics-panel tr:first-child th:last-child {
+	box-sizing: border-box;
+	padding-right: 2.5em;
+}
+
+.rtl .similartopics-panel .topiclist li.header dd.lastpost span,
+.rtl .similartopics-panel ul.header .lastpost,
+.rtl .similartopics-panel > .header,
+.rtl .similartopics-panel tr:first-child th:last-child {
+	padding-right: 0;
+	padding-left: 2.5em;
+}
+
+.similartopics-panel.is-collapsed .similartopics-content,
+.similartopics-panel.is-collapsed .similartopics-content-row {
+	display: none !important;
+}
