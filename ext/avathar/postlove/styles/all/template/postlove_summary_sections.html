@@ -1,0 +1,50 @@
+<!-- BEGIN postlove_summary_sections -->
+<div class="forabg postlove-summary-panel"<!-- IF postlove_summary_sections.PANEL_ID --> id="{postlove_summary_sections.PANEL_ID}"<!-- ENDIF --><!-- IF postlove_summary_sections.STORAGE_KEY --> data-storage-key="{postlove_summary_sections.STORAGE_KEY}"<!-- ENDIF -->>
+	<ul class="topiclist">
+		<li class="header">
+			<dl class="row-item postlove-summary-header">
+				<dt><div class="list-inner"><!-- IF postlove_summary_sections.ICON --><i class="icon {postlove_summary_sections.ICON} fa-fw" aria-hidden="true"></i> <!-- ENDIF -->{postlove_summary_sections.TITLE}</div></dt>
+				<dd class="postlove-summary-author">{L_POSTED_BY}</dd>
+				<dd class="postlove-summary-posted">{L_POSTED_AT}</dd>
+				<dd class="postlove-summary-likes-header">{L_POST_LIKES}</dd>
+				<dd class="postlove-summary-forum">{L_FORUM}</dd>
+			</dl>
+			<!-- IF postlove_summary_sections.S_COLLAPSIBLE -->
+			<a href="#" class="postlove-collapse-btn" title="{L_COLLAPSE_VIEW}" aria-label="{L_COLLAPSE_VIEW}" aria-expanded="true" data-title-expand="{L_EXPAND_VIEW}" style="display: none;">
+				<i class="fa fa-minus-square" aria-hidden="true"></i>
+				<span class="sr-only">{L_COLLAPSE_VIEW}</span>
+			</a>
+			<!-- ENDIF -->
+		</li>
+	</ul>
+	<div class="postlove-summary-content">
+		<!-- IF .postlove_summary_sections.posts -->
+			<table class="table1 not-responsive">
+				<tbody>
+				<!-- BEGIN posts -->
+					<tr class="tr_likedposts <!-- IF postlove_summary_sections.posts.S_ROW_COUNT is even -->bg1<!-- ELSE -->bg2<!-- ENDIF -->">
+						<td class="postlove-summary-post-cell">
+							<div class="postlove-summary-cell">
+								<a class="postlove-summary-status <!-- IF postlove_summary_sections.posts.S_UNREAD -->unread<!-- ELSE -->read<!-- ENDIF -->" href="{postlove_summary_sections.posts.U_TOPIC}">
+									<!-- IF postlove_summary_sections.posts.S_UNREAD --><i class="icon fa-file fa-fw icon-red icon-md" aria-hidden="true"></i><!-- ELSE --><i class="icon fa-file fa-fw icon-grey icon-md" aria-hidden="true"></i><!-- ENDIF -->
+								</a>
+								<a href="{postlove_summary_sections.posts.U_TOPIC}" class="postlove-summary-entry">
+									<span class="postlove-summary-title">{postlove_summary_sections.posts.TOPIC_TITLE}</span>
+									<span class="postlove-summary-excerpt">{postlove_summary_sections.posts.POST_EXCERPT}</span>
+								</a>
+							</div>
+						</td>
+						<td class="postlove-summary-author-cell">{postlove_summary_sections.posts.USERNAME_FULL}</td>
+						<td class="postlove-summary-posted-cell">{postlove_summary_sections.posts.POST_TIME}</td>
+						<td class="postlove-summary-likes"<!-- IF postlove_summary_sections.posts.S_HAS_POST_LIKERS --> title="{postlove_summary_sections.posts.POST_LIKERS}" aria-label="{postlove_summary_sections.posts.POST_LIKERS}"<!-- ENDIF -->>{postlove_summary_sections.posts.POST_LIKES_IN_PERIOD}</td>
+						<td class="postlove-summary-forum-cell"><a href="{postlove_summary_sections.posts.U_FORUM}">{postlove_summary_sections.posts.FORUM_NAME}</a></td>
+					</tr>
+				<!-- END posts -->
+				</tbody>
+			</table>
+		<!-- ELSE -->
+			<p class="postlove-summary-empty">{L_POSTLOVE_MOST_LIKED_EMPTY}</p>
+		<!-- ENDIF -->
+	</div>
+</div>
+<!-- END postlove_summary_sections -->
