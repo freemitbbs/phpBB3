@@ -1,6 +1,6 @@
 # Top Topics
 
-`freemitbbs/toptopics` promotes topics onto the board index and forum pages using a time-decayed ranking model. It builds on phpBB topic metadata plus Post Love likes and this extension's dislikes.
+`freemitbbs/toptopics` promotes topics onto the board index and forum pages using a time-decayed ranking model. It builds on phpBB topic metadata plus Post Love likes, this extension's dislikes, and general post reactions when the `post_reactions` table is available.
 
 The extension also maintains a materialized per-user reputation score that can gate negative actions such as dislikes and post reports.
 
@@ -10,6 +10,7 @@ For each candidate topic inside the configured lookback window:
 
 - `likes`: total likes across posts in the topic
 - `dislikes`: total dislikes across posts in the topic
+- `reactions`: total general post reactions in the topic, counted separately from Post Love likes/dislikes
 - `flags`: total open phpBB reports across posts in the topic
 - `content_length`: approximate plain-text length of the first post
 - `replies`: approved topic posts minus the first post
@@ -89,12 +90,14 @@ content_signal = ln(1 + min(content_length, 4000) / 120)
 reply_signal = ln(1 + replies)
 view_velocity = views / max(1, age_hours)
 view_signal = ln(1 + view_velocity)
+reaction_signal = ln(1 + reactions)
 
 signal_score =
     points
   + content_weight * content_signal
   + reply_weight * reply_signal
   + view_weight * view_signal
+  + reaction_weight * reaction_signal
 ```
 
 Then it applies Hacker News style time decay:
@@ -107,7 +110,8 @@ Higher `rank` means the topic sorts higher in the Top Topics list. Final orderin
 
 ## Meaning of the terms
 
-- `points`: net reaction score. Likes push up, dislikes push down.
+- `points`: net like score. Post Love likes push up, Top Topics dislikes push down.
+- `reaction_signal`: logarithmic general-reaction contribution. This is separate from likes/dislikes and defaults to a modest weight so emoji reactions can help without dominating ranking.
 - `content_signal`: logarithmic first-post quality signal based on approximate plain-text length. It is intentionally capped so a huge opening post does not dominate ranking.
 - `reply_signal`: logarithmic reply contribution. Replies help, but with diminishing returns.
 - `view_velocity`: views normalized by age, so recent traffic matters more than lifetime accumulated traffic.
@@ -191,6 +195,7 @@ A topic is skipped before ranking if all tracked engagement is absent:
 ```text
 likes == 0
 dislikes == 0
+reactions == 0
 flags == 0
 replies == 0
 views == 0
@@ -198,13 +203,14 @@ views == 0
 
 In practice, normal phpBB topics usually have at least some views, so the main filters that matter operationally are the lookback window, visibility rules, and hide thresholds.
 
-## ACP settings that matter most
+## Ranking settings that matter most
 
 These settings have the largest effect on ranking behavior:
 
 - `toptopics_content_weight`: how strongly opening-post quality helps before decay
 - `toptopics_reply_weight`: how strongly replies help before decay
 - `toptopics_view_weight`: how strongly view velocity helps before decay
+- `toptopics_reaction_weight`: how strongly general post reactions help before decay. The ranker uses a default of `0.3` if this config value is absent.
 - `toptopics_min_reputation_dislike`: minimum user reputation required to cast a dislike
 - `toptopics_min_reputation_report`: minimum user reputation required to report a post
 - `toptopics_manual_boost_multiplier`: how strongly an admin boost lifts a topic
@@ -221,10 +227,11 @@ The current ranking is best understood as:
 
 ```text
 rank =
-    ((net reactions)
+    ((net likes/dislikes)
      + (weighted first-post quality)
      + (weighted reply engagement)
-     + (weighted view velocity))
+     + (weighted view velocity)
+     + (weighted general reactions))
     / time_decay
     * boosts
     * penalties
