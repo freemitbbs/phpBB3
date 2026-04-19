@@ -188,7 +188,7 @@ dl.details dd {
 
 /* === Logo === */
 .site_logo {
-	background-image: url("./images/site_logo.svg");
+	background-image: url("/images/site_logo.svg");
 }
 
 /* === Jumpbox === */

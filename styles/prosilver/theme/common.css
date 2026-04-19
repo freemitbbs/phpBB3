@@ -176,9 +176,12 @@ a:hover	{ text-decoration: underline; }
 }
 
 .site_logo {
+	background-image: url("./images/site_logo.png");
 	background-repeat: no-repeat;
+	background-position: left center;
+	background-size: contain;
 	display: inline-block;
-	width: 149px;
+	width: 55px;
 	height: 52px;
 }
 
@@ -812,6 +815,12 @@ fieldset.fields1 dl.pmlist dd.recipients {
 	margin-right: 0;
 }
 
+.action-bar .forum-mark-topics-read {
+	float: left;
+	line-height: 24px;
+	margin-left: 8px;
+}
+
 /* Pagination
 ---------------------------------------- */
 .pagination {
@@ -1282,4 +1291,11 @@ ul.linklist:after,
 
 .dropdown .clone.hidden + li {
 	border-top: none;
+}
+
+/* Limit image height in signatures */
+.signature img {
+	max-height: 150px;
+	width: auto;
+	display: block;
 }

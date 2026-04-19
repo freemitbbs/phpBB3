@@ -262,6 +262,23 @@
 		max-width: 100px;
 	}
 
+	/* keep two authors on separate lines */
+	.topic-poster.left-box {
+		display: block !important;
+		float: none !important;
+		clear: both !important;
+		width: 100% !important;
+		margin-top: 2px;
+	}
+
+	.recentpost-replies {
+		display: inline-block !important;
+	}
+
+	.recentpost-likes {
+		display: none !important;
+	}
+
 	/* Pagination
 	----------------------------------------*/
 	.pagination > ul {
