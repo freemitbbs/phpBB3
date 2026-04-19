@@ -1,0 +1,179 @@
+<!-- INCLUDE overall_header.html -->
+<!-- INCLUDECSS @avathar_postlove/mostlikedposts.css -->
+
+<h2>{L_POSTLOVE_MOST_LIKED_PAGE}</h2>
+<p>{L_POSTLOVE_MOST_LIKED_PAGE_EXPLAIN}</p>
+
+<div class="forabg postlove-summary-panel">
+	<ul class="topiclist">
+		<li class="header">
+			<dl class="row-item postlove-summary-header">
+				<dt><div class="list-inner">{L_POSTLOVE_MOST_LIKED_THIS_WEEK}</div></dt>
+				<dd class="postlove-summary-author">{L_POSTED_BY}</dd>
+				<dd class="postlove-summary-posted">{L_POSTED_AT}</dd>
+				<dd class="postlove-summary-likes-header">{L_POST_LIKES}</dd>
+				<dd class="postlove-summary-forum">{L_FORUM}</dd>
+			</dl>
+		</li>
+	</ul>
+	<div class="postlove-summary-content">
+		<!-- IF .most_liked_week -->
+			<table class="table1 responsive">
+				<tbody>
+				<!-- BEGIN most_liked_week -->
+					<tr class="tr_likedposts <!-- IF most_liked_week.S_ROW_COUNT is even -->bg1<!-- ELSE -->bg2<!-- ENDIF -->">
+						<td id="td_likedpost">
+							<div class="postlove-summary-cell">
+								<a class="postlove-summary-status <!-- IF most_liked_week.S_UNREAD -->unread<!-- ELSE -->read<!-- ENDIF -->" href="{most_liked_week.U_TOPIC}">
+									<!-- IF most_liked_week.S_UNREAD --><i class="icon fa-file fa-fw icon-red icon-md" aria-hidden="true"></i><!-- ELSE --><i class="icon fa-file-o fa-fw icon-lightgray icon-md" aria-hidden="true"></i><!-- ENDIF -->
+								</a>
+								<a href="{most_liked_week.U_TOPIC}" class="postlove-summary-entry">
+									<span class="postlove-summary-title">{most_liked_week.TOPIC_TITLE}</span>
+									<span class="postlove-summary-excerpt">{most_liked_week.POST_EXCERPT}</span>
+								</a>
+							</div>
+						</td>
+						<td id="td_author">{most_liked_week.USERNAME_FULL}</td>
+						<td id="td_posted">{most_liked_week.POST_TIME}</td>
+						<td class="postlove-summary-likes"<!-- IF most_liked_week.S_HAS_POST_LIKERS --> title="{most_liked_week.POST_LIKERS}" aria-label="{most_liked_week.POST_LIKERS}"<!-- ENDIF -->>{most_liked_week.POST_LIKES_IN_PERIOD}</td>
+						<td id="td_forum"><a href="{most_liked_week.U_FORUM}">{most_liked_week.FORUM_NAME}</a></td>
+					</tr>
+				<!-- END most_liked_week -->
+				</tbody>
+			</table>
+		<!-- ELSE -->
+			<p class="postlove-summary-empty">{L_POSTLOVE_MOST_LIKED_EMPTY}</p>
+		<!-- ENDIF -->
+	</div>
+</div>
+
+<div class="forabg postlove-summary-panel">
+	<ul class="topiclist">
+		<li class="header">
+			<dl class="row-item postlove-summary-header">
+				<dt><div class="list-inner">{L_POSTLOVE_MOST_LIKED_THIS_MONTH}</div></dt>
+				<dd class="postlove-summary-author">{L_POSTED_BY}</dd>
+				<dd class="postlove-summary-posted">{L_POSTED_AT}</dd>
+				<dd class="postlove-summary-likes-header">{L_POST_LIKES}</dd>
+				<dd class="postlove-summary-forum">{L_FORUM}</dd>
+			</dl>
+		</li>
+	</ul>
+	<div class="postlove-summary-content">
+		<!-- IF .most_liked_month -->
+			<table class="table1 responsive">
+				<tbody>
+				<!-- BEGIN most_liked_month -->
+					<tr class="tr_likedposts <!-- IF most_liked_month.S_ROW_COUNT is even -->bg1<!-- ELSE -->bg2<!-- ENDIF -->">
+						<td id="td_likedpost">
+							<div class="postlove-summary-cell">
+								<a class="postlove-summary-status <!-- IF most_liked_month.S_UNREAD -->unread<!-- ELSE -->read<!-- ENDIF -->" href="{most_liked_month.U_TOPIC}">
+									<!-- IF most_liked_month.S_UNREAD --><i class="icon fa-file fa-fw icon-red icon-md" aria-hidden="true"></i><!-- ELSE --><i class="icon fa-file-o fa-fw icon-lightgray icon-md" aria-hidden="true"></i><!-- ENDIF -->
+								</a>
+								<a href="{most_liked_month.U_TOPIC}" class="postlove-summary-entry">
+									<span class="postlove-summary-title">{most_liked_month.TOPIC_TITLE}</span>
+									<span class="postlove-summary-excerpt">{most_liked_month.POST_EXCERPT}</span>
+								</a>
+							</div>
+						</td>
+						<td id="td_author">{most_liked_month.USERNAME_FULL}</td>
+						<td id="td_posted">{most_liked_month.POST_TIME}</td>
+						<td class="postlove-summary-likes"<!-- IF most_liked_month.S_HAS_POST_LIKERS --> title="{most_liked_month.POST_LIKERS}" aria-label="{most_liked_month.POST_LIKERS}"<!-- ENDIF -->>{most_liked_month.POST_LIKES_IN_PERIOD}</td>
+						<td id="td_forum"><a href="{most_liked_month.U_FORUM}">{most_liked_month.FORUM_NAME}</a></td>
+					</tr>
+				<!-- END most_liked_month -->
+				</tbody>
+			</table>
+		<!-- ELSE -->
+			<p class="postlove-summary-empty">{L_POSTLOVE_MOST_LIKED_EMPTY}</p>
+		<!-- ENDIF -->
+	</div>
+</div>
+
+<div class="forabg postlove-summary-panel">
+	<ul class="topiclist">
+		<li class="header">
+			<dl class="row-item postlove-summary-header">
+				<dt><div class="list-inner">{L_POSTLOVE_MOST_LIKED_THIS_YEAR}</div></dt>
+				<dd class="postlove-summary-author">{L_POSTED_BY}</dd>
+				<dd class="postlove-summary-posted">{L_POSTED_AT}</dd>
+				<dd class="postlove-summary-likes-header">{L_POST_LIKES}</dd>
+				<dd class="postlove-summary-forum">{L_FORUM}</dd>
+			</dl>
+		</li>
+	</ul>
+	<div class="postlove-summary-content">
+		<!-- IF .most_liked_year -->
+			<table class="table1 responsive">
+				<tbody>
+				<!-- BEGIN most_liked_year -->
+					<tr class="tr_likedposts <!-- IF most_liked_year.S_ROW_COUNT is even -->bg1<!-- ELSE -->bg2<!-- ENDIF -->">
+						<td id="td_likedpost">
+							<div class="postlove-summary-cell">
+								<a class="postlove-summary-status <!-- IF most_liked_year.S_UNREAD -->unread<!-- ELSE -->read<!-- ENDIF -->" href="{most_liked_year.U_TOPIC}">
+									<!-- IF most_liked_year.S_UNREAD --><i class="icon fa-file fa-fw icon-red icon-md" aria-hidden="true"></i><!-- ELSE --><i class="icon fa-file-o fa-fw icon-lightgray icon-md" aria-hidden="true"></i><!-- ENDIF -->
+								</a>
+								<a href="{most_liked_year.U_TOPIC}" class="postlove-summary-entry">
+									<span class="postlove-summary-title">{most_liked_year.TOPIC_TITLE}</span>
+									<span class="postlove-summary-excerpt">{most_liked_year.POST_EXCERPT}</span>
+								</a>
+							</div>
+						</td>
+						<td id="td_author">{most_liked_year.USERNAME_FULL}</td>
+						<td id="td_posted">{most_liked_year.POST_TIME}</td>
+						<td class="postlove-summary-likes"<!-- IF most_liked_year.S_HAS_POST_LIKERS --> title="{most_liked_year.POST_LIKERS}" aria-label="{most_liked_year.POST_LIKERS}"<!-- ENDIF -->>{most_liked_year.POST_LIKES_IN_PERIOD}</td>
+						<td id="td_forum"><a href="{most_liked_year.U_FORUM}">{most_liked_year.FORUM_NAME}</a></td>
+					</tr>
+				<!-- END most_liked_year -->
+				</tbody>
+			</table>
+		<!-- ELSE -->
+			<p class="postlove-summary-empty">{L_POSTLOVE_MOST_LIKED_EMPTY}</p>
+		<!-- ENDIF -->
+	</div>
+</div>
+
+<div class="forabg postlove-summary-panel">
+	<ul class="topiclist">
+		<li class="header">
+			<dl class="row-item postlove-summary-header">
+				<dt><div class="list-inner">{L_POSTLOVE_MOST_LIKED_TOTAL}</div></dt>
+				<dd class="postlove-summary-author">{L_POSTED_BY}</dd>
+				<dd class="postlove-summary-posted">{L_POSTED_AT}</dd>
+				<dd class="postlove-summary-likes-header">{L_POST_LIKES}</dd>
+				<dd class="postlove-summary-forum">{L_FORUM}</dd>
+			</dl>
+		</li>
+	</ul>
+	<div class="postlove-summary-content">
+		<!-- IF .most_liked_ever -->
+			<table class="table1 responsive">
+				<tbody>
+				<!-- BEGIN most_liked_ever -->
+					<tr class="tr_likedposts <!-- IF most_liked_ever.S_ROW_COUNT is even -->bg1<!-- ELSE -->bg2<!-- ENDIF -->">
+						<td id="td_likedpost">
+							<div class="postlove-summary-cell">
+								<a class="postlove-summary-status <!-- IF most_liked_ever.S_UNREAD -->unread<!-- ELSE -->read<!-- ENDIF -->" href="{most_liked_ever.U_TOPIC}">
+									<!-- IF most_liked_ever.S_UNREAD --><i class="icon fa-file fa-fw icon-red icon-md" aria-hidden="true"></i><!-- ELSE --><i class="icon fa-file-o fa-fw icon-lightgray icon-md" aria-hidden="true"></i><!-- ENDIF -->
+								</a>
+								<a href="{most_liked_ever.U_TOPIC}" class="postlove-summary-entry">
+									<span class="postlove-summary-title">{most_liked_ever.TOPIC_TITLE}</span>
+									<span class="postlove-summary-excerpt">{most_liked_ever.POST_EXCERPT}</span>
+								</a>
+							</div>
+						</td>
+						<td id="td_author">{most_liked_ever.USERNAME_FULL}</td>
+						<td id="td_posted">{most_liked_ever.POST_TIME}</td>
+						<td class="postlove-summary-likes"<!-- IF most_liked_ever.S_HAS_POST_LIKERS --> title="{most_liked_ever.POST_LIKERS}" aria-label="{most_liked_ever.POST_LIKERS}"<!-- ENDIF -->>{most_liked_ever.POST_LIKES_IN_PERIOD}</td>
+						<td id="td_forum"><a href="{most_liked_ever.U_FORUM}">{most_liked_ever.FORUM_NAME}</a></td>
+					</tr>
+				<!-- END most_liked_ever -->
+				</tbody>
+			</table>
+		<!-- ELSE -->
+			<p class="postlove-summary-empty">{L_POSTLOVE_MOST_LIKED_EMPTY}</p>
+		<!-- ENDIF -->
+	</div>
+</div>
+
+<!-- INCLUDE overall_footer.html -->
