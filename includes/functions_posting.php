@@ -1781,31 +1781,17 @@ function submit_post($mode, $subject, $username, $topic_type, &$poll_ary, &$data
 		case 'edit_last_post':
 		case 'edit_topic':
 
-			// If edit reason is given always display edit info
+			// phpBB's default behavior hides last-post and moderator edits.
+			// Track every submitted edit so the ACP display option is reliable.
+			$data_ary['post_edit_reason'] = truncate_string((string) $data_ary['post_edit_reason'], 255, 255, false);
 
-			// If editing last post then display no edit info
-			// If m_edit permission then display no edit info
-			// If normal edit display edit info
+			$sql_data[POSTS_TABLE]['sql']	= array(
+				'post_edit_time'	=> $current_time,
+				'post_edit_reason'	=> $data_ary['post_edit_reason'],
+				'post_edit_user'	=> (int) $data_ary['post_edit_user'],
+			);
 
-			// Display edit info if edit reason given or user is editing his post, which is not the last within the topic.
-			if ($data_ary['post_edit_reason'] || (!$auth->acl_get('m_edit', $data_ary['forum_id']) && ($post_mode == 'edit' || $post_mode == 'edit_first_post')))
-			{
-				$data_ary['post_edit_reason']		= truncate_string($data_ary['post_edit_reason'], 255, 255, false);
-
-				$sql_data[POSTS_TABLE]['sql']	= array(
-					'post_edit_time'	=> $current_time,
-					'post_edit_reason'	=> $data_ary['post_edit_reason'],
-					'post_edit_user'	=> (int) $data_ary['post_edit_user'],
-				);
-
-				$sql_data[POSTS_TABLE]['stat'][] = 'post_edit_count = post_edit_count + 1';
-			}
-			else if (!$data_ary['post_edit_reason'] && $mode == 'edit' && $auth->acl_get('m_edit', $data_ary['forum_id']))
-			{
-				$sql_data[POSTS_TABLE]['sql'] = array(
-					'post_edit_reason'	=> '',
-				);
-			}
+			$sql_data[POSTS_TABLE]['stat'][] = 'post_edit_count = post_edit_count + 1';
 
 			// If the person editing this post is different to the one having posted then we will add a log entry stating the edit
 			// Could be simplified by only adding to the log if the edit is not tracked - but this may confuse admins/mods
