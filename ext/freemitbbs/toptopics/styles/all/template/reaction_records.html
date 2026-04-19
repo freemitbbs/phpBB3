@@ -1,0 +1,38 @@
+<!-- INCLUDE overall_header.html -->
+
+<h2>{L_TOPTOPICS_REACTION_RECORDS}</h2>
+<p>{L_TOPTOPICS_REACTION_RECORDS_EXPLAIN}</p>
+
+<!-- IF .reaction_records -->
+	<div class="panel">
+		<div class="inner">
+			<ul class="topiclist forums">
+				<!-- BEGIN reaction_records -->
+					<li class="row {reaction_records.REACTION_CLASS} <!-- IF reaction_records.S_ROW_COUNT is odd -->bg1<!-- ELSE -->bg2<!-- ENDIF -->">
+						<dl>
+							<dt>
+								<div class="list-inner">
+									{reaction_records.LINE}
+								</div>
+							</dt>
+						</dl>
+					</li>
+				<!-- END reaction_records -->
+			</ul>
+		</div>
+	</div>
+<!-- ELSE -->
+	<div class="panel">
+		<div class="inner">
+			<p>{L_TOPTOPICS_NO_REACTION_RECORDS}</p>
+		</div>
+	</div>
+<!-- ENDIF -->
+
+<!-- IF .pagination -->
+	<div class="pagination">
+		{PAGE_NUMBER} &bull; <!-- INCLUDE pagination.html -->
+	</div>
+<!-- ENDIF -->
+
+<!-- INCLUDE overall_footer.html -->

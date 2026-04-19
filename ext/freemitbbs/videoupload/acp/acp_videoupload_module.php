@@ -22,6 +22,9 @@ class acp_videoupload_module
 		$request = $phpbb_container->get('request');
 		/** @var \phpbb\language\language $language */
 		$language = $phpbb_container->get('language');
+		$shared_config_provider = $phpbb_container->has('freemitbbs.s3storage.config_provider')
+			? $phpbb_container->get('freemitbbs.s3storage.config_provider')
+			: null;
 
 		$language->add_lang('info_acp_videoupload', 'freemitbbs/videoupload');
 		$language->add_lang('common', 'freemitbbs/videoupload');
@@ -62,31 +65,53 @@ class acp_videoupload_module
 			$config->set('videoupload_s3_use_path_style', (string) ($use_path_style ? 1 : 0));
 			$config->set('videoupload_s3_acl', $acl !== '' ? $acl : 'public-read');
 
+			if ($shared_config_provider !== null)
+			{
+				$config->set('s3storage_endpoint', $endpoint);
+				$config->set('s3storage_region', $region !== '' ? $region : 'us-east-1');
+				$config->set('s3storage_bucket', $bucket);
+				$config->set('s3storage_access_key', $access_key);
+				$config->set('s3storage_public_base_url', rtrim($public_base_url, '/'));
+				$config->set('s3storage_use_path_style', (string) ($use_path_style ? 1 : 0));
+			}
+
 			if ($clear_secret)
 			{
 				$config->set('videoupload_s3_secret_key', '');
+				if ($shared_config_provider !== null)
+				{
+					$config->set('s3storage_secret_key', '');
+				}
 			}
 			elseif ($secret_key !== '')
 			{
 				$config->set('videoupload_s3_secret_key', $secret_key);
+				if ($shared_config_provider !== null)
+				{
+					$config->set('s3storage_secret_key', $secret_key);
+				}
 			}
 
 			trigger_error($language->lang('CONFIG_UPDATED') . adm_back_link($this->u_action));
 		}
 
+		$shared_storage = ($shared_config_provider !== null && $shared_config_provider->has_shared_storage_config())
+			? $shared_config_provider->get_shared_storage_config()
+			: null;
+
 		$template->assign_vars([
 			'U_ACTION' => $this->u_action,
 			'VIDEOUPLOAD_ENABLED' => (int) ($config['videoupload_enabled'] ?? 0),
 			'VIDEOUPLOAD_MAX_SIZE_MB' => (int) ($config['videoupload_max_size_mb'] ?? 64),
-			'VIDEOUPLOAD_S3_ENDPOINT' => (string) ($config['videoupload_s3_endpoint'] ?? ''),
-			'VIDEOUPLOAD_S3_REGION' => (string) ($config['videoupload_s3_region'] ?? 'us-east-1'),
-			'VIDEOUPLOAD_S3_BUCKET' => (string) ($config['videoupload_s3_bucket'] ?? ''),
-			'VIDEOUPLOAD_S3_ACCESS_KEY' => (string) ($config['videoupload_s3_access_key'] ?? ''),
+			'VIDEOUPLOAD_S3_ENDPOINT' => (string) (($shared_storage['endpoint'] ?? null) ?? ($config['videoupload_s3_endpoint'] ?? '')),
+			'VIDEOUPLOAD_S3_REGION' => (string) (($shared_storage['region'] ?? null) ?? ($config['videoupload_s3_region'] ?? 'us-east-1')),
+			'VIDEOUPLOAD_S3_BUCKET' => (string) (($shared_storage['bucket'] ?? null) ?? ($config['videoupload_s3_bucket'] ?? '')),
+			'VIDEOUPLOAD_S3_ACCESS_KEY' => (string) (($shared_storage['access_key'] ?? null) ?? ($config['videoupload_s3_access_key'] ?? '')),
 			'VIDEOUPLOAD_S3_PATH_PREFIX' => (string) ($config['videoupload_s3_path_prefix'] ?? 'videos'),
-			'VIDEOUPLOAD_S3_PUBLIC_BASE_URL' => (string) ($config['videoupload_s3_public_base_url'] ?? ''),
-			'VIDEOUPLOAD_S3_USE_PATH_STYLE' => (int) ($config['videoupload_s3_use_path_style'] ?? 0),
+			'VIDEOUPLOAD_S3_PUBLIC_BASE_URL' => (string) (($shared_storage['public_base_url'] ?? null) ?? ($config['videoupload_s3_public_base_url'] ?? '')),
+			'VIDEOUPLOAD_S3_USE_PATH_STYLE' => (int) (($shared_storage['use_path_style'] ?? null) ?? ($config['videoupload_s3_use_path_style'] ?? 0)),
 			'VIDEOUPLOAD_S3_ACL' => (string) ($config['videoupload_s3_acl'] ?? 'public-read'),
-			'S_VIDEOUPLOAD_SECRET_CONFIGURED' => trim((string) ($config['videoupload_s3_secret_key'] ?? '')) !== '',
+			'S_VIDEOUPLOAD_SECRET_CONFIGURED' => trim((string) ($config['s3storage_secret_key'] ?? ($config['videoupload_s3_secret_key'] ?? ''))) !== '',
 		]);
 	}
 }

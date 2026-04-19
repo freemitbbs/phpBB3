@@ -94,6 +94,7 @@ class listener implements EventSubscriberInterface
 					'core.permissions' => 'add_permissions',
 					'core.ucp_prefs_personal_data' => 'ucp_prefs_personal_data',
 					'core.ucp_prefs_personal_update_data' => 'ucp_prefs_personal_update_data',
+						'core.memberlist_view_profile' => 'user_profile_reaction_records',
 					'core.viewforum_get_topic_ids_data' => 'viewforum_exclude_foe_topics',
 					'core.viewforum_get_announcement_topic_ids_data' => 'viewforum_exclude_foe_topics',
 					'core.viewtopic_modify_post_data' => 'prefetch_dislikes',
@@ -148,6 +149,21 @@ class listener implements EventSubscriberInterface
 			(int) $sql_ary['user_options']
 		);
 		$event['sql_ary'] = $sql_ary;
+	}
+
+	public function user_profile_reaction_records($event): void
+	{
+		$current_user_id = (int) $this->user->data['user_id'];
+		$profile_user_id = (int) ($event['member']['user_id'] ?? 0);
+		if ($current_user_id === ANONYMOUS || $current_user_id !== $profile_user_id)
+		{
+			return;
+		}
+
+		$this->template->assign_vars([
+			'S_TOPTOPICS_REACTION_RECORDS' => true,
+			'U_TOPTOPICS_REACTION_RECORDS' => $this->helper->route('freemitbbs_toptopics_reaction_records'),
+		]);
 	}
 
 	public function prefetch_dislikes($event)

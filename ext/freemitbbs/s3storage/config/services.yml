@@ -1,3 +1,8 @@
 services:
+    freemitbbs.s3storage.config_provider:
+        class: freemitbbs\s3storage\service\config_provider
+        arguments:
+            - '@config'
+
     freemitbbs.s3storage.object_store:
         class: freemitbbs\s3storage\service\s3_object_store

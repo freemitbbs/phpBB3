@@ -166,6 +166,58 @@ class s3_object_store
 		return $scheme . '://' . $config['bucket'] . '.' . $host . $port . $path;
 	}
 
+	public function create_presigned_get_url(
+		array $storage_config,
+		string $object_key,
+		int $expires_in = 300,
+		array $response_headers = []
+	): string
+	{
+		$config = $this->normalize_config($storage_config);
+		$request = $this->build_request($config, ltrim($object_key, '/'));
+		$expires_in = max(1, min(604800, $expires_in));
+		$amz_date = gmdate('Ymd\THis\Z');
+		$date_stamp = gmdate('Ymd');
+		$credential_scope = $date_stamp . '/' . $config['region'] . '/' . self::SERVICE . '/aws4_request';
+
+		$query_params = [
+			'X-Amz-Algorithm' => 'AWS4-HMAC-SHA256',
+			'X-Amz-Credential' => $config['access_key'] . '/' . $credential_scope,
+			'X-Amz-Date' => $amz_date,
+			'X-Amz-Expires' => (string) $expires_in,
+			'X-Amz-SignedHeaders' => 'host',
+		];
+
+		foreach ($response_headers as $name => $value)
+		{
+			$value = trim((string) $value);
+			if ($value === '')
+			{
+				continue;
+			}
+
+			$query_params[strtolower((string) $name)] = $value;
+		}
+
+		$canonical_query = $this->build_canonical_query_string($query_params);
+		$canonical_request = "GET\n"
+			. $request['canonical_uri'] . "\n"
+			. $canonical_query . "\n"
+			. 'host:' . $request['host'] . "\n\n"
+			. "host\n"
+			. 'UNSIGNED-PAYLOAD';
+
+		$string_to_sign = "AWS4-HMAC-SHA256\n"
+			. $amz_date . "\n"
+			. $credential_scope . "\n"
+			. hash('sha256', $canonical_request);
+
+		$signing_key = $this->derive_signing_key($config['secret_key'], $date_stamp, $config['region'], self::SERVICE);
+		$query_params['X-Amz-Signature'] = hash_hmac('sha256', $string_to_sign, $signing_key);
+
+		return $request['url'] . '?' . $this->build_canonical_query_string($query_params);
+	}
+
 	private function normalize_config(array $storage_config): array
 	{
 		$config = [
@@ -178,6 +230,13 @@ class s3_object_store
 			'acl' => trim((string) ($storage_config['acl'] ?? '')),
 			'use_path_style' => !empty($storage_config['use_path_style']),
 		];
+		if (strtolower($config['acl']) === 'private')
+		{
+			// S3-compatible providers such as Backblaze B2 may reject the
+			// explicit "private" canned ACL. Omitting x-amz-acl keeps the
+			// provider's default private behavior and works with signed URLs.
+			$config['acl'] = '';
+		}
 
 		if (
 			$config['endpoint'] === ''
@@ -327,5 +386,35 @@ class s3_object_store
 		$service_key = hash_hmac('sha256', $service, $region_key, true);
 
 		return hash_hmac('sha256', 'aws4_request', $service_key, true);
+	}
+
+	private function build_canonical_query_string(array $query_params): string
+	{
+		$encoded = [];
+		foreach ($query_params as $name => $value)
+		{
+			$encoded[] = [
+				rawurlencode((string) $name),
+				rawurlencode((string) $value),
+			];
+		}
+
+		usort($encoded, static function (array $left, array $right): int
+		{
+			if ($left[0] === $right[0])
+			{
+				return $left[1] <=> $right[1];
+			}
+
+			return $left[0] <=> $right[0];
+		});
+
+		$pairs = [];
+		foreach ($encoded as $pair)
+		{
+			$pairs[] = $pair[0] . '=' . $pair[1];
+		}
+
+		return implode('&', $pairs);
 	}
 }

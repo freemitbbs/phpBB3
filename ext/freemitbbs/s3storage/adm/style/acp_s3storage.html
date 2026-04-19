@@ -1,0 +1,81 @@
+{% INCLUDE 'overall_header.html' %}
+
+<h1>{{ lang('ACP_S3STORAGE') }}</h1>
+<p>{{ lang('S3STORAGE_EXPLAIN') }}</p>
+
+<form id="acp_s3storage" method="post" action="{U_ACTION}">
+	<fieldset>
+		<legend>{{ lang('S3STORAGE_FIELDSET_CONNECTION') }}</legend>
+
+		<dl>
+			<dt>
+				<label for="s3storage_endpoint">{{ lang('S3STORAGE_ENDPOINT') }}</label><br />
+				<span>{{ lang('S3STORAGE_ENDPOINT_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="s3storage_endpoint" name="s3storage_endpoint" value="{S3STORAGE_ENDPOINT}" class="inputbox" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="s3storage_region">{{ lang('S3STORAGE_REGION') }}</label><br />
+				<span>{{ lang('S3STORAGE_REGION_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="s3storage_region" name="s3storage_region" value="{S3STORAGE_REGION}" class="inputbox" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="s3storage_bucket">{{ lang('S3STORAGE_BUCKET') }}</label><br />
+				<span>{{ lang('S3STORAGE_BUCKET_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="s3storage_bucket" name="s3storage_bucket" value="{S3STORAGE_BUCKET}" class="inputbox" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="s3storage_access_key">{{ lang('S3STORAGE_ACCESS_KEY') }}</label><br />
+				<span>{{ lang('S3STORAGE_ACCESS_KEY_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="s3storage_access_key" name="s3storage_access_key" value="{S3STORAGE_ACCESS_KEY}" class="inputbox" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="s3storage_secret_key">{{ lang('S3STORAGE_SECRET_KEY') }}</label><br />
+				<span>{{ lang('S3STORAGE_SECRET_KEY_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<input type="password" id="s3storage_secret_key" name="s3storage_secret_key" value="" class="inputbox" autocomplete="new-password" />
+				{% if S_S3STORAGE_SECRET_CONFIGURED %}<br /><span>{{ lang('S3STORAGE_SECRET_KEY_CONFIGURED') }}</span>{% endif %}
+				<br /><label><input type="checkbox" name="s3storage_secret_key_clear" value="1" /> {{ lang('S3STORAGE_SECRET_KEY_CLEAR') }}</label>
+			</dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="s3storage_public_base_url">{{ lang('S3STORAGE_PUBLIC_BASE_URL') }}</label><br />
+				<span>{{ lang('S3STORAGE_PUBLIC_BASE_URL_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="s3storage_public_base_url" name="s3storage_public_base_url" value="{S3STORAGE_PUBLIC_BASE_URL}" class="inputbox" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="s3storage_use_path_style">{{ lang('S3STORAGE_USE_PATH_STYLE') }}</label><br />
+				<span>{{ lang('S3STORAGE_USE_PATH_STYLE_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<label><input type="radio" class="radio" name="s3storage_use_path_style" value="1"{% if S3STORAGE_USE_PATH_STYLE %} checked="checked"{% endif %} /> {{ lang('YES') }}</label>
+				<label><input type="radio" class="radio" name="s3storage_use_path_style" value="0"{% if not S3STORAGE_USE_PATH_STYLE %} checked="checked"{% endif %} /> {{ lang('NO') }}</label>
+			</dd>
+		</dl>
+	</fieldset>
+
+	<fieldset class="submit-buttons">
+		{{ S_FORM_TOKEN }}
+		<input class="button1" type="submit" id="submit" name="submit" value="{{ lang('SUBMIT') }}" />&nbsp;
+		<input class="button2" type="reset" id="reset" name="reset" value="{{ lang('RESET') }}" />
+	</fieldset>
+</form>
+
+{% INCLUDE 'overall_footer.html' %}

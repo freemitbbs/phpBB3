@@ -1,0 +1,18 @@
+services:
+    freemitbbs.s3attachments.attachment_storage:
+        class: freemitbbs\s3attachments\service\attachment_storage
+        arguments:
+            - '@config'
+            - '@dbal.conn'
+            - '@filesystem'
+            - '@service_container'
+            - '%core.root_path%'
+
+    freemitbbs.s3attachments.listener:
+        class: freemitbbs\s3attachments\event\listener
+        arguments:
+            - '@language'
+            - '@dbal.conn'
+            - '@freemitbbs.s3attachments.attachment_storage'
+        tags:
+            - { name: event.listener }

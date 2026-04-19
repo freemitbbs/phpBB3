@@ -95,6 +95,23 @@ services:
             - '%core.root_path%'
             - '%core.php_ext%'
 
+    freemitbbs.toptopics.reaction_records:
+        class: freemitbbs\toptopics\controller\reaction_records
+        arguments:
+            - '@auth'
+            - '@content.visibility'
+            - '@dbal.conn'
+            - '@controller.helper'
+            - '@language'
+            - '@pagination'
+            - '@template'
+            - '@user'
+            - '@user_loader'
+            - '%tables.freemitbbs.toptopics.likes%'
+            - '%tables.freemitbbs.toptopics.dislikes%'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+
     freemitbbs.toptopics.cron.refresh_scopes:
         class: freemitbbs\toptopics\cron\refresh_scopes
         arguments:

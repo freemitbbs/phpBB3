@@ -4,6 +4,16 @@ freemitbbs_toptopics_vote:
     requirements:
         post: \d+
 
+freemitbbs_toptopics_reaction_records:
+    path: /toptopics/reactions
+    defaults: { _controller: freemitbbs.toptopics.reaction_records:base, page: 1 }
+
+freemitbbs_toptopics_reaction_records_page:
+    path: /toptopics/reactions/page/{page}
+    defaults: { _controller: freemitbbs.toptopics.reaction_records:base }
+    requirements:
+        page: \d+
+
 freemitbbs_toptopics_override:
     path: /toptopics/override/{topic}/{state}
     defaults: { _controller: freemitbbs.toptopics.moderation:topic_override }

@@ -22,11 +22,16 @@ class s3_uploader
 	];
 
 	protected \phpbb\config\config $config;
-	protected s3_object_store $object_store;
+	protected $object_store;
+	protected $shared_config_provider;
 
 	public function __construct(\phpbb\config\config $config, ContainerInterface $container)
 	{
 		$this->config = $config;
+		$this->shared_config_provider = $container->has('freemitbbs.s3storage.config_provider')
+			? $container->get('freemitbbs.s3storage.config_provider')
+			: null;
+
 		if ($container->has('freemitbbs.s3storage.object_store'))
 		{
 			$this->object_store = $container->get('freemitbbs.s3storage.object_store');
@@ -67,6 +72,14 @@ class s3_uploader
 
 	protected function get_storage_config(): array
 	{
+		if ($this->shared_config_provider && $this->shared_config_provider->has_shared_storage_config())
+		{
+			$shared_config = $this->shared_config_provider->get_shared_storage_config();
+			$shared_config['acl'] = (string) ($this->config['videoupload_s3_acl'] ?? 'public-read');
+
+			return $shared_config;
+		}
+
 		return [
 			'endpoint' => (string) ($this->config['videoupload_s3_endpoint'] ?? ''),
 			'region' => (string) ($this->config['videoupload_s3_region'] ?? ''),

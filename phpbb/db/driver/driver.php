@@ -981,11 +981,12 @@ abstract class driver implements driver_interface
 		$this->sql_error_sql = $sql;
 
 		$this->sql_error_returned = $this->_sql_error();
-		$error_context = $this->build_sql_error_context($sql, $user, $auth);
-		$this->write_sql_error_log($error_context);
 
 		if (!$this->return_on_error)
 		{
+			$error_context = $this->build_sql_error_context($sql, $user, $auth);
+			$this->write_sql_error_log($error_context);
+
 			$message = 'SQL ERROR [ ' . $this->sql_layer . ' ]<br /><br />' . $this->sql_error_returned['message'] . ' [' . $this->sql_error_returned['code'] . ']';
 
 			// Show complete SQL error and path to administrators only

@@ -178,6 +178,13 @@ class s3_object_store
 			'acl' => trim((string) ($storage_config['acl'] ?? '')),
 			'use_path_style' => !empty($storage_config['use_path_style']),
 		];
+		if (strtolower($config['acl']) === 'private')
+		{
+			// S3-compatible providers such as Backblaze B2 may reject the
+			// explicit "private" canned ACL. Omitting x-amz-acl keeps the
+			// provider's default private behavior and works with signed URLs.
+			$config['acl'] = '';
+		}
 
 		if (
 			$config['endpoint'] === ''

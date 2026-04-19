@@ -1,0 +1,28 @@
+.s3attachments-status {
+	display: inline-block;
+	margin-top: 6px;
+	font-size: 0.9em;
+	color: #666666;
+}
+
+.s3attachments-status:empty {
+	display: none;
+}
+
+.s3attachments-status.is-busy {
+	color: #2f4f7f;
+}
+
+.s3attachments-status.is-success {
+	color: #2f7f2f;
+}
+
+.s3attachments-status.is-error {
+	color: #bc2a4d;
+}
+
+#attach-panel.s3attachments-uploading input[name="add_file"],
+#add_files.s3attachments-uploading {
+	opacity: 0.6;
+	pointer-events: none;
+}

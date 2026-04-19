@@ -55,7 +55,6 @@ class main_listener implements EventSubscriberInterface
 			'core.user_setup'					=> 'load_language_on_setup',
 			'core.ucp_prefs_personal_data'		=> 'ucp_prefs_personal_data',
 			'core.ucp_prefs_personal_update_data'	=> 'ucp_prefs_personal_update_data',
-			'core.memberlist_view_profile'		=> 'user_profile_likes',
 			'core.delete_posts_after'			=> 'clean_posts_after',
 			'core.delete_user_after'			=> 'clean_users_after',
 		);
