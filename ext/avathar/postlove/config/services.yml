@@ -32,6 +32,28 @@ services:
             - '%core.table_prefix%'
         tags:
             - {name: event.listener}
+    avathar.postlove.most_liked_posts:
+        class: avathar\postlove\service\most_liked_posts
+        arguments:
+            - '@auth'
+            - '@content.visibility'
+            - '@dbal.conn'
+            - '@dispatcher'
+            - '@user'
+            - '@language'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+            - '%tables.avathar.postlove%'
+    avathar.postlove.most_liked:
+        class: avathar\postlove\controller\most_liked
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@controller.helper'
+            - '@language'
+            - '@template'
+            - '@user'
+            - '@avathar.postlove.most_liked_posts'
     avathar.postlove.ajaxify:
         class: avathar\postlove\controller\ajaxify
         arguments:

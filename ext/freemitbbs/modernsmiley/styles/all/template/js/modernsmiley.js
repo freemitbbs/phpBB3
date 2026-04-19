@@ -62,6 +62,15 @@
 		img.dataset.modernsmileyHoverBound = '1';
 	}
 
+	function normalizeSize(img)
+	{
+		img.removeAttribute('width');
+		img.removeAttribute('height');
+		img.classList.add('emoji');
+		img.classList.add('modernsmiley-emoji');
+		img.draggable = false;
+	}
+
 	function getSmileyCode(img)
 	{
 		var alt = (img.getAttribute('alt') || '').trim();
@@ -119,8 +128,7 @@
 		{
 			img.setAttribute('data-modernsmiley-hover-fallback-src', hoverFallbackUrl);
 		}
-		img.classList.add('emoji');
-		img.draggable = false;
+		normalizeSize(img);
 		img.dataset.modernsmileyApplied = '1';
 		bindHover(img);
 	}
@@ -132,7 +140,7 @@
 			return;
 		}
 
-		root.querySelectorAll('img.smilies, img[src*="images/smilies/"], img[data-modernsmiley-hover-src]').forEach(replaceSmiley);
+		root.querySelectorAll('img.smilies, img[src*="images/smilies/"], img[data-modernsmiley-hover-src], .smiley-box img, .panel .inner a img').forEach(replaceSmiley);
 	}
 
 	if (document.readyState === 'loading')
@@ -158,7 +166,7 @@
 					return;
 				}
 
-				if (node.matches && (node.matches('img.smilies') || node.matches('img[src*="images/smilies/"]') || node.matches('img[data-modernsmiley-hover-src]')))
+				if (node.matches && (node.matches('img.smilies') || node.matches('img[src*="images/smilies/"]') || node.matches('img[data-modernsmiley-hover-src]') || node.matches('.smiley-box img') || node.matches('.panel .inner a img')))
 				{
 					replaceSmiley(node);
 				}

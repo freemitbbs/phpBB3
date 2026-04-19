@@ -49,8 +49,9 @@ class main_listener implements EventSubscriberInterface
 	public static function getSubscribedEvents()
 	{
 		return array(
-			'core.permissions'					=> 'add_permissions',
-			'core.viewtopic_modify_post_data'	=> 'prefetch_likes',
+				'core.permissions'					=> 'add_permissions',
+				'core.page_header_after'			=> 'assign_most_liked_page_link',
+				'core.viewtopic_modify_post_data'	=> 'prefetch_likes',
 			'core.viewtopic_modify_post_row'	=> 'modify_post_row',
 				'core.user_setup'					=> 'load_language_on_setup',
 				'core.ucp_prefs_personal_data'		=> 'ucp_prefs_personal_data',
@@ -85,6 +86,28 @@ class main_listener implements EventSubscriberInterface
 	public function load_language_on_setup($event)
 	{
 		$this->language->add_lang('postlove', 'avathar/postlove');
+	}
+
+	public function assign_most_liked_page_link($event)
+	{
+		if ($this->user->data['is_bot'] || !$this->auth->acl_get('u_postlove_summary') || $this->user_hides_summary())
+		{
+			return;
+		}
+
+		if ($this->user->data['is_registered'])
+		{
+			$this->user->get_profile_fields($this->user->data['user_id']);
+			if (isset($this->user->profile_fields['pf_postlove_hide']) && $this->user->profile_fields['pf_postlove_hide'])
+			{
+				return;
+			}
+		}
+
+		$this->template->assign_vars(array(
+			'S_POSTLOVE_MOST_LIKED_PAGE' => true,
+			'U_POSTLOVE_MOST_LIKED_PAGE' => $this->helper->route('avathar_postlove_most_liked'),
+		));
 	}
 
 	/**

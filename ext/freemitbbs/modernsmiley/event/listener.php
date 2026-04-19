@@ -141,6 +141,9 @@ class listener implements EventSubscriberInterface
 			$src = $img->getAttribute('src');
 			$token = (strpos($src, '{@tseq}') !== false) ? '{@tseq}' : '{@seq}';
 			$img->setAttribute('src', $this->mapper->get_unicode_emoji_url($token));
+			$this->add_class($img, 'modernsmiley-emoji');
+			$img->removeAttribute('width');
+			$img->removeAttribute('height');
 			$fallback_url = $this->mapper->get_unicode_emoji_url($token, true);
 			if ($fallback_url !== '')
 			{
@@ -169,7 +172,7 @@ class listener implements EventSubscriberInterface
 	{
 		$attributes = [
 			'alt="{.}"',
-			'class="smilies emoji"',
+			'class="smilies emoji modernsmiley-emoji"',
 			'draggable="false"',
 			'src="' . htmlspecialchars($this->mapper->get_asset_url($sequence), ENT_COMPAT) . '"',
 			'title="{.}"',
@@ -194,6 +197,17 @@ class listener implements EventSubscriberInterface
 		}
 
 		return '<img ' . implode(' ', $attributes) . '/>';
+	}
+
+	private function add_class(\DOMElement $img, string $class): void
+	{
+		$classes = preg_split('/\s+/', trim($img->getAttribute('class'))) ?: [];
+		if (!in_array($class, $classes, true))
+		{
+			$classes[] = $class;
+		}
+
+		$img->setAttribute('class', trim(implode(' ', array_filter($classes))));
 	}
 
 	private function apply_hover_attributes(\DOMElement $img, string $hover_url, string $hover_fallback_url): void

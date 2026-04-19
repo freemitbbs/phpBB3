@@ -4,6 +4,10 @@ avathar_postlove_control:
     requirements:
         post: \d+
 
+avathar_postlove_most_liked:
+    path: /postlove/most-liked
+    defaults: { _controller: avathar.postlove.most_liked:base }
+
 avathar_postlove_list:
     path: /postlove/{user_id}
     defaults: { _controller: avathar.postlove.lovelist:base, page: 1 }

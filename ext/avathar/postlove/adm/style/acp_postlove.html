@@ -48,17 +48,26 @@
 		<fieldset>
 			<legend>{L_POSTLOVE_FIELDSET_SUMMARY}</legend>
 			<p>{L_POSTLOVE_SUMMARY_PERMISSION_NOTICE}</p>
-			<dl>
-				<dt>
-					<label>{L_POSTLOVE_SUMMARY_POSITION}</label><br />
-					<span>{L_POSTLOVE_SUMMARY_POSITION_EXPLAIN}</span>
+				<dl>
+					<dt>
+						<label>{L_POSTLOVE_SUMMARY_POSITION}</label><br />
+						<span>{L_POSTLOVE_SUMMARY_POSITION_EXPLAIN}</span>
 				</dt>
 				<dd>
 					<label><input type="radio" name="poslove[postlove_summary_position]" value="0"<!-- IF not SUMMARY_POSITION --> checked<!-- ENDIF --> />{L_POSTLOVE_SUMMARY_ABOVE}</label>
-					<label><input type="radio" name="poslove[postlove_summary_position]" value="1"<!-- IF SUMMARY_POSITION --> checked<!-- ENDIF --> />{L_POSTLOVE_SUMMARY_BELOW}</label>
-				</dd>
-			</dl>
-			<table>
+						<label><input type="radio" name="poslove[postlove_summary_position]" value="1"<!-- IF SUMMARY_POSITION --> checked<!-- ENDIF --> />{L_POSTLOVE_SUMMARY_BELOW}</label>
+					</dd>
+				</dl>
+				<dl>
+					<dt>
+						<label>{L_POSTLOVE_MOST_LIKED_PAGE_LENGTH}</label><br />
+						<span>{L_POSTLOVE_MOST_LIKED_PAGE_LENGTH_EXPLAIN}</span>
+					</dt>
+					<dd>
+						<input type="number" name="poslove[postlove_most_liked_page_length]" min="1" max="100" size="4" value="{MOST_LIKED_PAGE_LENGTH}" />
+					</dd>
+				</dl>
+				<table>
 				<tr>
 					<th><label>{L_POSTLOVE_SUMMARY_PERIOD}</label></th>
 					<th><label>{L_POSTLOVE_INDEX}</label></th>
