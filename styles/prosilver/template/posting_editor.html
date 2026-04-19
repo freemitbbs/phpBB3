@@ -58,11 +58,12 @@
 		<!-- IF S_SHOW_SMILEY_LINK and S_SMILIES_ALLOWED -->
 			<br /><a href="{U_MORE_SMILIES}" onclick="popup(this.href, 750, 350, '_phpbbsmilies'); return false;">{L_MORE_SMILIES}</a>
 		<!-- ENDIF -->
-		<!-- EVENT posting_editor_smilies_after -->
-		<!-- IF BBCODE_STATUS -->
+		<!-- IF BBCODE_STATUS or L_MARKDOWN_STATUS -->
+		<!-- IF .smiley --><hr /><!-- ENDIF -->
 		<details class="bbcode-status posting-permissions-status">
-			<!-- IF .smiley --><hr /><!-- ENDIF -->
 			<summary>{L_POSTING_PERMISSIONS}</summary>
+			<!-- EVENT posting_editor_smilies_after -->
+			<!-- IF BBCODE_STATUS -->
 			<div class="posting-permissions-status-list">
 				{BBCODE_STATUS}<br />
 				<!-- IF S_BBCODE_ALLOWED -->
@@ -74,7 +75,10 @@
 				<!-- ENDIF -->
 				{SMILIES_STATUS}
 			</div>
+			<!-- ENDIF -->
 		</details>
+		<!-- ELSE -->
+		<!-- EVENT posting_editor_smilies_after -->
 		<!-- ENDIF -->
 		<!-- EVENT posting_editor_bbcode_status_after -->
 		<!-- IF S_EDIT_DRAFT || S_DISPLAY_REVIEW -->
