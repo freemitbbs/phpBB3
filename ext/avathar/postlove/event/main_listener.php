@@ -52,12 +52,13 @@ class main_listener implements EventSubscriberInterface
 			'core.permissions'					=> 'add_permissions',
 			'core.viewtopic_modify_post_data'	=> 'prefetch_likes',
 			'core.viewtopic_modify_post_row'	=> 'modify_post_row',
-			'core.user_setup'					=> 'load_language_on_setup',
-			'core.ucp_prefs_personal_data'		=> 'ucp_prefs_personal_data',
-			'core.ucp_prefs_personal_update_data'	=> 'ucp_prefs_personal_update_data',
-			'core.delete_posts_after'			=> 'clean_posts_after',
-			'core.delete_user_after'			=> 'clean_users_after',
-		);
+				'core.user_setup'					=> 'load_language_on_setup',
+				'core.ucp_prefs_personal_data'		=> 'ucp_prefs_personal_data',
+				'core.ucp_prefs_personal_update_data'	=> 'ucp_prefs_personal_update_data',
+				'core.memberlist_view_profile'		=> 'user_profile_likes',
+				'core.delete_posts_after'			=> 'clean_posts_after',
+				'core.delete_user_after'			=> 'clean_users_after',
+			);
 	}
 
 	public function __construct(\phpbb\auth\auth $auth, \phpbb\config\config $config, \phpbb\db\driver\driver_interface $db, \phpbb\request\request $request, \phpbb\template\template $template, \phpbb\user $user,
