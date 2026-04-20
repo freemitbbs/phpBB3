@@ -1,6 +1,12 @@
 <!-- IF postrow.S_TOPTOPICS_USER_REPUTATION -->
-	<dd class="profile-custom-field" title="{L_TOPTOPICS_REPUTATION}">
-		<i class="icon fa-thumbs-up fa-fw" aria-hidden="true"></i>
-		<span class="sr-only">{L_TOPTOPICS_REPUTATION}{L_COLON}</span> {postrow.USER_REPUTATION}
+	<dd class="profile-custom-field toptopics-reputation-badge toptopics-reputation-{postrow.USER_REPUTATION_CLASS}" title="{postrow.USER_REPUTATION_TOOLTIP}">
+		<span class="toptopics-reputation-mark" aria-hidden="true"></span>
+		<span class="toptopics-reputation-body">
+			<span class="toptopics-reputation-tier">{postrow.USER_REPUTATION_TIER}</span>
+			<span class="toptopics-reputation-xp">{L_TOPTOPICS_REPUTATION} {postrow.USER_REPUTATION}</span>
+			<span class="toptopics-reputation-meter" aria-hidden="true">
+				<span style="width: {postrow.USER_REPUTATION_PROGRESS}%;"></span>
+			</span>
+		</span>
 	</dd>
 <!-- ENDIF -->

@@ -58,6 +58,151 @@
 	cursor: default;
 }
 
+.postprofile .toptopics-reputation-badge {
+	--rep-accent: #7f8b96;
+	--rep-accent-dark: #43515d;
+	--rep-bg: #f3f6f8;
+	--rep-border: #d5dde4;
+	box-sizing: border-box;
+	display: grid;
+	grid-template-columns: 28px minmax(0, 1fr);
+	gap: 7px;
+	align-items: center;
+	margin: 6px 0 4px;
+	padding: 6px 7px;
+	border: 1px solid var(--rep-border);
+	border-radius: 8px;
+	background: var(--rep-bg);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+	color: var(--rep-accent-dark);
+	text-align: left;
+}
+
+.postprofile .toptopics-reputation-mark {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 7px;
+	background: var(--rep-accent);
+	color: #ffffff;
+	box-shadow: 0 1px 2px rgba(28, 42, 55, 0.16);
+	line-height: 1;
+}
+
+.postprofile .toptopics-reputation-mark::before {
+	content: "\f040";
+	font-family: FontAwesome;
+	font-size: 1.05em;
+	line-height: 1;
+}
+
+.postprofile .toptopics-reputation-body {
+	display: block;
+	min-width: 0;
+}
+
+.postprofile .toptopics-reputation-xp,
+.postprofile .toptopics-reputation-tier {
+	display: block;
+	line-height: 1.2;
+}
+
+.postprofile .toptopics-reputation-tier {
+	color: var(--rep-accent-dark);
+	font-size: 0.92em;
+	font-weight: 700;
+}
+
+.postprofile .toptopics-reputation-xp {
+	margin: 1px 0 4px;
+	color: #66727d;
+	font-size: 0.76em;
+	font-weight: 600;
+}
+
+.postprofile .toptopics-reputation-meter {
+	display: block;
+	overflow: hidden;
+	height: 3px;
+	border-radius: 999px;
+	background: rgba(42, 55, 68, 0.16);
+}
+
+.postprofile .toptopics-reputation-meter span {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--rep-accent);
+}
+
+.postprofile .toptopics-reputation-disputed {
+	--rep-accent: #b45245;
+	--rep-accent-dark: #653126;
+	--rep-bg: #fff3ef;
+	--rep-border: #e0b5aa;
+}
+
+.postprofile .toptopics-reputation-disputed .toptopics-reputation-mark::before {
+	content: "\f071";
+}
+
+.postprofile .toptopics-reputation-fresh {
+	--rep-accent: #8291a0;
+	--rep-accent-dark: #35434d;
+	--rep-bg: #f3f6f8;
+	--rep-border: #cdd7df;
+}
+
+.postprofile .toptopics-reputation-fresh .toptopics-reputation-mark::before {
+	content: "\f040";
+}
+
+.postprofile .toptopics-reputation-steady {
+	--rep-accent: #3f7fa8;
+	--rep-accent-dark: #21445b;
+	--rep-bg: #eef7ff;
+	--rep-border: #b5cbe0;
+}
+
+.postprofile .toptopics-reputation-steady .toptopics-reputation-mark::before {
+	content: "\f044";
+}
+
+.postprofile .toptopics-reputation-regular {
+	--rep-accent: #2f8f62;
+	--rep-accent-dark: #1f563d;
+	--rep-bg: #eefaf4;
+	--rep-border: #a8d2bf;
+}
+
+.postprofile .toptopics-reputation-regular .toptopics-reputation-mark::before {
+	content: "\f005";
+}
+
+.postprofile .toptopics-reputation-pillar {
+	--rep-accent: #ad7f19;
+	--rep-accent-dark: #604710;
+	--rep-bg: #fff8e6;
+	--rep-border: #d6bf82;
+}
+
+.postprofile .toptopics-reputation-pillar .toptopics-reputation-mark::before {
+	content: "\f091";
+}
+
+.postprofile .toptopics-reputation-legend {
+	--rep-accent: #7c4d9e;
+	--rep-accent-dark: #4b2b65;
+	--rep-bg: #f7f0ff;
+	--rep-border: #cdb8df;
+}
+
+.postprofile .toptopics-reputation-legend .toptopics-reputation-mark::before {
+	content: "\f19d";
+}
+
 .toptopics-summary .collapsible {
 	display: block;
 }

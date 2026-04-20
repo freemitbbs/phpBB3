@@ -6,7 +6,10 @@ class reputation
 {
 	private const DEFAULT_MIN_REPUTATION_DISLIKE = 10;
 	private const DEFAULT_MIN_REPUTATION_REPORT = 50;
-	private const DEFAULT_FLAG_WEIGHT = 2.0;
+	private const DEFAULT_LIKE_WEIGHT = 6.0;
+	private const DEFAULT_DISLIKE_WEIGHT = 6.0;
+	private const DEFAULT_FLAG_WEIGHT = 12.0;
+	private const CONTENT_WEIGHT_SCALE = 24.0;
 	private const CONTENT_LENGTH_CAP = 40000;
 	private const CONTENT_LENGTH_SCALE = 500.0;
 	private const PER_POST_CONTENT_CAP = 4000;
@@ -187,13 +190,14 @@ class reputation
 
 		foreach ($metrics as $user_id => $user_metrics)
 		{
-			$points = $user_metrics['likes_received']
-				- $user_metrics['dislikes_received']
-				- ($user_metrics['open_flags_received'] * self::DEFAULT_FLAG_WEIGHT);
 			$content_signal = log(1.0 + (min(self::CONTENT_LENGTH_CAP, $user_metrics['content_length_total']) / self::CONTENT_LENGTH_SCALE));
+			$content_score = $content_signal * $content_weight * self::CONTENT_WEIGHT_SCALE;
+			$like_score = log(1.0 + $user_metrics['likes_received']) * self::DEFAULT_LIKE_WEIGHT;
+			$dislike_penalty = log(1.0 + $user_metrics['dislikes_received']) * self::DEFAULT_DISLIKE_WEIGHT;
+			$flag_penalty = log(1.0 + $user_metrics['open_flags_received']) * self::DEFAULT_FLAG_WEIGHT;
 			$rows[$user_id] = [
 				'user_id' => (int) $user_id,
-				'reputation_score' => (int) round($points + ($content_signal * $content_weight)),
+				'reputation_score' => (int) round($content_score + $like_score - $dislike_penalty - $flag_penalty),
 				'computed_time' => $computed_time,
 				'likes_received' => (int) $user_metrics['likes_received'],
 				'dislikes_received' => (int) $user_metrics['dislikes_received'],
@@ -219,28 +223,61 @@ class reputation
 	protected function collect_content_lengths(array $user_ids): array
 	{
 		$content_lengths = [];
-		$text_length_sql = $this->get_text_length_sql('p.post_text');
-		$sql = 'SELECT p.poster_id,
-				SUM(CASE WHEN ' . $text_length_sql . ' > ' . self::PER_POST_CONTENT_CAP . '
-					THEN ' . self::PER_POST_CONTENT_CAP . '
-					ELSE ' . $text_length_sql . ' END) AS content_length
+		$sql = 'SELECT p.poster_id, p.post_text
 			FROM ' . TOPICS_TABLE . ' t
 			INNER JOIN ' . POSTS_TABLE . ' p
 				ON p.topic_id = t.topic_id
 			WHERE ' . $this->db->sql_in_set('p.poster_id', $user_ids) . '
 				AND p.post_visibility = ' . ITEM_APPROVED . '
 				AND t.topic_type <> ' . ITEM_MOVED . '
-				AND t.topic_visibility = ' . ITEM_APPROVED . '
-			GROUP BY p.poster_id';
+				AND t.topic_visibility = ' . ITEM_APPROVED;
 		$result = $this->db->sql_query($sql);
 
 		while ($row = $this->db->sql_fetchrow($result))
 		{
-			$content_lengths[(int) $row['poster_id']] = (int) ($row['content_length'] ?? 0);
+			$poster_id = (int) $row['poster_id'];
+			$content_lengths[$poster_id] = ($content_lengths[$poster_id] ?? 0)
+				+ min(self::PER_POST_CONTENT_CAP, $this->calculate_quality_content_length((string) ($row['post_text'] ?? '')));
 		}
 		$this->db->sql_freeresult($result);
 
 		return $content_lengths;
+	}
+
+	protected function calculate_quality_content_length(string $text): int
+	{
+		$text = $this->strip_quote_blocks($text);
+
+		$text = preg_replace('#\[(?:img|attachment)(?:=[^\]]*)?(?::[a-z0-9]+)?\].*?\[/(?:img|attachment)(?::[a-z0-9]+)?\]#isu', ' ', $text);
+		$text = preg_replace('#\[url(?:=[^\]]*)?(?::[a-z0-9]+)?\].*?\[/url(?::[a-z0-9]+)?\]#isu', ' ', $text);
+		$text = preg_replace('#https?://\S+|www\.\S+#iu', ' ', $text);
+		$text = preg_replace('#\[/?[a-z][a-z0-9_=-]*(?:[^\]]*)?(?::[a-z0-9]+)?\]#iu', ' ', $text);
+		$text = strip_tags((string) $text);
+		$text = html_entity_decode($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+		if (preg_match_all('/[\p{L}\p{N}]/u', $text, $matches) === false)
+		{
+			return 0;
+		}
+
+		return count($matches[0]);
+	}
+
+	protected function strip_quote_blocks(string $text): string
+	{
+		$pattern = '#\[quote(?:=[^\]]*)?(?::[a-z0-9]+)?\].*?\[/quote(?::[a-z0-9]+)?\]#isu';
+		for ($i = 0; $i < 10; $i++)
+		{
+			$stripped = preg_replace($pattern, ' ', $text);
+			if ($stripped === null || $stripped === $text)
+			{
+				break;
+			}
+
+			$text = $stripped;
+		}
+
+		return $text;
 	}
 
 	protected function collect_post_event_counts(string $event_table, string $alias, array $user_ids): array

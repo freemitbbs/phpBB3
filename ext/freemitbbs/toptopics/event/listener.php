@@ -155,6 +155,14 @@ class listener implements EventSubscriberInterface
 	{
 		$current_user_id = (int) $this->user->data['user_id'];
 		$profile_user_id = (int) ($event['member']['user_id'] ?? 0);
+		if ($profile_user_id > 0 && $profile_user_id !== ANONYMOUS)
+		{
+			$this->template->assign_vars([
+				'S_TOPTOPICS_PROFILE_REPUTATION' => true,
+				'TOPTOPICS_PROFILE_REPUTATION' => $this->format_reputation($this->reputation->get_score($profile_user_id)),
+			]);
+		}
+
 		if ($current_user_id === ANONYMOUS || $current_user_id !== $profile_user_id)
 		{
 			return;
@@ -269,8 +277,14 @@ class listener implements EventSubscriberInterface
 		$post_row['POST_DISLIKE_DISABLED'] = $disabled;
 		if ($poster_id !== ANONYMOUS)
 		{
+			$reputation_score = $this->user_reputation_scores[$poster_id] ?? 0;
+			$reputation_tier = $this->get_reputation_tier($reputation_score);
 			$post_row['S_TOPTOPICS_USER_REPUTATION'] = true;
-			$post_row['USER_REPUTATION'] = $this->user_reputation_scores[$poster_id] ?? 0;
+			$post_row['USER_REPUTATION'] = $this->format_reputation($reputation_score);
+			$post_row['USER_REPUTATION_CLASS'] = $reputation_tier['class'];
+			$post_row['USER_REPUTATION_TIER'] = $this->language->lang($reputation_tier['lang']);
+			$post_row['USER_REPUTATION_TOOLTIP'] = $this->language->lang('TOPTOPICS_REPUTATION_TOOLTIP', $post_row['USER_REPUTATION'], $post_row['USER_REPUTATION_TIER']);
+			$post_row['USER_REPUTATION_PROGRESS'] = $this->get_reputation_progress($reputation_score);
 		}
 
 		$forum_id = (int) ($event['row']['forum_id'] ?? 0);
@@ -1224,6 +1238,66 @@ class listener implements EventSubscriberInterface
 	protected function format_reputation(int $score): string
 	{
 		return (string) $score;
+	}
+
+	protected function get_reputation_tier(int $score): array
+	{
+		if ($score < 0)
+		{
+			return ['class' => 'disputed', 'lang' => 'TOPTOPICS_REPUTATION_TIER_NEGATIVE'];
+		}
+
+		if ($score < 50)
+		{
+			return ['class' => 'fresh', 'lang' => 'TOPTOPICS_REPUTATION_TIER_NEUTRAL'];
+		}
+
+		if ($score < 150)
+		{
+			return ['class' => 'steady', 'lang' => 'TOPTOPICS_REPUTATION_TIER_POSITIVE'];
+		}
+
+		if ($score < 400)
+		{
+			return ['class' => 'regular', 'lang' => 'TOPTOPICS_REPUTATION_TIER_TRUSTED'];
+		}
+
+		if ($score < 1000)
+		{
+			return ['class' => 'pillar', 'lang' => 'TOPTOPICS_REPUTATION_TIER_ELITE'];
+		}
+
+		return ['class' => 'legend', 'lang' => 'TOPTOPICS_REPUTATION_TIER_LEGEND'];
+	}
+
+	protected function get_reputation_progress(int $score): int
+	{
+		if ($score < 0)
+		{
+			return 100;
+		}
+
+		if ($score < 50)
+		{
+			return max(8, (int) round(($score / 50) * 100));
+		}
+
+		if ($score < 150)
+		{
+			return (int) round((($score - 50) / 100) * 100);
+		}
+
+		if ($score < 400)
+		{
+			return (int) round((($score - 150) / 250) * 100);
+		}
+
+		if ($score < 1000)
+		{
+			return (int) round((($score - 400) / 600) * 100);
+		}
+
+		return 100;
 	}
 
 	protected function escape_text(string $text): string

@@ -31,26 +31,52 @@ For a given user across all approved posts:
 - likes received across all of the user's approved posts
 - dislikes received across all of the user's approved posts
 - open phpBB reports across all of the user's approved posts
-- approximate plain-text length across all of the user's approved posts
+- quality length across all of the user's approved posts
 
 This is intentionally post-centric and lifetime-based. The reputation model does not distinguish between topic starters and replies, and it does not apply age decay. Topic-level reply/view dynamics stay in the Top Topics ranker, while user reputation looks only at the quality and reception of the posts a user actually wrote.
+
+Quality length is not raw database text length. For reputation, the extension removes quote blocks, image/attachment/url BBCode, raw URLs, remaining BBCode tags, HTML tags, whitespace, and punctuation, then counts Unicode letters and numbers. This prevents copied quotes, markup, and link spam from inflating reputation.
 
 ### Reputation formula
 
 ```text
-points = likes_received - dislikes_received - 2 * open_flags_received
-content_signal = ln(1 + min(total_authored_content_length, 40000) / 500)
+content_signal = ln(1 + min(total_authored_quality_length, 40000) / 500)
+content_score = content_signal * toptopics_content_weight * 24
+like_score = ln(1 + likes_received) * 6
+dislike_penalty = ln(1 + dislikes_received) * 6
+flag_penalty = ln(1 + open_flags_received) * 12
 
 reputation =
-    points
-  + content_weight * content_signal
+    content_score
+  + like_score
+  - dislike_penalty
+  - flag_penalty
 ```
+
+The main signal is authored quality length, capped per post and overall so long-running authors can build reputation without making extremely long posts dominate. Likes and dislikes are logarithmic modifiers: early feedback matters, but repeated likes/dislikes do not scale linearly. Open reports remain a stronger logarithmic penalty.
 
 The only ranking weight reused here is:
 
 - `toptopics_content_weight`
 
 The reply/view weights remain topic-ranking controls only.
+
+### Sidebar reputation badges
+
+Post sidebars show reputation as a simple game-like badge without exposing numeric levels:
+
+```text
+迷雾写手  score < 0
+初来执笔  0-49
+稳定输出  50-149
+好文常客  150-399
+镇版作者  400-999
+传说写手  1000+
+```
+
+The English language pack uses equivalent short titles: `Foggy Pen`, `Fresh Ink`, `Steady Voice`, `Signal Maker`, `Forum Pillar`, and `Legendary Pen`.
+
+The sidebar badge intentionally does not show `Lv.` or a numeric level. It shows the title, the raw reputation score, a compact icon, and a small progress bar. The raw score remains visible because it is used by the dislike/report gates, while the title provides the gamified user-facing identity.
 
 ### Gated actions
 
@@ -68,7 +94,7 @@ User reputation is stored in the `toptopics_user_reputation` table together with
 - `likes_received`
 - `dislikes_received`
 - `open_flags_received`
-- `content_length_total`
+- `content_length_total`: total quality length, not raw `post_text` length
 
 The extension refreshes affected authors when reputation inputs change:
 
@@ -79,6 +105,8 @@ The extension refreshes affected authors when reputation inputs change:
 - report open, close, and delete
 
 Page reads only fetch the stored score. If a user has no row yet, the extension initializes it once on demand.
+
+`release_1_1_11` changes the reputation formula and clears `toptopics_user_reputation` so old materialized scores are not reused. `release_1_1_12` changes the interpretation of `content_length_total` from raw length to quality length and clears the same materialized table again. Neither migration scans all users; scores are recomputed lazily as users appear on post/profile pages or when reputation inputs change.
 
 ## Core formula
 
