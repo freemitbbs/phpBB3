@@ -203,6 +203,12 @@
 	content: "\f19d";
 }
 
+@media (max-width: 700px) {
+	.postprofile .toptopics-reputation-badge {
+		display: none;
+	}
+}
+
 .toptopics-summary .collapsible {
 	display: block;
 }
