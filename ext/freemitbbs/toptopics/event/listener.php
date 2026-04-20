@@ -40,6 +40,7 @@ class listener implements EventSubscriberInterface
 	protected ?int $index_category_candidate_limit = null;
 	protected ?array $index_excluded_forum_id_map = null;
 	protected ?array $index_recenttopics_topic_id_map = null;
+	protected ?array $index_forum_viewership_order = null;
 	protected ?array $foe_user_id_map = null;
 
 	public function __construct(
@@ -995,6 +996,7 @@ class listener implements EventSubscriberInterface
 
 	protected function build_category_forum_menu_html(array $forums, int $category_id): string
 	{
+		$forums = $this->sort_category_forums_by_viewership($forums);
 		$html = '';
 		foreach ($forums as $forum)
 		{
@@ -1016,6 +1018,74 @@ class listener implements EventSubscriberInterface
 		return $html;
 	}
 
+	protected function sort_category_forums_by_viewership(array $forums): array
+	{
+		if (count($forums) < 2)
+		{
+			return $forums;
+		}
+
+		$forum_order = $this->get_forum_viewership_order();
+		if (empty($forum_order))
+		{
+			return $forums;
+		}
+
+		usort($forums, static function (array $left, array $right) use ($forum_order): int {
+			$left_rank = $forum_order[(int) ($left['forum_id'] ?? 0)] ?? PHP_INT_MAX;
+			$right_rank = $forum_order[(int) ($right['forum_id'] ?? 0)] ?? PHP_INT_MAX;
+			if ($left_rank !== $right_rank)
+			{
+				return $left_rank <=> $right_rank;
+			}
+
+			$left_order = (int) ($left['left_id'] ?? 0);
+			$right_order = (int) ($right['left_id'] ?? 0);
+			if ($left_order !== $right_order)
+			{
+				return $left_order <=> $right_order;
+			}
+
+			return (int) ($left['forum_id'] ?? 0) <=> (int) ($right['forum_id'] ?? 0);
+		});
+
+		return $forums;
+	}
+
+	protected function get_forum_viewership_order(): array
+	{
+		if ($this->index_forum_viewership_order !== null)
+		{
+			return $this->index_forum_viewership_order;
+		}
+
+		$this->index_forum_viewership_order = [];
+		$class = '\\freemitbbs\\hotforums\\service\\viewership';
+		if (!class_exists($class))
+		{
+			return $this->index_forum_viewership_order;
+		}
+
+		global $phpbb_container;
+		if (empty($phpbb_container)
+			|| !method_exists($phpbb_container, 'get'))
+		{
+			return $this->index_forum_viewership_order;
+		}
+
+		try
+		{
+			$viewership = new $class($this->auth, $phpbb_container->get('content.visibility'), $this->db);
+			$this->index_forum_viewership_order = $viewership->get_order_by_forum_id();
+		}
+		catch (\Throwable $exception)
+		{
+			$this->index_forum_viewership_order = [];
+		}
+
+		return $this->index_forum_viewership_order;
+	}
+
 	protected function build_index_category_block(int $category_id): array
 	{
 		if ($category_id <= 0)
@@ -1028,7 +1098,7 @@ class listener implements EventSubscriberInterface
 		$forums = [];
 		$topic_forum_ids = [];
 
-		$sql = 'SELECT forum_id, forum_name, forum_type
+		$sql = 'SELECT forum_id, forum_name, forum_type, left_id
 			FROM ' . FORUMS_TABLE . '
 			WHERE parent_id = ' . $category_id . '
 			ORDER BY left_id ASC';

@@ -50,6 +50,25 @@ class listener implements EventSubscriberInterface
 		$limit = isset($this->config['hotforums_index_limit']) ? (int) $this->config['hotforums_index_limit'] : 8;
 		$limit = max(1, min(100, $limit));
 
+		$viewership = $this->get_viewership_service();
+		if ($viewership !== null)
+		{
+			$has_rows = false;
+			foreach ($viewership->get_top_forums($limit) as $row)
+			{
+				$has_rows = true;
+				$this->template->assign_block_vars('hot_forums', [
+					'FORUM_ID' => (int) $row['forum_id'],
+					'FORUM_NAME' => (string) $row['forum_name'],
+					'TOTAL_VIEWS' => (int) $row['total_views'],
+					'U_VIEWFORUM' => append_sid($this->root_path . 'viewforum.' . $this->php_ext, 'f=' . (int) $row['forum_id']),
+				]);
+			}
+
+			$this->template->assign_var('S_HAS_HOT_FORUMS', $has_rows);
+			return;
+		}
+
 		$forum_ids = $this->get_readable_forum_ids();
 		if (empty($forum_ids))
 		{
@@ -89,6 +108,17 @@ class listener implements EventSubscriberInterface
 		$this->db->sql_freeresult($result);
 
 		$this->template->assign_var('S_HAS_HOT_FORUMS', $has_rows);
+	}
+
+	protected function get_viewership_service(): ?object
+	{
+		$class = '\\freemitbbs\\hotforums\\service\\viewership';
+		if (!class_exists($class))
+		{
+			return null;
+		}
+
+		return new $class($this->auth, $this->content_visibility, $this->db);
 	}
 
 	protected function get_readable_forum_ids(): array
