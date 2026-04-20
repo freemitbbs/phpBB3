@@ -96,6 +96,12 @@ User reputation is stored in the `toptopics_user_reputation` table together with
 - `open_flags_received`
 - `content_length_total`: total quality length, not raw `post_text` length
 
+Per-post quality length is stored in `toptopics_post_quality`. Runtime updates are incremental:
+
+- post submit/edit recalculates only that post's quality length and applies the author delta
+- post approval, restore, soft-delete, and deletion add or subtract the affected stored post lengths
+- like, dislike, and report changes refresh only the reaction/report counters and keep the stored content total
+
 The extension refreshes affected authors when reputation inputs change:
 
 - like and dislike add/remove
@@ -106,7 +112,7 @@ The extension refreshes affected authors when reputation inputs change:
 
 Page reads only fetch the stored score. If a user has no row yet, the extension initializes it once on demand.
 
-`release_1_1_11` changes the reputation formula and clears `toptopics_user_reputation` so old materialized scores are not reused. `release_1_1_12` changes the interpretation of `content_length_total` from raw length to quality length and clears the same materialized table again. Neither migration scans all users; scores are recomputed lazily as users appear on post/profile pages or when reputation inputs change.
+`release_1_1_11` changes the reputation formula and clears `toptopics_user_reputation` so old materialized scores are not reused. `release_1_1_12` changes the interpretation of `content_length_total` from raw length to quality length and clears the same materialized table again. `release_1_1_13` creates `toptopics_post_quality`, backfills existing posts in batches, and clears materialized reputation so future scores are rebuilt from the incremental per-post aggregate.
 
 ## Core formula
 

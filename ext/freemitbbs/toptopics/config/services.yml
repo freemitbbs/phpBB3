@@ -4,6 +4,7 @@ parameters:
     tables.freemitbbs.toptopics.likes: '%core.table_prefix%posts_likes'
     tables.freemitbbs.toptopics.topic_overrides: '%core.table_prefix%toptopics_topic_overrides'
     tables.freemitbbs.toptopics.user_reputation: '%core.table_prefix%toptopics_user_reputation'
+    tables.freemitbbs.toptopics.post_quality: '%core.table_prefix%toptopics_post_quality'
     tables.freemitbbs.toptopics.scope_snapshots: '%core.table_prefix%toptopics_scope_snapshots'
     tables.freemitbbs.toptopics.scope_forums: '%core.table_prefix%toptopics_scope_forums'
 
@@ -36,6 +37,7 @@ services:
             - '@dbal.conn'
             - '%tables.freemitbbs.toptopics.likes%'
             - '%tables.freemitbbs.toptopics.dislikes%'
+            - '%tables.freemitbbs.toptopics.post_quality%'
             - '%tables.freemitbbs.toptopics.user_reputation%'
 
     freemitbbs.toptopics.listener:

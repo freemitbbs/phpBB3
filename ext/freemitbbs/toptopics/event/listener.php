@@ -588,10 +588,10 @@ class listener implements EventSubscriberInterface
 	public function submit_post_end($event): void
 	{
 		$data = $event['data'] ?? [];
-		$poster_id = (int) ($data['poster_id'] ?? $this->user->data['user_id'] ?? ANONYMOUS);
-		if ($poster_id > 0 && $poster_id !== ANONYMOUS)
+		$post_id = (int) ($data['post_id'] ?? 0);
+		if ($post_id > 0)
 		{
-			$this->reputation->refresh_user($poster_id);
+			$this->reputation->sync_post($post_id);
 		}
 	}
 
@@ -605,7 +605,7 @@ class listener implements EventSubscriberInterface
 			WHERE ' . $this->db->sql_in_set('post_id', array_map('intval', $event['post_ids']));
 		$this->db->sql_query($sql);
 
-		$this->reputation->refresh_users($event['poster_ids']);
+		$this->reputation->remove_posts($event['post_ids'] ?? [], $event['poster_ids'] ?? []);
 		$this->invalidate_rank_cache_for_forums($event['forum_ids'] ?? []);
 	}
 
@@ -639,7 +639,7 @@ class listener implements EventSubscriberInterface
 			$this->invalidate_all_rank_cache();
 		}
 
-		$this->refresh_reputation_for_visibility_event($event);
+		$this->sync_reputation_for_visibility_event($event);
 	}
 
 	public function topic_visibility_after($event): void
@@ -649,10 +649,12 @@ class listener implements EventSubscriberInterface
 		{
 			$this->invalidate_rank_cache_for_forums([$forum_id]);
 			$this->ranker->clear_materialized_scopes_for_forums([$forum_id]);
+			$this->sync_reputation_for_topic_id((int) ($event['topic_id'] ?? 0));
 			return;
 		}
 
 		$this->invalidate_all_rank_cache();
+		$this->sync_reputation_for_topic_id((int) ($event['topic_id'] ?? 0));
 	}
 
 	public function report_notification_added($event): void
@@ -1140,22 +1142,6 @@ class listener implements EventSubscriberInterface
 		return '<div class="topic_preview_content" data-topic-preview-id="' . $topic_id . '" style="display: none;"></div>';
 	}
 
-	protected function refresh_reputation_for_visibility_event($event): void
-	{
-		$post_ids = $event['post_id'] ?? [];
-		if (is_array($post_ids) && !empty($post_ids))
-		{
-			$this->refresh_reputation_for_post_ids($post_ids);
-			return;
-		}
-
-		$topic_id = (int) ($event['topic_id'] ?? 0);
-		if ($topic_id > 0)
-		{
-			$this->refresh_reputation_for_topic_id($topic_id);
-		}
-	}
-
 	protected function refresh_reputation_for_post_ids(array $post_ids): void
 	{
 		$post_ids = array_values(array_unique(array_filter(array_map('intval', $post_ids))));
@@ -1178,25 +1164,32 @@ class listener implements EventSubscriberInterface
 		$this->reputation->refresh_users($user_ids);
 	}
 
-	protected function refresh_reputation_for_topic_id(int $topic_id): void
+	protected function sync_reputation_for_visibility_event($event): void
+	{
+		$post_ids = $event['post_id'] ?? [];
+		if (is_array($post_ids) && !empty($post_ids))
+		{
+			$this->reputation->sync_posts($post_ids);
+			return;
+		}
+
+		if ((int) $post_ids > 0)
+		{
+			$this->reputation->sync_post((int) $post_ids);
+			return;
+		}
+
+		$this->sync_reputation_for_topic_id((int) ($event['topic_id'] ?? 0));
+	}
+
+	protected function sync_reputation_for_topic_id(int $topic_id): void
 	{
 		if ($topic_id <= 0)
 		{
 			return;
 		}
 
-		$sql = 'SELECT DISTINCT poster_id
-			FROM ' . POSTS_TABLE . '
-			WHERE topic_id = ' . $topic_id;
-		$result = $this->db->sql_query($sql);
-		$user_ids = [];
-		while ($row = $this->db->sql_fetchrow($result))
-		{
-			$user_ids[] = (int) $row['poster_id'];
-		}
-		$this->db->sql_freeresult($result);
-
-		$this->reputation->refresh_users($user_ids);
+		$this->reputation->sync_topic($topic_id);
 	}
 
 	protected function can_current_user_report(int $forum_id): bool
