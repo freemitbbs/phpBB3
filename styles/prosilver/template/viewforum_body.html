@@ -34,6 +34,80 @@
 	<!-- INCLUDE forumlist_body.html -->
 <!-- ENDIF -->
 
+<!-- IF FORUM_ID == 11 -->
+
+<script type="module" src="https://widgets.tradingview-widget.com/w/en/tv-ticker-tape.js"></script>
+
+<tv-ticker-tape symbols="OTCB:US02Y,OTCB:US10Y,OTCB:US30Y,CRYPTOCAP:BTC,CRYPTOCAP:ETH,CRYPTOCAP:TOTAL3,FOREXCOM:NAS100,FOREXCOM:SPX500,FOREXCOM:US30,FOREXCOM:US2000,CAPITALCOM:VIX,VANTAGE:VIX,FOREXCOM:UK100,FOREXCOM:EU50,FOREXCOM:JP225,FOREXCOM:HK50,CAPITALCOM:CN50,FX:USDOLLAR,FX:EURUSD,FX:GBPUSD,FX:AUDUSD,FX:NZDUSD,FX:USDCAD,FX:USDCHF,OANDA:USDJPY,FX:USDCNH,BITSTAMP:BTCUSD,BITSTAMP:ETHUSD,TVC:GOLD,TVC:SILVER,CAPITALCOM:COPPER,TVC:USOIL,TVC:UKOIL,CAPITALCOM:NATURALGAS" hide-chart></tv-ticker-tape>
+
+<script type="module" src="https://widgets.tradingview-widget.com/w/en/tv-ticker-tag.js"></script>
+<div id="ticker-tags">
+	<tv-ticker-tag symbol="AMEX:XLK" hide-background></tv-ticker-tag>
+	<tv-ticker-tag symbol="AMEX:XLY" hide-background></tv-ticker-tag>
+	<tv-ticker-tag symbol="AMEX:XLC" hide-background></tv-ticker-tag>
+	<tv-ticker-tag symbol="AMEX:XLI" hide-background></tv-ticker-tag>
+	<tv-ticker-tag symbol="AMEX:XLB" hide-background></tv-ticker-tag>
+	<tv-ticker-tag symbol="AMEX:XLF" hide-background></tv-ticker-tag>
+	<tv-ticker-tag symbol="AMEX:XLE" hide-background></tv-ticker-tag>
+	<tv-ticker-tag symbol="AMEX:XLRE" hide-background></tv-ticker-tag>
+	<tv-ticker-tag symbol="AMEX:XLV" hide-background></tv-ticker-tag>
+	<tv-ticker-tag symbol="AMEX:XLP" hide-background></tv-ticker-tag>
+	<tv-ticker-tag symbol="AMEX:XLU" hide-background></tv-ticker-tag>
+</div>
+
+<!-- Toggle Bar -->
+<div style="display: flex; gap: 15px; align-items: center; margin-bottom: 10px;">
+    <span>显示/隐藏:</span>
+    <label><input type="checkbox" checked onclick="toggleWidget('stock-heatmap', this.checked)"> Stock Heapmap</label>
+    <label><input type="checkbox" checked onclick="toggleWidget('market-summary', this.checked)"> Market Summary</label>
+</div>
+
+<!-- Widgets (Hidden by default via style="display: none") -->
+
+<div id="stock-heatmap" style="display: none;">
+<!-- TradingView Widget BEGIN -->
+<div class="tradingview-widget-container">
+  <div class="tradingview-widget-container__widget"></div>
+  <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/heatmap/stock/" rel="noopener nofollow" target="_blank"><span class="blue-text">Stock Heatmap</span></a><span class="trademark"> by TradingView</span></div>
+  <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js" async>
+  {
+  "dataSource": "SPX500",
+  "blockSize": "market_cap_basic",
+  "blockColor": "change",
+  "grouping": "sector",
+  "locale": "en",
+  "symbolUrl": "",
+  "colorTheme": "dark",
+  "exchanges": [],
+  "hasTopBar": true,
+  "isDataSetEnabled": true,
+  "isZoomEnabled": true,
+  "hasSymbolTooltip": true,
+  "isMonoSize": false,
+  "width": 1150,
+  "height": 710
+}
+  </script>
+</div>
+<!-- TradingView Widget END -->
+</div>
+
+<script type="module" src="https://widgets.tradingview-widget.com/w/en/tv-market-summary.js"></script>
+<div id="market-summary" style="display: none;">
+	<tv-market-summary direction="horizontal"></tv-market-summary>
+</div>
+
+<script>
+function toggleWidget(id, isHidden) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.style.display = isHidden ? 'none' : 'block';
+    }
+}
+</script>
+
+<!-- ENDIF -->
+
 <!-- IF S_DISPLAY_POST_INFO or .pagination or TOTAL_POSTS or TOTAL_TOPICS -->
 	<div class="action-bar bar-top">
 
