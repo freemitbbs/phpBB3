@@ -22,84 +22,99 @@
 	right: auto;
 }
 
-.postlove-summary-header dt {
-	margin-right: -440px;
+.postlove-summary-panel {
+	--postlove-summary-grid: minmax(0, 1fr) minmax(5ch, 8ch) minmax(12ch, 14ch) minmax(7ch, 9ch) minmax(5ch, 8ch);
+}
+
+.postlove-summary-header,
+.postlove-summary-content .tr_likedposts {
+	display: grid;
+	grid-template-columns: var(--postlove-summary-grid);
+	align-items: start;
+}
+
+.postlove-summary-content .table1,
+.postlove-summary-content .table1 tbody {
+	display: block;
+	width: 100%;
+}
+
+.postlove-summary-header dt,
+.postlove-summary-header dd,
+.postlove-summary-content .tr_likedposts > td {
+	display: block;
+	float: none;
+	box-sizing: border-box;
+	width: auto;
+	max-width: none;
+	min-width: 0;
+	margin: 0;
 }
 
 .postlove-summary-header dt .list-inner {
-	margin-right: 440px;
+	margin-right: 0;
 	padding-right: 50px;
 }
 
-.postlove-summary-header dd {
-	box-sizing: border-box;
-	text-align: left;
+.postlove-summary-header dt,
+.postlove-summary-post-cell {
+	grid-column: 1;
 }
 
-.postlove-summary-author {
-	width: 110px;
+.postlove-summary-author,
+.postlove-summary-author-cell {
+	grid-column: 2;
 }
 
-.postlove-summary-posted {
-	width: 110px;
+.postlove-summary-posted,
+.postlove-summary-posted-cell {
+	grid-column: 3;
 }
 
-.postlove-summary-likes-header {
-	width: 80px;
-	text-align: center !important;
+.postlove-summary-likes-header,
+.postlove-summary-likes {
+	grid-column: 4;
 }
 
-.postlove-summary-forum {
-	width: 140px;
+.postlove-summary-forum,
+.postlove-summary-forum-cell {
+	grid-column: 5;
 }
 
-.postlove-summary-content .table1 {
-	width: 100%;
-	table-layout: fixed;
+.postlove-summary-header dd,
+.postlove-summary-content .tr_likedposts > td {
+	padding-left: 5px;
+	padding-right: 5px;
 }
 
-.tr_likedposts td,
-.tr_likedposts th {
-	vertical-align: top;
-}
-
+.postlove-summary-author,
+.postlove-summary-posted,
+.postlove-summary-forum,
 .postlove-summary-author-cell,
 .postlove-summary-posted-cell,
-.postlove-summary-likes,
 .postlove-summary-forum-cell,
 #td_author,
 #td_posted,
 #td_forum {
-	max-width: 110px;
+	text-align: left;
 	text-overflow: ellipsis;
 	overflow: hidden;
 	white-space: nowrap;
 }
 
-.postlove-summary-author-cell,
-#td_author {
-	width: 110px;
-}
-
-.postlove-summary-posted-cell,
-#td_posted {
-	width: 110px;
-}
-
+.postlove-summary-likes-header,
 .postlove-summary-likes {
-	width: 80px;
-	text-align: center;
+	text-align: center !important;
+	white-space: nowrap;
 }
 
-.postlove-summary-forum-cell,
-#td_forum {
-	width: 140px;
-	max-width: 140px;
+.postlove-summary-header dd {
+	text-align: center !important;
 }
 
-.postlove-summary-post-cell,
-#td_likedpost {
-	max-width: 260px;
+.tr_likedposts td,
+.tr_likedposts th {
+	vertical-align: top;
 }
 
 .postlove-summary-cell {
@@ -136,6 +151,9 @@
 }
 
 @media only screen and (max-width: 700px) {
+	.postlove-summary-panel {
+		--postlove-summary-grid: minmax(0, 1fr) minmax(5ch, 7ch) minmax(7ch, 8ch);
+	}
 
 	.tr_likedposts td,
 	.tr_likedposts th{
@@ -143,8 +161,45 @@
 		font-size: 10px !important;
 	}
 
-	.postlove-summary-forum,
-	.postlove-summary-forum-cell,
+	.postlove-summary-header {
+		display: block;
+	}
+
+	.postlove-summary-header dt {
+		display: block;
+		width: 100%;
+		text-align: center;
+	}
+
+	.postlove-summary-header dt .list-inner {
+		margin-right: 0 !important;
+		padding-right: 0;
+	}
+
+	.postlove-summary-header dd {
+		display: none !important;
+	}
+
+	.postlove-summary-post-cell {
+		grid-column: 1;
+	}
+
+	.postlove-summary-author,
+	.postlove-summary-author-cell {
+		grid-column: 2;
+	}
+
+	.postlove-summary-likes-header,
+	.postlove-summary-likes {
+		grid-column: 3;
+	}
+
+	.postlove-summary-header .postlove-summary-posted,
+	.postlove-summary-content .tr_likedposts > .postlove-summary-posted-cell,
+	#td_posted,
+	#th_posted,
+	.postlove-summary-header .postlove-summary-forum,
+	.postlove-summary-content .tr_likedposts > .postlove-summary-forum-cell,
 	#td_forum,
 	#th_forum{
 		display: none;
@@ -152,26 +207,8 @@
 }
 
 @media only screen and (max-width: 550px) {
-	.postlove-summary-posted,
-	.postlove-summary-posted-cell,
-	#td_posted,
-	#th_posted{
-		display: none;
-	}
-
-		.postlove-summary-author-cell,
-		.postlove-summary-posted-cell,
-		.postlove-summary-likes,
-		.postlove-summary-forum-cell,
-		#td_author,
-		#td_posted,
-		#td_forum {
-			max-width: 60px;
-		}
-
-		.postlove-summary-post-cell,
-		#td_likedpost{
-		max-width: 155px;
+	.postlove-summary-panel {
+		--postlove-summary-grid: minmax(0, 1fr) minmax(5ch, 7ch) minmax(7ch, 8ch);
 	}
 
 	.postlove-summary-title {
@@ -184,18 +221,7 @@
 }
 
 @media only screen and (max-width: 400px) {
-	.postlove-summary-post-cell,
-	#td_likedpost{
-		max-width: 135px;
+	.postlove-summary-panel {
+		--postlove-summary-grid: minmax(0, 1fr) minmax(5ch, 7ch) minmax(7ch, 8ch);
 	}
-
-		.postlove-summary-author-cell,
-		.postlove-summary-posted-cell,
-		.postlove-summary-likes,
-		.postlove-summary-forum-cell,
-		#td_author,
-		#td_posted,
-		#td_forum {
-			max-width: 52px;
-		}
-	}
+}
