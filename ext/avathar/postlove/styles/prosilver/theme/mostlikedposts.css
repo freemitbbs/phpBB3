@@ -1,5 +1,8 @@
-.postlove-summary-panel .topiclist li.header {
+.postlove-summary-panel .topiclist li.header,
+.postlove-summary-content .tr_likedposts {
 	position: relative;
+	box-sizing: border-box;
+	padding-right: 24px;
 }
 
 .postlove-collapse-btn {
@@ -22,8 +25,14 @@
 	right: auto;
 }
 
+.rtl .postlove-summary-panel .topiclist li.header,
+.rtl .postlove-summary-content .tr_likedposts {
+	padding-left: 24px;
+	padding-right: 0;
+}
+
 .postlove-summary-panel {
-	--postlove-summary-grid: minmax(0, 1fr) minmax(5ch, 8ch) minmax(12ch, 14ch) minmax(7ch, 9ch) minmax(5ch, 8ch);
+	--postlove-summary-grid: minmax(0, 1fr) minmax(8ch, 13ch) minmax(12ch, 14ch) minmax(7ch, 9ch) minmax(5ch, 8ch);
 }
 
 .postlove-summary-header,
@@ -53,7 +62,7 @@
 
 .postlove-summary-header dt .list-inner {
 	margin-right: 0;
-	padding-right: 50px;
+	padding-right: 0;
 }
 
 .postlove-summary-header dt,
@@ -150,9 +159,17 @@
 	overflow-wrap: anywhere;
 }
 
-@media only screen and (max-width: 700px) {
+@media only screen and (max-width: 950px) {
 	.postlove-summary-panel {
 		--postlove-summary-grid: minmax(0, 1fr) minmax(5ch, 7ch) minmax(7ch, 8ch);
+	}
+
+	.postlove-summary-panel .topiclist li.header,
+	.postlove-summary-content .tr_likedposts,
+	.rtl .postlove-summary-panel .topiclist li.header,
+	.rtl .postlove-summary-content .tr_likedposts {
+		padding-left: 24px;
+		padding-right: 24px;
 	}
 
 	.tr_likedposts td,

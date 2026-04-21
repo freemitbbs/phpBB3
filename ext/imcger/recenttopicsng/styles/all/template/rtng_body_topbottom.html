@@ -97,17 +97,8 @@
 							<div class="responsive-show rtng-mobile-meta" style="display: none;">
 								{% if rtng.S_HAS_POLL %}<i class="icon fa-bar-chart fa-fw" aria-hidden="true"></i>{% endif %}
 								{{ lang('POST_BY_AUTHOR') }} {% EVENT viewforum_body_topic_author_username_prepend %}
-								{% if rtng.S_DISP_FIRST_UNREAD_POST %}
-									{{ rtng.FIRST_UNREAD_POST_AUTHOR_FULL }}
-								{% else %}
-									{{ rtng.S_DISP_LAST_POST ? rtng.LAST_POST_AUTHOR_FULL : rtng.TOPIC_AUTHOR_FULL }}
-								{% endif %}
-								{% EVENT viewforum_body_topic_author_username_append %} &raquo;
-								{% if rtng.S_DISP_FIRST_UNREAD_POST %}
-									{{ rtng.FIRST_UNREAD_POST_TIME }}
-								{% else %}
-									{{ rtng.S_DISP_LAST_POST ? rtng.LAST_POST_TIME : rtng.FIRST_POST_TIME }}
-								{% endif %}
+								{{ rtng.TOPIC_AUTHOR_FULL }}
+								{% EVENT viewforum_body_topic_author_username_append %} &raquo; {{ rtng.FIRST_POST_TIME }}
 								{% if rtng.U_VIEW_FORUM && rtng.FORUM_NAME %} &raquo; {{ lang('IN') }} <a href="{{ rtng.U_VIEW_FORUM }}">{{ rtng.FORUM_NAME }}</a>
 								{% endif %}
 							</div>

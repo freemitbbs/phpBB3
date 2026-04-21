@@ -571,7 +571,7 @@
 	}
 }
 
-@media (min-width: 701px) and (max-width: 950px) {
+@media only screen and (min-width: 701px) and (max-width: 950px), only screen and (min-device-width: 701px) and (max-device-width: 950px) {
 	ul.topiclist dt {
 		margin-right: -410px;
 	}
@@ -582,5 +582,42 @@
 
 	dd.posts, dd.topics, dd.views {
 		width: 80px;
+	}
+
+	ul.topiclist.topics dt,
+	ul.topiclist.forums dt,
+	.forumbg ul.topiclist li.header dt,
+	.forabg ul.topiclist li.header dt,
+	.forabg.rtng ul.topiclist li.header dt,
+	.toptopics-summary ul.topiclist li.header dt,
+	#rtng-box ul.topiclist li.header dt {
+		margin-right: -250px;
+	}
+
+	ul.topiclist.topics dt .list-inner,
+	ul.topiclist.forums dt .list-inner,
+	.forumbg ul.topiclist li.header dt .list-inner,
+	.forabg ul.topiclist li.header dt .list-inner,
+	.forabg.rtng ul.topiclist li.header dt .list-inner,
+	.toptopics-summary ul.topiclist li.header dt .list-inner,
+	#rtng-box ul.topiclist li.header dt .list-inner {
+		margin-right: 250px;
+	}
+
+	ul.topiclist.topics dd.posts,
+	ul.topiclist.topics dd.views,
+	ul.topiclist.forums dd.topics,
+	ul.topiclist.forums dd.posts,
+	.forabg ul.topiclist li.header dd.topics,
+	.forabg ul.topiclist li.header dd.posts,
+	.forumbg ul.topiclist li.header dd.posts,
+	.forumbg ul.topiclist li.header dd.views,
+	.forabg.rtng ul.topiclist li.header dd.posts,
+	.forabg.rtng ul.topiclist li.header dd.views,
+	.toptopics-summary ul.topiclist li.header dd.posts,
+	.toptopics-summary ul.topiclist li.header dd.views,
+	#rtng-box ul.topiclist li.header dd.posts,
+	#rtng-box ul.topiclist li.header dd.views {
+		display: none !important;
 	}
 }

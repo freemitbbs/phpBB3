@@ -355,6 +355,12 @@
 	font-weight: 700;
 }
 
+@media only screen and (max-width: 950px) {
+	.toptopics-mobile-stats {
+		display: none !important;
+	}
+}
+
 @media only screen and (max-width: 700px) {
 	.toptopics-category-forum-link {
 		font-size: 0.95em;
