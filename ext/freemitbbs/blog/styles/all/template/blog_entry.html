@@ -1,0 +1,69 @@
+<!-- INCLUDE overall_header.html -->
+
+<h2>{ENTRY_TITLE}</h2>
+
+<div class="blog-entry-meta">
+	{L_BLOG_WRITTEN_BY} {ENTRY_AUTHOR_FULL} &bull;
+	<time datetime="{ENTRY_TIME_RFC3339}">{ENTRY_TIME}</time>
+	<span class="blog-entry-status {ENTRY_STATUS_CLASS}">{ENTRY_STATUS}</span>
+</div>
+
+<div class="blog-actions">
+	<a class="button" href="{U_AUTHOR_BLOG}">{L_BLOG}</a>
+	<!-- IF S_BLOG_CAN_COMMENT -->
+		<a class="button" href="{U_BLOG_COMMENT}">{L_BLOG_COMMENT}</a>
+	<!-- ENDIF -->
+	<!-- IF S_BLOG_CAN_EDIT_ENTRY -->
+		<a class="button" href="{U_BLOG_EDIT}">{L_BLOG_EDIT_LINK}</a>
+		<a class="button" href="{U_BLOG_TOGGLE}">{BLOG_TOGGLE_LABEL}</a>
+	<!-- ENDIF -->
+	<!-- IF S_HAS_SOURCE_POST -->
+		<a class="button" href="{U_SOURCE_POST}">{L_BLOG_SOURCE_POST}</a>
+	<!-- ENDIF -->
+</div>
+
+<div class="panel">
+	<div class="inner">
+		<div class="postbody blog-entry-postbody">
+			<div class="content">{BLOG_TEXT}</div>
+			<!-- IF S_BLOG_HAS_ATTACHMENTS -->
+				<dl class="attachbox">
+					<dt>{L_ATTACHMENTS}</dt>
+					<!-- BEGIN blog_attachments -->
+						<dd>{blog_attachments.DISPLAY_ATTACHMENT}</dd>
+					<!-- END blog_attachments -->
+				</dl>
+			<!-- ENDIF -->
+		</div>
+	</div>
+</div>
+
+<!-- IF S_BLOG_HAS_COMMENTS -->
+<div class="panel">
+	<div class="inner">
+		<h3>{L_BLOG_COMMENTS_HEADING} ({BLOG_COMMENT_COUNT})</h3>
+		<!-- BEGIN blog_comments -->
+			<div class="blog-comment">
+				<p class="author">{L_POST_BY_AUTHOR} {blog_comments.COMMENT_AUTHOR_FULL} &raquo; <time datetime="{blog_comments.COMMENT_TIME_RFC3339}">{blog_comments.COMMENT_TIME}</time></p>
+				<div class="content">{blog_comments.COMMENT_TEXT}</div>
+				<!-- IF blog_comments.S_HAS_ATTACHMENTS -->
+					<dl class="attachbox">
+						<dt>{L_ATTACHMENTS}</dt>
+						<!-- BEGIN comment_attachments -->
+							<dd>{blog_comments.comment_attachments.DISPLAY_ATTACHMENT}</dd>
+						<!-- END comment_attachments -->
+					</dl>
+				<!-- ENDIF -->
+			</div>
+		<!-- END blog_comments -->
+		<!-- IF .pagination -->
+			<div class="pagination">
+				{COMMENT_PAGE_NUMBER}
+				<!-- INCLUDE pagination.html -->
+			</div>
+		<!-- ENDIF -->
+	</div>
+</div>
+<!-- ENDIF -->
+
+<!-- INCLUDE overall_footer.html -->

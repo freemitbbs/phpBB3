@@ -1,0 +1,34 @@
+<!-- INCLUDE ucp_header.html -->
+
+<h2>{L_BLOG_MANAGE}</h2>
+<p>{L_BLOG_MANAGE_EXPLAIN}</p>
+
+<form id="blog-settings" method="post" action="{U_ACTION}">
+	<div class="panel">
+		<div class="inner">
+			<h3>{L_BLOG_SETTINGS}</h3>
+			<fieldset>
+				<dl>
+					<dt><label for="blog_comments_enabled1">{L_BLOG_ALLOW_COMMENTS}{L_COLON}</label><br /><span>{L_BLOG_ALLOW_COMMENTS_EXPLAIN}</span></dt>
+					<dd>
+						<label for="blog_comments_enabled1"><input type="radio" name="blog_comments_enabled" id="blog_comments_enabled1" value="1"<!-- IF S_BLOG_COMMENTS_ENABLED --> checked="checked"<!-- ENDIF --> /> {L_YES}</label>
+						<label for="blog_comments_enabled0"><input type="radio" name="blog_comments_enabled" id="blog_comments_enabled0" value="0"<!-- IF not S_BLOG_COMMENTS_ENABLED --> checked="checked"<!-- ENDIF --> /> {L_NO}</label>
+					</dd>
+				</dl>
+			</fieldset>
+		</div>
+	</div>
+
+	<fieldset class="submit-buttons">
+		<input type="submit" name="submit" value="{L_SUBMIT}" class="button1" />
+		{S_FORM_TOKEN}
+	</fieldset>
+</form>
+
+<div class="blog-actions">
+	<a class="button" href="{U_BLOG_NEW}">{L_BLOG_NEW_ENTRY}</a>
+	<a class="button" href="{U_BLOG_MANAGE}">{L_BLOG_MANAGE}</a>
+	<a class="button" href="{U_BLOG_PUBLIC}">{L_BLOG_VIEW_MY_BLOG}</a>
+</div>
+
+<!-- INCLUDE ucp_footer.html -->

@@ -8,7 +8,7 @@
  *
  #}
 
-{% if S_VIEWTOPIC or S_DISPLAY_PREVIEW or S_POST_REVIEW or SCRIPT_NAME == 'search' %}
+{% if S_VIEWTOPIC or S_DISPLAY_PREVIEW or S_POST_REVIEW or SCRIPT_NAME == 'search' or S_BLOG_ENTRY %}
 {% INCLUDEJS '@kinerity_mathjax/mathjax/mathjax_3-2-2.js' %}
 {{ lang('KMJ_POWERED_BY') }} <a href="https://www.mathjax.org"><img style="display:block; height:1em; border:0;" title="{{ lang('KMJ_POWERED_BY') }} MathJax" src="{{ BOARD_URL }}ext/kinerity/mathjax/styles/all/template/mathjax/logo2.png" alt="MathJax" ></a>
 {% endif %}

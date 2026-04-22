@@ -1,0 +1,23 @@
+{
+	"name": "freemitbbs/blog",
+	"type": "phpbb-extension",
+	"description": "User-owned blogs with drafts and post-to-blog promotion.",
+	"homepage": "https://freemitbbs.com",
+	"version": "1.0.5",
+	"license": "GPL-2.0-only",
+	"authors": [
+		{
+			"name": "FreeMITBBS"
+		}
+	],
+	"require": {
+		"php": ">=8.0",
+		"phpbb/phpbb": ">=3.3.0,<4.0.0"
+	},
+	"extra": {
+		"display-name": "User Blogs",
+		"soft-require": {
+			"phpbb/phpbb": ">=3.3.0,<4.0.0"
+		}
+	}
+}

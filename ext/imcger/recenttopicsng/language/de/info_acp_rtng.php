@@ -69,6 +69,8 @@ $lang = array_merge($lang, [
 	'RTNG_MIN_TOPIC_LEVEL_EXP'		=> 'Definiert das Minimum des anzuzeigenden Thementyps. Wenn du einen Thementyp angibst, werden nur Themen dieses oder eines höheren Typs angezeigt.',
 	'RTNG_ANTI_TOPICS'				=> 'Ausgeschlossene Themen',
 	'RTNG_ANTI_TOPICS_EXP'			=> 'Gebe die Themen-IDs ein, kommagetrennt (z. B. 7,9), andernfalls 0, um alle Themen anzuzeigen. (wie in der URL <code>viewtopic.php?t=12345</code>).',
+	'RTNG_EXCLUDED_FORUMS'			=> 'Ausgeschlossene Foren',
+	'RTNG_EXCLUDED_FORUMS_EXP'		=> 'Wähle Foren aus, deren Themen in Recent Topics NG nicht gezählt oder angezeigt werden sollen. Dies gilt zusätzlich zur forenspezifischen Anzeige-Einstellung und zu ausgeschlossenen Themen-IDs.',
 	'RTNG_PARENTS'					=> 'Übergeordnete Foren anzeigen',
 	'RTNG_PARENTS_EXP'				=> 'Übergeordnete Foren in der Liste der aktuellen Themen anzeigen.',
 	'RTNG_SIMPLE_LINK'				=> 'Link zur vereinfachten Seite',

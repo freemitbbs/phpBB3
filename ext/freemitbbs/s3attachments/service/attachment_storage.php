@@ -125,6 +125,92 @@ class attachment_storage
 		);
 	}
 
+	public function clone_attachment_storage(array $source_attachment, string $target_physical_filename): array
+	{
+		if (!$this->is_ready() || !$this->has_object_key_schema())
+		{
+			return [];
+		}
+
+		$source_physical_filename = $this->sanitize_filename((string) ($source_attachment['physical_filename'] ?? ''));
+		$target_physical_filename = $this->sanitize_filename($target_physical_filename);
+		if ($source_physical_filename === '' || $target_physical_filename === '')
+		{
+			return [];
+		}
+
+		$source_object_key = $this->attachment_object_key($source_attachment, false);
+		if ($source_object_key === '')
+		{
+			if ($this->local_file_is_usable($source_physical_filename, false))
+			{
+				return [];
+			}
+
+			$source_object_key = $this->build_object_key($source_physical_filename, false);
+		}
+
+		$target_object_key = $this->build_object_key($target_physical_filename, false);
+		$target_thumb_object_key = '';
+
+		try
+		{
+			$this->clone_object_to_key(
+				$source_object_key,
+				$target_object_key,
+				(string) ($source_attachment['mimetype'] ?: 'application/octet-stream')
+			);
+			$this->write_local_marker($target_physical_filename, false);
+
+			if ((int) ($source_attachment['thumbnail'] ?? 0))
+			{
+				$target_thumb_object_key = $this->build_object_key($target_physical_filename, true);
+				$source_thumb_object_key = $this->attachment_object_key($source_attachment, true);
+				$source_thumb_path = $this->get_local_path($source_physical_filename, true);
+				$thumb_mimetype = $this->detect_thumbnail_mimetype($source_thumb_path, (string) ($source_attachment['mimetype'] ?? ''));
+
+				if ($source_thumb_object_key !== '')
+				{
+					$this->clone_object_to_key($source_thumb_object_key, $target_thumb_object_key, $thumb_mimetype);
+				}
+				else if ($this->local_file_is_usable($source_physical_filename, true))
+				{
+					$this->object_store->put_object(
+						$this->get_storage_config(),
+						$source_thumb_path,
+						(int) @filesize($source_thumb_path),
+						$thumb_mimetype,
+						$target_thumb_object_key
+					);
+				}
+				else
+				{
+					$this->clone_object_to_key(
+						$this->build_object_key($source_physical_filename, true),
+						$target_thumb_object_key,
+						$thumb_mimetype
+					);
+				}
+
+				$this->write_local_marker($target_physical_filename, true);
+			}
+		}
+		catch (\Exception $e)
+		{
+			$this->write_log('clone_failed', [
+				'physical_filename' => $source_physical_filename,
+				'target_physical_filename' => $target_physical_filename,
+				'message' => $e->getMessage(),
+			]);
+			throw $e;
+		}
+
+		return [
+			's3_object_key' => $target_object_key,
+			's3_thumb_object_key' => $target_thumb_object_key,
+		];
+	}
+
 	public function delete_objects(array $physical): void
 	{
 		if (!$this->is_ready() || !$physical)
@@ -331,6 +417,80 @@ class attachment_storage
 		return trim(str_replace('\\', '/', $object_key), '/');
 	}
 
+	protected function attachment_object_key(array $attachment, bool $thumbnail): string
+	{
+		$column = $thumbnail ? 's3_thumb_object_key' : 's3_object_key';
+
+		return trim(str_replace('\\', '/', (string) ($attachment[$column] ?? '')), '/');
+	}
+
+	protected function clone_object_to_key(string $source_object_key, string $target_object_key, string $mimetype): void
+	{
+		$tmp_path = $this->download_object_to_temp_file($source_object_key);
+		try
+		{
+			$this->object_store->put_object(
+				$this->get_storage_config(),
+				$tmp_path,
+				(int) @filesize($tmp_path),
+				$mimetype !== '' ? $mimetype : 'application/octet-stream',
+				$target_object_key
+			);
+		}
+		finally
+		{
+			@unlink($tmp_path);
+		}
+	}
+
+	protected function download_object_to_temp_file(string $object_key): string
+	{
+		if (!function_exists('curl_init'))
+		{
+			throw new \RuntimeException('Download failed: cURL extension is not enabled.');
+		}
+
+		$tmp_path = tempnam(sys_get_temp_dir(), 'phpbb-s3-copy-');
+		if ($tmp_path === false)
+		{
+			throw new \RuntimeException('Download failed: unable to allocate temporary file.');
+		}
+
+		$file_handle = @fopen($tmp_path, 'wb');
+		if ($file_handle === false)
+		{
+			@unlink($tmp_path);
+			throw new \RuntimeException('Download failed: unable to write temporary file.');
+		}
+
+		$url = $this->object_store->create_presigned_get_url($this->get_storage_config(), $object_key, 300);
+		$curl = curl_init($url);
+		curl_setopt($curl, CURLOPT_FILE, $file_handle);
+		curl_setopt($curl, CURLOPT_FOLLOWLOCATION, false);
+		curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 15);
+		curl_setopt($curl, CURLOPT_TIMEOUT, 120);
+
+		$response = curl_exec($curl);
+		$error = $response === false ? curl_error($curl) : '';
+		$status_code = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+		curl_close($curl);
+		fclose($file_handle);
+
+		if ($response === false)
+		{
+			@unlink($tmp_path);
+			throw new \RuntimeException('Download failed: ' . $error);
+		}
+
+		if ($status_code !== 200)
+		{
+			@unlink($tmp_path);
+			throw new \RuntimeException('Download failed with HTTP status ' . $status_code);
+		}
+
+		return $tmp_path;
+	}
+
 	protected function normalize_attachment_ids(array $attachment_ids): array
 	{
 		$attachment_ids = array_values(array_unique(array_map('intval', $attachment_ids)));
@@ -376,6 +536,13 @@ class attachment_storage
 		return $this->phpbb_root_path . $this->config['upload_path'] . '/' . $filename;
 	}
 
+	protected function local_file_is_usable(string $physical_filename, bool $thumbnail): bool
+	{
+		$path = $this->get_local_path($physical_filename, $thumbnail);
+
+		return $this->filesystem->exists($path) && is_readable($path) && @filesize($path) > 0;
+	}
+
 	protected function sanitize_filename(string $filename): string
 	{
 		$filename = str_replace('\\', '/', $filename);
@@ -395,6 +562,15 @@ class attachment_storage
 		if (@file_put_contents($path, '') === false)
 		{
 			throw new \RuntimeException('Unable to replace local attachment with marker: ' . $path);
+		}
+	}
+
+	protected function write_local_marker(string $physical_filename, bool $thumbnail): void
+	{
+		$path = $this->get_local_path($physical_filename, $thumbnail);
+		if (@file_put_contents($path, '') === false)
+		{
+			throw new \RuntimeException('Unable to write local attachment marker: ' . $path);
 		}
 	}
 

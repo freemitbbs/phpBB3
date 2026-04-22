@@ -309,6 +309,15 @@ class rtng_functions
 
 			$this->db->sql_freeresult($result);
 
+			$forum_ids_disp = array_map('intval', $forum_ids_disp);
+			$excluded_forum_map = $this->parse_topic_id_csv_to_map((string) ($this->config['rtng_excluded_forum_ids'] ?? ''));
+			if (!empty($excluded_forum_map))
+			{
+				$forum_ids_disp = array_values(array_filter($forum_ids_disp, static function ($forum_id) use ($excluded_forum_map) {
+					return !isset($excluded_forum_map[$forum_id]);
+				}));
+			}
+
 			return $forum_ids_disp;
 		}
 		else

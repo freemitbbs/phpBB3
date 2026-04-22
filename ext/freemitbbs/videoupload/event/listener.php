@@ -48,6 +48,7 @@ class listener implements EventSubscriberInterface
 		return [
 			'core.user_setup' => 'load_language',
 			'core.posting_modify_template_vars' => 'add_posting_template_vars',
+			'core.viewtopic_modify_quick_reply_template_vars' => 'add_quick_reply_template_vars',
 		];
 	}
 
@@ -65,11 +66,33 @@ class listener implements EventSubscriberInterface
 			return;
 		}
 
+		$page_data = $event['page_data'];
+		$page_data = array_merge($page_data, $this->uploader_template_vars($forum_id));
+
+		$event['page_data'] = $page_data;
+	}
+
+	public function add_quick_reply_template_vars($event): void
+	{
+		$topic_data = $event['topic_data'];
+		$forum_id = (int) ($topic_data['forum_id'] ?? 0);
+		if (!$this->should_show_uploader($forum_id, 'reply'))
+		{
+			return;
+		}
+
+		$tpl_ary = $event['tpl_ary'];
+		$tpl_ary = array_merge($tpl_ary, $this->uploader_template_vars($forum_id));
+
+		$event['tpl_ary'] = $tpl_ary;
+	}
+
+	protected function uploader_template_vars(int $forum_id): array
+	{
 		$configured_max_size_mb = max(1, (int) ($this->config['videoupload_max_size_mb'] ?? 64));
 		$configured_max_bytes = $configured_max_size_mb * 1024 * 1024;
 		$php_limit_bytes = $this->php_upload_limit_bytes();
 		$max_bytes = ($php_limit_bytes > 0) ? min($configured_max_bytes, $php_limit_bytes) : $configured_max_bytes;
-		$page_data = $event['page_data'];
 		$allowed_label = implode(', ', self::ALLOWED_EXTENSIONS);
 		$allowed_exts = array_map(static function ($extension)
 		{
@@ -78,7 +101,7 @@ class listener implements EventSubscriberInterface
 		$allowed_exts_value = implode(',', $allowed_exts);
 		$accept_value = implode(',', array_merge($allowed_exts, self::ACCEPT_MIME_TYPES));
 
-		$page_data = array_merge($page_data, [
+		return [
 			'S_VIDEOUPLOAD_AVAILABLE' => true,
 			'VIDEOUPLOAD_U_UPLOAD' => $this->helper->route('freemitbbs_videoupload_upload'),
 			'VIDEOUPLOAD_HASH' => generate_link_hash('freemitbbs_videoupload'),
@@ -92,9 +115,7 @@ class listener implements EventSubscriberInterface
 			'VIDEOUPLOAD_MSG_EXTENSION' => $this->language->lang('VIDEOUPLOAD_ERR_UNSUPPORTED_EXTENSION', $allowed_label),
 			'VIDEOUPLOAD_MSG_TOO_LARGE' => $this->language->lang('VIDEOUPLOAD_ERR_TOO_LARGE', $this->format_size($max_bytes)),
 			'VIDEOUPLOAD_MSG_GENERIC' => $this->language->lang('VIDEOUPLOAD_ERR_SERVER'),
-		]);
-
-		$event['page_data'] = $page_data;
+		];
 	}
 
 	protected function should_show_uploader(int $forum_id, string $mode): bool

@@ -1,0 +1,47 @@
+freemitbbs_blog_index:
+    path: /blog
+    defaults: { _controller: freemitbbs.blog.controller:index }
+
+freemitbbs_blog_user:
+    path: /blog/user/{user_id}
+    defaults: { _controller: freemitbbs.blog.controller:user_blog }
+    requirements:
+        user_id: \d+
+
+freemitbbs_blog_entry:
+    path: /blog/entry/{entry_id}
+    defaults: { _controller: freemitbbs.blog.controller:entry }
+    requirements:
+        entry_id: \d+
+
+freemitbbs_blog_manage:
+    path: /blog/manage
+    defaults: { _controller: freemitbbs.blog.controller:manage }
+
+freemitbbs_blog_new:
+    path: /blog/manage/new
+    defaults: { _controller: freemitbbs.blog.controller:edit, entry_id: 0 }
+
+freemitbbs_blog_edit:
+    path: /blog/manage/{entry_id}
+    defaults: { _controller: freemitbbs.blog.controller:edit }
+    requirements:
+        entry_id: \d+
+
+freemitbbs_blog_toggle:
+    path: /blog/manage/{entry_id}/toggle
+    defaults: { _controller: freemitbbs.blog.controller:toggle }
+    requirements:
+        entry_id: \d+
+
+freemitbbs_blog_delete:
+    path: /blog/delete/{entry_id}
+    defaults: { _controller: freemitbbs.blog.controller:delete }
+    requirements:
+        entry_id: \d+
+
+freemitbbs_blog_send_post:
+    path: /blog/send-post/{post_id}
+    defaults: { _controller: freemitbbs.blog.controller:send_post }
+    requirements:
+        post_id: \d+

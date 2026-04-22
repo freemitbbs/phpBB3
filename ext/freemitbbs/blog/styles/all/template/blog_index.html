@@ -1,0 +1,126 @@
+<!-- INCLUDE overall_header.html -->
+
+<h2>{BLOG_PAGE_TITLE}</h2>
+
+<!-- IF BLOG_NOTICE -->
+	<div class="rules">
+		<div class="inner">{BLOG_NOTICE}</div>
+	</div>
+<!-- ENDIF -->
+
+<div class="blog-actions">
+	<a class="button" href="{U_BLOG_INDEX}">{L_BLOG_VIEW_ALL}</a>
+	<!-- IF S_BLOG_CAN_CREATE -->
+		<a class="button" href="{U_BLOG_NEW}">{L_BLOG_NEW_ENTRY}</a>
+		<a class="button" href="{U_BLOG_MANAGE}">{L_BLOG_MANAGE}</a>
+	<!-- ENDIF -->
+</div>
+
+<!-- IF S_BLOG_INDEX and S_BLOG_HAS_TOP_ENTRIES -->
+	<!-- IF S_BLOG_TOP_COLLAPSIBLE -->
+		<a class="category<!-- IF S_BLOG_TOP_HIDDEN --> hidden-category<!-- ENDIF -->" id="category{BLOG_TOP_BLOCK_ID}" style="display: none; height: 0"></a>
+	<!-- ENDIF -->
+	<div class="forabg blog-top-list">
+		<div class="inner">
+			<ul class="topiclist">
+				<li class="header">
+					<dl class="row-item">
+						<dt><div class="list-inner"><i class="icon fa-line-chart fa-fw" aria-hidden="true"></i> {L_BLOG_TOP_ENTRIES}</div></dt>
+						<dd class="posts">{L_BLOG_COMMENTS}</dd>
+						<dd class="views">{L_VIEWS}</dd>
+						<dd class="lastpost"><span>{L_BLOG_LAST_COMMENT}</span></dd>
+					</dl>
+					<!-- IF S_BLOG_TOP_COLLAPSIBLE -->
+						<a href="{U_BLOG_TOP_COLLAPSE_URL}"
+							class="collapse-btn"
+							data-hidden="{BLOG_TOP_COLLAPSE_HIDDEN_DATA}"
+							data-ajax="phpbb_collapse"
+							data-overlay="false"
+							data-title-alt="{BLOG_TOP_COLLAPSE_ALT_TITLE}"
+							title="{BLOG_TOP_COLLAPSE_TITLE}"
+							style="display: none; line-height: 0;">
+							<i class="fa {BLOG_TOP_COLLAPSE_ICON}"></i>
+						</a>
+					<!-- ENDIF -->
+				</li>
+			</ul>
+			<ul class="topiclist topics collapsible">
+			<!-- BEGIN top_blog_entries -->
+				<li class="row <!-- IF top_blog_entries.S_ROW_COUNT is odd -->bg1<!-- ELSE -->bg2<!-- ENDIF -->">
+					<dl class="row-item">
+						<dt>
+							<div class="list-inner">
+								<a href="{top_blog_entries.U_ENTRY}" class="topictitle">{top_blog_entries.TOPIC_TITLE}</a>
+								<div class="blog-entry-meta">
+									{L_POST_BY_AUTHOR} {top_blog_entries.USERNAME_FULL} &bull; {top_blog_entries.POST_TIME}
+								</div>
+								<div class="responsive-show blog-mobile-stats" style="display: none;">
+									<span>{L_BLOG_COMMENTS}{L_COLON} <strong>{top_blog_entries.REPLIES}</strong></span>
+									<span>{L_VIEWS}{L_COLON} <strong>{top_blog_entries.VIEWS}</strong></span>
+								</div>
+								<div class="responsive-show blog-mobile-lastpost" style="display: none;">
+									{L_BLOG_LAST_COMMENT} {L_POST_BY_AUTHOR} {top_blog_entries.LAST_POST_AUTHOR_FULL} &laquo; <a href="{top_blog_entries.U_LAST_POST}" title="{L_GOTO_LAST_POST}">{top_blog_entries.LAST_POST_TIME}</a>
+								</div>
+							</div>
+						</dt>
+						<dd class="posts">{top_blog_entries.REPLIES} <dfn>{L_BLOG_COMMENTS}</dfn></dd>
+						<dd class="views">{top_blog_entries.VIEWS} <dfn>{L_VIEWS}</dfn></dd>
+						<dd class="lastpost">
+							<span><dfn>{L_BLOG_LAST_COMMENT} </dfn>{L_POST_BY_AUTHOR} {top_blog_entries.LAST_POST_AUTHOR_FULL}
+								<a href="{top_blog_entries.U_LAST_POST}" title="{L_GOTO_LAST_POST}">
+									<i class="icon fa-external-link-square fa-fw icon-lightgray icon-md" aria-hidden="true"></i><span class="sr-only">{L_VIEW_LATEST_POST}</span>
+								</a>
+								<br /><time datetime="{top_blog_entries.LAST_POST_TIME_RFC3339}">{top_blog_entries.LAST_POST_TIME}</time>
+							</span>
+						</dd>
+					</dl>
+				</li>
+			<!-- END top_blog_entries -->
+			</ul>
+		</div>
+	</div>
+<!-- ENDIF -->
+
+<!-- IF S_BLOG_HAS_ENTRIES -->
+	<div class="panel">
+		<div class="inner">
+			<ul class="topiclist forums">
+			<!-- BEGIN blog_entries -->
+				<li class="row <!-- IF blog_entries.S_ROW_COUNT is odd -->bg1<!-- ELSE -->bg2<!-- ENDIF -->">
+					<dl>
+						<dt>
+							<div class="list-inner">
+								<a class="topictitle" href="{blog_entries.U_ENTRY}">{blog_entries.ENTRY_TITLE}</a>
+								<div class="blog-entry-meta">
+									{L_BLOG_WRITTEN_BY} {blog_entries.ENTRY_AUTHOR_FULL} &bull;
+									<time datetime="{blog_entries.ENTRY_TIME_RFC3339}">{blog_entries.ENTRY_TIME}</time>
+								</div>
+								<!-- IF blog_entries.ENTRY_EXCERPT -->
+									<div class="blog-entry-excerpt">{blog_entries.ENTRY_EXCERPT}</div>
+								<!-- ENDIF -->
+								<div class="blog-read-more">
+									<a class="button2" href="{blog_entries.U_ENTRY}">{L_BLOG_READ_MORE}</a>
+								</div>
+							</div>
+						</dt>
+					</dl>
+				</li>
+			<!-- END blog_entries -->
+			</ul>
+		</div>
+	</div>
+<!-- ELSE -->
+	<div class="panel">
+		<div class="inner">
+			<p>{L_BLOG_NO_ENTRIES}</p>
+		</div>
+	</div>
+<!-- ENDIF -->
+
+<!-- IF .pagination -->
+	<div class="pagination">
+		{PAGE_NUMBER} &bull; <!-- INCLUDE pagination.html -->
+	</div>
+<!-- ENDIF -->
+
+<!-- INCLUDE overall_footer.html -->

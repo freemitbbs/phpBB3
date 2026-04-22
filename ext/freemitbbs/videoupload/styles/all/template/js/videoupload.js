@@ -22,7 +22,14 @@
 		});
 	}
 
-	function findMessageTextarea() {
+	function findMessageTextarea(control) {
+		if (control && typeof control.closest === 'function') {
+			var localForm = control.closest('form');
+			if (localForm && localForm.elements && localForm.elements.message) {
+				return localForm.elements.message;
+			}
+		}
+
 		var formName = window.form_name || 'postform';
 		var textName = window.text_name || 'message';
 		var form = document.forms[formName];
@@ -60,21 +67,24 @@
 		return false;
 	}
 
-	function insertUrlIntoEditor(url, wrapAsAudio) {
+	function insertUrlIntoEditor(url, wrapAsAudio, control) {
 		var cleanedUrl = String(url || '').trim();
 		var text = wrapAsAudio ? ('[audio]' + cleanedUrl + '[/audio]\n') : (cleanedUrl + '\n');
 		if (!text.trim()) {
 			return false;
 		}
 
-		if (typeof window.insert_text === 'function') {
-			window.insert_text(text, false);
-			return true;
-		}
-
-		var textarea = findMessageTextarea();
+		var textarea = findMessageTextarea(control);
 		if (!textarea) {
 			return false;
+		}
+
+		var formName = window.form_name || '';
+		var textName = window.text_name || 'message';
+		var configuredForm = formName ? document.forms[formName] : null;
+		if (typeof window.insert_text === 'function' && configuredForm && configuredForm.elements && configuredForm.elements[textName] === textarea) {
+			window.insert_text(text, false);
+			return true;
 		}
 
 		var start = textarea.selectionStart || 0;
@@ -88,16 +98,32 @@
 		return true;
 	}
 
-	function findPostimageControl() {
-		var textarea = document.querySelector('#message-box textarea[data-postimg]');
+	function closestMessageBox(textarea) {
+		var node = textarea ? textarea.parentNode : null;
+		while (node && node !== document.body) {
+			if (node.classList && node.classList.contains('message-box')) {
+				return node;
+			}
+			node = node.parentNode;
+		}
+		return textarea ? textarea.parentNode : null;
+	}
+
+	function findPostimageControl(control) {
+		var textarea = findMessageTextarea(control);
 		if (!textarea || !textarea.parentNode) {
 			return null;
 		}
 
-		var siblings = textarea.parentNode.children;
+		var messageBox = closestMessageBox(textarea);
+		if (!messageBox) {
+			return null;
+		}
+
+		var siblings = messageBox.children;
 		for (var i = 0; i < siblings.length; i++) {
 			var node = siblings[i];
-			if (!node || node.id === 'videoupload-control' || node.id === 'videoupload-row') {
+			if (!node || node.id === 'videoupload-control' || node.id === 'videoupload-qr-control' || node.id === 'videoupload-row') {
 				continue;
 			}
 			if (node.tagName !== 'DIV') {
@@ -105,8 +131,7 @@
 			}
 
 			var link = node.querySelector('a[role="button"][href="#"]');
-			var icon = node.querySelector('img[width="16"][height="16"]');
-			if (link && icon) {
+			if (link) {
 				return node;
 			}
 		}
@@ -115,7 +140,7 @@
 	}
 
 	function placeBesidePostimage(control) {
-		var postimageControl = findPostimageControl();
+		var postimageControl = findPostimageControl(control);
 		if (!postimageControl || !postimageControl.parentNode) {
 			return false;
 		}
@@ -160,15 +185,7 @@
 		}, 250);
 	}
 
-	document.addEventListener('DOMContentLoaded', function () {
-		var control = document.getElementById('videoupload-control');
-		if (!control) {
-			return;
-		}
-
-		var button = document.getElementById('videoupload-button');
-		var input = document.getElementById('videoupload-file');
-		var status = document.getElementById('videoupload-status');
+	function initUploader(control, button, input, status) {
 		if (!button || !input || !status) {
 			return;
 		}
@@ -203,10 +220,10 @@
 
 		button.addEventListener('click', function (event) {
 			button.blur();
+			event.preventDefault();
 			if (isUploading) {
 				return;
 			}
-			event.preventDefault();
 			input.click();
 		});
 
@@ -274,7 +291,7 @@
 							return;
 						}
 
-						if (!insertUrlIntoEditor(data.url, isAudioUpload(file, data.url))) {
+						if (!insertUrlIntoEditor(data.url, isAudioUpload(file, data.url), control)) {
 							setStatus(msgGeneric, 'is-error');
 							return;
 						}
@@ -289,5 +306,24 @@
 					input.value = '';
 				});
 		});
+	}
+
+	function initUploaderByIds(controlId, buttonId, inputId, statusId) {
+		var control = document.getElementById(controlId);
+		if (!control) {
+			return;
+		}
+
+		initUploader(
+			control,
+			document.getElementById(buttonId),
+			document.getElementById(inputId),
+			document.getElementById(statusId)
+		);
+	}
+
+	document.addEventListener('DOMContentLoaded', function () {
+		initUploaderByIds('videoupload-control', 'videoupload-button', 'videoupload-file', 'videoupload-status');
+		initUploaderByIds('videoupload-qr-control', 'videoupload-qr-button', 'videoupload-qr-file', 'videoupload-qr-status');
 	});
 })();

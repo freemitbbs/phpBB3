@@ -51,6 +51,7 @@ services:
             - '@user'
             - '@language'
             - '@controller.helper'
+            - '@dispatcher'
             - '@freemitbbs.toptopics.ranker'
             - '@freemitbbs.toptopics.cache_invalidator'
             - '@freemitbbs.toptopics.reputation'

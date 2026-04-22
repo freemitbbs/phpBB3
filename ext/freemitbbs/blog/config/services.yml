@@ -1,0 +1,35 @@
+services:
+    freemitbbs.blog.controller:
+        class: freemitbbs\blog\controller\main
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@content.visibility'
+            - '@dbal.conn'
+            - '@controller.helper'
+            - '@language'
+            - '@pagination'
+            - '@request'
+            - '@template'
+            - '@user'
+            - '%core.table_prefix%'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+            - '@?freemitbbs.toptopics.ranker'
+            - '@?freemitbbs.s3attachments.attachment_storage'
+            - '@?phpbb.collapsiblecategories.operator'
+
+    freemitbbs.blog.listener:
+        class: freemitbbs\blog\event\listener
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@controller.helper'
+            - '@dbal.conn'
+            - '@language'
+            - '@request'
+            - '@template'
+            - '@user'
+            - '%core.table_prefix%'
+        tags:
+            - { name: event.listener }

@@ -16,6 +16,7 @@ class listener implements EventSubscriberInterface
 	protected \phpbb\user $user;
 	protected \phpbb\language\language $language;
 	protected \phpbb\controller\helper $helper;
+	protected \phpbb\event\dispatcher_interface $dispatcher;
 	protected \freemitbbs\toptopics\service\ranker $ranker;
 	protected \freemitbbs\toptopics\service\cache_invalidator $cache_invalidator;
 	protected \freemitbbs\toptopics\service\reputation $reputation;
@@ -52,6 +53,7 @@ class listener implements EventSubscriberInterface
 		\phpbb\user $user,
 		\phpbb\language\language $language,
 		\phpbb\controller\helper $helper,
+		\phpbb\event\dispatcher_interface $dispatcher,
 		\freemitbbs\toptopics\service\ranker $ranker,
 		\freemitbbs\toptopics\service\cache_invalidator $cache_invalidator,
 		\freemitbbs\toptopics\service\reputation $reputation,
@@ -74,6 +76,7 @@ class listener implements EventSubscriberInterface
 		$this->user = $user;
 		$this->language = $language;
 		$this->helper = $helper;
+		$this->dispatcher = $dispatcher;
 		$this->ranker = $ranker;
 		$this->cache_invalidator = $cache_invalidator;
 		$this->reputation = $reputation;
@@ -433,7 +436,10 @@ class listener implements EventSubscriberInterface
 		$scope_topics = !empty($scope_map)
 			? $this->ranker->get_topics_for_scopes($scope_map)
 			: [];
-		$this->index_summary_topics = $this->exclude_foe_authored_topics($scope_topics[$summary_scope_id] ?? []);
+		$this->index_summary_topics = $this->modify_topic_list(
+			$this->exclude_foe_authored_topics($scope_topics[$summary_scope_id] ?? []),
+			'index_summary'
+		);
 		$this->index_summary_topic_ids = [];
 		foreach ($this->index_summary_topics as $topic)
 		{
@@ -757,8 +763,11 @@ class listener implements EventSubscriberInterface
 		}
 
 		$forum_ids = $this->exclude_index_forum_ids($this->get_readable_forum_ids());
-		$this->index_summary_topics = $this->exclude_foe_authored_topics(
-			$this->ranker->get_topics($forum_ids, (int) $this->config['toptopics_index_limit'])
+		$this->index_summary_topics = $this->modify_topic_list(
+			$this->exclude_foe_authored_topics(
+				$this->ranker->get_topics($forum_ids, (int) $this->config['toptopics_index_limit'])
+			),
+			'index_summary'
 		);
 		$this->index_summary_topic_ids = [];
 
@@ -869,6 +878,7 @@ class listener implements EventSubscriberInterface
 
 		$filtered_topics = $this->exclude_foe_authored_topics($topics);
 		$filtered_topics = $this->exclude_topics_present_in_index_summary($filtered_topics);
+		$filtered_topics = $this->modify_topic_list($filtered_topics, 'index_category');
 		if (count($filtered_topics) > $forum_limit)
 		{
 			$filtered_topics = array_slice($filtered_topics, 0, $forum_limit);
@@ -1474,7 +1484,7 @@ class listener implements EventSubscriberInterface
 
 	protected function assign_summary(array $topics, string $template_flag, string $title, bool $include_forum_name, string $collapse_id): void
 	{
-		$topics = $this->exclude_foe_authored_topics($topics);
+		$topics = $this->modify_topic_list($this->exclude_foe_authored_topics($topics), $collapse_id);
 		if (empty($topics))
 		{
 			return;
@@ -1560,6 +1570,19 @@ class listener implements EventSubscriberInterface
 		}
 
 		return $filtered_topics;
+	}
+
+	protected function modify_topic_list(array $topics, string $context): array
+	{
+		if (empty($topics))
+		{
+			return [];
+		}
+
+		$vars = ['topics', 'context'];
+		extract($this->dispatcher->trigger_event('freemitbbs.toptopics.modify_topic_list', compact($vars)));
+
+		return is_array($topics) ? array_values($topics) : [];
 	}
 
 	protected function get_current_user_foe_id_map(): array
