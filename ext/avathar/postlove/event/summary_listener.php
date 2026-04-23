@@ -48,6 +48,8 @@ class summary_listener implements EventSubscriberInterface
 	protected string $table_prefix;
 	protected int $test_time;
 	protected ?array $foe_user_id_map = null;
+	protected ?array $index_excluded_forum_id_map = null;
+	protected ?array $forum_excluded_forum_id_map = null;
 
 	/** @var array Prefetched like counts per topic_id */
 	protected array $topic_like_counts = [];
@@ -126,8 +128,8 @@ class summary_listener implements EventSubscriberInterface
 			}
 		}
 
-		// prune any duplicates
-		$forum_ary = array_unique($forum_ary);
+		// prune any duplicates and remove administratively excluded forums
+		$forum_ary = $this->exclude_index_forum_ids(array_unique($forum_ary));
 
 		if (!count($forum_ary))
 		{
@@ -150,6 +152,11 @@ class summary_listener implements EventSubscriberInterface
 	 */
 	public function  forum_page_summary($event)
 	{
+		if ((int) ($event['start'] ?? 0) > 0)
+		{
+			return;
+		}
+
 		// first check that this user wants to see Post Like
 		$this->user->get_profile_fields($this->user->data['user_id']);
 		if ($this->user->data['is_bot'] || // we dont want bots to see summaries
@@ -163,7 +170,7 @@ class summary_listener implements EventSubscriberInterface
 		}
 
 		$forum_ary = array();
-		$forum_id = $event['forum_id'];
+		$forum_id = (int) $event['forum_id'];
 		$forum_ary[] = $forum_id;
 
 		// if there are sub-forums, we need to include them
@@ -178,17 +185,23 @@ class summary_listener implements EventSubscriberInterface
 			$result = $this->db->sql_query($sql);
 			while ($forum_data = $this->db->sql_fetchrow($result))
 			{
+				$child_forum_id = (int) $forum_data['forum_id'];
 				// ony add forums that are visible to this user
-				if ($forum_read_ary[$forum_id]['f_read'] == 1)
+				if (!empty($forum_read_ary[$child_forum_id]['f_read']))
 				{
-					$forum_ary[] = $forum_data['forum_id'];
+					$forum_ary[] = $child_forum_id;
 				}
 			}
 			$this->db->sql_freeresult($result);
-
-			// prune any duplicates
-			$forum_ary = array_unique($forum_ary);
 		}
+
+		// prune any duplicates and remove administratively excluded forums
+		$forum_ary = $this->exclude_forum_summary_forum_ids(array_unique($forum_ary));
+		if (!count($forum_ary))
+		{
+			return;
+		}
+
 		$this->build_summary_array($forum_ary, 'forum');
 	}
 
@@ -574,6 +587,88 @@ class summary_listener implements EventSubscriberInterface
 	protected function user_hides_forum_summary(): bool
 	{
 		return phpbb_optionget(self::USER_OPTION_HIDE_FORUM_SUMMARY, (int) $this->user->data['user_options']);
+	}
+
+	protected function exclude_index_forum_ids(array $forum_ids): array
+	{
+		return $this->exclude_forum_ids_by_map($forum_ids, $this->get_index_excluded_forum_id_map());
+	}
+
+	protected function exclude_forum_summary_forum_ids(array $forum_ids): array
+	{
+		return $this->exclude_forum_ids_by_map($forum_ids, $this->get_forum_excluded_forum_id_map());
+	}
+
+	protected function get_index_excluded_forum_id_map(): array
+	{
+		if ($this->index_excluded_forum_id_map !== null)
+		{
+			return $this->index_excluded_forum_id_map;
+		}
+
+		$this->index_excluded_forum_id_map = $this->parse_forum_id_map((string) ($this->config['postlove_index_excluded_forum_ids'] ?? ''));
+		return $this->index_excluded_forum_id_map;
+	}
+
+	protected function get_forum_excluded_forum_id_map(): array
+	{
+		if ($this->forum_excluded_forum_id_map !== null)
+		{
+			return $this->forum_excluded_forum_id_map;
+		}
+
+		$this->forum_excluded_forum_id_map = $this->parse_forum_id_map((string) ($this->config['postlove_forum_excluded_forum_ids'] ?? ''));
+		return $this->forum_excluded_forum_id_map;
+	}
+
+	protected function parse_forum_id_map(string $configured_ids): array
+	{
+		$configured_ids = preg_replace('/\s+/', '', trim($configured_ids));
+		if ($configured_ids === '')
+		{
+			return array();
+		}
+
+		$forum_ids = array();
+		foreach (explode(',', $configured_ids) as $part)
+		{
+			$forum_id = (int) $part;
+			if ($forum_id > 0)
+			{
+				$forum_ids[$forum_id] = true;
+			}
+		}
+
+		return $forum_ids;
+	}
+
+	protected function exclude_forum_ids_by_map(array $forum_ids, array $excluded_forum_ids): array
+	{
+		$forum_ids = array_values(array_unique(array_filter(array_map('intval', $forum_ids), static function ($forum_id) {
+			return $forum_id > 0;
+		})));
+		if (empty($forum_ids))
+		{
+			return array();
+		}
+
+		if (empty($excluded_forum_ids))
+		{
+			sort($forum_ids);
+			return $forum_ids;
+		}
+
+		$filtered_forum_ids = array();
+		foreach ($forum_ids as $forum_id)
+		{
+			if (!isset($excluded_forum_ids[$forum_id]))
+			{
+				$filtered_forum_ids[] = $forum_id;
+			}
+		}
+
+		sort($filtered_forum_ids);
+		return $filtered_forum_ids;
 	}
 
 	protected function build_post_excerpt(array $row): string

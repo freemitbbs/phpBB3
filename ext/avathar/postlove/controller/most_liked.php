@@ -58,7 +58,10 @@ class most_liked
 		}
 
 		$limit = max(1, min(100, (int) ($this->config['postlove_most_liked_page_length'] ?? 10)));
-		$forum_ids = $this->most_liked_posts->get_readable_forum_ids();
+		$forum_ids = $this->exclude_forum_ids_by_config(
+			$this->most_liked_posts->get_readable_forum_ids(),
+			(string) ($this->config['postlove_index_excluded_forum_ids'] ?? '')
+		);
 		$period_starts = $this->most_liked_posts->get_period_start_times();
 		$periods = [
 			[
@@ -118,5 +121,56 @@ class most_liked
 	protected function user_hides_summary(): bool
 	{
 		return phpbb_optionget(self::USER_OPTION_HIDE_SUMMARY, (int) $this->user->data['user_options']);
+	}
+
+	protected function exclude_forum_ids_by_config(array $forum_ids, string $configured_ids): array
+	{
+		$excluded_forum_ids = $this->parse_forum_id_map($configured_ids);
+		$forum_ids = array_values(array_unique(array_filter(array_map('intval', $forum_ids), static function ($forum_id) {
+			return $forum_id > 0;
+		})));
+		if (empty($forum_ids))
+		{
+			return [];
+		}
+
+		if (empty($excluded_forum_ids))
+		{
+			sort($forum_ids);
+			return $forum_ids;
+		}
+
+		$filtered_forum_ids = [];
+		foreach ($forum_ids as $forum_id)
+		{
+			if (!isset($excluded_forum_ids[$forum_id]))
+			{
+				$filtered_forum_ids[] = $forum_id;
+			}
+		}
+
+		sort($filtered_forum_ids);
+		return $filtered_forum_ids;
+	}
+
+	protected function parse_forum_id_map(string $configured_ids): array
+	{
+		$configured_ids = preg_replace('/\s+/', '', trim($configured_ids));
+		if ($configured_ids === '')
+		{
+			return [];
+		}
+
+		$forum_ids = [];
+		foreach (explode(',', $configured_ids) as $part)
+		{
+			$forum_id = (int) $part;
+			if ($forum_id > 0)
+			{
+				$forum_ids[$forum_id] = true;
+			}
+		}
+
+		return $forum_ids;
 	}
 }

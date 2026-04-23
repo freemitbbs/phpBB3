@@ -61,8 +61,16 @@ class acp_postlove_module
 		if ($request->is_set_post('submit'))
 		{
 			$postlove = $request->variable('poslove', array('' => ''));
+			$forum_id_settings = array(
+				'postlove_index_excluded_forum_ids' => true,
+				'postlove_forum_excluded_forum_ids' => true,
+			);
 			foreach ($postlove as $key => $var)
 			{
+				if (isset($forum_id_settings[$key]))
+				{
+					$var = $this->normalize_forum_id_list((string) $var);
+				}
 				$config->set($key, $var);
 			}
 			trigger_error($language->lang('CONFIRM_MESSAGE', $this->u_action));
@@ -176,6 +184,8 @@ class acp_postlove_module
 			'SHOW_BUTTON'	=> ($config['postlove_show_button'] == 1),
 				'SUMMARY_POSITION'	=> ($config['postlove_summary_position'] == 1),
 				'MOST_LIKED_PAGE_LENGTH'	=> $config['postlove_most_liked_page_length'] ?? 10,
+				'INDEX_EXCLUDED_FORUM_IDS'	=> $config['postlove_index_excluded_forum_ids'] ?? '',
+				'FORUM_EXCLUDED_FORUM_IDS'	=> $config['postlove_forum_excluded_forum_ids'] ?? '',
 				'INDEX_HOWMANY_TODAY'		=> $config['postlove_index_most_liked_today'],
 			'INDEX_HOWMANY_THIS_WEEK'	=> $config['postlove_index_most_liked_this_week'],
 			'INDEX_HOWMANY_THIS_MONTH'	=> $config['postlove_index_most_liked_this_month'],
@@ -188,5 +198,29 @@ class acp_postlove_module
 			'FORUM_HOWMANY_EVER'		=> $config['postlove_forum_most_liked_ever'],
 			'THANKS_TO_CONVERT'			=> $thanks_to_convert,
 		));
+	}
+
+	protected function normalize_forum_id_list(string $value): string
+	{
+		$trimmed = preg_replace('/\s+/', '', trim($value));
+		if ($trimmed === '')
+		{
+			return '';
+		}
+
+		$forum_ids = array();
+		foreach (explode(',', $trimmed) as $part)
+		{
+			$forum_id = (int) $part;
+			if ($forum_id > 0)
+			{
+				$forum_ids[$forum_id] = true;
+			}
+		}
+
+		$normalized_ids = array_keys($forum_ids);
+		sort($normalized_ids);
+
+		return implode(',', $normalized_ids);
 	}
 }

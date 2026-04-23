@@ -558,6 +558,11 @@ class listener implements EventSubscriberInterface
 
 	public function forum_page_summary($event)
 	{
+		if ((int) ($event['start'] ?? 0) > 0)
+		{
+			return;
+		}
+
 		if ($this->user->data['is_bot'] || $this->user_hides_forum_summary())
 		{
 			return;
