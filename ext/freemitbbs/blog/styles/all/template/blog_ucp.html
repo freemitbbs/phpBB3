@@ -3,16 +3,34 @@
 <h2>{L_BLOG_MANAGE}</h2>
 <p>{L_BLOG_MANAGE_EXPLAIN}</p>
 
-<form id="blog-settings" method="post" action="{U_ACTION}">
+<form id="blog-settings" method="post" action="{U_ACTION}" enctype="multipart/form-data">
 	<div class="panel">
 		<div class="inner">
 			<h3>{L_BLOG_SETTINGS}</h3>
 			<fieldset>
 				<dl>
+					<dt><label for="blog_title">{L_BLOG_CUSTOM_TITLE}{L_COLON}</label><br /><span>{L_BLOG_CUSTOM_TITLE_EXPLAIN}</span></dt>
+					<dd><input type="text" name="blog_title" id="blog_title" value="{BLOG_CUSTOM_TITLE}" maxlength="{BLOG_TITLE_MAX_LENGTH}" class="inputbox" /></dd>
+				</dl>
+				<dl>
+					<dt><label for="blog_subtitle">{L_BLOG_CUSTOM_SUBTITLE}{L_COLON}</label><br /><span>{L_BLOG_CUSTOM_SUBTITLE_EXPLAIN}</span></dt>
+					<dd><input type="text" name="blog_subtitle" id="blog_subtitle" value="{BLOG_CUSTOM_SUBTITLE}" maxlength="{BLOG_SUBTITLE_MAX_LENGTH}" class="inputbox" /></dd>
+				</dl>
+				<dl>
 					<dt><label for="blog_comments_enabled1">{L_BLOG_ALLOW_COMMENTS}{L_COLON}</label><br /><span>{L_BLOG_ALLOW_COMMENTS_EXPLAIN}</span></dt>
 					<dd>
 						<label for="blog_comments_enabled1"><input type="radio" name="blog_comments_enabled" id="blog_comments_enabled1" value="1"<!-- IF S_BLOG_COMMENTS_ENABLED --> checked="checked"<!-- ENDIF --> /> {L_YES}</label>
 						<label for="blog_comments_enabled0"><input type="radio" name="blog_comments_enabled" id="blog_comments_enabled0" value="0"<!-- IF not S_BLOG_COMMENTS_ENABLED --> checked="checked"<!-- ENDIF --> /> {L_NO}</label>
+					</dd>
+				</dl>
+				<dl>
+					<dt><label for="blog_header_image">{L_BLOG_HEADER_IMAGE}{L_COLON}</label><br /><span>{L_BLOG_HEADER_IMAGE_EXPLAIN}</span></dt>
+					<dd>
+						<!-- IF S_BLOG_HAS_HEADER_IMAGE -->
+							<div class="blog-header-preview" style="background-image: url('{U_BLOG_HEADER_IMAGE}');"></div>
+							<label for="blog_header_image_delete"><input type="checkbox" name="blog_header_image_delete" id="blog_header_image_delete" value="1" /> {L_BLOG_HEADER_IMAGE_DELETE}</label><br />
+						<!-- ENDIF -->
+						<input type="file" accept="image/gif,image/jpeg,image/png,image/webp" name="blog_header_image" id="blog_header_image" class="inputbox autowidth" />
 					</dd>
 				</dl>
 			</fieldset>

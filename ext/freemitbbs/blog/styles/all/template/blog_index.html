@@ -1,6 +1,15 @@
 <!-- INCLUDE overall_header.html -->
 
-<h2>{BLOG_PAGE_TITLE}</h2>
+<!-- IF S_BLOG_USER -->
+	<div class="blog-user-header" style="background-image: url('<!-- IF U_BLOG_HEADER_IMAGE -->{U_BLOG_HEADER_IMAGE}<!-- ELSE -->{ROOT_PATH}images/default-blog-header-bg.png<!-- ENDIF -->');">
+		<div class="blog-user-header-inner">
+			<h2>{BLOG_PAGE_TITLE}</h2>
+			<!-- IF BLOG_USER_SUBTITLE --><p>{BLOG_USER_SUBTITLE}</p><!-- ENDIF -->
+		</div>
+	</div>
+<!-- ELSE -->
+	<h2>{BLOG_PAGE_TITLE}</h2>
+<!-- ENDIF -->
 
 <!-- IF BLOG_NOTICE -->
 	<div class="rules">

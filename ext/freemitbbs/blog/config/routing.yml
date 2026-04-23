@@ -8,6 +8,12 @@ freemitbbs_blog_user:
     requirements:
         user_id: \d+
 
+freemitbbs_blog_header_image:
+    path: /blog/user/{user_id}/header-image
+    defaults: { _controller: freemitbbs.blog.controller:header_image }
+    requirements:
+        user_id: \d+
+
 freemitbbs_blog_entry:
     path: /blog/entry/{entry_id}
     defaults: { _controller: freemitbbs.blog.controller:entry }

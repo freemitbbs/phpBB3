@@ -114,7 +114,12 @@ class attachment_storage
 		$response_headers['response-content-type'] = $is_image ? $mimetype : 'application/octet-stream';
 		if ($real_filename !== '')
 		{
-			$response_headers['response-content-disposition'] = ($is_image ? 'inline; ' : 'attachment; ') . header_filename($real_filename);
+			if (!function_exists('header_filename'))
+			{
+				require_once $this->phpbb_root_path . 'includes/functions_download.php';
+			}
+
+			$response_headers['response-content-disposition'] = ($is_image ? 'inline; ' : 'attachment; ') . \header_filename($real_filename);
 		}
 
 		return $this->object_store->create_presigned_get_url(
