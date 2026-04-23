@@ -7,6 +7,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 class listener implements EventSubscriberInterface
 {
 	private const USER_OPTION_HIDE_FORUM_SUMMARY = 20;
+	private const USER_OPTION_SHOW_MOBILE_TOPIC_STATS = 21;
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
@@ -99,6 +100,9 @@ class listener implements EventSubscriberInterface
 					'core.permissions' => 'add_permissions',
 					'core.ucp_prefs_personal_data' => 'ucp_prefs_personal_data',
 					'core.ucp_prefs_personal_update_data' => 'ucp_prefs_personal_update_data',
+					'core.ucp_prefs_view_data' => 'ucp_prefs_view_data',
+					'core.ucp_prefs_view_update_data' => 'ucp_prefs_view_update_data',
+					'core.page_header_after' => 'assign_page_template_vars',
 						'core.memberlist_view_profile' => 'user_profile_reaction_records',
 					'core.viewforum_get_topic_ids_data' => 'viewforum_exclude_foe_topics',
 					'core.viewforum_get_announcement_topic_ids_data' => 'viewforum_exclude_foe_topics',
@@ -154,6 +158,35 @@ class listener implements EventSubscriberInterface
 			(int) $sql_ary['user_options']
 		);
 		$event['sql_ary'] = $sql_ary;
+	}
+
+	public function ucp_prefs_view_data($event): void
+	{
+		$data = $event['data'];
+		$data['toptopics_show_mobile_topic_stats'] = $this->request->variable(
+			'toptopics_show_mobile_topic_stats',
+			$this->user_shows_mobile_topic_stats()
+		);
+		$event['data'] = $data;
+
+		$this->template->assign_var('S_TOPTOPICS_SHOW_MOBILE_TOPIC_STATS', $data['toptopics_show_mobile_topic_stats']);
+	}
+
+	public function ucp_prefs_view_update_data($event): void
+	{
+		$data = $event['data'];
+		$sql_ary = $event['sql_ary'];
+		$sql_ary['user_options'] = phpbb_optionset(
+			self::USER_OPTION_SHOW_MOBILE_TOPIC_STATS,
+			(bool) ($data['toptopics_show_mobile_topic_stats'] ?? false),
+			(int) $sql_ary['user_options']
+		);
+		$event['sql_ary'] = $sql_ary;
+	}
+
+	public function assign_page_template_vars($event): void
+	{
+		$this->template->assign_var('S_TOPTOPICS_SHOW_MOBILE_TOPIC_STATS', $this->user_shows_mobile_topic_stats());
 	}
 
 	public function user_profile_reaction_records($event): void
@@ -792,6 +825,11 @@ class listener implements EventSubscriberInterface
 	protected function user_hides_forum_summary(): bool
 	{
 		return phpbb_optionget(self::USER_OPTION_HIDE_FORUM_SUMMARY, (int) $this->user->data['user_options']);
+	}
+
+	protected function user_shows_mobile_topic_stats(): bool
+	{
+		return phpbb_optionget(self::USER_OPTION_SHOW_MOBILE_TOPIC_STATS, (int) $this->user->data['user_options']);
 	}
 
 	protected function get_index_summary_topic_id_map(): array

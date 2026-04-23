@@ -1,0 +1,28 @@
+@media only screen and (max-width: 700px) {
+	.freemitbbs-mobile-topic-stats,
+	#rtng-box .rtng-mobile-stats,
+	.toptopics-mobile-stats {
+		display: block !important;
+	}
+
+	.topiclist.topics span.responsive-show.left-box {
+		display: none !important;
+	}
+
+	.freemitbbs-mobile-topic-stats {
+		margin-top: 4px;
+		color: #666666;
+		font-size: 0.9em;
+		line-height: 1.4;
+	}
+
+	.freemitbbs-mobile-topic-stats span {
+		display: inline-block;
+	}
+
+	.freemitbbs-mobile-topic-stats span + span::before {
+		content: "\2022";
+		color: #999999;
+		margin: 0 8px 0 4px;
+	}
+}

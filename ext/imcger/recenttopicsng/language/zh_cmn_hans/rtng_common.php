@@ -42,7 +42,7 @@ $lang = array_merge($lang, [
 	'RTNG_NO_TOPICS'        => '没有可显示的新主题。',
         'RTNG_TOPICS_COUNT'     => '%d 个主题',
 
-        'RTNG_TITLE'            => '近期主题',
+        'RTNG_TITLE'            => '最近更新话题',
         'RTNG_UNREAD_TITLE'     => '未读主题',
         'RTNG_READ_SEPARATE'    => '正在阅读“%s”',
         'RTNG_READ_SIMPLE'      => '正在阅读“%s”（简化页面）',

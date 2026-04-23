@@ -207,6 +207,7 @@ class main
 			throw new \phpbb\exception\http_exception(404, 'BLOG_ENTRY_NOT_FOUND');
 		}
 
+		$this->increment_blog_topic_views($entry);
 		$this->assign_entry($entry);
 		$this->assign_common_vars($forum);
 
@@ -1190,6 +1191,7 @@ class main
 	protected function assign_top_blog_list(int $forum_id): void
 	{
 		$topics = $this->get_top_blog_topics($forum_id, self::TOP_BLOG_SIZE);
+		$topics = $this->hydrate_top_blog_topic_stats($topics);
 		$collapsible = $this->collapsible_operator
 			&& method_exists($this->collapsible_operator, 'is_collapsed')
 			&& method_exists($this->collapsible_operator, 'get_collapsible_link');
@@ -1249,6 +1251,63 @@ class main
 		return $this->fetch_rows($sql, $limit);
 	}
 
+	protected function hydrate_top_blog_topic_stats(array $topics): array
+	{
+		if (empty($topics))
+		{
+			return [];
+		}
+
+		$topic_ids = [];
+		foreach ($topics as $topic)
+		{
+			$topic_id = (int) ($topic['topic_id'] ?? 0);
+			if ($topic_id > 0)
+			{
+				$topic_ids[$topic_id] = true;
+			}
+		}
+
+		if (empty($topic_ids))
+		{
+			return $topics;
+		}
+
+		$sql = 'SELECT topic_id, topic_posts_approved, topic_views, topic_last_post_time, topic_last_post_id,
+				topic_last_poster_id, topic_last_poster_name, topic_last_poster_colour
+			FROM ' . TOPICS_TABLE . '
+			WHERE ' . $this->db->sql_in_set('topic_id', array_keys($topic_ids));
+		$result = $this->db->sql_query($sql);
+		$stats = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$stats[(int) $row['topic_id']] = $row;
+		}
+		$this->db->sql_freeresult($result);
+
+		foreach ($topics as &$topic)
+		{
+			$topic_id = (int) ($topic['topic_id'] ?? 0);
+			if ($topic_id <= 0 || !isset($stats[$topic_id]))
+			{
+				continue;
+			}
+
+			$topic['topic_posts_approved'] = (int) $stats[$topic_id]['topic_posts_approved'];
+			$topic['topic_views'] = (int) $stats[$topic_id]['topic_views'];
+			$topic['topic_last_post_time'] = (int) $stats[$topic_id]['topic_last_post_time'];
+			$topic['topic_last_post_id'] = (int) $stats[$topic_id]['topic_last_post_id'];
+			$topic['topic_last_poster_id'] = (int) $stats[$topic_id]['topic_last_poster_id'];
+			$topic['topic_last_poster_name'] = (string) $stats[$topic_id]['topic_last_poster_name'];
+			$topic['topic_last_poster_colour'] = (string) $stats[$topic_id]['topic_last_poster_colour'];
+			$topic['replies'] = max(0, $topic['topic_posts_approved'] - 1);
+			$topic['views'] = $topic['topic_views'];
+		}
+		unset($topic);
+
+		return $topics;
+	}
+
 	protected function filter_public_blog_topics(array $topics, int $forum_id, int $limit): array
 	{
 		if (empty($topics))
@@ -1303,6 +1362,32 @@ class main
 		}
 
 		return $filtered;
+	}
+
+	protected function increment_blog_topic_views(array $entry): void
+	{
+		if ($this->user->data['is_bot'] || !empty($entry['is_draft']))
+		{
+			return;
+		}
+
+		$topic_id = (int) ($entry['topic_id'] ?? 0);
+		if ($topic_id <= 0)
+		{
+			return;
+		}
+
+		$session_page = (string) ($this->user->data['session_page'] ?? '');
+		$current_entry_page = 'app.php/blog/entry/' . $topic_id;
+		if (strpos($session_page, $current_entry_page) !== false && empty($this->user->data['session_created']))
+		{
+			return;
+		}
+
+		$sql = 'UPDATE ' . TOPICS_TABLE . '
+			SET topic_views = topic_views + 1, topic_last_view_time = ' . time() . '
+			WHERE topic_id = ' . $topic_id;
+		$this->db->sql_query($sql);
 	}
 
 	protected function top_blog_template_vars(array $topic): array

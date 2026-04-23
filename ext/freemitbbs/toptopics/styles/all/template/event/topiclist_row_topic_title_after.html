@@ -1,0 +1,18 @@
+{% if S_TOPTOPICS_SHOW_MOBILE_TOPIC_STATS and not S_IS_BOT %}
+	{% if topicrow is defined and topicrow.VIEWS is defined %}
+		<div class="responsive-show freemitbbs-mobile-topic-stats" style="display: none;">
+			<span>{{ lang('REPLIES') }}{{ lang('COLON') }} <strong>{{ topicrow.REPLIES }}</strong></span>
+			<span>{{ lang('VIEWS') }}{{ lang('COLON') }} <strong>{{ topicrow.VIEWS }}</strong></span>
+		</div>
+	{% elseif searchresults is defined and searchresults.TOPIC_VIEWS is defined %}
+		<div class="responsive-show freemitbbs-mobile-topic-stats" style="display: none;">
+			<span>{{ lang('REPLIES') }}{{ lang('COLON') }} <strong>{{ searchresults.TOPIC_REPLIES }}</strong></span>
+			<span>{{ lang('VIEWS') }}{{ lang('COLON') }} <strong>{{ searchresults.TOPIC_VIEWS }}</strong></span>
+		</div>
+	{% elseif similar is defined and similar.TOPIC_VIEWS is defined %}
+		<div class="responsive-show freemitbbs-mobile-topic-stats" style="display: none;">
+			<span>{{ lang('REPLIES') }}{{ lang('COLON') }} <strong>{{ similar.TOPIC_REPLIES }}</strong></span>
+			<span>{{ lang('VIEWS') }}{{ lang('COLON') }} <strong>{{ similar.TOPIC_VIEWS }}</strong></span>
+		</div>
+	{% endif %}
+{% endif %}
