@@ -26,6 +26,8 @@ class main
 	protected \phpbb\attachment\manager $attachment_manager;
 	protected $toptopics_ranker;
 	protected $attachment_storage;
+	protected $public_object_store;
+	protected $shared_storage_config_provider;
 	protected $collapsible_operator;
 	protected string $blog_topics_table;
 	protected string $root_path;
@@ -48,6 +50,8 @@ class main
 		string $php_ext,
 		$toptopics_ranker = null,
 		$attachment_storage = null,
+		$public_object_store = null,
+		$shared_storage_config_provider = null,
 		$collapsible_operator = null
 	)
 	{
@@ -64,6 +68,8 @@ class main
 		$this->attachment_manager = $attachment_manager;
 		$this->toptopics_ranker = $toptopics_ranker;
 		$this->attachment_storage = $attachment_storage;
+		$this->public_object_store = $public_object_store;
+		$this->shared_storage_config_provider = $shared_storage_config_provider;
 		$this->collapsible_operator = $collapsible_operator;
 		$this->blog_topics_table = $table_prefix . 'blog_topics';
 		$this->root_path = $root_path;
@@ -147,9 +153,7 @@ class main
 		$this->template->assign_vars([
 			'BLOG_PAGE_TITLE' => $blog_title,
 			'BLOG_USER_SUBTITLE' => $blog_subtitle,
-			'U_BLOG_HEADER_IMAGE' => !empty($blog_user['user_blog_header_attachment_id'])
-				? $this->helper->route('freemitbbs_blog_header_image', ['user_id' => $user_id])
-				: '',
+			'U_BLOG_HEADER_IMAGE' => $this->get_blog_header_image_url($blog_user),
 			'PAGE_NUMBER' => $this->pagination->on_page($total, self::PAGE_SIZE, $start),
 			'S_BLOG_USER' => true,
 		]);
@@ -168,6 +172,16 @@ class main
 		if (!$blog_user)
 		{
 			throw new \phpbb\exception\http_exception(404, 'ERROR_NO_ATTACHMENT');
+		}
+
+		$object_key = trim((string) ($blog_user['user_blog_header_object_key'] ?? ''));
+		if ($object_key !== '')
+		{
+			$public_header_url = $this->get_blog_header_image_url($blog_user);
+			if ($public_header_url !== '')
+			{
+				redirect($public_header_url, false, true);
+			}
 		}
 
 		$attach_id = (int) ($blog_user['user_blog_header_attachment_id'] ?? 0);
@@ -395,7 +409,9 @@ class main
 			$blog_title = $this->clean_blog_header_text('blog_title', self::BLOG_TITLE_MAX_LENGTH);
 			$blog_subtitle = $this->clean_blog_header_text('blog_subtitle', self::BLOG_SUBTITLE_MAX_LENGTH);
 			$old_header_attachment_id = (int) ($this->user->data['user_blog_header_attachment_id'] ?? 0);
+			$old_header_object_key = trim((string) ($this->user->data['user_blog_header_object_key'] ?? ''));
 			$new_header_attachment_id = $old_header_attachment_id;
+			$new_header_object_key = $old_header_object_key;
 			$delete_header_image = (bool) $this->request->variable('blog_header_image_delete', 0);
 
 			if ($this->has_uploaded_file('blog_header_image'))
@@ -407,10 +423,12 @@ class main
 				}
 
 				$new_header_attachment_id = (int) $upload_result['attach_id'];
+				$new_header_object_key = trim((string) ($upload_result['object_key'] ?? ''));
 			}
 			else if ($delete_header_image)
 			{
 				$new_header_attachment_id = 0;
+				$new_header_object_key = '';
 			}
 
 			$sql_ary = [
@@ -418,6 +436,7 @@ class main
 				'user_blog_title' => $blog_title,
 				'user_blog_subtitle' => $blog_subtitle,
 				'user_blog_header_attachment_id' => $new_header_attachment_id,
+				'user_blog_header_object_key' => $new_header_object_key,
 			];
 			$sql = 'UPDATE ' . USERS_TABLE . '
 				SET ' . $this->db->sql_build_array('UPDATE', $sql_ary) . '
@@ -427,10 +446,16 @@ class main
 			$this->user->data['user_blog_title'] = $blog_title;
 			$this->user->data['user_blog_subtitle'] = $blog_subtitle;
 			$this->user->data['user_blog_header_attachment_id'] = $new_header_attachment_id;
+			$this->user->data['user_blog_header_object_key'] = $new_header_object_key;
 
 			if ($old_header_attachment_id > 0 && $old_header_attachment_id !== $new_header_attachment_id)
 			{
 				$this->delete_blog_header_attachment($old_header_attachment_id, $user_id);
+			}
+
+			if ($old_header_object_key !== '' && $old_header_object_key !== $new_header_object_key)
+			{
+				$this->delete_blog_header_media_object($old_header_object_key);
 			}
 
 			meta_refresh(3, $u_action);
@@ -448,15 +473,13 @@ class main
 			'U_BLOG_NEW' => $this->posting_new_url((int) $forum['forum_id']),
 			'U_BLOG_MANAGE' => $this->helper->route('freemitbbs_blog_manage'),
 			'U_BLOG_PUBLIC' => $this->helper->route('freemitbbs_blog_user', ['user_id' => $user_id]),
-			'U_BLOG_HEADER_IMAGE' => !empty($this->user->data['user_blog_header_attachment_id'])
-				? $this->helper->route('freemitbbs_blog_header_image', ['user_id' => $user_id])
-				: '',
+			'U_BLOG_HEADER_IMAGE' => $this->get_blog_header_image_url($this->user->data),
 			'BLOG_CUSTOM_TITLE' => (string) ($this->user->data['user_blog_title'] ?? ''),
 			'BLOG_CUSTOM_SUBTITLE' => (string) ($this->user->data['user_blog_subtitle'] ?? ''),
 			'BLOG_TITLE_MAX_LENGTH' => self::BLOG_TITLE_MAX_LENGTH,
 			'BLOG_SUBTITLE_MAX_LENGTH' => self::BLOG_SUBTITLE_MAX_LENGTH,
 			'S_BLOG_COMMENTS_ENABLED' => !isset($this->user->data['user_blog_comments_enabled']) || (bool) $this->user->data['user_blog_comments_enabled'],
-			'S_BLOG_HAS_HEADER_IMAGE' => !empty($this->user->data['user_blog_header_attachment_id']),
+			'S_BLOG_HAS_HEADER_IMAGE' => $this->has_blog_header_image($this->user->data),
 		]);
 	}
 
@@ -486,6 +509,7 @@ class main
 		{
 			return [
 				'attach_id' => 0,
+				'object_key' => '',
 				'error' => $errors ?: [$this->language->lang('NO_UPLOAD_FORM_FOUND')],
 			];
 		}
@@ -496,7 +520,34 @@ class main
 
 			return [
 				'attach_id' => 0,
+				'object_key' => '',
 				'error' => [$this->language->lang('BLOG_HEADER_IMAGE_INVALID')],
+			];
+		}
+
+		if ($this->has_blog_header_media_storage())
+		{
+			try
+			{
+				$object_key = $this->upload_blog_header_media_object($filedata);
+			}
+			catch (\RuntimeException $e)
+			{
+				$this->cleanup_copied_attachment_files([(string) $filedata['physical_filename']]);
+
+				return [
+					'attach_id' => 0,
+					'object_key' => '',
+					'error' => [$e->getMessage()],
+				];
+			}
+
+			$this->cleanup_copied_attachment_files([(string) $filedata['physical_filename']]);
+
+			return [
+				'attach_id' => 0,
+				'object_key' => $object_key,
+				'error' => [],
 			];
 		}
 
@@ -528,8 +579,38 @@ class main
 
 		return [
 			'attach_id' => $attach_id,
+			'object_key' => '',
 			'error' => [],
 		];
+	}
+
+	protected function upload_blog_header_media_object(array $filedata): string
+	{
+		$storage_config = $this->get_blog_header_storage_config();
+		if ($storage_config === null
+			|| !$this->public_object_store
+			|| !method_exists($this->public_object_store, 'put_object'))
+		{
+			throw new \RuntimeException($this->language->lang('BLOG_HEADER_IMAGE_STORAGE_UNAVAILABLE'));
+		}
+
+		$physical_filename = utf8_basename((string) ($filedata['physical_filename'] ?? ''));
+		$source_path = $this->attachment_path($physical_filename, false);
+		if (!is_file($source_path) || !is_readable($source_path))
+		{
+			throw new \RuntimeException($this->language->lang('BLOG_HEADER_IMAGE_STORAGE_UNAVAILABLE'));
+		}
+
+		$object_key = $this->build_blog_header_object_key((string) ($filedata['extension'] ?? ''));
+		$this->public_object_store->put_object(
+			$storage_config,
+			$source_path,
+			(int) ($filedata['filesize'] ?? 0),
+			(string) ($filedata['mimetype'] ?? 'application/octet-stream'),
+			$object_key
+		);
+
+		return $object_key;
 	}
 
 	protected function get_blog_header_attachment(int $attach_id, int $user_id): ?array
@@ -554,6 +635,27 @@ class main
 		}
 	}
 
+	protected function delete_blog_header_media_object(string $object_key): void
+	{
+		$object_key = trim($object_key, '/');
+		$storage_config = $this->get_blog_header_storage_config();
+		if ($object_key === ''
+			|| $storage_config === null
+			|| !$this->public_object_store
+			|| !method_exists($this->public_object_store, 'delete_object'))
+		{
+			return;
+		}
+
+		try
+		{
+			$this->public_object_store->delete_object($storage_config, $object_key);
+		}
+		catch (\Exception $e)
+		{
+		}
+	}
+
 	protected function is_blog_header_image(array $filedata): bool
 	{
 		$extension = strtolower((string) ($filedata['extension'] ?? ''));
@@ -561,6 +663,107 @@ class main
 
 		return in_array($extension, self::BLOG_HEADER_IMAGE_EXTENSIONS, true)
 			&& str_starts_with($mimetype, 'image/');
+	}
+
+	protected function has_blog_header_media_storage(): bool
+	{
+		return $this->get_blog_header_storage_config() !== null;
+	}
+
+	protected function get_blog_header_storage_config(): ?array
+	{
+		if (!$this->public_object_store)
+		{
+			return null;
+		}
+
+		$shared_config = [];
+		if ($this->shared_storage_config_provider
+			&& method_exists($this->shared_storage_config_provider, 'has_shared_storage_config')
+			&& $this->shared_storage_config_provider->has_shared_storage_config()
+			&& method_exists($this->shared_storage_config_provider, 'get_shared_storage_config'))
+		{
+			$shared_config = (array) $this->shared_storage_config_provider->get_shared_storage_config();
+		}
+
+		$config = [
+			'endpoint' => trim((string) (($this->config['videoupload_s3_endpoint'] ?? '') ?: ($shared_config['endpoint'] ?? ''))),
+			'region' => trim((string) (($this->config['videoupload_s3_region'] ?? '') ?: ($shared_config['region'] ?? 'us-east-1'))),
+			'bucket' => trim((string) (($this->config['videoupload_s3_bucket'] ?? '') ?: ($shared_config['bucket'] ?? ''))),
+			'access_key' => trim((string) (($this->config['videoupload_s3_access_key'] ?? '') ?: ($shared_config['access_key'] ?? ''))),
+			'secret_key' => trim((string) (($this->config['videoupload_s3_secret_key'] ?? '') ?: ($shared_config['secret_key'] ?? ($this->config['s3storage_secret_key'] ?? '')))),
+			'public_base_url' => rtrim(trim((string) (($this->config['videoupload_s3_public_base_url'] ?? '') ?: ($shared_config['public_base_url'] ?? ''))), '/'),
+			'use_path_style' => (int) ($this->config['videoupload_s3_use_path_style'] ?? ($shared_config['use_path_style'] ?? 0)),
+			'acl' => trim((string) ($this->config['videoupload_s3_acl'] ?? 'public-read')),
+		];
+
+		return $this->is_complete_blog_header_storage_config($config) ? $config : null;
+	}
+
+	protected function is_complete_blog_header_storage_config(array $config): bool
+	{
+		return trim((string) ($config['endpoint'] ?? '')) !== ''
+			&& trim((string) ($config['region'] ?? '')) !== ''
+			&& trim((string) ($config['bucket'] ?? '')) !== ''
+			&& trim((string) ($config['access_key'] ?? '')) !== ''
+			&& trim((string) ($config['secret_key'] ?? '')) !== '';
+	}
+
+	protected function build_blog_header_object_key(string $extension): string
+	{
+		$extension = strtolower(trim($extension));
+		if ($extension === '' || !in_array($extension, self::BLOG_HEADER_IMAGE_EXTENSIONS, true))
+		{
+			$extension = 'png';
+		}
+
+		$prefix = trim((string) ($this->config['videoupload_s3_path_prefix'] ?? 'videos'), " \t\n\r\0\x0B/");
+		$path = 'blog-headers/' . gmdate('Y/m') . '/' . $this->random_hex(16) . '.' . $extension;
+
+		return ($prefix !== '') ? ($prefix . '/' . $path) : $path;
+	}
+
+	protected function random_hex(int $bytes): string
+	{
+		try
+		{
+			return bin2hex(random_bytes($bytes));
+		}
+		catch (\Exception $e)
+		{
+			return sha1(uniqid((string) mt_rand(), true));
+		}
+	}
+
+	protected function get_blog_header_image_url(array $blog_user): string
+	{
+		$object_key = trim((string) ($blog_user['user_blog_header_object_key'] ?? ''));
+		if ($object_key !== '')
+		{
+			$storage_config = $this->get_blog_header_storage_config();
+			if ($storage_config !== null
+				&& $this->public_object_store
+				&& method_exists($this->public_object_store, 'build_public_url'))
+			{
+				try
+				{
+					return $this->public_object_store->build_public_url($storage_config, $object_key);
+				}
+				catch (\Exception $e)
+				{
+				}
+			}
+		}
+
+		return !empty($blog_user['user_blog_header_attachment_id'])
+			? $this->helper->route('freemitbbs_blog_header_image', ['user_id' => (int) ($blog_user['user_id'] ?? 0)])
+			: '';
+	}
+
+	protected function has_blog_header_image(array $blog_user): bool
+	{
+		return trim((string) ($blog_user['user_blog_header_object_key'] ?? '')) !== ''
+			|| !empty($blog_user['user_blog_header_attachment_id']);
 	}
 
 	protected function trigger_ucp_error(array $errors, string $u_action): void
@@ -715,7 +918,7 @@ class main
 
 	protected function get_user(int $user_id): ?array
 	{
-		$sql = 'SELECT user_id, username, user_colour, user_blog_header_attachment_id, user_blog_title, user_blog_subtitle
+		$sql = 'SELECT user_id, username, user_colour, user_blog_header_attachment_id, user_blog_header_object_key, user_blog_title, user_blog_subtitle
 			FROM ' . USERS_TABLE . '
 			WHERE user_id = ' . (int) $user_id . '
 				AND user_id <> ' . ANONYMOUS;

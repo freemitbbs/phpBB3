@@ -25,6 +25,7 @@ $lang = array_merge($lang, [
 	'BLOG_HEADER_IMAGE_EXPLAIN' => 'Upload a GIF, JPG, PNG, or WebP image to display as the background on your public blog page.',
 	'BLOG_HEADER_IMAGE_DELETE' => 'Remove current header image',
 	'BLOG_HEADER_IMAGE_INVALID' => 'The blog header image must be a GIF, JPG, PNG, or WebP image.',
+	'BLOG_HEADER_IMAGE_STORAGE_UNAVAILABLE' => 'Blog header media storage is not configured.',
 	'BLOG_SETTINGS_SAVED' => 'Your blog settings have been saved.',
 	'BLOG_CREATE' => 'Write blog entry',
 	'BLOG_EDIT' => 'Edit blog entry',

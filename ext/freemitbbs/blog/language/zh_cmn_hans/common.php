@@ -25,6 +25,7 @@ $lang = array_merge($lang, [
 	'BLOG_HEADER_IMAGE_EXPLAIN' => '上传 GIF、JPG、PNG 或 WebP 图片，作为你的公开博客页面背景。',
 	'BLOG_HEADER_IMAGE_DELETE' => '移除当前页头图片',
 	'BLOG_HEADER_IMAGE_INVALID' => '博客页头图片必须是 GIF、JPG、PNG 或 WebP 图片。',
+	'BLOG_HEADER_IMAGE_STORAGE_UNAVAILABLE' => '博客页头媒体存储尚未配置。',
 	'BLOG_SETTINGS_SAVED' => '博客设置已保存。',
 	'BLOG_CREATE' => '写博客文章',
 	'BLOG_EDIT' => '编辑博客文章',

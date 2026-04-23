@@ -18,6 +18,8 @@ services:
             - '%core.php_ext%'
             - '@?freemitbbs.toptopics.ranker'
             - '@?freemitbbs.s3attachments.attachment_storage'
+            - '@?freemitbbs.s3storage.object_store'
+            - '@?freemitbbs.s3storage.config_provider'
             - '@?phpbb.collapsiblecategories.operator'
 
     freemitbbs.blog.listener:
