@@ -44,6 +44,7 @@ $lang = array_merge($lang, [
 	'BLOG_EDIT_DRAFT_EXPLAIN' => 'Review the draft and publish it from My blog when it is ready.',
 	'BLOG_VIEW_MY_BLOG' => 'View my public blog',
 	'BLOG_VIEW_ALL' => 'View all blogs',
+	'BLOG_AUTHOR_LINK' => 'Author blog',
 	'BLOG_READ_MORE' => 'Read more',
 	'BLOG_TITLE' => 'Title',
 	'BLOG_TEXT' => 'Entry',

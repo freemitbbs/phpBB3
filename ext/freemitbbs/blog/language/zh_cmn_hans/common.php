@@ -44,6 +44,7 @@ $lang = array_merge($lang, [
 	'BLOG_EDIT_DRAFT_EXPLAIN' => '请检查草稿内容，准备好后可在“我的博客”里发布。',
 	'BLOG_VIEW_MY_BLOG' => '访客所见我的博客',
 	'BLOG_VIEW_ALL' => '查看所有博客',
+	'BLOG_AUTHOR_LINK' => '作者的博客',
 	'BLOG_READ_MORE' => '阅读全文',
 	'BLOG_TITLE' => '标题',
 	'BLOG_TEXT' => '正文',
