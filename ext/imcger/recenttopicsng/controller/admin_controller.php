@@ -91,7 +91,6 @@ class admin_controller
 			'RTNG_EXT_VER'					=> $metadata['version'],
 
 			'RTNG_ANTI_TOPICS'				=> $this->config['rtng_anti_topics'],
-			'RTNG_EXCLUDED_FORUM_OPTIONS'	=> $this->get_excluded_forum_options(),
 			'RTNG_PARENTS'					=> (int) $this->config['rtng_parents'],
 			'RTNG_ALL_TOPICS'				=> (int) $this->config['rtng_all_topics'],
 			'RTNG_MIN_TOPIC_LEVEL_OPTIONS'	=> $this->ctrl_common->select_struct((int) $this->config['rtng_min_topic_level'], [
@@ -121,7 +120,6 @@ class admin_controller
 		$this->config->set('rtng_parents', $this->request->variable('rtng_parents', 0));
 		$this->config->set('rtng_simple_topics_qty', $this->request->variable('rtng_simple_topics_qty', 5));
 		$this->config->set('rtng_simple_page_qty', $this->request->variable('rtng_simple_page_qty', 3));
-		$this->config->set('rtng_excluded_forum_ids', $this->normalise_id_list($this->request->variable('rtng_excluded_forum_ids', [0])));
 
 		// Variable should be a string ("1234,2457,3928").
 		$rtng_anti_topics = $this->request->variable('rtng_anti_topics', '');
@@ -136,57 +134,6 @@ class admin_controller
 		{
 			$this->config->set('rtng_anti_topics', '0');
 		}
-	}
-
-	protected function get_excluded_forum_options(): string
-	{
-		if (!function_exists('make_forum_select'))
-		{
-			include($this->phpbb_root_path . 'includes/functions_admin.' . $this->phpEx);
-		}
-
-		$selected_forum_ids = array_keys($this->csv_to_id_map((string) ($this->config['rtng_excluded_forum_ids'] ?? '')));
-
-		return make_forum_select($selected_forum_ids, false, true, true, true);
-	}
-
-	protected function normalise_id_list(array $ids): string
-	{
-		$id_map = [];
-		foreach ($ids as $id)
-		{
-			$id = (int) $id;
-			if ($id > 0)
-			{
-				$id_map[$id] = true;
-			}
-		}
-
-		$ids = array_keys($id_map);
-		sort($ids);
-
-		return implode(',', $ids);
-	}
-
-	protected function csv_to_id_map(string $csv): array
-	{
-		$csv = preg_replace('/\s+/', '', trim($csv));
-		if ($csv === '')
-		{
-			return [];
-		}
-
-		$id_map = [];
-		foreach (explode(',', $csv) as $part)
-		{
-			$id = (int) $part;
-			if ($id > 0)
-			{
-				$id_map[$id] = true;
-			}
-		}
-
-		return $id_map;
 	}
 
 	/**

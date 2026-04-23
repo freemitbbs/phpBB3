@@ -96,6 +96,13 @@ class acp_toptopics_module
 				$config->set('toptopics_min_reputation_report', (string) $min_dislike);
 			}
 
+			if ($phpbb_container->has('freemitbbs.toptopics.ranker'))
+			{
+				/** @var \freemitbbs\toptopics\service\ranker $ranker */
+				$ranker = $phpbb_container->get('freemitbbs.toptopics.ranker');
+				$ranker->invalidate_all();
+			}
+
 			trigger_error($language->lang('CONFIG_UPDATED') . adm_back_link($this->u_action));
 		}
 

@@ -70,7 +70,7 @@ $lang = array_merge($lang, [
 	'RTNG_ANTI_TOPICS'				=> 'Excluded topic ID’s',
 	'RTNG_ANTI_TOPICS_EXP'			=> 'Enter the topic IDs, comma separated (e.g. 7,9), otherwise 0 to show all topics. (as in the URL <code>viewtopic.php?t=12345</code>).',
 	'RTNG_EXCLUDED_FORUMS'			=> 'Excluded forums',
-	'RTNG_EXCLUDED_FORUMS_EXP'		=> 'Select forums whose topics should not be counted or displayed in Recent Topics NG. This is applied in addition to the per-forum display setting and excluded topic IDs.',
+	'RTNG_EXCLUDED_FORUMS_EXP'		=> 'Enter forum IDs as a comma-separated list for forums whose topics should not be counted or displayed in Recent Topics NG. Leave blank to clear this list. This is applied in addition to the per-forum display setting and excluded topic IDs, so a forum with “Display on Recent Topics NG” turned off will still stay excluded.',
 	'RTNG_PARENTS'					=> 'Display parent forums',
 	'RTNG_PARENTS_EXP'				=> 'Display parent forums inside the topic row of recent topics.',
 	'RTNG_SIMPLE_LINK'				=> 'Link to the simplified page',

@@ -70,7 +70,7 @@ $lang = array_merge($lang, [
         'RTNG_ANTI_TOPICS'              => '排除的主题 ID',
         'RTNG_ANTI_TOPICS_EXP'          => '输入要排除的主题 ID，用逗号分隔（例如 7,9），设为 0 则显示所有主题。（ID 见 URL 中的 <code>viewtopic.php?t=12345</code>）。',
         'RTNG_EXCLUDED_FORUMS'           => '排除的版块',
-        'RTNG_EXCLUDED_FORUMS_EXP'       => '选择不应计入或显示在“近期主题”中的版块。此设置会与单个版块的显示设置和排除的主题 ID 一起生效。',
+        'RTNG_EXCLUDED_FORUMS_EXP'       => '输入要排除的版块 ID，使用逗号分隔。留空即可清空这个列表。其主题将不会计入或显示在“近期主题”中。此设置会与单个版块的显示设置和排除的主题 ID 一起生效，所以如果某个版块在版块设置里关闭了“在近期主题中显示”，即使这里留空，它仍然会继续被排除。',
         'RTNG_PARENTS'                  => '显示上级版块',
         'RTNG_PARENTS_EXP'              => '在近期主题的主题行中显示其所属的上级版块名称。',
         'RTNG_SIMPLE_LINK'              => '链接到简化页面',
