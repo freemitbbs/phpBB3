@@ -11,6 +11,7 @@ class acp_toptopics_module
 		['key' => 'toptopics_forum_limit', 'type' => 'int', 'default' => 5, 'min' => 0, 'max' => 100],
 		['key' => 'toptopics_summary_cache_seconds', 'type' => 'int', 'default' => 600, 'min' => 0, 'max' => 86400],
 		['key' => 'toptopics_index_excluded_forum_ids', 'type' => 'forum_ids', 'default' => '', 'size' => 40],
+		['key' => 'toptopics_index_category_excluded_forum_ids', 'type' => 'forum_ids', 'default' => '', 'size' => 40],
 	];
 
 	private const DOWNVOTE_SETTINGS = [

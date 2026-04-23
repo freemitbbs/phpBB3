@@ -29,7 +29,9 @@ $lang = array_merge($lang, [
 		'TOPTOPICS_SUMMARY_CACHE_SECONDS' => '摘要缓存时间',
 		'TOPTOPICS_SUMMARY_CACHE_SECONDS_EXPLAIN' => '公共可见范围的 Top Topics 快照保持新鲜的秒数。重建进行中时，系统可能会短暂继续返回旧快照。填 0 表示禁用快照缓存。',
 		'TOPTOPICS_INDEX_EXCLUDED_FORUM_IDS' => '首页排除的版块 ID',
-		'TOPTOPICS_INDEX_EXCLUDED_FORUM_IDS_EXPLAIN' => '按逗号分隔需要从首页 Top Topics（全局与分类区块）排除的版块 ID。例如：12,34,56',
+		'TOPTOPICS_INDEX_EXCLUDED_FORUM_IDS_EXPLAIN' => '按逗号分隔需要从论坛首页全局“热门话题”区块排除的版块 ID。例如：12,34,56',
+		'TOPTOPICS_INDEX_CATEGORY_EXCLUDED_FORUM_IDS' => '分类区块排除的版块 ID',
+		'TOPTOPICS_INDEX_CATEGORY_EXCLUDED_FORUM_IDS_EXPLAIN' => '按逗号分隔在分类“热门话题”区块中不参与计算的版块 ID。分类区块里的版块菜单仍会显示这些版块。例如：12,34,56',
 
 		'TOPTOPICS_DOWNVOTE_MIN_POSTS' => '允许踩之前的最少发帖数',
 	'TOPTOPICS_DOWNVOTE_MIN_POSTS_EXPLAIN' => '用户至少需要达到这个发帖数后，才允许使用踩。',

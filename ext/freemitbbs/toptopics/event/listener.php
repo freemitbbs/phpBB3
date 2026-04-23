@@ -40,6 +40,7 @@ class listener implements EventSubscriberInterface
 	protected ?array $index_summary_topic_ids = null;
 	protected ?int $index_category_candidate_limit = null;
 	protected ?array $index_excluded_forum_id_map = null;
+	protected ?array $index_category_excluded_forum_id_map = null;
 	protected ?array $index_recenttopics_topic_id_map = null;
 	protected ?array $index_forum_viewership_order = null;
 	protected ?array $foe_user_id_map = null;
@@ -421,7 +422,7 @@ class listener implements EventSubscriberInterface
 					$topic_forum_ids[] = (int) $forum['forum_id'];
 				}
 			}
-			$topic_forum_ids = $this->exclude_index_forum_ids($topic_forum_ids);
+			$topic_forum_ids = $this->exclude_index_category_forum_ids($topic_forum_ids);
 
 			$category_topic_forum_ids[$category_id] = $topic_forum_ids;
 			if (!empty($topic_forum_ids))
@@ -811,6 +812,59 @@ class listener implements EventSubscriberInterface
 
 	protected function exclude_index_forum_ids(array $forum_ids): array
 	{
+		return $this->exclude_forum_ids_by_map($forum_ids, $this->get_index_excluded_forum_id_map());
+	}
+
+	protected function exclude_index_category_forum_ids(array $forum_ids): array
+	{
+		return $this->exclude_forum_ids_by_map($forum_ids, $this->get_index_category_excluded_forum_id_map());
+	}
+
+	protected function get_index_excluded_forum_id_map(): array
+	{
+		if ($this->index_excluded_forum_id_map !== null)
+		{
+			return $this->index_excluded_forum_id_map;
+		}
+
+		$this->index_excluded_forum_id_map = $this->parse_forum_id_map((string) ($this->config['toptopics_index_excluded_forum_ids'] ?? ''));
+		return $this->index_excluded_forum_id_map;
+	}
+
+	protected function get_index_category_excluded_forum_id_map(): array
+	{
+		if ($this->index_category_excluded_forum_id_map !== null)
+		{
+			return $this->index_category_excluded_forum_id_map;
+		}
+
+		$this->index_category_excluded_forum_id_map = $this->parse_forum_id_map((string) ($this->config['toptopics_index_category_excluded_forum_ids'] ?? ''));
+		return $this->index_category_excluded_forum_id_map;
+	}
+
+	protected function parse_forum_id_map(string $configured_ids): array
+	{
+		$configured_ids = preg_replace('/\s+/', '', trim($configured_ids));
+		if ($configured_ids === '')
+		{
+			return [];
+		}
+
+		$forum_ids = [];
+		foreach (explode(',', $configured_ids) as $part)
+		{
+			$forum_id = (int) $part;
+			if ($forum_id > 0)
+			{
+				$forum_ids[$forum_id] = true;
+			}
+		}
+
+		return $forum_ids;
+	}
+
+	protected function exclude_forum_ids_by_map(array $forum_ids, array $excluded_forum_ids): array
+	{
 		$forum_ids = array_values(array_unique(array_filter(array_map('intval', $forum_ids), static function ($forum_id) {
 			return $forum_id > 0;
 		})));
@@ -819,7 +873,6 @@ class listener implements EventSubscriberInterface
 			return [];
 		}
 
-		$excluded_forum_ids = $this->get_index_excluded_forum_id_map();
 		if (empty($excluded_forum_ids))
 		{
 			sort($forum_ids);
@@ -837,35 +890,6 @@ class listener implements EventSubscriberInterface
 
 		sort($filtered_forum_ids);
 		return $filtered_forum_ids;
-	}
-
-	protected function get_index_excluded_forum_id_map(): array
-	{
-		if ($this->index_excluded_forum_id_map !== null)
-		{
-			return $this->index_excluded_forum_id_map;
-		}
-
-		$configured_ids = (string) ($this->config['toptopics_index_excluded_forum_ids'] ?? '');
-		$configured_ids = preg_replace('/\s+/', '', trim($configured_ids));
-		if ($configured_ids === '')
-		{
-			$this->index_excluded_forum_id_map = [];
-			return $this->index_excluded_forum_id_map;
-		}
-
-		$excluded_forum_ids = [];
-		foreach (explode(',', $configured_ids) as $part)
-		{
-			$forum_id = (int) $part;
-			if ($forum_id > 0)
-			{
-				$excluded_forum_ids[$forum_id] = true;
-			}
-		}
-
-		$this->index_excluded_forum_id_map = $excluded_forum_ids;
-		return $this->index_excluded_forum_id_map;
 	}
 
 	protected function filter_index_category_topics(array $topics): array
@@ -1135,7 +1159,7 @@ class listener implements EventSubscriberInterface
 		}
 
 		$topics = !empty($topic_forum_ids)
-			? $this->filter_index_category_topics($this->ranker->get_topics($this->exclude_index_forum_ids($topic_forum_ids), $this->get_index_category_candidate_limit()))
+			? $this->filter_index_category_topics($this->ranker->get_topics($this->exclude_index_category_forum_ids($topic_forum_ids), $this->get_index_category_candidate_limit()))
 			: [];
 		$topicpreview = $this->get_topicpreview_context();
 		if ($topicpreview['enabled'])
