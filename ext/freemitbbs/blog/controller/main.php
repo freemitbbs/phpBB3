@@ -977,6 +977,8 @@ class main
 			WHERE bt.user_id = ' . (int) $user_id . '
 				AND bt.source_post_id = ' . (int) $post_id . '
 				AND t.forum_id = ' . (int) $blog_forum_id . '
+				AND (t.topic_visibility <> ' . ITEM_DELETED . ' OR bt.is_draft = 1)
+				AND t.topic_moved_id = 0
 			ORDER BY bt.topic_id ASC';
 		$result = $this->db->sql_query_limit($sql, 1);
 		$row = $this->db->sql_fetchrow($result) ?: null;

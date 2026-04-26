@@ -58,6 +58,8 @@ class listener implements EventSubscriberInterface
 			'core.posting_modify_template_vars' => 'customise_blog_posting_title',
 			'core.posting_modify_submit_post_before' => 'publish_blog_draft_before_submit',
 			'core.submit_post_end' => 'redirect_blog_after_submit',
+			'core.delete_post_after' => 'delete_blog_topic_metadata_after_post_delete',
+			'core.delete_topics_before_query' => 'delete_blog_topic_metadata_before_topic_delete',
 			'core.search_backend_search_after' => 'filter_reposted_blog_search_results',
 			'vse.similartopics.modify_rowset' => 'filter_reposted_blog_similar_topics',
 			'imcger.recenttopicsng.modify_topics_list' => 'filter_reposted_blog_recent_topics',
@@ -420,6 +422,30 @@ class listener implements EventSubscriberInterface
 		}
 	}
 
+	public function delete_blog_topic_metadata_after_post_delete($event): void
+	{
+		if (!$this->is_blog_forum((int) ($event['forum_id'] ?? 0)))
+		{
+			return;
+		}
+
+		$data = $event['data'] ?? [];
+		$post_mode = (string) ($event['post_mode'] ?? '');
+		$post_id = (int) ($event['post_id'] ?? 0);
+		$first_post_id = (int) ($data['topic_first_post_id'] ?? 0);
+		if ($post_mode !== 'delete_topic' && ($first_post_id <= 0 || $post_id !== $first_post_id))
+		{
+			return;
+		}
+
+		$this->delete_blog_topic_metadata([(int) ($event['topic_id'] ?? 0)]);
+	}
+
+	public function delete_blog_topic_metadata_before_topic_delete($event): void
+	{
+		$this->delete_blog_topic_metadata($event['topic_ids'] ?? []);
+	}
+
 	protected function is_blog_forum(int $forum_id): bool
 	{
 		return $forum_id > 0 && $forum_id === (int) ($this->config['freemitbbs_blog_forum_id'] ?? 0);
@@ -445,6 +471,19 @@ class listener implements EventSubscriberInterface
 		$this->db->sql_freeresult($result);
 
 		return $is_draft;
+	}
+
+	protected function delete_blog_topic_metadata(array $topic_ids): void
+	{
+		$topic_ids = $this->normalise_ids($topic_ids);
+		if (empty($topic_ids))
+		{
+			return;
+		}
+
+		$sql = 'DELETE FROM ' . $this->blog_topics_table . '
+			WHERE ' . $this->db->sql_in_set('topic_id', $topic_ids);
+		$this->db->sql_query($sql);
 	}
 
 	protected function topic_poster_id(int $topic_id): int
