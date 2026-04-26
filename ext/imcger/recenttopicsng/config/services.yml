@@ -53,6 +53,7 @@ services:
             - '%core.root_path%'
             - '%core.php_ext%'
             - '@?freemitbbs.toptopics.ranker'
+            - '@?freemitbbs.toptopics.listener'
 
     imcger.recenttopicsng.main_listener:
         class: imcger\recenttopicsng\event\main_listener

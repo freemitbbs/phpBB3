@@ -40,6 +40,7 @@ class rtng_functions
 		protected $root_path,
 		protected $phpEx,
 		protected $toptopics_ranker = null,
+		protected $toptopics_listener = null,
 	)
 	{
 		$this->topics_start			= 0;
@@ -98,7 +99,7 @@ class rtng_functions
 
 		$rtng_start = $this->request->variable($tpl_loopname . '_start', 0);
 
-		$excluded_topics = $this->get_effective_excluded_topics($tpl_loopname);
+		$excluded_topics = $this->get_effective_excluded_topics($tpl_loopname, [], $rtng_start);
 
 		$min_topic_level = $this->config['rtng_min_topic_level'];
 
@@ -229,7 +230,7 @@ class rtng_functions
 		$this->topics_per_page = max(1, (int) $this->user_setting['user_rtng_index_topics_qty']);
 		$this->topics_page_number = max(1, (int) $this->user_setting['user_rtng_index_page_qty']);
 		$rtng_start = $this->request->variable($tpl_loopname . '_start', 0);
-		$excluded_topics = $this->get_effective_excluded_topics($tpl_loopname, $additional_excluded_topic_ids);
+		$excluded_topics = $this->get_effective_excluded_topics($tpl_loopname, $additional_excluded_topic_ids, $rtng_start);
 		$min_topic_level = (int) $this->config['rtng_min_topic_level'];
 
 		if ((int) $this->config['rtng_all_topics'] == 0)
@@ -451,7 +452,7 @@ class rtng_functions
 		return $sql_array;
 	}
 
-	private function get_effective_excluded_topics(string $tpl_loopname, array $additional_excluded_topic_ids = []): array
+	private function get_effective_excluded_topics(string $tpl_loopname, array $additional_excluded_topic_ids = [], int $rtng_start = 0): array
 	{
 		$excluded_topic_map = $this->parse_topic_id_csv_to_map((string) ($this->config['rtng_anti_topics'] ?? ''));
 
@@ -464,7 +465,7 @@ class rtng_functions
 			}
 		}
 
-		if (empty($additional_excluded_topic_ids) && $this->should_exclude_index_toptopics_from_rtng($tpl_loopname))
+		if (empty($additional_excluded_topic_ids) && $this->should_exclude_index_toptopics_from_rtng($tpl_loopname, $rtng_start))
 		{
 			foreach ($this->get_index_toptopics_topic_ids() as $topic_id)
 			{
@@ -479,19 +480,25 @@ class rtng_functions
 		return !empty($excluded_topics) ? $excluded_topics : [0];
 	}
 
-	private function should_exclude_index_toptopics_from_rtng(string $tpl_loopname): bool
+	private function should_exclude_index_toptopics_from_rtng(string $tpl_loopname, int $rtng_start): bool
 	{
 		if ($tpl_loopname !== 'rtng_topics')
 		{
 			return false;
 		}
 
-		if (!$this->toptopics_ranker || !method_exists($this->toptopics_ranker, 'get_topics'))
+		if ($rtng_start > 0)
 		{
 			return false;
 		}
 
-		return ((string) ($this->user->page['page_name'] ?? '')) === 'index.php';
+		if (((string) ($this->user->page['page_name'] ?? '')) !== 'index.php')
+		{
+			return false;
+		}
+
+		return ($this->toptopics_listener && method_exists($this->toptopics_listener, 'get_index_summary_topic_ids_for_dedupe'))
+			|| ($this->toptopics_ranker && method_exists($this->toptopics_ranker, 'get_topics'));
 	}
 
 	private function get_index_toptopics_topic_ids(): array
@@ -502,6 +509,38 @@ class rtng_functions
 		}
 
 		$this->toptopics_index_topic_ids = [];
+		if ($this->toptopics_listener && method_exists($this->toptopics_listener, 'get_index_summary_topic_ids_for_dedupe'))
+		{
+			try
+			{
+				$topic_ids = $this->toptopics_listener->get_index_summary_topic_ids_for_dedupe();
+				if (is_array($topic_ids))
+				{
+					foreach ($topic_ids as $topic_id)
+					{
+						$topic_id = (int) $topic_id;
+						if ($topic_id > 0)
+						{
+							$this->toptopics_index_topic_ids[$topic_id] = true;
+						}
+					}
+
+					$this->toptopics_index_topic_ids = array_keys($this->toptopics_index_topic_ids);
+					sort($this->toptopics_index_topic_ids);
+					return $this->toptopics_index_topic_ids;
+				}
+			}
+			catch (\Throwable $exception)
+			{
+				$this->toptopics_index_topic_ids = [];
+			}
+		}
+
+		if (!$this->toptopics_ranker || !method_exists($this->toptopics_ranker, 'get_topics'))
+		{
+			return $this->toptopics_index_topic_ids;
+		}
+
 		$index_limit = isset($this->config['toptopics_index_limit']) ? max(0, (int) $this->config['toptopics_index_limit']) : 0;
 		if ($index_limit <= 0)
 		{

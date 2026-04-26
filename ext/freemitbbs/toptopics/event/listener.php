@@ -862,6 +862,17 @@ class listener implements EventSubscriberInterface
 		return $this->index_summary_topic_ids ?? [];
 	}
 
+	public function get_index_summary_topic_ids_for_dedupe(): array
+	{
+		$topic_ids = array_keys($this->get_index_summary_topic_id_map());
+		$topic_ids = array_values(array_unique(array_filter(array_map('intval', $topic_ids), static function ($topic_id) {
+			return $topic_id > 0;
+		})));
+		sort($topic_ids);
+
+		return $topic_ids;
+	}
+
 	protected function get_index_category_candidate_limit(): int
 	{
 		if ($this->index_category_candidate_limit === null)
