@@ -8,6 +8,9 @@ class listener implements EventSubscriberInterface
 {
 	private const USER_OPTION_HIDE_FORUM_SUMMARY = 20;
 	private const USER_OPTION_SHOW_MOBILE_TOPIC_STATS = 21;
+	private const DEFAULT_PER_FORUM_TOPIC_LIMIT = 3;
+	private const BALANCED_TOPIC_FETCH_MULTIPLIER = 5;
+	private const DEFAULT_CANDIDATE_POOL_LIMIT = 2000;
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
@@ -435,11 +438,12 @@ class listener implements EventSubscriberInterface
 		$scope_map = [];
 		$summary_scope_id = '__index_summary';
 		$summary_forum_ids = $this->exclude_index_forum_ids($this->get_readable_forum_ids());
+		$summary_display_limit = max(0, (int) $this->config['toptopics_index_limit']);
 		if (!empty($summary_forum_ids))
 		{
 			$scope_map[$summary_scope_id] = [
 				'forum_ids' => $summary_forum_ids,
-				'limit' => (int) $this->config['toptopics_index_limit'],
+				'limit' => $this->get_balanced_topic_fetch_limit($summary_display_limit, $summary_forum_ids),
 			];
 		}
 
@@ -462,7 +466,7 @@ class listener implements EventSubscriberInterface
 			{
 				$scope_map['category_' . $category_id] = [
 					'forum_ids' => $topic_forum_ids,
-					'limit' => $category_candidate_limit,
+					'limit' => $this->get_balanced_topic_fetch_limit($category_candidate_limit, $topic_forum_ids),
 				];
 			}
 		}
@@ -470,9 +474,13 @@ class listener implements EventSubscriberInterface
 		$scope_topics = !empty($scope_map)
 			? $this->ranker->get_topics_for_scopes($scope_map)
 			: [];
-		$this->index_summary_topics = $this->modify_topic_list(
-			$this->exclude_foe_authored_topics($scope_topics[$summary_scope_id] ?? []),
-			'index_summary'
+		$this->index_summary_topics = $this->apply_topic_list_limits(
+			$this->modify_topic_list(
+				$this->exclude_foe_authored_topics($scope_topics[$summary_scope_id] ?? []),
+				'index_summary'
+			),
+			$summary_display_limit,
+			$summary_forum_ids
 		);
 		$this->index_summary_topic_ids = [];
 		foreach ($this->index_summary_topics as $topic)
@@ -488,7 +496,7 @@ class listener implements EventSubscriberInterface
 		foreach ($category_forums as $category_id => $forums)
 		{
 			$topics = !empty($category_topic_forum_ids[$category_id])
-				? $this->filter_index_category_topics($scope_topics['category_' . $category_id] ?? [])
+				? $this->filter_index_category_topics($scope_topics['category_' . $category_id] ?? [], $category_topic_forum_ids[$category_id])
 				: [];
 
 			$this->index_category_blocks[$category_id] = [
@@ -586,7 +594,15 @@ class listener implements EventSubscriberInterface
 			'S_TOPTOPICS_INDEX_BELOW',
 			isset($this->config['postlove_summary_position']) ? (bool) $this->config['postlove_summary_position'] : true
 		);
-		$this->assign_summary($topics, 'S_TOPTOPICS_INDEX_ITEMS', $this->language->lang('TOPTOPICS_INDEX_TITLE'), true, 'toptopics_index');
+		$this->assign_summary(
+			$topics,
+			'S_TOPTOPICS_INDEX_ITEMS',
+			$this->language->lang('TOPTOPICS_INDEX_TITLE'),
+			true,
+			'toptopics_index',
+			$this->exclude_index_forum_ids($this->get_readable_forum_ids()),
+			max(0, (int) $this->config['toptopics_index_limit'])
+		);
 	}
 
 	public function forum_page_summary($event)
@@ -625,10 +641,9 @@ class listener implements EventSubscriberInterface
 			$this->db->sql_freeresult($result);
 		}
 
-		$topics = $this->exclude_foe_authored_topics(
-			$this->ranker->get_topics($forum_ids, (int) $this->config['toptopics_forum_limit'])
-		);
-		$this->assign_summary($topics, 'S_TOPTOPICS_FORUM_ITEMS', $this->language->lang('TOPTOPICS_FORUM_TITLE'), $include_forum_name, 'toptopics_forum_' . $forum_id);
+		$display_limit = max(0, (int) $this->config['toptopics_forum_limit']);
+		$topics = $this->ranker->get_topics($forum_ids, $this->get_balanced_topic_fetch_limit($display_limit, $forum_ids));
+		$this->assign_summary($topics, 'S_TOPTOPICS_FORUM_ITEMS', $this->language->lang('TOPTOPICS_FORUM_TITLE'), $include_forum_name, 'toptopics_forum_' . $forum_id, $forum_ids, $display_limit);
 	}
 
 	public function submit_post_end($event): void
@@ -802,11 +817,16 @@ class listener implements EventSubscriberInterface
 		}
 
 		$forum_ids = $this->exclude_index_forum_ids($this->get_readable_forum_ids());
-		$this->index_summary_topics = $this->modify_topic_list(
-			$this->exclude_foe_authored_topics(
-				$this->ranker->get_topics($forum_ids, (int) $this->config['toptopics_index_limit'])
+		$display_limit = max(0, (int) $this->config['toptopics_index_limit']);
+		$this->index_summary_topics = $this->apply_topic_list_limits(
+			$this->modify_topic_list(
+				$this->exclude_foe_authored_topics(
+					$this->ranker->get_topics($forum_ids, $this->get_balanced_topic_fetch_limit($display_limit, $forum_ids))
+				),
+				'index_summary'
 			),
-			'index_summary'
+			$display_limit,
+			$forum_ids
 		);
 		$this->index_summary_topic_ids = [];
 
@@ -851,6 +871,110 @@ class listener implements EventSubscriberInterface
 		}
 
 		return $this->index_category_candidate_limit;
+	}
+
+	protected function get_balanced_topic_fetch_limit(int $display_limit, array $forum_ids): int
+	{
+		$display_limit = max(0, $display_limit);
+		if ($display_limit <= 0)
+		{
+			return 0;
+		}
+
+		$forum_ids = $this->normalise_forum_ids($forum_ids);
+		if (!$this->should_limit_topics_per_forum($forum_ids))
+		{
+			return $display_limit;
+		}
+
+		$configured_candidate_limit = isset($this->config['toptopics_candidate_pool_limit'])
+			? (int) $this->config['toptopics_candidate_pool_limit']
+			: self::DEFAULT_CANDIDATE_POOL_LIMIT;
+		$configured_candidate_limit = max(50, min(20000, $configured_candidate_limit));
+
+		return max(
+			$display_limit,
+			min(
+				$configured_candidate_limit,
+				max(
+					$display_limit,
+					$display_limit * self::BALANCED_TOPIC_FETCH_MULTIPLIER,
+					count($forum_ids) * $this->get_per_forum_topic_limit()
+				)
+			)
+		);
+	}
+
+	protected function apply_topic_list_limits(array $topics, int $display_limit, array $forum_ids): array
+	{
+		$display_limit = max(0, $display_limit);
+		if ($display_limit <= 0 || empty($topics))
+		{
+			return [];
+		}
+
+		$topics = $this->limit_topics_per_forum($topics, $forum_ids);
+		if (count($topics) > $display_limit)
+		{
+			return array_slice($topics, 0, $display_limit);
+		}
+
+		return $topics;
+	}
+
+	protected function limit_topics_per_forum(array $topics, array $forum_ids): array
+	{
+		$forum_ids = $this->normalise_forum_ids($forum_ids);
+		if (!$this->should_limit_topics_per_forum($forum_ids))
+		{
+			return array_values($topics);
+		}
+
+		$per_forum_limit = $this->get_per_forum_topic_limit();
+		$forum_counts = [];
+		$limited_topics = [];
+		foreach ($topics as $topic)
+		{
+			$forum_id = (int) ($topic['forum_id'] ?? 0);
+			if ($forum_id > 0 && in_array($forum_id, $forum_ids, true))
+			{
+				$forum_counts[$forum_id] = (int) ($forum_counts[$forum_id] ?? 0);
+				if ($forum_counts[$forum_id] >= $per_forum_limit)
+				{
+					continue;
+				}
+				$forum_counts[$forum_id]++;
+			}
+
+			$limited_topics[] = $topic;
+		}
+
+		return $limited_topics;
+	}
+
+	protected function should_limit_topics_per_forum(array $forum_ids): bool
+	{
+		return $this->get_per_forum_topic_limit() > 0
+			&& count($this->normalise_forum_ids($forum_ids)) > 1;
+	}
+
+	protected function get_per_forum_topic_limit(): int
+	{
+		$value = isset($this->config['toptopics_per_forum_limit'])
+			? (int) $this->config['toptopics_per_forum_limit']
+			: self::DEFAULT_PER_FORUM_TOPIC_LIMIT;
+
+		return max(0, min(100, $value));
+	}
+
+	protected function normalise_forum_ids(array $forum_ids): array
+	{
+		$forum_ids = array_values(array_unique(array_filter(array_map('intval', $forum_ids), static function ($forum_id) {
+			return $forum_id > 0;
+		})));
+		sort($forum_ids);
+
+		return $forum_ids;
 	}
 
 	protected function exclude_index_forum_ids(array $forum_ids): array
@@ -935,7 +1059,7 @@ class listener implements EventSubscriberInterface
 		return $filtered_forum_ids;
 	}
 
-	protected function filter_index_category_topics(array $topics): array
+	protected function filter_index_category_topics(array $topics, array $forum_ids): array
 	{
 		$forum_limit = max(0, (int) $this->config['toptopics_forum_limit']);
 		if ($forum_limit <= 0 || empty($topics))
@@ -946,12 +1070,8 @@ class listener implements EventSubscriberInterface
 		$filtered_topics = $this->exclude_foe_authored_topics($topics);
 		$filtered_topics = $this->exclude_topics_present_in_index_summary($filtered_topics);
 		$filtered_topics = $this->modify_topic_list($filtered_topics, 'index_category');
-		if (count($filtered_topics) > $forum_limit)
-		{
-			$filtered_topics = array_slice($filtered_topics, 0, $forum_limit);
-		}
 
-		return $filtered_topics;
+		return $this->apply_topic_list_limits($filtered_topics, $forum_limit, $forum_ids);
 	}
 
 	protected function exclude_topics_present_in_index_summary(array $topics): array
@@ -1201,8 +1321,12 @@ class listener implements EventSubscriberInterface
 			return [];
 		}
 
+		$topic_forum_ids = $this->exclude_index_category_forum_ids($topic_forum_ids);
 		$topics = !empty($topic_forum_ids)
-			? $this->filter_index_category_topics($this->ranker->get_topics($this->exclude_index_category_forum_ids($topic_forum_ids), $this->get_index_category_candidate_limit()))
+			? $this->filter_index_category_topics(
+				$this->ranker->get_topics($topic_forum_ids, $this->get_balanced_topic_fetch_limit($this->get_index_category_candidate_limit(), $topic_forum_ids)),
+				$topic_forum_ids
+			)
 			: [];
 		$topicpreview = $this->get_topicpreview_context();
 		if ($topicpreview['enabled'])
@@ -1549,9 +1673,14 @@ class listener implements EventSubscriberInterface
 		return $html;
 	}
 
-	protected function assign_summary(array $topics, string $template_flag, string $title, bool $include_forum_name, string $collapse_id): void
+	protected function assign_summary(array $topics, string $template_flag, string $title, bool $include_forum_name, string $collapse_id, ?array $forum_ids = null, ?int $display_limit = null): void
 	{
 		$topics = $this->modify_topic_list($this->exclude_foe_authored_topics($topics), $collapse_id);
+		if ($forum_ids !== null && $display_limit !== null)
+		{
+			$topics = $this->apply_topic_list_limits($topics, $display_limit, $forum_ids);
+		}
+
 		if (empty($topics))
 		{
 			return;

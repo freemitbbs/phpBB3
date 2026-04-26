@@ -6,9 +6,11 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 class listener implements EventSubscriberInterface
 {
-	private const ALLOWED_EXTENSIONS = ['mp4', 'ogg', 'webm', 'weba', 'mp3', 'm4a', 'aac', 'wav', 'oga', 'opus', 'flac'];
+	private const ALLOWED_EXTENSIONS = ['mp4', 'mov', 'ogg', 'webm', 'weba', 'mp3', 'm4a', 'aac', 'wav', 'oga', 'opus', 'flac'];
 	private const ACCEPT_MIME_TYPES = [
 		'video/mp4',
+		'video/quicktime',
+		'video/x-quicktime',
 		'video/ogg',
 		'video/webm',
 		'audio/webm',

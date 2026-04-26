@@ -7,7 +7,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 class upload
 {
 	private const LINK_HASH_NAME = 'freemitbbs_videoupload';
-	private const ALLOWED_EXTENSIONS = ['mp4', 'ogg', 'webm', 'weba', 'mp3', 'm4a', 'aac', 'wav', 'oga', 'opus', 'flac'];
+	private const ALLOWED_EXTENSIONS = ['mp4', 'mov', 'ogg', 'webm', 'weba', 'mp3', 'm4a', 'aac', 'wav', 'oga', 'opus', 'flac'];
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;

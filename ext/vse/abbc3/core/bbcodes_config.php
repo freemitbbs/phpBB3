@@ -30,7 +30,9 @@ class bbcodes_config
 			return;
 		}
 
-		$configurator->plugins->load('Autovideo');
+		$configurator->plugins->load('Autovideo', [
+			'regexp' => '#\bhttps?://[-.\w]+/(?:[-+.:/\w]|%[0-9a-f]{2}|\(\w+\))+\.(?:mp4|mov|ogg|webm)(?!\S)#i',
+		]);
 
 		/** @var \s9e\TextFormatter\Configurator\Items\TemplateDocument $dom Add class "auto-video" to allow us to style the video with our CSS */
 		$dom = $configurator->tags['VIDEO']->template->asDOM();

@@ -2,7 +2,7 @@
 	'use strict';
 
 	function splitAllowedExts(rawValue) {
-		return (rawValue || '.mp4,.ogg,.webm,.weba,.mp3,.m4a,.aac,.wav,.oga,.opus,.flac')
+		return (rawValue || '.mp4,.mov,.ogg,.webm,.weba,.mp3,.m4a,.aac,.wav,.oga,.opus,.flac')
 			.split(',')
 			.map(function (item) { return item.trim().toLowerCase(); })
 			.filter(function (item) { return item.length > 0; });
@@ -41,7 +41,7 @@
 
 	function isAudioUpload(file, url) {
 		var audioOnlyExtensions = ['.weba', '.mp3', '.m4a', '.aac', '.wav', '.oga', '.opus', '.flac'];
-		var videoExtensions = ['.mp4', '.webm'];
+		var videoExtensions = ['.mp4', '.mov', '.webm'];
 		var mimeType = file && typeof file.type === 'string' ? file.type.toLowerCase() : '';
 
 		if (hasAnyExtension(url, videoExtensions)) {
