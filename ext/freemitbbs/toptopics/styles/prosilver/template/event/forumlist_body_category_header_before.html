@@ -1,4 +1,7 @@
 <!-- IF S_TOPTOPICS_INDEX_ITEMS and not S_TOPTOPICS_INDEX_BELOW and not $TOPTOPICS_INDEX_SHOWN and (forumrow.S_IS_CAT or forumrow.S_FIRST_ROW or forumrow.S_NO_CAT) -->
 <!-- DEFINE $TOPTOPICS_INDEX_SHOWN = 1 -->
 	<!-- INCLUDE @freemitbbs_toptopics/toptopics_summary_body.html -->
+	<!-- IF S_MOSTLIKEDSUMMARYCOUNT && not S_POSTLOVE_SUMMARY_BELOW -->
+		<!-- INCLUDE @avathar_postlove/postlove_summary_body.html -->
+	<!-- ENDIF -->
 <!-- ENDIF -->

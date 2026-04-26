@@ -13,7 +13,8 @@ For each candidate topic inside the configured lookback window:
 - `reactions`: total general post reactions in the topic, counted separately from Post Love likes/dislikes
 - `flags`: total open phpBB reports across posts in the topic
 - `content_length`: approximate plain-text length of the first post
-- `replies`: approved topic posts minus the first post
+- `ranking_replies`: approved replies by users other than the topic author
+- `replies`: approved topic posts minus the first post, used for display only
 - `views`: `topic_views`
 - `age_hours`: hours since `topic_time`
 - `user_posts`: topic author's total post count, used as a small trust factor
@@ -121,7 +122,7 @@ The ranker first builds a positive engagement score:
 ```text
 points = likes - dislikes
 content_signal = ln(1 + min(content_length, 4000) / 120)
-reply_signal = ln(1 + replies)
+reply_signal = ln(1 + ranking_replies)
 view_velocity = views / max(1, age_hours)
 view_signal = ln(1 + view_velocity)
 reaction_signal = ln(1 + reactions)
@@ -147,7 +148,7 @@ Higher `rank` means the topic sorts higher in the Top Topics list. Final orderin
 - `points`: net like score. Post Love likes push up, Top Topics dislikes push down.
 - `reaction_signal`: logarithmic general-reaction contribution. This is separate from likes/dislikes and defaults to a modest weight so emoji reactions can help without dominating ranking.
 - `content_signal`: logarithmic first-post quality signal based on approximate plain-text length. It is intentionally capped so a huge opening post does not dominate ranking.
-- `reply_signal`: logarithmic reply contribution. Replies help, but with diminishing returns.
+- `reply_signal`: logarithmic non-author reply contribution. The topic author's own follow-up posts do not lift the topic through this term.
 - `view_velocity`: views normalized by age, so recent traffic matters more than lifetime accumulated traffic.
 - `age_offset_hours`: fixed cushion in the denominator. This prevents brand new topics from spiking too aggressively.
 - `gravity`: time-decay exponent. Higher values make older topics drop faster.
@@ -173,12 +174,12 @@ This favors topics that gain traction early, not just topics that eventually acc
 If replies are very high relative to likes:
 
 ```text
-if replies >= discussion_reply_minimum
-and replies > max(1, likes) * discussion_reply_like_ratio:
+if ranking_replies >= discussion_reply_minimum
+and ranking_replies > max(1, likes) * discussion_reply_like_ratio:
     rank *= discussion_penalty
 ```
 
-This is meant to push down noisy or contentious threads that generate lots of replies without strong positive signal.
+This is meant to push down noisy or contentious threads that generate lots of non-author replies without strong positive signal.
 
 ### Report penalties
 

@@ -35,11 +35,13 @@ class ranker
 	private const DEFAULT_REFRESH_BATCH_SIZE = 10;
 	private const CONTENT_LENGTH_CAP = 4000;
 	private const CONTENT_LENGTH_SCALE = 120.0;
+	private const RANK_MODEL_REVISION = 2;
 	private const MATERIALIZED_TOPIC_PAYLOAD_FIELDS = [
 		'topic_last_post_id',
 		'topic_last_poster_id',
 		'topic_last_poster_name',
 		'topic_last_poster_colour',
+		'ranking_replies',
 	];
 
 	protected \phpbb\auth\auth $auth;
@@ -455,13 +457,14 @@ class ranker
 		$early_window_seconds = $options['early_window_hours'] * 3600;
 		$content_length_sql = $this->get_text_length_sql('base.first_post_text');
 		$points_sql = '(base.like_count - base.dislike_count)';
-		$replies_sql = 'CASE WHEN base.topic_posts_approved > 0 THEN base.topic_posts_approved - 1 ELSE 0 END';
+		$display_replies_sql = 'CASE WHEN base.topic_posts_approved > 0 THEN base.topic_posts_approved - 1 ELSE 0 END';
+		$ranking_replies_sql = 'CASE WHEN base.non_author_reply_count > 0 THEN base.non_author_reply_count ELSE 0 END';
 		$views_sql = 'CASE WHEN base.topic_views > 0 THEN base.topic_views ELSE 0 END';
 		$age_hours_sql = '((' . $now . ' - base.topic_time) / 3600.0)';
 		$age_divisor_sql = 'CASE WHEN ' . $age_hours_sql . ' > 1.0 THEN ' . $age_hours_sql . ' ELSE 1.0 END';
 		$velocity_hours_sql = 'CASE WHEN ' . $age_hours_sql . ' > 24.0 THEN 24.0 WHEN ' . $age_hours_sql . ' > 1.0 THEN ' . $age_hours_sql . ' ELSE 1.0 END';
 		$content_length_capped_sql = 'CASE WHEN ' . $content_length_sql . ' > ' . self::CONTENT_LENGTH_CAP . ' THEN ' . self::CONTENT_LENGTH_CAP . ' ELSE ' . $content_length_sql . ' END';
-		$reply_signal_sql = $this->sql_ln('(1.0 + ' . $replies_sql . ')');
+		$reply_signal_sql = $this->sql_ln('(1.0 + ' . $ranking_replies_sql . ')');
 		$view_signal_sql = $this->sql_ln('(1.0 + (' . $views_sql . ' / ' . $age_divisor_sql . '))');
 		$content_signal_sql = $this->sql_ln('(1.0 + (' . $content_length_capped_sql . ' / ' . self::CONTENT_LENGTH_SCALE . '))');
 		$reaction_signal_sql = $this->sql_ln('(1.0 + base.reaction_count)');
@@ -478,8 +481,8 @@ class ranker
 			ELSE ' . $base_rank_sql . '
 		END';
 		$rank_after_discussion_sql = 'CASE
-			WHEN ' . $replies_sql . ' >= ' . $options['discussion_reply_minimum'] . '
-				AND ' . $replies_sql . ' > (CASE WHEN base.like_count > 1 THEN base.like_count ELSE 1 END * ' . $options['discussion_reply_like_ratio'] . ')
+			WHEN ' . $ranking_replies_sql . ' >= ' . $options['discussion_reply_minimum'] . '
+				AND ' . $ranking_replies_sql . ' > (CASE WHEN base.like_count > 1 THEN base.like_count ELSE 1 END * ' . $options['discussion_reply_like_ratio'] . ')
 			THEN (' . $rank_after_velocity_sql . ' * ' . $options['discussion_penalty'] . ')
 			ELSE ' . $rank_after_velocity_sql . '
 		END';
@@ -530,7 +533,8 @@ class ranker
 					COALESCE(like_data.like_count, 0) AS like_count,
 					COALESCE(like_data.early_like_count, 0) AS early_like_count,
 					COALESCE(dislike_data.dislike_count, 0) AS dislike_count,
-					COALESCE(report_data.flag_count, 0) AS flag_count'
+					COALESCE(report_data.flag_count, 0) AS flag_count,
+					COALESCE(reply_data.non_author_reply_count, 0) AS non_author_reply_count'
 					. $reaction_select_sql . '
 				FROM ' . TOPICS_TABLE . ' t
 				INNER JOIN ' . FORUMS_TABLE . ' f ON f.forum_id = t.forum_id
@@ -562,13 +566,27 @@ class ranker
 					WHERE r.report_closed = 0
 						AND ' . $candidate_post_sql . '
 					GROUP BY p.topic_id
-				) report_data ON report_data.topic_id = t.topic_id'
+				) report_data ON report_data.topic_id = t.topic_id
+				LEFT JOIN (
+					SELECT p.topic_id, COUNT(p.post_id) AS non_author_reply_count
+					FROM ' . POSTS_TABLE . ' p
+					INNER JOIN ' . TOPICS_TABLE . ' rt ON rt.topic_id = p.topic_id
+					WHERE ' . $candidate_post_sql . '
+						AND p.post_visibility = ' . ITEM_APPROVED . '
+						AND p.post_id <> rt.topic_first_post_id
+						AND (
+							(rt.topic_poster > ' . ANONYMOUS . ' AND p.poster_id <> rt.topic_poster)
+							OR (rt.topic_poster <= ' . ANONYMOUS . ' AND (p.poster_id > ' . ANONYMOUS . ' OR p.post_username <> rt.topic_first_poster_name))
+						)
+					GROUP BY p.topic_id
+				) reply_data ON reply_data.topic_id = t.topic_id'
 				. $reaction_join_sql . '
 				WHERE ' . $topic_sql;
 
 		$scored_sql = 'SELECT base.*,
 				' . $points_sql . ' AS points,
-				' . $replies_sql . ' AS replies,
+				' . $display_replies_sql . ' AS replies,
+				' . $ranking_replies_sql . ' AS ranking_replies,
 				' . $views_sql . ' AS views,
 				' . $content_length_capped_sql . ' AS content_length,
 				' . $signal_score_sql . ' AS signal_score,
@@ -587,7 +605,7 @@ class ranker
 					OR ranked.dislike_count <> 0
 					OR ranked.flag_count <> 0
 					OR ranked.reaction_count <> 0
-					OR ranked.replies <> 0
+					OR ranked.ranking_replies <> 0
 					OR ranked.views <> 0
 					OR ranked.override_state = \'boost\'
 				)
@@ -627,6 +645,7 @@ class ranker
 				'dislike_count' => (int) $row['dislike_count'],
 				'flag_count' => (int) $row['flag_count'],
 				'replies' => (int) $row['replies'],
+				'ranking_replies' => (int) $row['ranking_replies'],
 				'views' => (int) $row['views'],
 				'rank' => (float) $row['rank'],
 			];
@@ -761,6 +780,7 @@ class ranker
 	protected function get_rank_options(): array
 	{
 		return [
+			'rank_model_revision' => self::RANK_MODEL_REVISION,
 			'summary_cache_seconds' => $this->get_int_config('toptopics_summary_cache_seconds', self::DEFAULT_CACHE_SECONDS, 0, 86400),
 			'age_offset_hours' => $this->get_float_config('toptopics_age_offset_hours', self::DEFAULT_AGE_OFFSET_HOURS, 0.1),
 			'gravity' => $this->get_float_config('toptopics_gravity', self::DEFAULT_GRAVITY, 0.1),
