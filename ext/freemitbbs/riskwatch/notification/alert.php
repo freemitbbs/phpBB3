@@ -4,6 +4,8 @@ namespace freemitbbs\riskwatch\notification;
 
 class alert extends \phpbb\notification\type\base
 {
+	private const MAX_NOTIFICATION_ITEM_ID = 16777215;
+
 	/** @var \phpbb\user_loader */
 	protected $user_loader;
 
@@ -32,10 +34,19 @@ class alert extends \phpbb\notification\type\base
 	{
 		if (!empty($data['alert_item_id']))
 		{
-			return (int) $data['alert_item_id'];
+			return self::normalize_item_id((int) $data['alert_item_id']);
 		}
 
-		return (int) sprintf('%u', crc32((string) (($data['risk_user_id'] ?? 0) . '|' . ($data['risk_level'] ?? 0) . '|' . ($data['alert_time'] ?? time()))));
+		$seed = (string) (($data['risk_user_id'] ?? 0) . '|' . ($data['risk_level'] ?? 0) . '|' . ($data['alert_time'] ?? time()));
+
+		return self::normalize_item_id((int) hexdec(hash('crc32b', $seed)));
+	}
+
+	private static function normalize_item_id(int $item_id): int
+	{
+		$item_id = abs($item_id) % self::MAX_NOTIFICATION_ITEM_ID;
+
+		return $item_id > 0 ? $item_id : self::MAX_NOTIFICATION_ITEM_ID;
 	}
 
 	public static function get_item_parent_id($data)

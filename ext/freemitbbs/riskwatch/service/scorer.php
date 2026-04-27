@@ -513,7 +513,6 @@ class scorer
 		try
 		{
 			$this->notification_manager->add_notifications(self::ALERT_NOTIFICATION_TYPE, [
-				'alert_item_id' => (int) sprintf('%u', crc32((string) ($user_id . '|' . $risk_level . '|' . $alert_time))),
 				'risk_user_id' => $user_id,
 				'risk_score' => $risk_score,
 				'risk_level' => $risk_level,
