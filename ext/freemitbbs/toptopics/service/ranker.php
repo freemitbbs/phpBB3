@@ -32,6 +32,8 @@ class ranker
 	private const DEFAULT_CANDIDATE_POOL_MULTIPLIER = 50;
 	private const DEFAULT_CANDIDATE_POOL_LIMIT = 2000;
 	private const MATERIALIZED_REBUILD_LOCK_SECONDS = 30;
+	private const MATERIALIZED_SCOPE_READ_CACHE_PREFIX = '_freemitbbs_toptopics_scope_read_';
+	private const MATERIALIZED_SCOPE_READ_CACHE_GENERATION = '_freemitbbs_toptopics_scope_read_generation';
 	private const DEFAULT_REFRESH_BATCH_SIZE = 10;
 	private const CONTENT_LENGTH_CAP = 4000;
 	private const CONTENT_LENGTH_SCALE = 120.0;
@@ -1042,7 +1044,19 @@ class ranker
 			return [];
 		}
 
-		$fresh_cutoff = time() - $this->get_int_config('toptopics_summary_cache_seconds', self::DEFAULT_CACHE_SECONDS, 0, 86400);
+		$cache_ttl = $this->get_int_config('toptopics_summary_cache_seconds', self::DEFAULT_CACHE_SECONDS, 0, 86400);
+		$read_cache_key = '';
+		if ($cache_ttl > 0)
+		{
+			$read_cache_key = $this->build_materialized_scope_read_cache_key($scope_keys, $options_hash);
+			$cached_topics_by_scope_key = $this->cache->get($read_cache_key);
+			if (is_array($cached_topics_by_scope_key))
+			{
+				return $cached_topics_by_scope_key;
+			}
+		}
+
+		$fresh_cutoff = time() - $cache_ttl;
 
 		$sql = 'SELECT scope_key, topics_json, options_hash, updated_time
 			FROM ' . $this->scope_snapshots_table . '
@@ -1059,7 +1073,38 @@ class ranker
 		}
 		$this->db->sql_freeresult($result);
 
+		if ($read_cache_key !== '')
+		{
+			$this->cache->put($read_cache_key, $topics_by_scope_key, $cache_ttl);
+		}
+
 		return $topics_by_scope_key;
+	}
+
+	protected function build_materialized_scope_read_cache_key(array $scope_keys, string $options_hash): string
+	{
+		sort($scope_keys);
+
+		return self::MATERIALIZED_SCOPE_READ_CACHE_PREFIX . md5(json_encode([
+			'scope_keys' => $scope_keys,
+			'options_hash' => $options_hash,
+			'generation' => $this->get_materialized_scope_read_cache_generation(),
+		]));
+	}
+
+	protected function get_materialized_scope_read_cache_generation(): int
+	{
+		$value = $this->cache->get(self::MATERIALIZED_SCOPE_READ_CACHE_GENERATION);
+
+		return ($value === false) ? 0 : (int) $value;
+	}
+
+	protected function invalidate_materialized_scope_read_cache(): void
+	{
+		$this->cache->put(
+			self::MATERIALIZED_SCOPE_READ_CACHE_GENERATION,
+			$this->get_materialized_scope_read_cache_generation() + 1
+		);
 	}
 
 	protected function materialized_topics_from_row(array $row, string $options_hash, int $fresh_cutoff): ?array
@@ -1143,6 +1188,7 @@ class ranker
 	{
 		$this->db->sql_query('DELETE FROM ' . $this->scope_forums_table);
 		$this->db->sql_query('DELETE FROM ' . $this->scope_snapshots_table);
+		$this->invalidate_materialized_scope_read_cache();
 	}
 
 	protected function delete_materialized_scope(string $scope_key): void
@@ -1155,6 +1201,7 @@ class ranker
 		$escaped_scope_key = $this->db->sql_escape($scope_key);
 		$this->db->sql_query('DELETE FROM ' . $this->scope_forums_table . " WHERE scope_key = '" . $escaped_scope_key . "'");
 		$this->db->sql_query('DELETE FROM ' . $this->scope_snapshots_table . " WHERE scope_key = '" . $escaped_scope_key . "'");
+		$this->invalidate_materialized_scope_read_cache();
 	}
 
 	protected function build_materialized_scope_key(array $forum_ids, int $limit): string

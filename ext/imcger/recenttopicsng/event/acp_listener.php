@@ -22,6 +22,7 @@ class acp_listener implements EventSubscriberInterface
 		protected \phpbb\template\template $template,
 		protected \phpbb\request\request $request,
 		protected \imcger\recenttopicsng\controller\controller_common $ctrl_common,
+		protected \phpbb\cache\service $cache,
 	)
 	{
 	}
@@ -48,6 +49,7 @@ class acp_listener implements EventSubscriberInterface
 		$array = $event['forum_data'];
 		$array['forum_rtng_disp'] = $this->request->variable('forum_rtng_disp', true);
 		$event['forum_data'] = $array;
+		$this->cache->destroy(\imcger\recenttopicsng\core\rtng_functions::CACHE_RTNG_ENABLED_FORUM_IDS);
 	}
 
 	/**

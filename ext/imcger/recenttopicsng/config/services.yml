@@ -74,6 +74,7 @@ services:
             - '@template'
             - '@request'
             - '@imcger.recenttopicsng.controller_common'
+            - '@cache'
         tags:
             - { name: event.listener }
 
