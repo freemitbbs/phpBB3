@@ -83,6 +83,9 @@ class similar_topics
 	/** @var bool|null Whether the shadow search-title path is migration-ready */
 	protected $search_title_index_available;
 
+	/** @var array|null Password-protected forums for the current user */
+	protected $passworded_forums;
+
 	/**
 	 * Constructor
 	 *
@@ -553,7 +556,7 @@ class similar_topics
 	 */
 	protected function apply_forum_filters(array &$sql_array, $similar_topic_forums = null)
 	{
-		$passworded_forums = $this->user->get_passworded_forums();
+		$passworded_forums = $this->get_passworded_forums();
 
 		if (!empty($similar_topic_forums))
 		{
@@ -574,6 +577,16 @@ class similar_topics
 
 		$sql_array['WHERE'] .= ' AND f.similar_topics_ignore = 0';
 		return true;
+	}
+
+	protected function get_passworded_forums()
+	{
+		if ($this->passworded_forums === null)
+		{
+			$this->passworded_forums = $this->user->get_passworded_forums();
+		}
+
+		return $this->passworded_forums;
 	}
 
 	/**

@@ -2,7 +2,7 @@
 	"name": "freemitbbs/toptopics",
 	"type": "phpbb-extension",
 	"description": "Adds dislikes and HN-style promoted top topics built on Post Love reactions.",
-	"version": "1.1.18",
+	"version": "1.1.19",
 	"license": "GPL-2.0-only",
 	"authors": [
 		{

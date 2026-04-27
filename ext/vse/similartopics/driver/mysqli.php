@@ -21,6 +21,9 @@ class mysqli implements driver_interface
 	/** @var string */
 	protected $engine;
 
+	/** @var array */
+	protected $fulltext_indexes = array();
+
 	/**
 	 * Constructor
 	 *
@@ -142,10 +145,17 @@ class mysqli implements driver_interface
 	 */
 	public function get_fulltext_indexes($column = 'topic_title', $table = TOPICS_TABLE)
 	{
+		$cache_key = $table . ':' . $column;
+		if (isset($this->fulltext_indexes[$cache_key]))
+		{
+			return $this->fulltext_indexes[$cache_key];
+		}
+
 		$indexes = array();
 
 		if (!$this->is_supported())
 		{
+			$this->fulltext_indexes[$cache_key] = $indexes;
 			return $indexes;
 		}
 
@@ -166,6 +176,7 @@ class mysqli implements driver_interface
 
 		$this->db->sql_freeresult($result);
 
+		$this->fulltext_indexes[$cache_key] = $indexes;
 		return $indexes;
 	}
 
@@ -187,6 +198,7 @@ class mysqli implements driver_interface
 			$sql = 'ALTER TABLE ' . $this->db->sql_escape($table) . '
 				ADD FULLTEXT (' . $this->db->sql_escape($column) . ')';
 			$this->db->sql_query($sql);
+			$this->fulltext_indexes = array();
 		}
 	}
 

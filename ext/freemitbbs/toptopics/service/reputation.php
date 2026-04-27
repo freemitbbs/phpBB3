@@ -55,8 +55,7 @@ class reputation
 			return [];
 		}
 
-		$this->ensure_users($user_ids);
-		$rows = $this->get_rows($user_ids);
+		$rows = $this->ensure_users($user_ids);
 		$scores = array_fill_keys($user_ids, 0);
 
 		foreach ($rows as $user_id => $row)
@@ -239,7 +238,7 @@ class reputation
 		$this->db->sql_query($sql);
 	}
 
-	protected function ensure_users(array $user_ids): void
+	protected function ensure_users(array $user_ids): array
 	{
 		$existing_rows = $this->get_rows($user_ids);
 		$missing_user_ids = array_values(array_diff($user_ids, array_keys($existing_rows)));
@@ -247,7 +246,10 @@ class reputation
 		if (!empty($missing_user_ids))
 		{
 			$this->refresh_users($missing_user_ids);
+			return $this->get_rows($user_ids);
 		}
+
+		return $existing_rows;
 	}
 
 	protected function get_rows(array $user_ids): array

@@ -34,6 +34,7 @@ class summary_listener implements EventSubscriberInterface
 	private const USER_OPTION_HIDE_SUMMARY = 18;
 	private const USER_OPTION_HIDE_FORUM_SUMMARY = 19;
 	private const SUMMARY_CACHE_PREFIX = '_avathar_postlove_summary_';
+	private const TOPIC_LIKE_COUNTS_CACHE_PREFIX = '_avathar_postlove_topic_like_counts_';
 	private const SUMMARY_CACHE_VERSION_CONFIG = 'postlove_summary_cache_version';
 	private const SUMMARY_RENDER_CACHE_SECONDS = 120;
 
@@ -626,9 +627,25 @@ class summary_listener implements EventSubscriberInterface
 	 */
 	public function prefetch_topic_likes($event)
 	{
-		$topic_list = $event['topic_list'];
+		$topic_list = $this->normalise_id_list($event['topic_list']);
+		$this->topic_like_counts = [];
 		if (empty($topic_list))
 		{
+			return;
+		}
+
+		$cache_key = $this->build_topic_like_counts_cache_key($topic_list);
+		$cached_counts = $this->cache->get($cache_key);
+		if (is_array($cached_counts))
+		{
+			foreach ($cached_counts as $topic_id => $like_count)
+			{
+				$topic_id = (int) $topic_id;
+				if ($topic_id > 0)
+				{
+					$this->topic_like_counts[$topic_id] = (int) $like_count;
+				}
+			}
 			return;
 		}
 
@@ -643,6 +660,26 @@ class summary_listener implements EventSubscriberInterface
 			$this->topic_like_counts[(int) $row['topic_id']] = (int) $row['like_count'];
 		}
 		$this->db->sql_freeresult($result);
+
+		$this->cache->put($cache_key, $this->topic_like_counts, self::SUMMARY_RENDER_CACHE_SECONDS);
+	}
+
+	protected function build_topic_like_counts_cache_key(array $topic_list): string
+	{
+		return self::TOPIC_LIKE_COUNTS_CACHE_PREFIX . md5(json_encode(array(
+			'version' => (string) ($this->config[self::SUMMARY_CACHE_VERSION_CONFIG] ?? '0'),
+			'topic_ids' => $topic_list,
+		)));
+	}
+
+	protected function normalise_id_list(array $ids): array
+	{
+		$ids = array_values(array_unique(array_filter(array_map('intval', $ids), static function ($id) {
+			return $id > 0;
+		})));
+		sort($ids);
+
+		return $ids;
 	}
 
 	/**

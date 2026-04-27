@@ -33,6 +33,10 @@ class listener implements EventSubscriberInterface
     protected $language;
     protected $helper;
     protected $config;
+    protected $viewtopic_posts = [];
+    protected $prefetched_reaction_counts = [];
+    protected $prefetched_user_reactions = [];
+    protected $prefetched_reaction_users = [];
     
     // ✅ AJOUT DE LA PROPRIÉTÉ MANQUANTE
     protected $root_path;
@@ -89,6 +93,7 @@ class listener implements EventSubscriberInterface
             'core.user_setup'                => 'load_language_files',
             'core.page_header'               => 'add_assets_to_page',
             'core.viewtopic_cache_user_data' => 'load_language_and_data',
+            'core.viewtopic_modify_post_data' => 'prefetch_viewtopic_reactions',
             'core.viewtopic_post_row_after'  => 'display_reactions',
             'core.viewforum_modify_topicrow' => 'add_forum_data',
             'core.console.command.configure' => 'load_language_for_cli',
@@ -185,7 +190,64 @@ class listener implements EventSubscriberInterface
 
     // Le reste des méthodes reste identique...
     public function load_language_and_data($event) {}
-    
+
+    public function prefetch_viewtopic_reactions($event)
+    {
+        $post_ids = array_values(array_unique(array_filter(array_map('intval', $event['post_list'] ?? []))));
+        if (empty($post_ids)) {
+            return;
+        }
+
+        $this->viewtopic_posts = array_fill_keys($post_ids, true);
+        $this->prefetched_reaction_counts = [];
+        $this->prefetched_user_reactions = [];
+        $this->prefetched_reaction_users = [];
+
+        foreach ($post_ids as $post_id) {
+            $this->prefetched_reaction_counts[$post_id] = [];
+            $this->prefetched_user_reactions[$post_id] = [];
+            $this->prefetched_reaction_users[$post_id] = [];
+        }
+
+        $current_user_id = (int) $this->user->data['user_id'];
+
+        $sql = 'SELECT pr.post_id, pr.user_id, pr.reaction_emoji, pr.reaction_time, u.username
+                FROM ' . $this->post_reactions_table . ' pr
+                JOIN ' . USERS_TABLE . ' u ON pr.user_id = u.user_id
+                WHERE ' . $this->db->sql_in_set('pr.post_id', $post_ids) . '
+                ORDER BY pr.post_id ASC, pr.reaction_time ASC';
+        $result = $this->db->sql_query($sql);
+
+        while ($row = $this->db->sql_fetchrow($result)) {
+            $post_id = (int) $row['post_id'];
+            $emoji = (string) ($row['reaction_emoji'] ?? '');
+            if ($post_id <= 0 || $emoji === '') {
+                continue;
+            }
+
+            if (!isset($this->prefetched_reaction_counts[$post_id][$emoji])) {
+                $this->prefetched_reaction_counts[$post_id][$emoji] = 0;
+                $this->prefetched_reaction_users[$post_id][$emoji] = [];
+            }
+
+            $this->prefetched_reaction_counts[$post_id][$emoji]++;
+            $this->prefetched_reaction_users[$post_id][$emoji][] = [
+                'user_id'       => (int) $row['user_id'],
+                'username'      => $row['username'],
+                'reaction_time' => (int) $row['reaction_time'],
+            ];
+
+            if ($current_user_id !== ANONYMOUS && (int) $row['user_id'] === $current_user_id) {
+                $this->prefetched_user_reactions[$post_id][] = $emoji;
+            }
+        }
+        $this->db->sql_freeresult($result);
+
+        foreach ($this->prefetched_user_reactions as $post_id => $emojis) {
+            $this->prefetched_user_reactions[$post_id] = array_values(array_unique($emojis));
+        }
+    }
+
     public function display_reactions($event)
     {
         $post_row = isset($event['post_row']) ? $event['post_row'] : [];
@@ -197,21 +259,22 @@ class listener implements EventSubscriberInterface
             return;
         }
 
-        if (!$this->is_valid_post($post_id)) {
+        $is_prefetched = isset($this->viewtopic_posts[$post_id]);
+        if (!$is_prefetched && !$this->is_valid_post($post_id)) {
             error_log('[phpBB Reactions] display_reactions: post_id ' . $post_id . ' not found');
             $event['post_row'] = $post_row;
             return;
         }
 
-        $reactions_by_db = $this->get_post_reactions($post_id);
-        $user_reactions = $this->get_user_reactions($post_id, (int) $this->user->data['user_id']);
+        $reactions_by_db = $is_prefetched ? ($this->prefetched_reaction_counts[$post_id] ?? []) : $this->get_post_reactions($post_id);
+        $user_reactions = $is_prefetched ? ($this->prefetched_user_reactions[$post_id] ?? []) : $this->get_user_reactions($post_id, (int) $this->user->data['user_id']);
 
         $visible_reactions = [];
         foreach ($reactions_by_db as $emoji => $count) {
             if ((int) $count > 0) {
-                $users_for_emoji = $this->get_users_by_reaction($post_id, $emoji);
+                $users_for_emoji = $is_prefetched ? ($this->prefetched_reaction_users[$post_id][$emoji] ?? []) : $this->get_users_by_reaction($post_id, $emoji);
                 $users_json = json_encode($users_for_emoji, JSON_UNESCAPED_UNICODE);
-                
+
                 $visible_reactions[] = [
                     'EMOJI'        => $emoji,
                     'COUNT'        => (int) $count,
