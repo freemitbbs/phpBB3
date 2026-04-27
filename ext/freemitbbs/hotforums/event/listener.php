@@ -7,6 +7,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 class listener implements EventSubscriberInterface
 {
 	protected \phpbb\auth\auth $auth;
+	protected \phpbb\cache\service $cache;
 	protected \phpbb\config\config $config;
 	protected \phpbb\content_visibility $content_visibility;
 	protected \phpbb\db\driver\driver_interface $db;
@@ -17,6 +18,7 @@ class listener implements EventSubscriberInterface
 
 	public function __construct(
 		\phpbb\auth\auth $auth,
+		\phpbb\cache\service $cache,
 		\phpbb\config\config $config,
 		\phpbb\content_visibility $content_visibility,
 		\phpbb\db\driver\driver_interface $db,
@@ -27,6 +29,7 @@ class listener implements EventSubscriberInterface
 	)
 	{
 		$this->auth = $auth;
+		$this->cache = $cache;
 		$this->config = $config;
 		$this->content_visibility = $content_visibility;
 		$this->db = $db;
@@ -118,7 +121,7 @@ class listener implements EventSubscriberInterface
 			return null;
 		}
 
-		return new $class($this->auth, $this->content_visibility, $this->db);
+		return new $class($this->auth, $this->content_visibility, $this->db, $this->cache, $this->config);
 	}
 
 	protected function get_readable_forum_ids(): array

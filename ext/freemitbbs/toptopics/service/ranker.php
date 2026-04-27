@@ -193,6 +193,7 @@ class ranker
 		$options_hash = $this->build_options_hash($options);
 		$topics_by_scope = [];
 		$missing_scopes = [];
+		$scope_keys = [];
 
 		foreach ($normalized_scopes as $scope_id => $scope)
 		{
@@ -202,14 +203,19 @@ class ranker
 				continue;
 			}
 
-			$cached_topics = $this->get_existing_materialized_scope_topics($scope['forum_ids'], $scope['limit'], $options_hash);
-			if ($cached_topics !== null)
+			$scope_keys[$scope_id] = $this->build_materialized_scope_key($scope['forum_ids'], $scope['limit']);
+		}
+
+		$cached_topics_by_scope_key = $this->get_existing_materialized_scope_topics_by_key(array_values($scope_keys), $options_hash);
+		foreach ($scope_keys as $scope_id => $scope_key)
+		{
+			if (array_key_exists($scope_key, $cached_topics_by_scope_key))
 			{
-				$topics_by_scope[$scope_id] = $this->exclude_foe_authored_topics($cached_topics);
+				$topics_by_scope[$scope_id] = $this->exclude_foe_authored_topics($cached_topics_by_scope_key[$scope_key]);
 				continue;
 			}
 
-			$missing_scopes[$scope_id] = $scope;
+			$missing_scopes[$scope_id] = $normalized_scopes[$scope_id];
 		}
 
 		if (empty($missing_scopes))
@@ -1021,20 +1027,43 @@ class ranker
 	protected function get_existing_materialized_scope_topics(array $forum_ids, int $limit, string $options_hash): ?array
 	{
 		$scope_key = $this->build_materialized_scope_key($forum_ids, $limit);
-		$fresh_cutoff = time() - $this->get_int_config('toptopics_summary_cache_seconds', self::DEFAULT_CACHE_SECONDS, 0, 86400);
+		$cached_topics_by_scope_key = $this->get_existing_materialized_scope_topics_by_key([$scope_key], $options_hash);
 
-		$sql = 'SELECT topics_json, options_hash, updated_time
-			FROM ' . $this->scope_snapshots_table . '
-			WHERE scope_key = \'' . $this->db->sql_escape($scope_key) . '\'';
-		$result = $this->db->sql_query_limit($sql, 1);
-		$row = $this->db->sql_fetchrow($result);
-		$this->db->sql_freeresult($result);
+		return array_key_exists($scope_key, $cached_topics_by_scope_key) ? $cached_topics_by_scope_key[$scope_key] : null;
+	}
 
-		if (!$row)
+	protected function get_existing_materialized_scope_topics_by_key(array $scope_keys, string $options_hash): array
+	{
+		$scope_keys = array_values(array_unique(array_filter(array_map('strval', $scope_keys), static function ($scope_key) {
+			return $scope_key !== '';
+		})));
+		if (empty($scope_keys))
 		{
-			return null;
+			return [];
 		}
 
+		$fresh_cutoff = time() - $this->get_int_config('toptopics_summary_cache_seconds', self::DEFAULT_CACHE_SECONDS, 0, 86400);
+
+		$sql = 'SELECT scope_key, topics_json, options_hash, updated_time
+			FROM ' . $this->scope_snapshots_table . '
+			WHERE ' . $this->db->sql_in_set('scope_key', $scope_keys);
+		$result = $this->db->sql_query($sql);
+		$topics_by_scope_key = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$cached_topics = $this->materialized_topics_from_row($row, $options_hash, $fresh_cutoff);
+			if ($cached_topics !== null)
+			{
+				$topics_by_scope_key[(string) $row['scope_key']] = $cached_topics;
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		return $topics_by_scope_key;
+	}
+
+	protected function materialized_topics_from_row(array $row, string $options_hash, int $fresh_cutoff): ?array
+	{
 		$cached_topics = json_decode((string) $row['topics_json'], true);
 		$has_cached_topics = is_array($cached_topics) && $this->is_materialized_topic_payload_compatible($cached_topics);
 		if (!$has_cached_topics)

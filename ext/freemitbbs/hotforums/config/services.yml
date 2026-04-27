@@ -3,6 +3,7 @@ services:
         class: freemitbbs\hotforums\event\listener
         arguments:
             - '@auth'
+            - '@cache'
             - '@config'
             - '@content.visibility'
             - '@dbal.conn'

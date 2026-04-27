@@ -1129,17 +1129,24 @@ class listener implements EventSubscriberInterface
 		$this->index_recenttopics_topic_id_map = [];
 		$recenttopicsng_functions = $this->get_recenttopicsng_functions_service();
 		if (empty($recenttopicsng_functions)
-			|| !method_exists($recenttopicsng_functions, 'get_index_topic_ids_for_dedupe'))
+			|| (!method_exists($recenttopicsng_functions, 'get_displayed_index_topic_ids_for_dedupe')
+				&& !method_exists($recenttopicsng_functions, 'get_index_topic_ids_for_dedupe')))
 		{
 			return $this->index_recenttopics_topic_id_map;
 		}
 
 		try
 		{
-			$topic_ids = $recenttopicsng_functions->get_index_topic_ids_for_dedupe(
-				'rtng_topics',
-				array_keys($this->get_index_summary_topic_id_map())
-			);
+			if (method_exists($recenttopicsng_functions, 'get_displayed_index_topic_ids_for_dedupe')
+				&& (!method_exists($recenttopicsng_functions, 'has_displayed_index_topic_ids_for_dedupe')
+					|| $recenttopicsng_functions->has_displayed_index_topic_ids_for_dedupe('rtng_topics')))
+			{
+				$topic_ids = $recenttopicsng_functions->get_displayed_index_topic_ids_for_dedupe('rtng_topics');
+			}
+			else
+			{
+				$topic_ids = $recenttopicsng_functions->get_index_topic_ids_for_dedupe('rtng_topics');
+			}
 		}
 		catch (\Throwable $exception)
 		{
@@ -1283,7 +1290,10 @@ class listener implements EventSubscriberInterface
 
 		try
 		{
-			$viewership = new $class($this->auth, $phpbb_container->get('content.visibility'), $this->db);
+			$cache = method_exists($phpbb_container, 'has') && $phpbb_container->has('cache')
+				? $phpbb_container->get('cache')
+				: null;
+			$viewership = new $class($this->auth, $phpbb_container->get('content.visibility'), $this->db, $cache, $this->config);
 			$this->index_forum_viewership_order = $viewership->get_order_by_forum_id();
 		}
 		catch (\Throwable $exception)

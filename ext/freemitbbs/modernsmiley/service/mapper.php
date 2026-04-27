@@ -12,6 +12,9 @@ class mapper
 	public const DEFAULT_HOVER_ASSET_URL_PATTERN = '';
 	public const DEFAULT_HOVER_FALLBACK_ASSET_URL_PATTERN = '';
 	public const DEFAULT_PLACEHOLDER_URL = 'icon_e_smile.gif';
+	private const CACHE_CODE_MAPPINGS = '_freemitbbs_modernsmiley_code_mappings';
+	private const CACHE_INLINE_PICKER_ROWS = '_freemitbbs_modernsmiley_inline_picker_rows';
+	private const CACHE_SECONDS = 86400;
 
 	public const DEFAULT_URL_MAPPINGS = [
 		'icon_e_biggrin.gif'    => '1f603',
@@ -42,14 +45,16 @@ class mapper
 
 	private driver_interface $db;
 	private config $config;
+	private \phpbb\cache\service $cache;
 	private string $smilies_table;
 	private string $modern_smiley_map_table;
 	private ?bool $modern_smiley_map_available = null;
 
-	public function __construct(driver_interface $db, config $config, string $smilies_table, string $modern_smiley_map_table)
+	public function __construct(driver_interface $db, config $config, \phpbb\cache\service $cache, string $smilies_table, string $modern_smiley_map_table)
 	{
 		$this->db = $db;
 		$this->config = $config;
+		$this->cache = $cache;
 		$this->smilies_table = $smilies_table;
 		$this->modern_smiley_map_table = $modern_smiley_map_table;
 	}
@@ -197,6 +202,12 @@ class mapper
 
 	public function get_code_mappings(): array
 	{
+		$cached = $this->cache->get(self::CACHE_CODE_MAPPINGS);
+		if (is_array($cached))
+		{
+			return $cached;
+		}
+
 		if (!$this->has_modern_smiley_map_table())
 		{
 			return [];
@@ -219,6 +230,8 @@ class mapper
 			}
 		}
 		$this->db->sql_freeresult($result);
+
+		$this->cache->put(self::CACHE_CODE_MAPPINGS, $mappings, self::CACHE_SECONDS);
 
 		return $mappings;
 	}
@@ -306,6 +319,12 @@ class mapper
 
 	public function get_inline_picker_rows(): array
 	{
+		$cached = $this->cache->get(self::CACHE_INLINE_PICKER_ROWS);
+		if (is_array($cached))
+		{
+			return $cached;
+		}
+
 		if ($this->has_modern_smiley_map_table())
 		{
 			$sql = 'SELECT s.smiley_id, s.code, s.emotion, s.smiley_url, s.smiley_width, s.smiley_height, s.smiley_order, m.emoji_seq
@@ -350,6 +369,8 @@ class mapper
 		}
 		$this->db->sql_freeresult($result);
 
+		$this->cache->put(self::CACHE_INLINE_PICKER_ROWS, $rows, self::CACHE_SECONDS);
+
 		return $rows;
 	}
 
@@ -366,6 +387,7 @@ class mapper
 		}
 
 		$this->db->sql_query('DELETE FROM ' . $this->modern_smiley_map_table);
+		$this->clear_cached_rows();
 
 		if (empty($mappings))
 		{
@@ -382,6 +404,7 @@ class mapper
 		}
 
 		$this->db->sql_multi_insert($this->modern_smiley_map_table, $sql_ary);
+		$this->clear_cached_rows();
 	}
 
 	public function save_smiley_rows(array $rows, array $new_smiley): void
@@ -483,6 +506,14 @@ class mapper
 			$this->db->sql_transaction('rollback');
 			throw $e;
 		}
+
+		$this->clear_cached_rows();
+	}
+
+	private function clear_cached_rows(): void
+	{
+		$this->cache->destroy(self::CACHE_CODE_MAPPINGS);
+		$this->cache->destroy(self::CACHE_INLINE_PICKER_ROWS);
 	}
 
 	private function get_existing_smilies_indexed(): array

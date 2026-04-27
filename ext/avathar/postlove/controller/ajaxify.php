@@ -23,6 +23,8 @@ namespace avathar\postlove\controller;
  */
 class ajaxify
 {
+	private const SUMMARY_CACHE_VERSION_CONFIG = 'postlove_summary_cache_version';
+
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
 	protected \phpbb\content_visibility $content_visibility;
@@ -139,6 +141,7 @@ class ajaxify
 								if ($inserted)
 								{
 									$this->cache->destroy('sql', $this->likes_table);
+									$this->invalidate_summary_cache();
 									$this->invalidate_toptopics_state((int) $row['forum_id'], (int) $row['poster_id']);
 									$this->notifyhelper->notify('add', $row['topic_id'], (int) $post, $row['post_subject'], $row['poster_id'] , $this->user->data['user_id']);
 								}
@@ -162,6 +165,7 @@ class ajaxify
 								if ($deleted)
 								{
 									$this->cache->destroy('sql', $this->likes_table);
+									$this->invalidate_summary_cache();
 									$this->invalidate_toptopics_state((int) $row['forum_id'], (int) $row['poster_id']);
 									$this->notifyhelper->notify('remove', $row['topic_id'], (int) $post, $row['post_subject'], $row['poster_id'], $this->user->data['user_id']);
 								}
@@ -223,6 +227,11 @@ class ajaxify
 			'string' => $this->language->lang('LIKED_BY') . implode(', ', $likers),
 			'count' => count($likers),
 		];
+	}
+
+	protected function invalidate_summary_cache(): void
+	{
+		$this->config->set(self::SUMMARY_CACHE_VERSION_CONFIG, (string) microtime(true));
 	}
 
 	protected function has_user_liked(int $post_id): bool

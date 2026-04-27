@@ -21,6 +21,9 @@ class rtng_functions
 	private int $topics_page_number;
 	private ?array $toptopics_index_topic_ids;
 	private ?array $index_topic_ids_for_dedupe;
+	private array $displayed_topic_ids_for_dedupe;
+	private ?array $forum_id_list;
+	private ?array $prepared_index_topic_list_for_display;
 	private ?array $foe_user_id_map;
 
 	public function __construct
@@ -48,6 +51,9 @@ class rtng_functions
 		$this->topics_page_number	= 0;
 		$this->toptopics_index_topic_ids = null;
 		$this->index_topic_ids_for_dedupe = null;
+		$this->displayed_topic_ids_for_dedupe = [];
+		$this->forum_id_list = null;
+		$this->prepared_index_topic_list_for_display = null;
 		$this->foe_user_id_map = null;
 	}
 
@@ -84,6 +90,7 @@ class rtng_functions
 	 */
 	public function display_recent_topics(string $tpl_loopname = 'rtng_topics'): void
 	{
+		$this->displayed_topic_ids_for_dedupe[$tpl_loopname] = [];
 		$this->user_setting = $this->ctrl_common->get_user_setting();
 
 		// can view rtng ?
@@ -163,7 +170,20 @@ class rtng_functions
 			return;
 		}
 
-		$topics_count = $this->gettopiclist($obtain_icons, $forums, $rtng_start, $total_topics_limit, $excluded_topics, $forum_id_list, $topic_list);
+		$topic_list_cache_key = $this->build_topic_list_cache_key($tpl_loopname, $rtng_start, $total_topics_limit, $excluded_topics, $forum_id_list);
+		$prepared_topic_list = $this->get_prepared_index_topic_list_for_display($topic_list_cache_key);
+		if ($prepared_topic_list !== null)
+		{
+			$obtain_icons = (bool) $prepared_topic_list['obtain_icons'];
+			$forums = $prepared_topic_list['forums'];
+			$topic_list = $prepared_topic_list['topic_list'];
+			$topics_count = (int) $prepared_topic_list['topics_count'];
+			$this->topics_start = (int) $prepared_topic_list['topics_start'];
+		}
+		else
+		{
+			$topics_count = $this->gettopiclist($obtain_icons, $forums, $rtng_start, $total_topics_limit, $excluded_topics, $forum_id_list, $topic_list);
+		}
 
 		// Return if there are no topics available to display.
 		if (count($topic_list) == 0)
@@ -203,6 +223,11 @@ class rtng_functions
 
 	public function get_index_topic_ids_for_dedupe(string $tpl_loopname = 'rtng_topics', array $additional_excluded_topic_ids = []): array
 	{
+		if ($this->has_displayed_index_topic_ids_for_dedupe($tpl_loopname))
+		{
+			return $this->get_displayed_index_topic_ids_for_dedupe($tpl_loopname);
+		}
+
 		if ($this->index_topic_ids_for_dedupe !== null && empty($additional_excluded_topic_ids))
 		{
 			return $this->index_topic_ids_for_dedupe;
@@ -259,7 +284,20 @@ class rtng_functions
 		$obtain_icons = false;
 		$forums = [];
 		$topic_list = [];
-		$this->gettopiclist($obtain_icons, $forums, $rtng_start, $total_topics_limit, $excluded_topics, $forum_id_list, $topic_list);
+		$topics_count = $this->gettopiclist($obtain_icons, $forums, $rtng_start, $total_topics_limit, $excluded_topics, $forum_id_list, $topic_list);
+		$display_topic_list = $topic_list;
+
+		if (empty($additional_excluded_topic_ids))
+		{
+			$this->prepared_index_topic_list_for_display = [
+				'key' => $this->build_topic_list_cache_key($tpl_loopname, $rtng_start, $total_topics_limit, $excluded_topics, $forum_id_list),
+				'obtain_icons' => $obtain_icons,
+				'forums' => $forums,
+				'topic_list' => $display_topic_list,
+				'topics_count' => $topics_count,
+				'topics_start' => $this->topics_start,
+			];
+		}
 
 		$topic_list = array_values(array_unique(array_filter(array_map('intval', $topic_list), static function ($topic_id) {
 			return $topic_id > 0;
@@ -274,11 +312,26 @@ class rtng_functions
 		return $topic_list;
 	}
 
+	public function get_displayed_index_topic_ids_for_dedupe(string $tpl_loopname = 'rtng_topics'): array
+	{
+		return $this->normalise_topic_ids(array_keys($this->displayed_topic_ids_for_dedupe[$tpl_loopname] ?? []));
+	}
+
+	public function has_displayed_index_topic_ids_for_dedupe(string $tpl_loopname = 'rtng_topics'): bool
+	{
+		return array_key_exists($tpl_loopname, $this->displayed_topic_ids_for_dedupe);
+	}
+
 	/**
 	 * Get the forums we take our topics from
 	 */
 	private function getforumlist(): array
 	{
+		if ($this->forum_id_list !== null)
+		{
+			return $this->forum_id_list;
+		}
+
 		// Get the allowed forums
 		$forum_ary = [];
 		$forum_read_ary = $this->auth->acl_getf('f_read');
@@ -311,12 +364,52 @@ class rtng_functions
 			$this->db->sql_freeresult($result);
 
 			$forum_ids_disp = array_map('intval', $forum_ids_disp);
-			return $forum_ids_disp;
+			$this->forum_id_list = $forum_ids_disp;
+			return $this->forum_id_list;
 		}
 		else
 		{
-			return [];
+			$this->forum_id_list = [];
+			return $this->forum_id_list;
 		}
+	}
+
+	private function build_topic_list_cache_key(string $tpl_loopname, int $rtng_start, int $total_topics_limit, array $excluded_topics, array $forum_id_list): string
+	{
+		$excluded_topics = $this->normalise_topic_ids($excluded_topics);
+		$forum_id_list = $this->normalise_topic_ids($forum_id_list);
+
+		return md5(json_encode([
+			'tpl_loopname' => $tpl_loopname,
+			'rtng_start' => $rtng_start,
+			'total_topics_limit' => $total_topics_limit,
+			'topics_per_page' => $this->topics_per_page,
+			'topics_page_number' => $this->topics_page_number,
+			'rtng_all_topics' => (int) $this->config['rtng_all_topics'],
+			'rtng_min_topic_level' => (int) $this->config['rtng_min_topic_level'],
+			'user_rtng_unread_only' => !empty($this->user_setting['user_rtng_unread_only']),
+			'user_rtng_sort_start_time' => !empty($this->user_setting['user_rtng_sort_start_time']),
+			'excluded_topics' => $excluded_topics,
+			'forum_id_list' => $forum_id_list,
+		]));
+	}
+
+	private function get_prepared_index_topic_list_for_display(string $topic_list_cache_key): ?array
+	{
+		if (!is_array($this->prepared_index_topic_list_for_display)
+			|| ($this->prepared_index_topic_list_for_display['key'] ?? '') !== $topic_list_cache_key
+			|| !isset($this->prepared_index_topic_list_for_display['forums'])
+			|| !is_array($this->prepared_index_topic_list_for_display['forums'])
+			|| !isset($this->prepared_index_topic_list_for_display['topic_list'])
+			|| !is_array($this->prepared_index_topic_list_for_display['topic_list'])
+			|| !isset($this->prepared_index_topic_list_for_display['obtain_icons'])
+			|| !isset($this->prepared_index_topic_list_for_display['topics_count'])
+			|| !isset($this->prepared_index_topic_list_for_display['topics_start']))
+		{
+			return null;
+		}
+
+		return $this->prepared_index_topic_list_for_display;
 	}
 
 	/**
@@ -346,51 +439,56 @@ class rtng_functions
 		{
 			// Get allowed topics
 			$sql_array = $this->get_allowed_topics_sql($excluded_topics, $min_topic_level, $forum_id_list);
-			$count_sql_array = $sql_array;
-			$count_sql_array['SELECT'] = 'COUNT(t.topic_id) as topic_count';
-			unset($count_sql_array['ORDER_BY']);
-			unset($count_sql_array['LEFT_JOIN']);
-			$sql = $this->db->sql_build_query('SELECT', $count_sql_array);
-
-			$result = $this->db->sql_query($sql);
-			$topics_count = (int) $this->db->sql_fetchfield('topic_count');
-			$this->db->sql_freeresult($result);
-
-			//load topics list
 			$sql = $this->db->sql_build_query('SELECT', $sql_array);
 
-			$total_topics_limit = min($total_topics_limit, $topics_count);
-			$rtng_start			= $this->validate_start($rtng_start, $this->topics_per_page, $total_topics_limit);
-			$result = $this->db->sql_query_limit($sql, $this->topics_per_page, $rtng_start);
-
-			// Return 0 topics to display
-			if ($result == false)
+			if ((int) $this->config['rtng_all_topics'] == 0)
 			{
-				return 0;
+				$result = $this->db->sql_query_limit($sql, $total_topics_limit);
+				if ($result == false)
+				{
+					return 0;
+				}
+
+				$rows = $this->db->sql_fetchrowset($result);
+				$this->db->sql_freeresult($result);
+
+				$topics_count = count($rows);
+				$total_topics_limit = min($total_topics_limit, $topics_count);
+				$rtng_start = $this->validate_start($rtng_start, $this->topics_per_page, $total_topics_limit);
+
+				$this->collect_topic_list_rows(
+					array_slice($rows, $rtng_start, $this->topics_per_page),
+					$obtain_icons,
+					$forums,
+					$topic_list
+				);
 			}
-
-			$rowset = [];
-
-			while ($row = $this->db->sql_fetchrow($result))
+			else
 			{
-				$topic_list[] = $row['topic_id'];
+				$count_sql_array = $sql_array;
+				$count_sql_array['SELECT'] = 'COUNT(t.topic_id) as topic_count';
+				unset($count_sql_array['ORDER_BY']);
+				unset($count_sql_array['LEFT_JOIN']);
+				$count_sql = $this->db->sql_build_query('SELECT', $count_sql_array);
 
-				$rowset[$row['topic_id']] = $row;
+				$result = $this->db->sql_query($count_sql);
+				$topics_count = (int) $this->db->sql_fetchfield('topic_count');
+				$this->db->sql_freeresult($result);
 
-				if (!isset($forums[$row['forum_id']]) && $this->user->data['is_registered'] && $this->config['load_db_lastread'])
+				$total_topics_limit = min($total_topics_limit, $topics_count);
+				$rtng_start = $this->validate_start($rtng_start, $this->topics_per_page, $total_topics_limit);
+				$result = $this->db->sql_query_limit($sql, $this->topics_per_page, $rtng_start);
+
+				if ($result == false)
 				{
-					$forums[$row['forum_id']]['mark_time'] = $row['f_mark_time'];
+					return 0;
 				}
-				$forums[$row['forum_id']]['topic_list'][] = $row['topic_id'];
-				$forums[$row['forum_id']]['rowset'][$row['topic_id']] = & $rowset[$row['topic_id']];
 
-				if ($row['icon_id'])
-				{
-					$obtain_icons = true;
-				}
+				$rows = $this->db->sql_fetchrowset($result);
+				$this->db->sql_freeresult($result);
+
+				$this->collect_topic_list_rows($rows, $obtain_icons, $forums, $topic_list);
 			}
-
-			$this->db->sql_freeresult($result);
 		}
 
 		// Set start of pagination
@@ -398,6 +496,33 @@ class rtng_functions
 
 		// Return number of total topics counts to display
 		return $total_topics_limit;
+	}
+
+	private function collect_topic_list_rows(array $rows, bool &$obtain_icons, array &$forums, array &$topic_list): void
+	{
+		foreach ($rows as $row)
+		{
+			$topic_id = (int) ($row['topic_id'] ?? 0);
+			$forum_id = (int) ($row['forum_id'] ?? 0);
+			if ($topic_id <= 0 || $forum_id <= 0)
+			{
+				continue;
+			}
+
+			$topic_list[] = $topic_id;
+
+			if (!isset($forums[$forum_id]) && $this->user->data['is_registered'] && $this->config['load_db_lastread'])
+			{
+				$forums[$forum_id]['mark_time'] = $row['f_mark_time'];
+			}
+			$forums[$forum_id]['topic_list'][] = $topic_id;
+			$forums[$forum_id]['rowset'][$topic_id] = $row;
+
+			if (!empty($row['icon_id']))
+			{
+				$obtain_icons = true;
+			}
+		}
 	}
 
 	/**
@@ -622,6 +747,16 @@ class rtng_functions
 		}
 
 		return $id_map;
+	}
+
+	private function normalise_topic_ids(array $topic_ids): array
+	{
+		$topic_ids = array_values(array_unique(array_filter(array_map('intval', $topic_ids), static function ($topic_id) {
+			return $topic_id > 0;
+		})));
+		sort($topic_ids);
+
+		return $topic_ids;
 	}
 
 	private function build_non_foe_topic_poster_sql(string $topic_alias = 't'): string
@@ -937,6 +1072,7 @@ class rtng_functions
 				extract($this->dispatcher->trigger_event('imcger.recenttopicsng.modify_tpl_ary', compact($vars)));
 
 				$this->template->assign_block_vars($tpl_loopname, $tpl_ary);
+				$this->record_displayed_topic_id_for_dedupe($tpl_loopname, (int) ($tpl_ary['TOPIC_ID'] ?? $topic_id));
 				$this->pagination->generate_template_pagination($view_topic_url, $tpl_loopname . '.pagination', 'start', $replies + 1, $this->config['posts_per_page'], 1, true, true);
 
 				if ($this->config['rtng_parents'])
@@ -989,6 +1125,14 @@ class rtng_functions
 				'S_RTNG_TOPIC_ICONS' => (bool) $topic_icons,
 			]);
 		} // topics found
+	}
+
+	private function record_displayed_topic_id_for_dedupe(string $tpl_loopname, int $topic_id): void
+	{
+		if ($topic_id > 0)
+		{
+			$this->displayed_topic_ids_for_dedupe[$tpl_loopname][$topic_id] = true;
+		}
 	}
 
 	public function validate_start($start, $per_page, $num_items)

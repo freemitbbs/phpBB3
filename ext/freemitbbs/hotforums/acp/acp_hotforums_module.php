@@ -8,6 +8,7 @@ class acp_hotforums_module
 
 	private const SETTINGS = [
 		['key' => 'hotforums_index_limit', 'default' => 8, 'min' => 1, 'max' => 100],
+		['key' => 'hotforums_viewership_cache_seconds', 'default' => 600, 'min' => 0, 'max' => 86400],
 	];
 
 	public string $tpl_name;

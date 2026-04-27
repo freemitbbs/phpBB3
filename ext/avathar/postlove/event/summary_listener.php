@@ -33,6 +33,9 @@ class summary_listener implements EventSubscriberInterface
 	private const SECONDS_PER_DAY = self::SECONDS_PER_HOUR * 24;
 	private const USER_OPTION_HIDE_SUMMARY = 18;
 	private const USER_OPTION_HIDE_FORUM_SUMMARY = 19;
+	private const SUMMARY_CACHE_PREFIX = '_avathar_postlove_summary_';
+	private const SUMMARY_CACHE_VERSION_CONFIG = 'postlove_summary_cache_version';
+	private const SUMMARY_RENDER_CACHE_SECONDS = 120;
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
@@ -104,14 +107,21 @@ class summary_listener implements EventSubscriberInterface
 	public function  index_page_summary($event)
 	{
 		// first check that this user wants to see Post Like
-		$this->user->get_profile_fields($this->user->data['user_id']);
 		if ($this->user->data['is_bot'] || // bots dont want to see this
 			!$this->auth->acl_get('u_postlove_summary') || // user group not allowed to see summary
-			$this->user_hides_summary() || // user disabled the summary in UCP
-			(isset($this->user->profile_fields['pf_postlove_hide']) && $this->user->profile_fields['pf_postlove_hide']) // user doesnt want
+			$this->user_hides_summary() // user disabled the summary in UCP
 			)
 		{
 			return;
+		}
+
+		if ($this->user->data['is_registered'])
+		{
+			$this->user->get_profile_fields($this->user->data['user_id']);
+			if (isset($this->user->profile_fields['pf_postlove_hide']) && $this->user->profile_fields['pf_postlove_hide'])
+			{
+				return;
+			}
 		}
 
 		// get array of fora permissions
@@ -158,15 +168,22 @@ class summary_listener implements EventSubscriberInterface
 		}
 
 		// first check that this user wants to see Post Like
-		$this->user->get_profile_fields($this->user->data['user_id']);
 		if ($this->user->data['is_bot'] || // we dont want bots to see summaries
 			 !$this->auth->acl_get('u_postlove_summary') || // user group not allowed to see summary
 			 $this->user_hides_summary() || // user disabled the summary in UCP
-			 $this->user_hides_forum_summary() || // user disabled forum summaries in UCP
-			 (isset($this->user->profile_fields['pf_postlove_hide']) && $this->user->profile_fields['pf_postlove_hide']) // user doesnt want
+			 $this->user_hides_forum_summary() // user disabled forum summaries in UCP
 			)
 		{
 			return;
+		}
+
+		if ($this->user->data['is_registered'])
+		{
+			$this->user->get_profile_fields($this->user->data['user_id']);
+			if (isset($this->user->profile_fields['pf_postlove_hide']) && $this->user->profile_fields['pf_postlove_hide'])
+			{
+				return;
+			}
 		}
 
 		$forum_ary = array();
@@ -249,6 +266,14 @@ class summary_listener implements EventSubscriberInterface
 			array('key' => 'LIKES_EVER', 'start' => 2, 'count' => (int) $this->config['postlove_' . $page_type . '_most_liked_ever']),
 		);
 
+		$cache_key = $this->build_summary_cache_key($forum_ary, $page_type, $day_begin_time, $selection_periods);
+		$cached_summary = $this->get_cached_summary($cache_key);
+		if ($cached_summary !== null)
+		{
+			$this->assign_summary_template($cached_summary['summary_rows'], $cached_summary['post_count']);
+			return;
+		}
+
 		foreach ($selection_periods as $period)
 		{
 			$period_rows = array();
@@ -271,8 +296,23 @@ class summary_listener implements EventSubscriberInterface
 			foreach ($rows_by_period[$period_key] as $tpl_ary)
 			{
 				$summary_rows[] = $tpl_ary;
-				$this->template->assign_block_vars('most_liked_posts', $tpl_ary);
 			}
+		}
+
+		$post_count = count($post_list) - 1;
+		$this->cache->put($cache_key, array(
+			'summary_rows' => $summary_rows,
+			'post_count' => $post_count,
+		), self::SUMMARY_RENDER_CACHE_SECONDS);
+
+		$this->assign_summary_template($summary_rows, $post_count);
+	}
+
+	protected function assign_summary_template(array $summary_rows, int $post_count): void
+	{
+		foreach ($summary_rows as $tpl_ary)
+		{
+			$this->template->assign_block_vars('most_liked_posts', $tpl_ary);
 		}
 
 		if (!empty($summary_rows))
@@ -292,9 +332,58 @@ class summary_listener implements EventSubscriberInterface
 		}
 
 		$this->template->assign_vars(array(
-			'S_MOSTLIKEDSUMMARYCOUNT'	=>  count($post_list) - 1,
+			'S_MOSTLIKEDSUMMARYCOUNT'	=>  $post_count,
 			'S_POSTLOVE_SUMMARY_BELOW'	=>  (int) $this->config['postlove_summary_position'],
 			));
+	}
+
+	protected function get_cached_summary(string $cache_key): ?array
+	{
+		$cached = $this->cache->get($cache_key);
+		if (!is_array($cached)
+			|| !isset($cached['summary_rows'])
+			|| !is_array($cached['summary_rows'])
+			|| !isset($cached['post_count']))
+		{
+			return null;
+		}
+
+		return array(
+			'summary_rows' => $cached['summary_rows'],
+			'post_count' => (int) $cached['post_count'],
+		);
+	}
+
+	protected function build_summary_cache_key(array $forum_ary, string $page_type, int $day_begin_time, array $selection_periods): string
+	{
+		$forum_ary = array_values(array_unique(array_map('intval', $forum_ary)));
+		sort($forum_ary);
+
+		$foe_user_ids = array_map('intval', array_keys($this->get_current_user_foe_id_map()));
+		sort($foe_user_ids);
+
+		$period_config = array_map(static function ($period) {
+			return array(
+				'key' => (string) $period['key'],
+				'start' => (int) $period['start'],
+				'count' => (int) $period['count'],
+			);
+		}, $selection_periods);
+
+		$timezone = ($this->user->timezone instanceof \DateTimeZone)
+			? $this->user->timezone->getName()
+			: 'UTC';
+
+		return self::SUMMARY_CACHE_PREFIX . md5(json_encode(array(
+			'version' => (string) ($this->config[self::SUMMARY_CACHE_VERSION_CONFIG] ?? '0'),
+			'page_type' => $page_type,
+			'forum_ids' => $forum_ary,
+			'periods' => $period_config,
+			'user_id' => (int) ($this->user->data['user_id'] ?? ANONYMOUS),
+			'user_lang' => (string) ($this->user->data['user_lang'] ?? ''),
+			'timezone' => $timezone,
+			'foe_user_ids' => $foe_user_ids,
+		)));
 	}
 
 	/**
