@@ -187,7 +187,7 @@ function toggle_visible(id) {
     function attachMoreButtonEvents(context) {
         context.querySelectorAll('.reaction-more').forEach(button => {
             const container = button.closest('.post-reactions-container');
-            if (container && container.classList.contains('post-reactions-readonly')) {
+            if ((container && container.classList.contains('post-reactions-readonly')) || button.classList.contains('reaction-more-disabled')) {
                 return;
             }
             button.removeEventListener('click', handleMoreButtonClick);
@@ -292,6 +292,10 @@ function toggle_visible(id) {
         closeAllPickers();
 
         const button = event.currentTarget;
+        if (button.classList.contains('reaction-more-disabled')) {
+            return;
+        }
+
         const postId = getPostIdFromReaction(button);
 
         if (!postId) {

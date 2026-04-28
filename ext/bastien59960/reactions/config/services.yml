@@ -27,6 +27,7 @@ services:
             - '@language'
             - '@controller.helper'
             - '%tables.post_reactions%'
+            - '%tables.posts%'
 
     # =========================================================================
     # LISTENER D'ÉVÉNEMENTS

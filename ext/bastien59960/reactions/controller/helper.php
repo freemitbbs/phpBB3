@@ -59,7 +59,8 @@ class helper
         template $template,
         language $language,
         controller_helper $controller_helper,
-        $table_post_reactions  // ✅ SANS type hint string
+        $table_post_reactions,  // ✅ SANS type hint string
+        $table_posts = null
     ) {
         $this->db = $db;
         $this->user = $user;
@@ -67,6 +68,7 @@ class helper
         $this->language = $language;
         $this->controller_helper = $controller_helper;
         $this->table_post_reactions = $table_post_reactions;
+        $this->table_posts = $table_posts ?: POSTS_TABLE;
     }
 
     /**
@@ -113,6 +115,8 @@ class helper
 
         $user_id = (int) $this->user->data['user_id'];
         $is_logged_in = ($user_id !== ANONYMOUS);
+        $is_own_post = $is_logged_in && $this->is_own_post($post_id, $user_id);
+
         if ($is_logged_in) {
             foreach ($aggregated as $emoji => &$data) {
                 foreach ($data['users'] as $user_info) {
@@ -147,13 +151,13 @@ class helper
 
         $html = '<div class="post-reactions">';
 
-        $is_readonly = !$is_logged_in;
+        $is_readonly = !$is_logged_in || $is_own_post;
 
         foreach ($reactions as $reaction) {
             $wrapper_classes = ['reaction-wrapper'];
             $button_classes = ['reaction'];
 
-            if ($reaction['user_reacted']) {
+            if ($reaction['user_reacted'] && !$is_own_post) {
                 $wrapper_classes[] = 'active';
             }
             if ($is_readonly) {
@@ -181,9 +185,19 @@ class helper
         }
 
         if ($is_logged_in) {
-            $tooltip = htmlspecialchars($this->language->lang('REACTIONS_ADD_TOOLTIP'), ENT_QUOTES, 'UTF-8');
+            $more_classes = ['reaction-more'];
+            $extra_attrs = ' role="button"';
+            if ($is_own_post) {
+                $more_classes[] = 'reaction-more-disabled';
+                $tooltip_text = $this->language->lang('REACTION_OWN_POST');
+                $extra_attrs .= ' aria-disabled="true" tabindex="-1"';
+            } else {
+                $tooltip_text = $this->language->lang('REACTIONS_ADD_TOOLTIP');
+            }
+
+            $tooltip = htmlspecialchars($tooltip_text, ENT_QUOTES, 'UTF-8');
             $button_text = htmlspecialchars($this->language->lang('REACTIONS_BUTTON_TEXT'), ENT_QUOTES, 'UTF-8');
-            $html .= '<span class="reaction-more" role="button" title="' . $tooltip . '" aria-label="' . $tooltip . '">';
+            $html .= '<span class="' . implode(' ', $more_classes) . '"' . $extra_attrs . ' title="' . $tooltip . '" aria-label="' . $tooltip . '">';
             $html .= '<span class="reaction-more-icon"></span>';
             $html .= '<span class="reaction-more-text">' . $button_text . '</span>';
             $html .= '</span>';
@@ -194,6 +208,18 @@ class helper
         // Retourne uniquement le contenu intérieur (pas le conteneur parent)
         // Le JS remplace innerHTML du conteneur existant
         return $html;
+    }
+
+    private function is_own_post($post_id, $user_id)
+    {
+        $sql = 'SELECT poster_id
+                FROM ' . $this->table_posts . '
+                WHERE post_id = ' . (int) $post_id;
+        $result = $this->db->sql_query($sql);
+        $row = $this->db->sql_fetchrow($result);
+        $this->db->sql_freeresult($result);
+
+        return $row && (int) $row['poster_id'] === (int) $user_id;
     }
 
     /**

@@ -20,10 +20,10 @@
  * - Responsive design
  */
 :root {
-    --reactions-post-emoji-size: 24px;
+    --reactions-post-emoji-size: 11px;
     --reactions-picker-width: 320px;
     --reactions-picker-height: 280px;
-    --reactions-picker-emoji-size: 24px;
+    --reactions-picker-emoji-size: 11px;
 }
 
 
@@ -73,14 +73,14 @@
     gap: 0;
     background: transparent;
     border: none;
-    border-radius: 20px;
-    padding: 6px 12px;
+    border-radius: 18px;
+    padding: 5px 10px;
     cursor: pointer;
     color: #1877F2;
     transition: all 0.2s ease;
     order: -1;
     margin-right: 8px;
-    font-size: 18px;
+    font-size: 16px;
 }
 
 .reaction-more:hover {
@@ -88,7 +88,7 @@
 }
 
 .reaction-more-icon {
-    font-size: 18px;
+    font-size: 16px;
     line-height: 1;
 }
 
@@ -407,4 +407,99 @@
 
 .emoji-picker--no-search .emoji-picker-header {
     justify-content: flex-end;
+}
+
+/* ========== recovered production customization ========== */
+
+.post-reactions .reaction-wrapper {
+    background: #f3f3f3;
+    border: 1px solid #d1d1d1;
+    border-radius: 15px;
+    padding: 2px 6px;
+    font-size: 11px;
+    line-height: 1;
+    margin-right: 4px;
+    transform: none;
+}
+
+.post-reactions button.reaction,
+.post-reactions .reaction {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    padding: 0;
+}
+
+.post-reactions .reaction-more {
+    order: -1;
+    border-style: none;
+    background: transparent;
+}
+
+.reaction-more-disabled {
+    cursor: default;
+    pointer-events: none;
+}
+
+.reaction-more-disabled .reaction-more-text {
+    margin-left: 0;
+    max-width: 0;
+    opacity: 0;
+}
+
+.post:hover .reaction-more-disabled {
+    opacity: 0.45;
+}
+
+.post-reactions .reaction-wrapper:hover {
+    background: #f0f0f0;
+    border-color: #cccccc;
+    transform: none;
+}
+
+.post-reactions .reaction-wrapper.active {
+    background: #e1ecf4;
+    border-color: #abc9de;
+}
+
+.post-reactions .reaction-wrapper.active .reaction,
+.post-reactions .reaction-wrapper.active .count {
+    color: #3a7ca8;
+}
+
+.post-reactions .reaction .count {
+    margin-left: 3px;
+    font-weight: normal;
+    font-size: 10px;
+}
+
+.reaction-more {
+    font-size: 12px !important;
+    color: #666 !important;
+    text-transform: lowercase;
+}
+
+.reaction-more-icon,
+.reaction-more-text {
+    font-size: 12px !important;
+}
+
+.reaction-picker-item img {
+    width: 20px !important;
+    height: 20px !important;
+}
+
+.post:not(:hover) .reaction-more {
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+}
+
+.post:hover .reaction-more {
+    visibility: visible;
+    opacity: 1;
 }

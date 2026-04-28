@@ -26,15 +26,13 @@
     <div class="post-reactions">
         <!-- Boucle des réactions existantes depuis la base de données -->
         <!-- BEGIN post_reactions -->
-        <span class="reaction<!-- IF post_reactions.USER_REACTED --> active<!-- ENDIF -->"
-              data-emoji="{post_reactions.EMOJI}"
-              data-count="{post_reactions.COUNT}"
-              data-users="{post_reactions.USERS}"
-              title="{L_REACTIONS_COUNT_TOOLTIP}"
-              <!-- IF post_reactions.COUNT == 0 -->style="display: none;"<!-- ENDIF -->>
-            {post_reactions.EMOJI}
-            <span class="count">{post_reactions.COUNT}</span>
-        </span>
+        <div class="reaction-wrapper<!-- IF post_reactions.USER_REACTED --> active<!-- ENDIF -->" data-emoji="{post_reactions.EMOJI}" data-count="{post_reactions.COUNT}" data-users="{post_reactions.USERS}">
+            <button type="button" class="reaction"
+                    <!-- IF post_reactions.COUNT == 0 -->style="display: none;"<!-- ENDIF -->>
+                {post_reactions.EMOJI}
+                <span class="count">{post_reactions.COUNT}</span>
+            </button>
+        </div>
         <!-- END post_reactions -->
 
         <!-- Bouton pour ouvrir la palette d'emojis -->
@@ -52,13 +50,12 @@
         <!-- BEGIN post_reactions -->
             <!-- Afficher seulement les réactions avec un compteur > 0 -->
             <!-- IF post_reactions.COUNT > 0 -->
-            <span class="reaction reaction-readonly"
-                  data-emoji="{post_reactions.EMOJI}"
-                  data-count="{post_reactions.COUNT}"
-                  title="{L_REACTIONS_COUNT_TOOLTIP}">
-                {post_reactions.EMOJI}
-                <span class="count">{post_reactions.COUNT}</span>
-            </span>
+            <div class="reaction-wrapper" data-emoji="{post_reactions.EMOJI}" data-count="{post_reactions.COUNT}">
+                <button type="button" class="reaction reaction-readonly">
+                    {post_reactions.EMOJI}
+                    <span class="count">{post_reactions.COUNT}</span>
+                </button>
+            </div>
             <!-- ENDIF -->
         <!-- END post_reactions -->
     </div>

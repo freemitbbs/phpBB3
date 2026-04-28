@@ -28,6 +28,7 @@ $lang = array_merge($lang ?? [], [
     // ERROR AND VALIDATION MESSAGES
     // =============================================================================
     'REACTION_NOT_AUTHORIZED'   => 'Vous n\'êtes pas autorisé à réagir',
+    'REACTION_OWN_POST'         => 'Vous ne pouvez pas réagir à votre propre message',
     'REACTION_INVALID_POST'     => 'Message invalide',
     'REACTION_INVALID_EMOJI'    => 'Emoji invalide',
     'REACTION_ALREADY_ADDED'    => 'Vous avez déjà réagi avec cet emoji',

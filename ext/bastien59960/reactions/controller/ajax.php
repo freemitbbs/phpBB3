@@ -344,6 +344,15 @@ class ajax
             // Pour les autres actions, on vérifie si l'utilisateur peut interagir avec le post.
             if ($action !== 'sync')
             {
+                if ($action === 'add' && (int) $this->user->data['user_id'] !== ANONYMOUS && $this->is_own_post($post_id)) {
+                    return new JsonResponse([
+                        'success'  => false,
+                        'error'    => $this->language->lang('REACTION_OWN_POST'),
+                        'own_post' => true,
+                        'rid'      => $rid,
+                    ], 400);
+                }
+
                 if (!$this->can_react_to_post($post_id)) {
                     return new JsonResponse([
                         'success' => false,
@@ -790,6 +799,18 @@ class ajax
         $this->db->sql_freeresult($result);
         
         return (bool) $exists;
+    }
+
+    private function is_own_post($post_id)
+    {
+        $sql = 'SELECT poster_id
+                FROM ' . $this->posts_table . '
+                WHERE post_id = ' . (int) $post_id;
+        $result = $this->db->sql_query($sql);
+        $row = $this->db->sql_fetchrow($result);
+        $this->db->sql_freeresult($result);
+
+        return $row && (int) $row['poster_id'] === (int) $this->user->data['user_id'];
     }
 
     /**

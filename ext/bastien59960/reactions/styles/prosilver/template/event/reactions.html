@@ -28,8 +28,6 @@
         <!-- BEGIN post_reactions --> 
         <div class="reaction-wrapper<!-- IF post_reactions.USER_REACTED --> active<!-- ENDIF -->" data-emoji="{post_reactions.EMOJI}" data-count="{post_reactions.COUNT}" data-users="{post_reactions.USERS}">
             <button type="button" class="reaction"
-                    title="{L_REACTIONS_COUNT_TOOLTIP}"
-                    aria-label="{L_REACTIONS_COUNT_TOOLTIP}"
                     <!-- IF post_reactions.COUNT == 0 -->style="display: none;"<!-- ENDIF -->>
                 {post_reactions.EMOJI}
                 <span class="count">{post_reactions.COUNT}</span>
@@ -55,8 +53,7 @@
         <div class="reaction-wrapper">
             <button type="button" class="reaction reaction-readonly"
                     data-emoji="{post_reactions.EMOJI}"
-                    data-count="{post_reactions.COUNT}"
-                    title="{L_REACTIONS_COUNT_TOOLTIP}">
+                    data-count="{post_reactions.COUNT}">
                 {post_reactions.EMOJI}
                 <span class="count">{post_reactions.COUNT}</span>
             </button>

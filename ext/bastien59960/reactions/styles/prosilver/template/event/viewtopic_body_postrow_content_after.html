@@ -1,17 +1,20 @@
 <!-- IF S_REACTIONS_ENABLED and not S_IS_BOT and S_USER_LOGGED_IN -->
-<div class="post-reactions-container" data-post-id="{postrow.POST_ID}">
+<div class="post-reactions-container<!-- IF postrow.S_IS_OWN_POST --> post-reactions-readonly post-reactions-own-post<!-- ENDIF -->" data-post-id="{postrow.POST_ID}">
     <div class="post-reactions">
         <!-- BEGIN postrow.post_reactions -->
-        <span class="reaction<!-- IF postrow.post_reactions.USER_REACTED --> active<!-- ENDIF -->" 
-              data-emoji="{postrow.post_reactions.EMOJI}" 
-              data-count="{postrow.post_reactions.COUNT}"
-              data-users='{postrow.post_reactions.USERS}'
-              <!-- IF postrow.post_reactions.COUNT == 0 -->style="display:none;"<!-- ENDIF -->>
-            {postrow.post_reactions.EMOJI} <span class="count">{postrow.post_reactions.COUNT}</span>
-        </span>
+        <div class="reaction-wrapper<!-- IF postrow.post_reactions.USER_REACTED and not postrow.S_IS_OWN_POST --> active<!-- ENDIF -->" data-emoji="{postrow.post_reactions.EMOJI}" data-count="{postrow.post_reactions.COUNT}" data-users='{postrow.post_reactions.USERS}'>
+            <button type="button" class="reaction<!-- IF postrow.S_IS_OWN_POST --> reaction-readonly<!-- ENDIF -->"
+                    <!-- IF postrow.post_reactions.COUNT == 0 -->style="display:none;"<!-- ENDIF -->>
+                {postrow.post_reactions.EMOJI} <span class="count">{postrow.post_reactions.COUNT}</span>
+            </button>
+        </div>
         <!-- END postrow.post_reactions -->
         
+        <!-- IF postrow.S_IS_OWN_POST -->
+        <span class="reaction-more reaction-more-disabled" role="button" aria-disabled="true" tabindex="-1" title="{L_REACTION_OWN_POST}" aria-label="{L_REACTION_OWN_POST}"><span class="reaction-more-icon"></span><span class="reaction-more-text">{L_REACTIONS_BUTTON_TEXT}</span></span>
+        <!-- ELSE -->
         <span class="reaction-more" role="button" title="{L_REACTIONS_ADD_TOOLTIP}" aria-label="{L_REACTIONS_ADD_TOOLTIP}"><span class="reaction-more-icon"></span><span class="reaction-more-text">{L_REACTIONS_BUTTON_TEXT}</span></span>
+        <!-- ENDIF -->
     </div>
 </div>
 
@@ -20,11 +23,11 @@
     <div class="post-reactions">
         <!-- BEGIN postrow.post_reactions -->
         <!-- IF postrow.post_reactions.COUNT > 0 -->
-        <span class="reaction reaction-readonly" 
-              data-emoji="{postrow.post_reactions.EMOJI}" 
-              data-count="{postrow.post_reactions.COUNT}">
-            {postrow.post_reactions.EMOJI} <span class="count">{postrow.post_reactions.COUNT}</span>
-        </span>
+        <div class="reaction-wrapper" data-emoji="{postrow.post_reactions.EMOJI}" data-count="{postrow.post_reactions.COUNT}">
+            <button type="button" class="reaction reaction-readonly">
+                {postrow.post_reactions.EMOJI} <span class="count">{postrow.post_reactions.COUNT}</span>
+            </button>
+        </div>
         <!-- ENDIF -->
         <!-- END postrow.post_reactions -->
     </div>

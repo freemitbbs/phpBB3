@@ -268,6 +268,8 @@ class listener implements EventSubscriberInterface
 
         $reactions_by_db = $is_prefetched ? ($this->prefetched_reaction_counts[$post_id] ?? []) : $this->get_post_reactions($post_id);
         $user_reactions = $is_prefetched ? ($this->prefetched_user_reactions[$post_id] ?? []) : $this->get_user_reactions($post_id, (int) $this->user->data['user_id']);
+        $poster_id = isset($row['poster_id']) ? (int) $row['poster_id'] : (int) ($post_row['POSTER_ID'] ?? 0);
+        $is_own_post = $poster_id > 0 && $poster_id === (int) $this->user->data['user_id'];
 
         $visible_reactions = [];
         foreach ($reactions_by_db as $emoji => $count) {
@@ -290,6 +292,7 @@ class listener implements EventSubscriberInterface
 
         $post_row = array_merge($post_row, [
             'S_REACTIONS_ENABLED' => true,
+            'S_IS_OWN_POST'       => $is_own_post,
             'post_reactions'      => $visible_reactions,
         ]);
 
