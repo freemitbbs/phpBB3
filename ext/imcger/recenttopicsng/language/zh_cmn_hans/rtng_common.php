@@ -40,7 +40,7 @@ if (empty($lang) || !is_array($lang))
 //
 $lang = array_merge($lang, [
 	'RTNG_NO_TOPICS'        => '没有可显示的新主题。',
-        'RTNG_TOPICS_COUNT'     => '%d 个主题',
+        'RTNG_TOPICS_COUNT'     => '最近更新主题分页',
 
         'RTNG_TITLE'            => '最近更新话题',
         'RTNG_UNREAD_TITLE'     => '未读主题',
