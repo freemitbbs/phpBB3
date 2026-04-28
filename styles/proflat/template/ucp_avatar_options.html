@@ -1,0 +1,46 @@
+<div class="panel">
+	<div class="inner">
+	{% if not S_AVATARS_ENABLED %}
+		<p>{{ lang('AVATAR_FEATURES_DISABLED') }}</p>
+	{% endif %}
+
+	<fieldset>
+	{% if ERROR %}<p class="error">{{ ERROR }}</p>{% endif %}
+		<dl>
+			<dt><label>{{ lang('CURRENT_IMAGE') }}{{ lang('COLON') }}</label><br /><span>{{ lang('AVATAR_EXPLAIN') }}</span></dt>
+			<dd>{% if AVATAR %}{{ AVATAR }}{% else %}<i class="icon fa-fw fa-user"></i>{% endif %}</dd>
+			<dd><label for="avatar_delete"><input type="checkbox" name="avatar_delete" id="avatar_delete" /> {{ lang('DELETE_AVATAR') }}</label></dd>
+		</dl>
+	</fieldset>
+	<h3>{{ lang('AVATAR_SELECT') }}</h3>
+	<fieldset>
+		<dl>
+			<dt><label>{{ lang('AVATAR_TYPE') }}{{ lang('COLON') }}</label></dt>
+			<dd><select name="avatar_driver" id="avatar_driver" data-togglable-settings="true">
+				{% for avatar_drivers in loops.avatar_drivers %}
+				<option value="{{ avatar_drivers.DRIVER }}"{% if avatar_drivers.SELECTED %} selected="selected"{% endif %} data-toggle-setting="#avatar_option_{{ avatar_drivers.DRIVER }}">{{ avatar_drivers.L_TITLE }}</option>
+				{% endfor %}
+			</select></dd>
+		</dl>
+	</fieldset>
+	<div id="avatar_options">
+{% for avatar_drivers in loops.avatar_drivers %}
+	<div id="avatar_option_{{ avatar_drivers.DRIVER }}">
+	<noscript>
+	<h3 class="avatar_section_header">{{ avatar_drivers.L_TITLE }}</h3>
+	</noscript>
+	<p>{{ avatar_drivers.L_EXPLAIN }}</p>
+
+	<fieldset>
+	{{ avatar_drivers.OUTPUT }}
+	</fieldset>
+	</div>
+{% endfor %}
+	</div>
+{% if not S_GROUP_MANAGE %}
+	<fieldset class="submit-buttons">
+		<input type="submit" name="submit" value="{{ lang('SUBMIT') }}" class="button1" />
+	</fieldset>
+{% endif %}
+	</div>
+</div>

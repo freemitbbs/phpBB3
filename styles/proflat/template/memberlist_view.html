@@ -1,0 +1,142 @@
+{% INCLUDE 'overall_header.html' %}
+
+<h2 class="memberlist-title">{{ PAGE_TITLE }}</h2>
+
+{% EVENT memberlist_view_content_prepend %}
+
+<form method="post" action="{{ S_PROFILE_ACTION }}" id="viewprofile" class="viewprofile">
+<div class="panel bg1">
+	<div class="inner">
+	{% if S_ONLINE %}<span class="online-text">{{ lang('ONLINE') }}</span>{% endif %}
+	{% if AVATAR_IMG %}
+		<dl class="left-box avatar-rank-container">
+			<dt class="profile-avatar">{{ AVATAR_IMG }}</dt>
+			{% EVENT memberlist_view_rank_avatar_before %}
+			{% if RANK_TITLE %}<dd style="text-align: center;">{{ RANK_TITLE }}</dd>{% endif %}
+			{% if RANK_IMG %}<dd style="text-align: center;">{{ RANK_IMG }}</dd>{% endif %}
+			{% EVENT memberlist_view_rank_avatar_after %}
+		</dl>
+	{% endif %}
+
+	<dl class="left-box details profile-details">
+		<dt>{{ lang('USERNAME') }}{{ lang('COLON') }}</dt>
+		<dd>
+			{% EVENT memberlist_view_username_prepend %}{% if USER_COLOR %}<span style="color: {{ USER_COLOR }}; font-weight: bold;">{% else %}<span>{% endif %}{{ USERNAME }}</span>{% EVENT memberlist_view_username_append %}
+			{% if U_EDIT_SELF %} [ <a href="{{ U_EDIT_SELF }}">{{ lang('EDIT_PROFILE') }}</a> ]{% endif %}
+			{% if U_USER_ADMIN %} [ <a href="{{ U_USER_ADMIN }}">{{ lang('USER_ADMIN') }}</a> ]{% endif %}
+			{% if U_USER_BAN %} [ <a href="{{ U_USER_BAN }}">{{ lang('USER_BAN') }}</a> ]{% endif %}
+			{% if U_SWITCH_PERMISSIONS %} [ <a href="{{ U_SWITCH_PERMISSIONS }}">{{ lang('USE_PERMISSIONS') }}</a> ]{% endif %}
+		</dd>
+		{% if not AVATAR_IMG %}
+			{% EVENT memberlist_view_rank_no_avatar_before %}
+			{% if RANK_TITLE %}<dt>{{ lang('RANK') }}{{ lang('COLON') }}</dt> <dd>{{ RANK_TITLE }}</dd>{% endif %}
+			{% if RANK_IMG %}<dt>{% if RANK_TITLE %}&nbsp;{% else %}{{ lang('RANK') }}{{ lang('COLON') }}{% endif %}</dt> <dd>{{ RANK_IMG }}</dd>{% endif %}
+			{% EVENT memberlist_view_rank_no_avatar_after %}
+		{% endif %}
+		{% if S_USER_INACTIVE %}<dt>{{ lang('USER_IS_INACTIVE') }}{{ lang('COLON') }}</dt> <dd>{{ USER_INACTIVE_REASON }}</dd>{% endif %}
+		{% if AGE !== '' %}<dt>{{ lang('AGE') }}{{ lang('COLON') }}</dt> <dd>{{ AGE }}</dd>{% endif %}
+		{% if S_GROUP_OPTIONS %}<dt>{{ lang('USERGROUPS') }}{{ lang('COLON') }}</dt> <dd><select name="g">{{ S_GROUP_OPTIONS }}</select> <input type="submit" name="submit" value="{{ lang('GO') }}" class="button2" /></dd>{% endif %}
+		{% EVENT memberlist_view_non_contact_custom_fields_before %}
+		{% for custom_fields in loops.custom_fields %}
+			{% if not custom_fields.S_PROFILE_CONTACT %}
+				<dt>{{ custom_fields.PROFILE_FIELD_NAME }}{{ lang('COLON') }}</dt> <dd>{{ custom_fields.PROFILE_FIELD_VALUE }}</dd>
+			{% endif %}
+		{% endfor %}
+		{% EVENT memberlist_view_non_contact_custom_fields_after %}
+		{% EVENT memberlist_view_zebra_before %}
+		{% if S_USER_LOGGED_IN and S_ZEBRA %}
+			{% if U_REMOVE_FRIEND %}
+				<dt>&nbsp;</dt> <dd class="zebra"><a href="{{ U_REMOVE_FRIEND }}" data-ajax="zebra"><strong>{{ lang('REMOVE_FRIEND') }}</strong></a></dd>
+			{% elseif U_REMOVE_FOE %}
+				<dt>&nbsp;</dt> <dd class="zebra"><a href="{{ U_REMOVE_FOE }}" data-ajax="zebra"><strong>{{ lang('REMOVE_FOE') }}</strong></a></dd>
+			{% else %}
+				{% if U_ADD_FRIEND %}
+					<dt>&nbsp;</dt> <dd class="zebra"><a href="{{ U_ADD_FRIEND }}" data-ajax="zebra"><strong>{{ lang('ADD_FRIEND') }}</strong></a></dd>
+				{% endif %}
+				{% if U_ADD_FOE %}
+					<dt>&nbsp;</dt> <dd class="zebra"><a href="{{ U_ADD_FOE }}" data-ajax="zebra"><strong>{{ lang('ADD_FOE') }}</strong></a></dd>
+				{% endif %}
+			{% endif %}
+		{% endif %}
+		{% EVENT memberlist_view_zebra_after %}
+	</dl>
+
+	</div>
+</div>
+
+{% EVENT memberlist_view_contact_before %}
+<div class="panel bg2">
+	<div class="inner">
+
+	<div class="column1">
+		<h3>{{ lang('CONTACT_USER') }}</h3>
+
+		<dl class="details">
+		{% if U_EMAIL %}<dt>{{ lang('EMAIL_ADDRESS') }}{{ lang('COLON') }}</dt> <dd><a href="{{ U_EMAIL }}">{{ lang('SEND_EMAIL_USER') }}</a></dd>{% endif %}
+		{% if U_PM %}<dt>{{ lang('PM') }}{{ lang('COLON') }}</dt> <dd><a href="{{ U_PM }}">{{ lang('SEND_PRIVATE_MESSAGE') }}</a></dd>{% endif %}
+		{% if U_JABBER and S_JABBER_ENABLED %}<dt>{{ lang('JABBER') }}{{ lang('COLON') }}</dt> <dd><a href="{{ U_JABBER }}" onclick="popup(this.href, 750, 320); return false;">{{ lang('SEND_JABBER_MESSAGE') }}</a></dd>{% elseif USER_JABBER %}<dt>{{ lang('JABBER') }}{{ lang('COLON') }}</dt> <dd>{{ USER_JABBER }}</dd>{% endif %}
+		{% EVENT memberlist_view_contact_custom_fields_before %}
+		{% for custom_fields in loops.custom_fields %}
+			{% if custom_fields.S_PROFILE_CONTACT %}
+				<dt>{{ custom_fields.PROFILE_FIELD_NAME }}{{ lang('COLON') }}</dt>
+				{% if custom_fields.PROFILE_FIELD_CONTACT %}
+					<dd><a href="{{ custom_fields.PROFILE_FIELD_CONTACT }}">{{ custom_fields.PROFILE_FIELD_DESC }}</a></dd>
+				{% else %}
+					<dd>{{ custom_fields.PROFILE_FIELD_VALUE }}</dd>
+				{% endif %}
+			{% endif %}
+		{% endfor %}
+		{% EVENT memberlist_view_contact_custom_fields_after %}
+		{% if S_PROFILE_FIELD1 %}
+			<!-- NOTE: Use a construct like this to include admin defined profile fields. Replace FIELD1 with the name of your field. -->
+			<dt>{{ PROFILE_FIELD1_NAME }}{{ lang('COLON') }}</dt> <dd>{{ PROFILE_FIELD1_VALUE }}</dd>
+		{% endif %}
+		</dl>
+	</div>
+
+	<div class="column2">
+		<h3>{{ lang('USER_FORUM') }}</h3>
+		<dl class="details">
+			{% EVENT memberlist_view_user_statistics_before %}
+			<dt>{{ lang('JOINED') }}{{ lang('COLON') }}</dt> <dd>{{ JOINED }}</dd>
+			<dt>{{ lang('LAST_ACTIVE') }}{{ lang('COLON') }}</dt> <dd>{{ LAST_ACTIVE }}</dd>
+			{% if S_WARNINGS %}
+			<dt>{{ lang('WARNINGS') }}{{ lang('COLON') }} </dt>
+			<dd><strong>{{ WARNINGS }}</strong>{% if U_NOTES or U_WARN %} [ {% if U_NOTES %}<a href="{{ U_NOTES }}">{{ lang('VIEW_NOTES') }}</a>{% endif %} {% if U_WARN %}{% if U_NOTES %} | {% endif %}<a href="{{ U_WARN }}">{{ lang('WARN_USER') }}</a>{% endif %} ]{% endif %}</dd>
+			{% endif %}
+			<dt>{{ lang('TOTAL_POSTS') }}{{ lang('COLON') }}</dt>
+				<dd>{{ POSTS }} {% if S_DISPLAY_SEARCH %}| <strong><a href="{{ U_SEARCH_USER }}">{{ lang('SEARCH_USER_POSTS') }}</a></strong>{% endif %}
+					{% if POSTS_PCT %}<br />({{ POSTS_PCT }} / {{ POSTS_DAY }}){% endif %}
+					{% if POSTS_IN_QUEUE and U_MCP_QUEUE %}<br />(<a href="{{ U_MCP_QUEUE }}">{{ lang('POSTS_IN_QUEUE') }}</a>){% elseif POSTS_IN_QUEUE %}<br />({{ lang('POSTS_IN_QUEUE') }}){% endif %}
+				</dd>
+			{% if S_SHOW_ACTIVITY and POSTS %}
+				<dt>{{ lang('ACTIVE_IN_FORUM') }}{{ lang('COLON') }}</dt> <dd>{% if ACTIVE_FORUM != '' %}<strong><a href="{{ U_ACTIVE_FORUM }}">{{ ACTIVE_FORUM }}</a></strong><br />({{ ACTIVE_FORUM_POSTS }} / {{ ACTIVE_FORUM_PCT }}){% else %} - {% endif %}</dd>
+				<dt>{{ lang('ACTIVE_IN_TOPIC') }}{{ lang('COLON') }}</dt> <dd>{% if ACTIVE_TOPIC != '' %}<strong><a href="{{ U_ACTIVE_TOPIC }}">{{ ACTIVE_TOPIC }}</a></strong><br />({{ ACTIVE_TOPIC_POSTS }} / {{ ACTIVE_TOPIC_PCT }}){% else %} - {% endif %}</dd>
+			{% endif %}
+			{% EVENT memberlist_view_user_statistics_after %}
+		</dl>
+	</div>
+
+	</div>
+</div>
+{% EVENT memberlist_view_contact_after %}
+
+{% if SIGNATURE %}
+<div class="panel bg1">
+	<div class="inner">
+
+		<h3>{{ lang('SIGNATURE') }}</h3>
+
+		<div class="postbody"><div class="signature standalone">{{ SIGNATURE }}</div></div>
+
+	</div>
+</div>
+{% endif %}
+
+</form>
+
+{% EVENT memberlist_view_content_append %}
+
+{% INCLUDE 'jumpbox.html' %}
+
+{% INCLUDE 'overall_footer.html' %}

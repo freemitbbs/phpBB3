@@ -1,0 +1,46 @@
+{% INCLUDE 'simple_header.html' %}
+
+<h2>{{ lang('SEND_IM') }}</h2>
+
+<form method="post" action="{{ S_IM_ACTION }}">
+
+<div class="panel bg3">
+	<div class="inner">
+
+	<p>{{ lang('SEND_IM_EXPLAIN') }}</p>
+
+	{% if S_SENT_JABBER %}
+		<p>{{ lang('IM_SENT_JABBER') }}</p>
+	{% endif %}
+
+	<fieldset>
+		<dl class="fields2">
+			<dt><label>{{ lang('IM_RECIPIENT') }}{{ lang('COLON') }}</label></dt>
+			<dd><strong>{{ USERNAME }}</strong>{% if S_NO_SEND_JABBER %} [ {{ IM_CONTACT }} ]{% endif %}{% if PRESENCE_IMG %} {{ PRESENCE_IMG }}{% endif %}</dd>
+		</dl>
+
+	{% if S_SEND_JABBER %}
+		<dl class="fields2">
+			<dt><label for="message">{{ lang('IM_MESSAGE') }}{{ lang('COLON') }}</label></dt>
+			<dd><textarea class="inputbox autowidth" name="message" id="message" rows="5" cols="45"></textarea></dd>
+		</dl>
+		<dl class="fields2">
+			<dt>&nbsp;</dt>
+			<dd><input class="button1" name="submit" type="submit" value="{{ lang('IM_SEND') }}" /></dd>
+		</dl>
+	{% elseif S_NO_SEND_JABBER %}
+		<dl class="fields2">
+			<dt>&nbsp;</dt>
+			<dd>{{ lang('IM_NO_JABBER') }}</dd>
+		</dl>
+	{% endif %}
+	{{ S_FORM_TOKEN }}
+	</fieldset>
+
+	</div>
+</div>
+</form>
+
+<a href="#" onclick="window.close(); return false;">{{ lang('CLOSE_WINDOW') }}</a>
+
+{% INCLUDE 'simple_footer.html' %}

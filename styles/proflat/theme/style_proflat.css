@@ -1,0 +1,696 @@
+@charset "utf-8";
+
+html {
+	--radius0: 0px; /* important! awlays 0px */
+	--radius1: 0px; 
+}
+
+/*** common.css ***/
+/** General Markup Styles **/
+html {
+	height: 100%;
+}
+body {
+	line-height: 1.5;
+	padding: 0;
+}
+/** Main blocks **/
+.wrap {
+	border: none;
+	border-radius: var(--radius1);
+	padding: 5px 5px 0 5px;
+}
+@media (max-width: 1220px) {
+	.wrap {
+		margin: 0;
+	}
+}
+.site_logo {
+	width: 59px;
+	height: 59px;
+}
+#catbgndimg {
+	display: none !important;
+}
+/** Round cornered boxes and backgrounds **/
+.headerbar {
+	border-radius: var(--radius1);
+	margin-bottom: 0;
+}
+.navbar {
+	border-radius: var(--radius1);
+}
+.forabg {
+	border-radius: var(--radius1);
+	margin-bottom: 5px;
+	padding: 0;
+}
+.forumbg {
+	border-radius: var(--radius1);
+	margin-bottom: 5px;
+	padding: 0;
+}
+.panel {
+	border-radius: var(--radius1);
+}
+.post {
+	border-radius: var(--radius1);
+}
+/** Horizontal lists **/
+ul.navlinks {
+	border-top: none;
+}
+/** Dropdown menu **/
+.dropdown {
+	border-radius: var(--radius1);
+}
+.dropdown .dropdown-contents {
+	border-radius: var(--radius1);
+}
+.dropdown-contents a {
+	text-decoration: none;
+}
+/** Table styles **/
+table.table1 tbody tr {
+	border: none;
+}
+table.table1 tbody td {
+	border-bottom: 1px solid transparent;
+	border-top: none;
+	padding: 5px 10px
+}
+/* Specific column styles */
+.forumbg-table > .inner {
+	margin: 0;
+}
+/** Pagination **/
+.pagination li a,
+.pagination li span {
+	border-radius: var(--radius1);
+}
+.pagination li.page-jump a {
+	padding: 2px 8px;
+}
+.pagination li.page-jump a i {
+	font-size: 14px;
+}
+/* Pagination in viewforum for multipage topics */
+.row .pagination li a,
+.row .pagination li span {
+	border-radius: var(--radius1);
+	padding: 2px 4px;
+}
+/** jQuery popups **/
+.loading_indicator {
+	border-radius: var(--radius1);
+}
+/** Miscellaneous styles **/
+.copyright {
+	float: left;
+	padding: 10px;
+	text-align: left;
+}
+.footer-row {
+	font-size: 1em;
+	line-height: 1.4em;
+}
+.headerspace {
+	margin-top: 0;
+}
+div.rules {
+	border-radius: var(--radius1);
+	font-size: 1.2em;
+}
+.badge {
+	border-radius: var(--radius1);
+}
+/* Inner box-model clearing */
+.dropdown-extended .header {
+	border-radius: var(--radius1) var(--radius1) var(--radius0) var(--radius0);
+	font-family: Verdana, Helvetica, Arial, sans-serif;
+	font-size: 1.1em;
+	font-weight: normal;
+	line-height: inherit;
+	text-align: center;
+	text-shadow: none;
+	text-transform: none;
+}
+.member-search {
+	padding: 11px 10px;
+}
+
+/*** links.css ***/
+/** Link Styles **/
+/* Notification mark read link */
+.dropdown-extended a.mark_read {
+	border-radius: var(--radius1) var(--radius1) var(--radius0) var(--radius0);
+}
+/* Arrow links  */
+a.arrow-up 		{ padding-left: 0; }
+a.arrow-down 	{ padding-right: 0; }
+a.arrow-left 	{ padding-left: 0; }
+a.arrow-right 	{ padding-right: 0;  }
+
+/*** content.css ***/
+/** Content Styles **/
+li.header dt,
+li.header dd {
+	padding-top: 13px;
+	padding-bottom: 9px;
+	font-size: 1.1em;
+}
+li.row {
+	border-top: none;
+}
+li.header dl.row-item dt .list-inner {
+	/* Tweak for headers alignment when folder icon used */
+	padding-left: 10px;
+}
+/* Forum list column styles */
+dl.row-item dt .list-inner {
+	padding-left: 55px;					/* Space for folder icon */
+}
+dl.row-item dt {
+	background-position: 5px calc(50% + 12px);
+	min-height: 45px;
+}
+dl a.row-item-link {						/* topic row icon links */
+	width: 32px;
+	height: 32px;
+}
+dl.row-item dt[style*="background-image"],
+dd.lastpost>span>*:not(dfn) {
+	position: relative;
+}
+/** BB Code styles **/
+/* Quote block */
+blockquote.uncited {
+	padding-top: 5px;
+}
+
+/*** buttons.css ***/
+/** Button Styles **/
+.button {
+	border-radius: var(--radius1);
+}
+/** Posting page styles **/
+.button-search,
+.button-search-end  {
+	border-radius: var(--radius0);
+}
+.button-search-end {
+	border-radius: var(--radius0) var(--radius1) var(--radius1) var(--radius0);
+}
+/** Post control buttons **/
+.has-profile .post-buttons {
+	right: -12px;
+}
+.format-buttons .bbcode-size {
+	border: 2px solid transparent;
+}
+
+/*** cp.css ***/
+/** CP tabs shared **/
+.tabs .tab, .minitabs .tab {
+	margin-right: 5px;
+}
+/** CP tabbed menu **/
+.tabs {
+    margin: 20px 0 5px 5px;
+}
+.tabs .tab > a {
+	border-radius: var(--radius1);
+	margin: 0;
+}
+.tabs .activetab > a {
+	padding-bottom: 5px;
+}
+/** Mini tabbed menu used in MCP **/
+.minitabs {
+	margin: 15px 5px 5px 0;
+}
+.minitabs .tab > a {
+	border-radius: var(--radius1);
+	margin: 0;
+}
+/** UCP navigation menu **/
+/* Container for sub-navigation list */
+.navigation ul {
+	margin-right: 5px;
+}
+/* Link styles for the sub-section links */
+.navigation a {
+	margin: 0px 0px 5px;
+	padding: 6px 9px;
+}
+/** Preferences pane layout **/
+/* Friends list */
+.cp-mini {
+	border-radius: var(--radius1);
+	margin: 5px 5px 0 0;
+}
+/** Responsive *CP navigation **/
+@media (max-width: 900px) {
+	.navigation li:first-child a {
+		border-top-left-radius: var(--radius1);
+		border-top-right-radius: var(--radius1);
+	}
+	.navigation li:last-child a {
+		border-bottom-left-radius: var(--radius1);
+		border-bottom-right-radius: var(--radius1);
+	}
+}
+
+/*** forms.css ***/
+/** General form styles **/
+select {
+	border-radius: var(--radius1);
+	min-height: 24px;
+	padding: 3px;
+}
+/** Definition list layout for forms **/
+/* Quick-login on index page */
+fieldset.quick-login {
+	margin: 0 0 5px 0;
+	padding: 10px 10px 10px 10px;
+}
+fieldset.quick-login input.inputbox {
+	height: 20px;
+}
+/* Submit button fieldset */
+fieldset.submit-buttons {
+	border-radius: var(--radius1);
+}
+fieldset.submit-buttons input {
+	margin: 2px 0;
+}
+/** Input field styles **/
+.inputbox {
+	border-radius: var(--radius1);
+	height: 20px;
+}
+.inputbox:hover, .inputbox:focus {
+	border: 1px solid transparent;
+}
+/** Form button styles **/
+input.button1, input.button2 {
+	font-size: 1em;
+}
+a.button1, input.button1, input.button3, a.button2, input.button2 {
+	border-radius: var(--radius1);
+	padding: 2px 8px;
+	font-family: "Open Sans", "Droid Sans", Verdana, Arial, Helvetica;
+}
+/* Topic and forum Search */
+.search-box .inputbox {
+	border-radius: var(--radius1) var(--radius0) var(--radius0) var(--radius1);
+}
+/** Search box (header) **/
+.search-header {
+	border-radius: var(--radius1);
+	margin-right: 10px;
+	margin-top: 25px;
+}
+
+/*** icons.css ***/
+/** Global module setup **/
+.button4 .icon:before { padding-right: 0; }
+/* Icon size classes */
+.icon.icon-md {
+    font-size: 12px;
+}
+/* icon modifiers */
+.arrow-left:hover .icon {
+	margin-left: 0;
+	margin-right: 0;
+}
+.arrow-right:hover .icon {
+	margin-left: 0;
+	margin-right: 0;
+}
+.alert_close .icon:before {
+    border-radius: 50%;
+}
+
+/*** colours.css ***/
+/** Colours and backgrounds for links.css **/
+/* Table styles */
+table.table1 thead th {
+	font-family: Arial, Helvetica, sans-serif;
+	font-weight: bold;
+	text-transform: uppercase;
+	min-height: 38px;
+	font-size: 1.1em;
+	padding: 0 0 4px 3px;
+}
+/** Colours and backgrounds for buttons.css **/
+/* Forum icons & Topic icons */
+.row-item[class*=_read], .row-item[class*=_unread], .forum_link, .topic_moved {
+	cursor:default;
+}
+.row-item:before {
+    left: 10px;
+    position: absolute;
+	top: 50%;
+	transform: translateY(-50%);
+}
+
+/***  responsive.css ***/
+@media (max-width: 700px) {
+	/* Common block wrappers */
+	.headerbar, 
+	.navbar,
+	.forabg,
+	.forumbg,
+	.post,
+	.panel,
+	.stat-block	{
+		margin-left: 0;
+		margin-right: 0;
+	}
+	.cp-main .forabg,
+	.cp-main .forumdb,
+	.cp-main .post,
+	.cp-main .panel {
+		border-radius: 0;
+	}
+	/* Post */
+	.has-profile .post-buttons {
+		right: 2px;
+	}
+}
+/*** proflat.css ***/
+/* Action-bars */
+.dropdown-container-right .button {
+	margin-right: 0;
+}
+/* Buttons used in the editor */
+.format-buttons {
+    margin: 13px 0 0 0;
+}
+.format-buttons .button, .format-buttons .bbcode-size {
+	margin: 2px 0;
+}
+/* Colours and backgrounds for content.css */
+.unread:hover {
+    text-decoration: none;
+}
+/* Dropdown menu */
+.dropdown-page-jump li {
+	padding-top: 4px;
+	padding-bottom: 4px;
+}
+/* Font */
+.row-item .fa-file-o:before,
+.lastpost .fa-external-link-square:before {
+	font-size: 12px;
+}
+.dropdown-contents .fa-check-circle:before,
+.row-item .fa-exclamation:before,
+.row-item .fa-question:before,
+.row-item .fa-rss-square:before,	
+.row-item .fa-recycle:before {
+	font-size: 16px;
+}
+.socialinks .icon,
+.socialinks .fa-brands {
+	font-size: 2em;
+}
+.dropdown-extended .notification-block .fa-user:before {
+	font-size: 55px;
+}
+.cp-main .fa-user:before {
+	font-size: 110px;
+}
+.cp-main .topiclist .fa-user:before {
+	font-size: 55px;
+}
+/* Horizontal list */
+ul.linklist li a {
+text-decoration: none;
+}
+/* Inner box-model clearing */
+.dropdown-extended .header a {
+	display: inline;
+}
+/* List in forum description */
+dd.lastpost span a, dd.mark input {
+	position: relative;
+}
+/* Miscellaneous styles */
+.footerbar {
+	border-radius: var(--radius1);
+	clear: both;
+	overflow: hidden;
+}
+/* Navbar Top & Navbar Bottom */
+.navbar-container,
+.headerbar-container,
+.footerbar-container {
+	max-width: 1152px;
+	margin: 0 auto;
+}
+/* No-avatar icon */
+.dropdown-extended .notification-block .fa-user {
+    float: left;
+    margin-left: 4px;
+    width: auto;
+    height: auto;
+}
+.panel .fa-user {
+    width: auto;
+    height: auto;
+}
+.cp-main .row .fa-user {
+    float: left;
+    margin-left: 3px;
+    width: auto;
+    height: auto;
+}
+/* Poster profile block */
+.online-text {
+	font-size: 0.9em;
+	font-weight: bold;
+	position: absolute;
+	right: 8px;
+	text-transform: uppercase;
+	top: 8px;
+}
+.viewprofile .online-text {
+	position: relative;
+	float:right;
+}
+/* Responsive */
+@media (max-width: 700px) {
+	.linklist .mark-read span {
+		display: none;
+	}
+	table.responsive.show-header thead, table.responsive.show-header th:first-child {
+		text-align: center !important;
+		text-transform: none;
+		line-height: 1.3em;
+		font-size: 1.1em;
+	}
+	.online-text {
+		font-size: 0.6em;
+		right: 5px;
+		top: 3px;
+	}
+}
+/* Social links */
+@font-face {
+	font-family: "fa-brands";
+	src: url("./fonts/fa-brands-400.woff2") format("woff2"), 
+		 url("./fonts/fa-brands-400.ttf") format("truetype");
+	font-style: normal;
+	font-weight: 400;
+}
+.fa-brands {
+	font-family: "fa-brands";
+	font-style: normal;
+	font-variant: normal;
+	line-height: 1;
+	text-rendering: auto;
+}
+.socialinks {
+	float: right;
+	padding: 5px 10px;
+}
+@media (max-width: 700px) {
+	.socialinks {
+		float: none;
+		text-align: center;
+	}
+}
+.socialinks > ul {
+	display: inline-block;
+}
+.socialinks ul li {
+	border: 1px solid transparent;
+	float: right;
+	list-style-type: none;
+	margin: 5px 2px;
+	opacity: 0.75;
+	padding: 5px 2px;
+}
+.socialinks ul li:hover {
+	border-radius: var(--radius1);
+}
+.socialinks ul li a:hover {
+	text-decoration: none;
+}
+.socialinks ul li a i:before {
+	padding: 5px;
+}
+
+/* Stat-block */
+.stat-block h3 {
+	border-bottom: none;
+	border-radius: var(--radius1) var(--radius1) var(--radius0) var(--radius0);
+	margin-bottom: 0;
+	padding: 12px 0 12px 10px;
+	margin-top: 0;
+}
+.stat-block p {
+	padding: 10px 0 10px 10px;
+	margin-bottom: 5px;
+}
+.stat-block p:hover {
+	background-color: #e5e5e5;
+}
+@media (max-width: 700px) {
+	.stat-block h3 {
+		text-align: center;
+		text-transform: none;
+	}
+	.postprofile .no-avatar img {
+		width: auto !important;
+		height: auto !important;
+		max-height: 35px;
+	}
+}
+/* Table styles */
+table.table1 thead tr {
+	height: 38px;
+}
+table.table1 thead th a {
+	padding: 0 0 0 8px;
+}
+
+/***  bidi.css ***/
+/* Content Styles */
+.rtl li.header dl.row-item dt .list-inner {
+    padding-left: inherit;
+    padding-right: 10px !important;
+}
+/* Default avatar */
+.rtl .dropdown-extended .notification-block .fa-user {
+    float: right;
+    margin-right: 4px;
+}
+/* Forum icons & Topic icons */
+.rtl .row-item:before {
+    left: inherit;
+    right: 10px;
+}
+/* Forum list column styles */
+.rtl dl a.row-item-link {
+	margin-right: 10px !important;
+}
+/* Miscellaneous styles */
+.rtl .copyright {
+	float: right;
+	padding: 10px;
+	text-align: right;
+}
+/* Poster profile block */
+.rtl .online-text {
+	right: inherit;
+	left: 8px;
+}
+/* Quote block */
+.rtl blockquote cite > div {
+    float: left;
+}
+/* Social links */
+.rtl .socialinks {
+	float: left;
+}
+/* Stat-block */
+.rtl .stat-block h3 {
+    padding: 12px 10px 12px 0;
+}
+.rtl .stat-block p {
+    padding: 10px 10px 10px 0;
+}
+/* Topic and forum Search */
+.rtl .search-box .inputbox {
+    border-radius: 0 !important;
+}
+.rtl .button-search-end {
+    border-radius: 0 !important;
+}
+/* Misc */
+.rightside.mark-read {
+	padding-top: 2px;
+}
+
+/*** Officials extension compatibility ***/
+/** Extension Board Annoucements 1.3.0 ( https://www.phpbb.com/customise/db/extension/boardannouncements/ ) **/
+.proflat .phpbb_announcement {
+	font-size: 1em;
+	border-radius: var(--radius1);
+}
+
+/** Extension Board Rules 2.1.3 ( https://www.phpbb.com/customise/db/extension/boardrules/ ) **/
+.proflat .boardrules-container h2 {
+	margin: .5em 0 .2em;
+}
+.proflat .boardrules-container .content {
+	border-radius: var(--radius);
+	font-size: 1.2em;
+	padding: 20px 10px;
+}
+.proflat .boardrules-categories {
+	margin: 44px 0 4px 4px;
+}
+.proflat .boardrules-categories .mini-panel {
+	border-radius: var(--radius);
+	margin-bottom: 4px;
+	padding: 5px 10px;
+}
+.proflat .highlight {
+	border-radius: var(--radius);
+	font-weight: inherit;
+}
+.proflat .rule-anchor.postlink {
+	background: 0;
+	border: 0;
+}
+@media (max-width:700px) {
+	.proflat .boardrules-categories, .rtl .proflat .boardrules-categories {
+		text-align: center;
+		float: none;
+		width: 100%;
+		margin: 0;
+	}
+}
+/** Extension Collapsible Forum Categories 2.1.0 ( https://www.phpbb.com/customise/db/extension/collapsible_forum_categories/ ) **/
+.proflat .collapse-btn {
+	margin: -30px 15px 0
+}
+/* Extension knowledgebase_1.0.2 ( https://www.phpbb.com/customise/db/extension/knowledge_base/ ) */
+/*.proflat .main-content {
+	background-color: inherit;
+	border-top: inherit;
+	border-radius: inherit;
+	padding: inherit;
+}
+.proflat .explain {
+	line-height: 1em;
+	font-size: 1em;
+	font-family: Arial, Helvetica, sans-serif;
+	text-transform: uppercase;
+	margin: 2px 0 20px;
+	padding-top: 2px;
+}*/

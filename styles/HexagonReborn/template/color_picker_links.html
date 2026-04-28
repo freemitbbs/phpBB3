@@ -1,0 +1,10 @@
+{% set colors = ['orange', 'green', 'blue', 'cyan', 'violet'] %}
+{% for color in colors %}
+<a class="colorbutton color{{ color }}" data-color="{{ color }}" href="#"></a>
+{% endfor %}
+{% if definition.CUSTOMCOLORPICKERCOLOR == 'yes' %}
+<a class="colorbutton colorcustom" data-color="custom" href="#"></a>
+{% endif %}
+<a class="clearstorage" href="#" title="{{ lang('RESET') }}"><i class="icon fa-trash fa-fw icon-xl"></i></a>
+
+<!-- Credits for code goes to Cabot -->

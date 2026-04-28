@@ -1,0 +1,49 @@
+<div id="notification_list" class="dropdown dropdown-extended notification_list">
+	<div class="pointer"><div class="pointer-inner"></div></div>
+	<div class="dropdown-contents">
+		<div class="header">
+
+				<a href="{{ U_NOTIFICATION_SETTINGS }}">{{ lang('SETTINGS') }}</a>
+				{% if NOTIFICATIONS_COUNT %}
+					<span id="mark_all_notifications"> &bull; <a href="{{ U_MARK_ALL_NOTIFICATIONS }}" data-ajax="notification.mark_all_read">{{ lang('MARK_ALL_READ') }}</a></span>
+				{% endif %}
+
+		</div>
+
+		<ul>
+			{% if not loops.notifications|length %}
+				<li class="no_notifications">
+					{{ lang('NO_NOTIFICATIONS') }}
+				</li>
+			{% endif %}
+			{% for notifications in loops.notifications %}
+				<li class="{% if notifications.UNREAD %} bg2{% endif %}{% if notifications.STYLING %} {{ notifications.STYLING }}{% endif %}{% if not notifications.URL %} no-url{% endif %}">
+					{% if notifications.URL %}
+						<a class="notification-block" href="{% if notifications.UNREAD %}{{ notifications.U_MARK_READ }}" data-real-url="{{ notifications.URL }}{% else %}{{ notifications.URL }}{% endif %}">
+					{% endif %}
+						{% if notifications.AVATAR %}{{ notifications.AVATAR }}{% else %}<i class="icon fa-fw fa-user"></i>{% endif %}
+						<div class="notification_text">
+							<p class="notification-title">{{ notifications.FORMATTED_TITLE }}</p>
+							{% if notifications.REFERENCE %}<p class="notification-reference">{{ notifications.REFERENCE }}</p>{% endif %}
+							{% if notifications.FORUM %}<p class="notification-forum">{{ notifications.FORUM }}</p>{% endif %}
+							{% if notifications.REASON %}<p class="notification-reason">{{ notifications.REASON }}</p>{% endif %}
+							<p class="notification-time">{{ notifications.TIME }}</p>
+						</div>
+					{% if notifications.URL %}</a>{% endif %}
+					{% if notifications.UNREAD %}
+						<a href="{{ notifications.U_MARK_READ }}" class="mark_read icon-mark" data-ajax="notification.mark_read" title="{{ lang('MARK_READ') }}">
+							 <i class="icon fa-check-circle icon-xl fa-fw" aria-hidden="true"></i><span class="sr-only">{{ lang('MARK_READ') }}</span>
+						</a>
+					{% endif %}
+				</li>
+			{% endfor %}
+		</ul>
+
+		{% EVENT notification_dropdown_footer_before %}
+ 		<div class="footer">
+ 			<a href="{{ U_VIEW_ALL_NOTIFICATIONS }}"><span>{{ lang('SEE_ALL') }}</span></a>
+ 		</div>
+		{% EVENT notification_dropdown_footer_after %}
+
+	</div>
+</div>

@@ -1,0 +1,60 @@
+{% INCLUDE 'overall_header.html' %}
+
+
+{% EVENT index_body_markforums_before %}
+
+{% EVENT index_body_markforums_after %}
+
+{% INCLUDE 'forumlist_body.html' %}
+
+{% EVENT index_body_forumlist_body_after %}
+
+
+{% EVENT index_body_stat_blocks_before %}
+<div class="tabcontentblock">
+{% if S_DISPLAY_ONLINE_LIST %}
+	<button class="tablink" onclick="openPage('WhoIs', this, '#0076B1','#000')" id="defaultOpen"><i class="icon fa-users fa-fw cat" aria-hidden="true" style="color: white"></i><span>{{ lang('WHO_IS_ONLINE') }}</span></button>
+{% endif %}
+{% if S_DISPLAY_BIRTHDAY_LIST %}
+	<button class="tablink" onclick="openPage('B-day', this, '#0076B1','#000')" ><i class="icon fa-birthday-cake fa-fw cat" aria-hidden="true"></i><span>{{ lang('BIRTHDAYS') }}</span></button>
+{% endif %}
+{% if NEWEST_USER %}
+	<button class="tablink" onclick="openPage('Stats', this, '#0076B1','#000')"><i class="icon fa-pie-chart fa-fw cat" aria-hidden="true"></i><span>{{ lang('STATISTICS') }}</span></button>
+{% endif %}
+</div>
+{% if S_DISPLAY_ONLINE_LIST %}
+<div id="WhoIs" class="tabcontent stat-block online-list">
+		<p>
+			<!-- IF U_VIEWONLINE --><a title="{{ lang('WHO_IS_ONLINE') }}" href="{U_VIEWONLINE}"><!-- ENDIF --><i class="icon fa-users fa-fw cat" aria-hidden="true"></i><!-- IF U_VIEWONLINE --></a><!-- ENDIF -->
+			{% EVENT index_body_block_online_prepend %}
+			{{ TOTAL_USERS_ONLINE }} ({{ lang('ONLINE_EXPLAIN') }})<br />{{ RECORD_USERS }}<br /> 
+			{% if U_VIEWONLINE %}
+				<br />{{ LOGGED_IN_USER_LIST }}
+				{% if LEGEND %}<br /><em>{{ lang('LEGEND') }}{{ lang('COLON') }} {{ LEGEND }}</em>{% endif %}
+			{% endif %}
+			{% EVENT index_body_block_online_append %}
+		</p>
+</div>
+{% endif %}
+{% EVENT index_body_birthday_block_before %}
+{% if S_DISPLAY_BIRTHDAY_LIST %}
+<div id="B-day" class="tabcontent stat-block birthday-list">
+		<p>
+			{% EVENT index_body_block_birthday_prepend %}
+			{% if loops.birthdays|length %}{{ lang('CONGRATULATIONS') }}{{ lang('COLON') }} <strong>{% for birthdays in loops.birthdays %}{{ birthdays.USERNAME }}{% if birthdays.AGE !== '' %} ({{ birthdays.AGE }}){% endif %}{% if not birthdays.S_LAST_ROW %}, {% endif %}{% endfor %}</strong>{% else %}{{ lang('NO_BIRTHDAYS') }}{% endif %}
+			{% EVENT index_body_block_birthday_append %}
+		</p>
+</div>
+{% endif %}
+{% if NEWEST_USER %}
+<div id="Stats" class="tabcontent stat-block statistics">
+		<p>
+			{% EVENT index_body_block_stats_prepend %}
+			{{ TOTAL_POSTS }} &bull; {{ TOTAL_TOPICS }} &bull; {{ TOTAL_USERS }} &bull; {{ NEWEST_USER }}
+			{% EVENT index_body_block_stats_append %}
+		</p>
+</div>
+{% endif %}
+{% EVENT index_body_stat_blocks_after %}
+
+{% INCLUDE 'overall_footer.html' %}

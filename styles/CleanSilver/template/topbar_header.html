@@ -1,0 +1,238 @@
+<div class="topbar">
+	<div class="inner">
+		<div id="mySidenav" class="sidenav">
+			<a href="javascript:void(0)" class="closebtn">&times;</a>
+			
+			<ul class="nav"  role="menubar">
+			<li class="mark-buttons">
+				<ul role="menubar" id="mark-forums">
+				{% if U_MARK_FORUMS %}
+					{% if SCRIPT_NAME == 'index' %}
+					<li>
+						<a href="{{ U_MARK_FORUMS }}" class="mark-read leftside" accesskey="m" data-ajax="mark_forums_read">{{ lang('MARK_FORUMS_READ') }}</a>
+					</li>				
+					{% endif %}
+				{% endif %}
+				{% if SCRIPT_NAME == 'viewforum' %}
+					{% if not S_IS_BOT and U_MARK_TOPICS and loops.topicrow|length %}
+					<li>
+						<a href="{{ U_MARK_TOPICS }}" class="mark" accesskey="m" data-ajax="mark_topics_read">{{ lang('MARK_TOPICS_READ') }}</a>
+					</li>
+					{% endif %}	
+					{% if S_HAS_SUBFORUM %}
+					{% if not S_IS_BOT and U_MARK_FORUMS %}
+					<li>
+						<a href="{{ U_MARK_FORUMS }}" class="mark-read leftside" data-ajax="mark_forums_read"  > {{ lang('MARK_SUBFORUMS_READ') }}</a>
+					</li>					
+					{% endif %}
+					{% endif %}
+				{% endif %}
+				</ul>
+			</li>
+				{% if S_REGISTERED_USER %}
+				{% EVENT navbar_header_user_profile_prepend %}
+		
+				{% EVENT navbar_header_username_prepend %}
+				<li>
+					<a class="nav-username">{{ CURRENT_USERNAME_SIMPLE }}</a>
+				</li>
+				{% if U_RESTORE_PERMISSIONS %}
+				<li>
+					<a href="{{ U_RESTORE_PERMISSIONS }}">
+						<i class="icon fa-refresh fa-fw" aria-hidden="true"></i><span>{{ lang('RESTORE_PERMISSIONS') }}</span>
+					</a>
+				</li>
+				{% endif %}
+				{% EVENT navbar_header_profile_list_before %}
+				<li>
+					<a href="{{ U_PROFILE }}" title="{{ lang('PROFILE') }}" role="menuitem">
+						<i class="icon fa-sliders fa-fw" aria-hidden="true"></i><span>{{ lang('PROFILE') }}</span>
+					</a>
+				</li>
+				{% if U_USER_PROFILE %}
+				<li>
+					<a href="{{ U_USER_PROFILE }}" title="{{ lang('READ_PROFILE') }}" role="menuitem">
+						<i class="icon fa-user fa-fw" aria-hidden="true"></i><span>{{ lang('READ_PROFILE') }}</span>
+					</a>
+				</li>
+				{% endif %}
+				{% EVENT navbar_header_profile_list_after %}
+				<li>
+					<a href="{{ U_LOGIN_LOGOUT }}" title="{{ lang('LOGIN_LOGOUT') }}" accesskey="x" role="menuitem">
+						<i class="icon fa-power-off fa-fw" aria-hidden="true"></i><span>{{ lang('LOGIN_LOGOUT') }}</span>
+					</a>
+				</li>
+				{% EVENT navbar_header_username_append %}
+
+				{% if S_DISPLAY_PM %}
+				<li class="leftside" data-skip-responsive="true">
+					<a href="{{ U_PRIVATEMSGS }}" role="menuitem">
+						<i class="icon fa-inbox fa-fw" aria-hidden="true"></i><span>{{ lang('PRIVATE_MESSAGES') }} </span><strong class="badge{% if not PRIVATE_MESSAGE_COUNT %} hidden{% endif %}">{{ PRIVATE_MESSAGE_COUNT }}</strong>
+					</a>
+				</li>
+				{% endif %}
+				{% if S_NOTIFICATIONS_DISPLAY %}
+				<li>
+					<button class="dropdown-btn" id="notification_list_button"><i class="icon fa-bell fa-fw" aria-hidden="true"></i><span>{{ lang('NOTIFICATIONS') }}</span><strong class="badge{% if not NOTIFICATIONS_COUNT %} hidden{% endif %}">{{ NOTIFICATIONS_COUNT }}</strong>
+					</button>
+					<div class="dropdown-containers">
+					{% INCLUDE 'notification_dropdown.html' %}
+					</div>
+				</li>
+				{% endif %}
+				{% EVENT navbar_header_user_profile_append %}
+				{% elseif not S_IS_BOT %}
+				<li class="leftside"  data-skip-responsive="true">
+					<a id="myBtn" href="{U_LOGIN_LOGOUT}" title="{{ lang('LOGIN_LOGOUT') }}" accesskey="x" role="menuitem">
+						<i class="icon fa-power-off fa-fw" aria-hidden="true"></i><span>{{ lang('LOGIN_LOGOUT') }}</span>
+					</a>
+				</li>
+				{% if S_REGISTER_ENABLED and not (S_SHOW_COPPA or S_REGISTRATION) %}
+				<li class="leftside" data-skip-responsive="true">
+					<a href="{{ U_REGISTER }}" role="menuitem">
+						<i class="icon fa-pencil-square-o  fa-fw" aria-hidden="true"></i><span>{{ lang('REGISTER') }}</span>
+					</a>
+				</li>
+				{% endif %}
+				{% EVENT navbar_header_logged_out_content %}
+				{% endif %}
+
+				{% EVENT navbar_header_quick_links_before %}
+				{% if S_DISPLAY_SEARCH %}	
+				{% if S_REGISTERED_USER %}
+				<li>
+					<a href="{{ U_SEARCH_SELF }}" role="menuitem">
+						<i class="icon fa-file-o fa-fw icon-gray" aria-hidden="true"></i><span>{{ lang('SEARCH_SELF') }}</span>
+					</a>
+				</li>
+				{% endif %}
+				{% if S_USER_LOGGED_IN %}
+				<li>
+					<a href="{{ U_SEARCH_NEW }}" role="menuitem">
+						<i class="icon fa-file-o fa-fw icon-red" aria-hidden="true"></i><span>{{ lang('SEARCH_NEW') }}</span>
+					</a>
+				</li>
+				{% endif %}
+				{% if S_LOAD_UNREADS %}
+				<li>
+					<a href="{{ U_SEARCH_UNREAD }}" role="menuitem">
+						<i class="icon fa-file-o fa-fw icon-red" aria-hidden="true"></i><span>{{ lang('SEARCH_UNREAD') }}</span>
+					</a>
+				</li>
+				{% endif %}
+				<li>
+					<a href="{{ U_SEARCH_UNANSWERED }}" role="menuitem">
+						<i class="icon fa-file-o fa-fw icon-gray" aria-hidden="true"></i><span>{{ lang('SEARCH_UNANSWERED') }}</span>
+					</a>
+				</li>
+				<li>
+					<a href="{{ U_SEARCH_ACTIVE_TOPICS }}" role="menuitem">
+						<i class="icon fa-file-o fa-fw icon-blue" aria-hidden="true"></i><span>{{ lang('SEARCH_ACTIVE_TOPICS') }}</span>
+					</a>
+				</li>
+				<li class="separator"></li>
+				<li>
+					<a href="{{ U_SEARCH }}" role="menuitem">
+						<i class="icon fa-search fa-fw" aria-hidden="true"></i><span>{{ lang('SEARCH') }}</span>
+					</a>
+				</li>
+				{% endif %}
+				{% if not S_IS_BOT and (S_DISPLAY_MEMBERLIST or U_TEAM) %}
+				{% if S_DISPLAY_MEMBERLIST %}
+				<li>
+					<a href="{{ U_MEMBERLIST }}" role="menuitem">
+						<i class="icon fa-group fa-fw" aria-hidden="true"></i><span>{{ lang('MEMBERLIST') }}</span>
+					</a>
+				</li>
+				{% endif %}
+				{% if U_TEAM %}
+				<li>
+					<a href="{{ U_TEAM }}" role="menuitem">
+						<i class="icon fa-shield fa-fw" aria-hidden="true"></i><span>{{ lang('THE_TEAM') }}</span>
+					</a>
+				</li>
+				{% endif %}
+				{% endif %}
+				{% EVENT navbar_header_quick_links_after %}
+				{% EVENT overall_header_navigation_prepend %}
+				<li {% if not S_USER_LOGGED_IN %}data-skip-responsive="true"{% else %}data-last-responsive="true"{% endif %}>
+					<a href="{{ U_FAQ }}" rel="help" title="{{ lang('FAQ_EXPLAIN') }}" role="menuitem">
+						<i class="icon fa-question-circle fa-fw" aria-hidden="true"></i><span>{{ lang('FAQ') }}</span>
+					</a>
+				</li>
+				{% EVENT overall_header_navigation_append %}
+				{% if U_ACP %}
+				<li data-last-responsive="true">
+					<a href="{{ U_ACP }}" title="{{ lang('ACP') }}" role="menuitem">
+						<i class="icon fa-cogs fa-fw" aria-hidden="true"></i><span>{{ lang('ACP_SHORT') }}</span>
+					</a>
+				</li>
+				{% endif %}
+				{% if U_MCP %}
+				<li data-last-responsive="true">
+					<a href="{{ U_MCP }}" title="{{ lang('MCP') }}" role="menuitem">
+						<i class="icon fa-gavel fa-fw" aria-hidden="true"></i><span>{{ lang('MCP_SHORT') }}</span>
+					</a>
+				</li>
+				{% endif %}
+			</ul>
+		</div>
+		<div class="navbar" role="navigation">
+			<div class="inner">
+				<ul id="nav-breadcrumbs" class="nav-breadcrumbs linklist navlinks" role="menubar">
+	
+					{% set MICRODATA = 'itemtype="https://schema.org/ListItem" itemprop="itemListElement" itemscope' %}
+					{% set navlink_position = 1 %}
+					{% EVENT overall_header_breadcrumbs_before %}
+					<li class="breadcrumbs" itemscope itemtype="https://schema.org/BreadcrumbList">					
+						<span class="crumb mainmenu">{% if not S_USER_LOGGED_IN %}<i class="icon fa-bars fa-fw" aria-hidden="true" style="font-size: 34px;"></i>{% else %}{% if CURRENT_USER_AVATAR %}<a class="header-profile header-avatar has-avatar">{{ CURRENT_USER_AVATAR }}<strong class="badge header-profile-badge{% if not NOTIFICATIONS_COUNT %} hidden{% endif %}">{{ NOTIFICATIONS_COUNT }}</strong></a>{% else %}<a class="header-profile header-avatar no-avatar"><strong class="badge header-profile-badge{% if not NOTIFICATIONS_COUNT %} hidden{% endif %}">{{ NOTIFICATIONS_COUNT }}</strong></a>{% endif %}{% endif %}</span>	
+						{% if U_SITE_HOME %}
+							<span class="crumb" {{ MICRODATA }}><a itemprop="item" href="{{ U_SITE_HOME }}" data-navbar-reference="home"><i class="icon fa-home fa-fw" aria-hidden="true"></i><span itemprop="name">{{ L_SITE_HOME }}</span></a><meta itemprop="position" content="{{ navlink_position }}{% set navlink_position = navlink_position + 1 %}" /></span>
+						{% endif %}
+						{% EVENT overall_header_breadcrumb_prepend %}
+							<span class="crumb" {{ MICRODATA }}><a itemprop="item" href="{{ U_INDEX }}" accesskey="h" data-navbar-reference="index">{% if not U_SITE_HOME %}<i class="icon fa-home fa-fw"></i>{% endif %}<span itemprop="name">{{ L_INDEX }}</span></a><meta itemprop="position" content="{{ navlink_position }}{% set navlink_position = navlink_position + 1 %}" /></span>
+
+						{% for navlink in navlinks %}
+							{% set NAVLINK_NAME = navlink.BREADCRUMB_NAME | default(navlink.FORUM_NAME) %}
+							{% set NAVLINK_LINK = navlink.U_BREADCRUMB | default(navlink.U_VIEW_FORUM) %}
+
+							{% EVENT overall_header_navlink_prepend %}
+							<span class="crumb" {{ MICRODATA }}{% if navlink.MICRODATA %} {{ navlink.MICRODATA }}{% endif %}><a itemprop="item" href="{{ NAVLINK_LINK }}"><span itemprop="name">{{ NAVLINK_NAME }}</span></a><meta itemprop="position" content="{{ navlink_position }}{% set navlink_position = navlink_position + 1 %}" /></span>
+							{% EVENT overall_header_navlink_append %}
+						{% endfor %}
+					{% EVENT overall_header_breadcrumb_append %}
+					</li>
+					{% EVENT overall_header_breadcrumbs_after %}
+				</ul>
+			</div>
+		</div>
+	</div>
+
+	<!-- The Modal -->
+	<div id="myModal" class="modal">
+
+	<!-- Modal content -->
+	<div class="modal-content">
+		<span class="close">&times;</span>
+		{% if not S_USER_LOGGED_IN and not S_IS_BOT %}
+		<form method="post" action="{{ S_LOGIN_ACTION }}" class="headerspace">
+		<h3><a href="{{ U_LOGIN_LOGOUT }}">{{ lang('LOGIN_LOGOUT') }}</a>{% if S_REGISTER_ENABLED %}&nbsp; &bull; &nbsp;<a href="{{ U_REGISTER }}">{{ lang('REGISTER') }}</a>{% endif %}</h3>
+			<fieldset class="quick-login">
+				<label for="username"><span>{L_USERNAME}{L_COLON}</span> <input type="text" tabindex="1" name="username" id="username" size="10" class="inputbox" title="{L_USERNAME}" autocomplete="username" /></label>
+				<label for="password"><span>{L_PASSWORD}{L_COLON}</span> <input type="password" tabindex="2" name="password" id="password" size="10" class="inputbox" title="{L_PASSWORD}" autocomplete="current-password" /></label>
+				{% if U_SEND_PASSWORD %}
+					<a href="{{ U_SEND_PASSWORD }}">{{ lang('FORGOT_PASS') }}</a>
+				{% endif %}
+				{% if S_AUTOLOGIN_ENABLED %}
+					<span class="responsive-hide">|</span> <label for="autologin">{{ lang('LOG_ME_IN') }} <input type="checkbox" tabindex="4" name="autologin" id="autologin" /></label>
+				{% endif %}
+				<input type="submit" tabindex="5" name="login" value="{{ lang('LOGIN') }}" class="button2" />
+				{{ S_LOGIN_REDIRECT }}
+				{{ S_FORM_TOKEN_LOGIN }}
+			</fieldset>
+		</form>
+		{% endif %}
+	</div>
+
+	</div>
+</div>

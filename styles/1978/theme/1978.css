@@ -1,0 +1,330 @@
+@font-face {
+    font-family: 'VCR OSD Mono';
+    src: url('fonts/VCROSDMono.eot');
+    src: url('fonts/VCROSDMono.eot?#iefix') format('embedded-opentype'),
+        url('fonts/VCROSDMono.woff2') format('woff2'),
+        url('fonts/VCROSDMono.woff') format('woff'),
+        url('fonts/VCROSDMono.ttf') format('truetype'),
+        url('fonts/VCROSDMono.svg#VCROSDMono') format('svg');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* scroll bars */
+/* Firefox */
+* {
+    scrollbar-width: 16px;
+    scrollbar-color: #00ff00 #000000;
+}
+
+/* Chrome, Edge, Safari */
+*::-webkit-scrollbar {
+    width: 16px;
+}
+
+*::-webkit-scrollbar-track {
+    background: #000000;
+    border: 1px solid #00ff00;
+}
+
+*::-webkit-scrollbar-thumb {
+    background-color: #00ff00;
+}
+
+/* remove browser auto fill colours */
+/* Chrome */
+input:-webkit-autofill {
+    -webkit-text-fill-color: #00ff00;
+    -webkit-box-shadow: 0 0 0px 1000px #000000 inset;
+}
+
+input:-webkit-autofill::first-line {
+    font-size:20px;
+    font-family: 'VCR OSD Mono';
+}
+
+/* Firefox */
+input {
+    filter: none;
+}
+
+/* style inputs */
+input[type="checkbox"], input[type="radio"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    outline: none;
+    cursor: pointer;
+    position: relative;
+    border: 1px solid #009900;
+    height: 20px;
+    width: 20px !important;
+}
+input[type="checkbox"]:checked::before, input[type="radio"]:checked::before {
+    display: block;
+    text-align: center;
+    color: #00ff00;
+    position: relative;
+    top: -2px;
+}
+input[type="checkbox"]:checked::before {
+    content: 'X';
+}
+input[type="radio"]:checked::before {
+    content: '*';
+    top: 2px;
+}
+
+#login input[type="checkbox"]:checked::before {
+    top: -6px;
+}
+
+.cplist input[type="checkbox"]:checked::before {
+    top: -12px;
+}
+
+input[type="number"]:focus {
+    outline: none;
+}
+
+::-webkit-file-upload-button {
+    color: #000000;
+    background: #00ff00;
+    border: 1px solid #00ff00;
+    font-family: 'VCR OSD Mono';
+    margin-right: 10px;
+}
+
+::-ms-browse {
+    color: #000000;
+    background: #00ff00;
+    border: 1px solid #00ff00;
+    font-family: 'VCR OSD Mono';
+    margin-right: 10px;
+}
+
+::file-selector-button {
+    color: #000000;
+    background: #00ff00;
+    border: 1px solid #00ff00;
+    font-family: 'VCR OSD Mono';
+    margin-right: 10px;
+}
+
+/**/
+
+select, input {
+    color: #00ff00;
+    background: #000000;
+    border: 1px solid #009900;
+}
+
+strong, th {
+    font-weight: normal;
+}
+
+.site-description h1 {
+    text-transform: uppercase;
+}
+
+.site-description a:hover {
+    color: #00ff00;
+    text-decoration: none;
+}
+
+.search-header .button {
+    border-color: #009900;
+    box-shadow: 0 0 0px 1px #000000 inset;
+}
+
+.search-header .button:hover {
+    background: #009900;
+}
+
+.button-search-end {
+    border-left: 1px solid #000000;
+}
+
+.dropdown-contents .icon {
+    padding-right: 8px;
+}
+
+a:hover > .badge {
+    background: #009900;
+}
+
+.nav-breadcrumbs {
+    background: #009900;
+    color: #000000;
+}
+
+.nav-breadcrumbs a {
+    color: #000000;
+}
+
+.nav-breadcrumbs a:hover {
+    color: #00ff00;
+}
+
+ul.nav-breadcrumbs.linklist > li {
+    line-height: 1;
+    padding: 3px;
+}
+
+.rules a {
+    color: #00ff00;
+}
+
+.rules a:hover {
+    text-decoration: underline;
+    color: #00ff00;
+}
+
+.topiclist .header {
+    padding-left: 5px;
+}
+
+.post {
+    border: 2px solid #009900;
+}
+
+.topic_poll + hr, .post + hr {
+    display: none;
+}
+
+.format-buttons .button {
+    padding: 3px 6px;
+}
+
+.panel {
+    border: 2px solid #009900;
+    margin-bottom: 10px;
+}
+
+dd.extra {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.display-actions .left-box {
+    float: none;
+    text-align: right;
+}
+
+.attach-name .file-name {
+    margin-bottom: 2px;
+}
+
+.page-footer ul.linklist > li {
+    padding: 0 5px;
+}
+
+.nav-footer {
+    background: #009900;
+    color: #000000;
+}
+
+.nav-footer a {
+    color: #000000;
+}
+
+.nav-footer a:hover {
+    color: #00ff00;
+}
+
+.crt::before {
+    content: " ";
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background:
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.2) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    z-index: 2;
+    background-size: 100% 3px, 3px 100%;
+    pointer-events: none;
+}
+
+/* font awesome replacements, cos it looks way too modern! */
+.icon {
+	width: auto;
+}
+
+/*remove icons from drop boxes (but not the mark read notification icon (.icon-xl)), and footer navbar */
+.dropdown .icon:not(.icon-xl), .nav-footer .rightside .icon {
+	display: none;
+}
+
+/* \2005 = small space, \00a0 = full space */
+
+.search-box .fa-search::before { content: ">"; font-family: 'VCR OSD Mono'; }
+.fa-cog::before { content: "*"; font-family: 'VCR OSD Mono'; }
+
+.navbar .fa-bars::before { content: "\2005\2261\2005"; font-family: 'VCR OSD Mono'; }
+.navbar .fa-question-circle::before { content: "\2005?\2005"; font-family: 'VCR OSD Mono'; }
+.fa-pencil-square-o::before { content: "+\2005"; font-family: 'VCR OSD Mono'; }
+.fa-power-off::before { content: ">\2005"; font-family: 'VCR OSD Mono'; }
+
+.navbar .fa-cogs::before { content: "\2005*\2005"; font-family: 'VCR OSD Mono'; }
+.navbar .fa-gavel::before { content: "\2005\00a1\2005"; font-family: 'VCR OSD Mono'; }
+.navbar .fa-bell::before { content: "\2005!\2005"; font-family: 'VCR OSD Mono'; }
+.navbar .fa-inbox::before { content: "\2005\@\2005"; font-family: 'VCR OSD Mono'; }
+.navbar .fa-home::before { content: "\2005\2261\2005"; font-family: 'VCR OSD Mono'; }
+.navbar .fa-search::before { content: "?"; font-family: 'VCR OSD Mono'; }
+.mark_read .fa-check-circle::before { content: "x"; font-family: 'VCR OSD Mono'; }
+.navbar .fa-envelope::before { content: "\2005\0022\2005"; font-family: 'VCR OSD Mono'; }
+.navbar .fa-shield::before { content: "\2005\03b1\2005"; font-family: 'VCR OSD Mono'; }
+.navbar .fa-group::before { content: "\2005\2248\2005"; font-family: 'VCR OSD Mono'; }
+.navbar .fa-trash::before { content: "\2005x\2005"; font-family: 'VCR OSD Mono'; }
+.navbar .fa-square-o::before { content: "X\2005"; font-family: 'VCR OSD Mono'; }
+.navbar .fa-check-square-o::before { content: "\221a\2005"; font-family: 'VCR OSD Mono'; }
+
+.subforum.unread .fa-file-o::before, .subforum.read .fa-file-o::before { content: ">\00a0"; font-family: 'VCR OSD Mono'; }
+.fa-external-link::before { content: "\25a0\00a0"; font-family: 'VCR OSD Mono'; }
+.fa-external-link-square::before { content: ">"; font-family: 'VCR OSD Mono'; }
+
+.fa-chevron-circle-up::before { content: "^"; font-family: 'VCR OSD Mono'; }
+.fa-chevron-right::before { content: ">"; font-family: 'VCR OSD Mono'; }
+.fa-chevron-left::before { content: "<"; font-family: 'VCR OSD Mono'; }
+.pagination .fa-clone::before { content: ""; font-family: 'VCR OSD Mono'; }
+
+.fa-file::before { content: "*"; font-family: 'VCR OSD Mono'; }
+.fa-paperclip::before { content: "+"; font-family: 'VCR OSD Mono'; }
+.fa-bar-chart::before { content: "%"; font-family: 'VCR OSD Mono'; }
+.fa-exclamation::before { content: "!"; font-family: 'VCR OSD Mono'; }
+
+.fa-pencil::before { content: "+"; font-family: 'VCR OSD Mono'; }
+.fa-reply::before { content: "+"; font-family: 'VCR OSD Mono'; }
+.fa-times::before { content: "X"; font-family: 'VCR OSD Mono'; }
+.fa-mail-forward::before { content: "\2192"; font-family: 'VCR OSD Mono';}
+.fa-info::before { content: "?"; font-family: 'VCR OSD Mono'; }
+.fa-quote-left::before, .fa-quote-right::before { content: '"'; font-family: 'VCR OSD Mono'; }
+.fa-exclamation-triangle::before { content: "!!"; font-family: 'VCR OSD Mono'; }
+
+.fa-bold::before { content: "B"; font-family: 'VCR OSD Mono'; }
+.fa-italic::before { content: "I"; font-style: italic; font-family: 'VCR OSD Mono'; }
+.fa-underline::before { content: "U"; text-decoration: underline; font-family: 'VCR OSD Mono'; }
+.fa-code::before { content: "<>"; font-family: 'VCR OSD Mono'; }
+.fa-list::before { content: "\2261"; font-family: 'VCR OSD Mono'; }
+.fa-list-ol::before { content: "1\2261"; font-family: 'VCR OSD Mono'; }
+.fa-asterisk::before { content: "*"; font-family: 'VCR OSD Mono'; }
+.fa-image::before { content: "img"; font-family: 'VCR OSD Mono'; }
+.fa-link::before { content: "\221e"; font-family: 'VCR OSD Mono'; }
+.fa-flash::before { content: "f"; font-family: 'VCR OSD Mono'; }
+.fa-tint::before { content: "#"; font-family: 'VCR OSD Mono'; }
+
+.fa-wrench::before { content: "?"; font-family: 'VCR OSD Mono'; }
+.fa-sort-amount-asc::before { content: "\2261"; font-family: 'VCR OSD Mono'; }
+.fa-sort-down::before { content: "\00a0v"; font-family: 'VCR OSD Mono'; }
+.fa-gavel::before { content: "\00a1"; font-family: 'VCR OSD Mono'; }
+
+.fa-commenting-o::before { content: "@"; font-family: 'VCR OSD Mono'; }
+blockquote cite::before, .uncited::before { content: '"..."'; font-family: 'VCR OSD Mono'; }
+
+.jumpbox-return .fa-angle-left::before { content: ""; font-family: 'VCR OSD Mono'; }
+
+.fa-times-circle::before { content: "X"; font-family: 'VCR OSD Mono'; }

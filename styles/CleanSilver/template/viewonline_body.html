@@ -1,0 +1,63 @@
+{% INCLUDE 'overall_header.html' %}
+
+<h2 class="viewonline-title">{{ TOTAL_REGISTERED_USERS_ONLINE }}</h2>
+<p>{{ TOTAL_GUEST_USERS_ONLINE }}{% if S_SWITCH_GUEST_DISPLAY %} &bull; <a href="{{ U_SWITCH_GUEST_DISPLAY }}">{{ lang('SWITCH_GUEST_DISPLAY') }}</a>{% endif %}</p>
+
+<div class="action-bar bar-top">
+	<div class="pagination">
+		{% if loops.pagination|length %}
+			{% INCLUDE 'pagination.html' %}
+		{% else %}
+			{{ PAGE_NUMBER }}
+		{% endif %}
+	</div>
+</div>
+
+<div class="forumbg forumbg-table">
+	<div class="inner">
+
+	<table class="table1">
+
+	{% if loops.user_row|length %}
+		<thead class="header">
+		<tr>
+			<th class="name"><a href="{{ U_SORT_USERNAME }}">{{ lang('USERNAME') }}</a></th>
+			<th class="info"><a href="{{ U_SORT_LOCATION }}">{{ lang('FORUM_LOCATION') }}</a></th>
+			<th class="active"><a href="{{ U_SORT_UPDATED }}">{{ lang('LAST_UPDATED') }}</a></th>
+		</tr>
+		</thead>
+		<tbody>
+		{% for user_row in loops.user_row %}
+		<tr class="{% if user_row.S_ROW_COUNT is odd %}bg1{% else %}bg2{% endif %}">
+			<td>{% EVENT viewonline_body_username_prepend %}{{ user_row.USERNAME_FULL }}{% EVENT viewonline_body_username_append %}{% if user_row.USER_IP %} <span style="float: {{ S_CONTENT_FLOW_END }};">{{ lang('IP') }}{{ lang('COLON') }} <a href="{{ user_row.U_USER_IP }}">{{ user_row.USER_IP }}</a> &#187; <a href="{{ user_row.U_WHOIS }}" onclick="popup(this.href, 750, 500); return false;">{{ lang('WHOIS') }}</a></span>{% endif %}
+				{% if user_row.USER_BROWSER %}<br />{{ user_row.USER_BROWSER }}{% endif %}</td>
+			<td class="info"><a href="{{ user_row.U_FORUM_LOCATION }}">{{ user_row.FORUM_LOCATION }}</a></td>
+			<td class="active">{{ user_row.LASTUPDATE }}</td>
+		</tr>
+		{% endfor %}
+		{% else %}
+		<tbody>
+		<tr class="bg1">
+			<td colspan="3">{{ lang('NO_ONLINE_USERS') }}{% if S_SWITCH_GUEST_DISPLAY %} &bull; <a href="{{ U_SWITCH_GUEST_DISPLAY }}">{{ lang('SWITCH_GUEST_DISPLAY') }}</a>{% endif %}</td>
+		</tr>
+		{% endif %}
+		</tbody>
+	</table>
+
+	</div>
+</div>
+
+{% if LEGEND %}<p><em>{{ lang('LEGEND') }}{{ lang('COLON') }} {{ LEGEND }}</em></p>{% endif %}
+
+<div class="action-bar bar-bottom">
+	<div class="pagination">
+		{% if loops.pagination|length %}
+			{% INCLUDE 'pagination.html' %}
+		{% else %}
+			{{ PAGE_NUMBER }}
+		{% endif %}
+	</div>
+</div>
+
+{% INCLUDE 'jumpbox.html' %}
+{% INCLUDE 'overall_footer.html' %}

@@ -1,0 +1,129 @@
+{% INCLUDE 'ucp_header.html' %}
+
+{% EVENT ucp_notifications_form_before %}
+
+<form id="ucp" method="post" action="{{ S_UCP_ACTION }}"{{ S_FORM_ENCTYPE }}>
+
+<h2>{{ TITLE }}</h2>
+
+{% EVENT ucp_notifications_content_before %}
+
+<div class="panel">
+	<div class="inner">
+
+		<p>{{ TITLE_EXPLAIN }}</p>
+
+		{% if MODE == 'notification_options' %}
+			<table class="table1">
+				<thead>
+					<tr>
+						<th>{{ lang('NOTIFICATION_TYPE') }}</th>
+						{% for notification_methods in loops.notification_methods %}
+							<th class="mark">{{ notification_methods.NAME }}</th>
+						{% endfor %}
+					</tr>
+				</thead>
+				<tbody>
+				{% for notification_types in loops.notification_types %}
+					{% if notification_types.GROUP_NAME %}
+						<tr class="bg3">
+							<td colspan="{{ NOTIFICATION_TYPES_COLS }}">{{ notification_types.GROUP_NAME }}</td>
+						</tr>
+					{% else %}
+						<tr class="{% if notification_types.S_ROW_COUNT is odd %}bg1{% else %}bg2{% endif %}">
+							<td>
+								{{ notification_types.NAME }}
+								{% if notification_types.EXPLAIN %}<br />&nbsp; &nbsp;{{ notification_types.EXPLAIN }}{% endif %}
+							</td>
+							{% for notification_methods in notification_types.notification_methods %}
+								<td class="mark"><input type="checkbox" name="{{ notification_types.TYPE }}_{{ notification_methods.METHOD }}"{% if notification_methods.SUBSCRIBED %} checked="checked"{% endif %}{% if not notification_methods.AVAILABLE %} disabled="disabled"{% endif %} /></td>
+							{% endfor %}
+						</tr>
+					{% endif %}
+				{% endfor %}
+				</tbody>
+			</table>
+		{% else %}
+			{% if loops.notification_list|length %}
+				<div class="action-bar bar-top">
+					<div class="pagination">
+						{% if U_MARK_ALL %}<a href="{{ U_MARK_ALL }}" class="mark">{{ lang('NOTIFICATIONS_MARK_ALL_READ') }}</a> &bull; {% endif %}
+						{{ lang('NOTIFICATIONS') }} [<strong>{{ TOTAL_COUNT }}</strong>]
+						{% if loops.pagination|length %}
+							{% INCLUDE 'pagination.html' %}
+						{% else %}
+							 &bull; {{ PAGE_NUMBER }}
+						{% endif %}
+					</div>
+				</div>
+
+			<div class="notification_list">
+				<ul class="topiclist two-columns">
+					<li class="header">
+						<dl>
+							<dt><div class="list-inner">{{ lang('NOTIFICATIONS') }}</div></dt>
+							<dd class="mark">{{ lang('MARK_READ') }}</dd>
+						</dl>
+					</li>
+				</ul>
+				<ul class="topiclist cplist two-columns">
+					{% for notification_list in loops.notification_list %}
+						<li class="row{% if notification_list.UNREAD %} bg3{% else %}{% if notification_list.S_ROW_COUNT is odd %} bg1{% else %} bg2{% endif %}{% endif %}{% if notification_list.STYLING %} {{ notification_list.STYLING }}{% endif %}">
+							<dl>
+								<dt>
+									<div class="list-inner">
+										{% if notification_list.AVATAR %}{{ notification_list.AVATAR }}{% else %}<i class="icon fa-fw fa-user"></i>{% endif %}
+										<div class="notifications">
+											{% if notification_list.URL %}<a href="{% if notification_list.UNREAD %}{{ notification_list.U_MARK_READ }}{% else %}{{ notification_list.URL }}{% endif %}">{% endif %}
+											<p class="notifications_title">{{ notification_list.FORMATTED_TITLE }}{% if notification_list.REFERENCE %} {{ notification_list.REFERENCE }}{% endif %}</p>
+											{% if notification_list.URL %}</a>{% endif %}
+											{% if notification_list.FORUM %}<p class="notifications_forum">{{ notification_list.FORUM }}</p>{% endif %}
+											{% if notification_list.REASON %}<p class="notifications_reason">{{ notification_list.REASON }}</p>{% endif %}
+											<p class="notifications_time">{{ notification_list.TIME }}</p>
+										</div>
+									</div>
+								</dt>
+
+								<dd class="mark">&nbsp;<input type="checkbox" name="mark[]" value="{{ notification_list.NOTIFICATION_ID }}"{% if not notification_list.UNREAD %} disabled="disabled"{% endif %} /> <dfn>{{ lang('MARK_READ') }}</dfn>&nbsp;</dd>
+							</dl>
+						</li>
+					{% endfor %}
+				</ul>
+			</div>
+
+			<div class="action-bar bar-bottom">
+				<div class="pagination">
+					{{ lang('NOTIFICATIONS') }} [<strong>{{ TOTAL_COUNT }}</strong>]
+					{% if loops.pagination|length %}
+						{% INCLUDE 'pagination.html' %}
+					{% else %}
+						  &bull; {{ PAGE_NUMBER }}
+					{% endif %}
+				</div>
+			</div>
+
+			{% else %}
+				<p><strong>{{ lang('NO_NOTIFICATIONS') }}</strong></p>
+			{% endif %}
+
+		{% endif %}
+	</div>
+</div>
+
+{% EVENT ucp_notifications_content_after %}
+
+{% if loops.notification_types|length or loops.notification_list|length %}
+<fieldset class="display-actions">
+	<input type="hidden" name="form_time" value="{{ FORM_TIME }}" />
+	{{ S_HIDDEN_FIELDS }}
+	<input type="submit" name="submit" value="{% if MODE == 'notification_options' %}{{ lang('SUBMIT') }}{% else %}{{ lang('MARK_READ') }}{% endif %}" class="button1" />
+	<div><a href="#" onclick="$('#ucp input:checkbox').prop('checked', true); return false;">{{ lang('MARK_ALL') }}</a> &bull; <a href="#" onclick="$('#ucp input:checkbox').prop('checked', false); return false;">{{ lang('UNMARK_ALL') }}</a></div>
+	{{ S_FORM_TOKEN }}
+</fieldset>
+{% endif %}
+
+</form>
+
+{% EVENT ucp_notifications_form_after %}
+
+{% INCLUDE 'ucp_footer.html' %}

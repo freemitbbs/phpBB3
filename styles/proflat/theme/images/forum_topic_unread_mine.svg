@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="32" height="32">
+<style>.icon{fill:#e5e5e5;stroke:#e5e5e5}@media (prefers-color-scheme:dark){.icon{fill:#e5e5e5;stroke:#e5e5e5}}</style>
+<path class="icon" d="M25 6.2V3.7c0-.2.1-.4.2-.5.1-.2.3-.2.4-.2h2.7c.2 0 .4.1.5.2.1.2.2.3.2.5v2.6c0 .2-.1.4-.2.5-.1.1-.3.2-.5.2h-2.7c-.2 0-.4-.1-.5-.2 0-.2-.1-.4-.1-.6Z" style="display:inline;fill=currentColor;fill-opacity:1;stroke=currentColor;stroke-opacity:1"/>
+<path class="icon" d="M16 10.75c-3.947 0-7.286 2.285-7.286 5 0 1.455.949 2.842 2.59 3.799l.825.488-.256.937a7.175 7.175 0 0 1-.665 1.68 9.36 9.36 0 0 0 2.61-1.67l.407-.37.541.058c.408.049.825.078 1.233.078 3.947 0 7.286-2.285 7.286-5s-3.34-5-7.286-5zm8.5 5c0 3.457-3.805 6.25-8.5 6.25-.466 0-.93-.03-1.376-.078a10.304 10.304 0 0 1-4.364 2.363 7.6 7.6 0 0 1-1.081.215H9.13c-.19 0-.36-.156-.408-.371v-.01c-.047-.245.114-.39.257-.566.597-.694 1.28-1.28 1.726-2.91C8.752 19.5 7.5 17.733 7.5 15.75c0-3.457 3.804-6.25 8.5-6.25s8.5 2.793 8.5 6.25z" style="display:inline;fill=currentColor;fill-opacity:1;stroke=currentColor;stroke-width:1;stroke-dasharray:none;stroke-opacity:1"/>
+</svg>

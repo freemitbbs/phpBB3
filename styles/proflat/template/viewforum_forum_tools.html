@@ -1,0 +1,30 @@
+{% if not S_IS_BOT and (U_MARK_FORUMS or U_MARK_TOPICS)%}
+	<div class="dropdown-container dropdown-button-control topic-tools">
+		<span class="button button-secondary dropdown-trigger dropdown-select">
+			<i class="icon fa-wrench fa-fw" aria-hidden="true"></i>
+			<span class="caret"><i class="icon fa-sort-down fa-fw" aria-hidden="true"></i></span>
+		</span>
+		<div class="dropdown">
+			<div class="pointer"><div class="pointer-inner"></div></div>
+			<ul class="dropdown-contents">
+			{% EVENT viewtopic_forum_tools_before %}
+				{% if U_WATCH_FORUM_LINK and not S_IS_BOT %}
+					<li>
+						<a href="{{ U_WATCH_FORUM_LINK }}" title="{{ S_WATCH_FORUM_TITLE }}" data-ajax="toggle_link" data-toggle-class="icon {% if S_WATCHING_FORUM %}fa-check-square-o{% else %}fa-square-o{% endif %} fa-fw" data-toggle-text="{{ S_WATCH_FORUM_TOGGLE }}" data-toggle-url="{{ U_WATCH_FORUM_TOGGLE }}">
+							<i class="icon {% if S_WATCHING_FORUM %}fa-square-o{% else %}fa-check-square-o{% endif %} fa-fw" aria-hidden="true"></i><span>{{ S_WATCH_FORUM_TITLE }}</span>
+						</a>
+					</li>
+				{% endif %}
+				{% if not S_IS_BOT and U_MARK_TOPICS and loops.topicrow|length %}
+					<li>
+						<a href="{{ U_MARK_TOPICS }}" class="mark" accesskey="m" data-ajax="mark_topics_read">
+							<i class="icon fa-check-square-o fa-fw" aria-hidden="true"></i><span>{{ lang('MARK_TOPICS_READ') }}</span>
+						</a>
+					</li>
+				{% endif %}
+			{% EVENT viewtopic_forum_tools_after %}
+			</ul>
+		</div>
+	</div>
+{% endif %}
+

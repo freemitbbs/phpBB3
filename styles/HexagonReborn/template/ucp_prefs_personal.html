@@ -1,0 +1,131 @@
+{% INCLUDE 'ucp_header.html' %}
+
+<form id="ucp" method="post" action="{{ S_UCP_ACTION }}"{{ S_FORM_ENCTYPE }}>
+
+<h2>{{ lang('TITLE') }}</h2>
+
+<div class="panel">
+	<div class="inner">
+
+	<fieldset>
+	
+	{% if ERROR %}<p class="error">{{ ERROR }}</p>{% endif %}
+	{% EVENT ucp_prefs_personal_prepend %}
+	{% if definition.COLORPICKER == 'yes' and definition.COLORPICKERPOSITION == 'ucp' %}
+	<dl>
+		<dt><label>ColorPicker {{ lang('COLON') }}</label></dt>
+		<dd>
+			{% include 'color_picker_links.html' %}
+		</dd>
+	</dl>
+	{% endif %}
+	<dl>
+		<dt><label for="viewemail0">{{ lang('SHOW_EMAIL') }}{{ lang('COLON') }}</label></dt>
+		<dd>
+			<label for="viewemail1"><input type="radio" name="viewemail" id="viewemail1" value="1"{% if S_VIEW_EMAIL %} checked="checked"{% endif %} /> {{ lang('YES') }}</label>
+			<label for="viewemail0"><input type="radio" name="viewemail" id="viewemail0" value="0"{% if not S_VIEW_EMAIL %} checked="checked"{% endif %} /> {{ lang('NO') }}</label>
+		</dd>
+	</dl>
+	<dl>
+		<dt><label for="massemail1">{{ lang('ADMIN_EMAIL') }}{{ lang('COLON') }}</label></dt>
+		<dd>
+			<label for="massemail1"><input type="radio" name="massemail" id="massemail1" value="1"{% if S_MASS_EMAIL %} checked="checked"{% endif %} /> {{ lang('YES') }}</label>
+			<label for="massemail0"><input type="radio" name="massemail" id="massemail0" value="0"{% if not S_MASS_EMAIL %} checked="checked"{% endif %} /> {{ lang('NO') }}</label>
+		</dd>
+	</dl>
+	<dl>
+		<dt><label for="allowpm1">{{ lang('ALLOW_PM') }}{{ lang('COLON') }}</label><br /><span>{{ lang('ALLOW_PM_EXPLAIN') }}</span></dt>
+		<dd>
+			<label for="allowpm1"><input type="radio" name="allowpm" id="allowpm1" value="1"{% if S_ALLOW_PM %} checked="checked"{% endif %} /> {{ lang('YES') }}</label>
+			<label for="allowpm0"><input type="radio" name="allowpm" id="allowpm0" value="0"{% if not S_ALLOW_PM %} checked="checked"{% endif %} /> {{ lang('NO') }}</label>
+		</dd>
+	</dl>
+	{% if S_CAN_HIDE_ONLINE %}
+	<dl>
+		<dt><label for="hideonline0">{{ lang('HIDE_ONLINE') }}{{ lang('COLON') }}</label><br /><span>{{ lang('HIDE_ONLINE_EXPLAIN') }}</span></dt>
+		<dd>
+			<label for="hideonline1"><input type="radio" name="hideonline" id="hideonline1" value="1"{% if S_HIDE_ONLINE %} checked="checked"{% endif %} /> {{ lang('YES') }}</label>
+			<label for="hideonline0"><input type="radio" name="hideonline" id="hideonline0" value="0"{% if not S_HIDE_ONLINE %} checked="checked"{% endif %} /> {{ lang('NO') }}</label>
+		</dd>
+	</dl>
+	{% endif %}
+	{% if S_SELECT_NOTIFY %}
+	<dl>
+		<dt><label for="notifymethod0">{{ lang('NOTIFY_METHOD') }}{{ lang('COLON') }}</label></dt>
+		<dd>
+			<label for="notifymethod0"><input type="radio" name="notifymethod" id="notifymethod0" value="0"{% if S_NOTIFY_EMAIL %} checked="checked"{% endif %} /> {{ lang('NOTIFY_METHOD_EMAIL') }}</label>
+			<label for="notifymethod1"><input type="radio" name="notifymethod" id="notifymethod1" value="1"{% if S_NOTIFY_IM %} checked="checked"{% endif %} /> {{ lang('NOTIFY_METHOD_IM') }}</label>
+			<label for="notifymethod2"><input type="radio" name="notifymethod" id="notifymethod2" value="2"{% if S_NOTIFY_BOTH %} checked="checked"{% endif %} /> {{ lang('NOTIFY_METHOD_BOTH') }}</label>
+		</dd>
+	</dl>
+	{% endif %}
+	{% if S_MORE_LANGUAGES %}
+	<dl>
+		<dt><label for="lang">{{ lang('BOARD_LANGUAGE') }}{{ lang('COLON') }}</label></dt>
+		<dd><select name="lang" id="lang">{{ S_LANG_OPTIONS }}</select></dd>
+	</dl>
+	{% endif %}
+	{% if S_STYLE_OPTIONS and S_MORE_STYLES %}
+	<dl>
+		<dt><label for="user_style">{{ lang('BOARD_STYLE') }}{{ lang('COLON') }}</label></dt>
+		<dd><select name="user_style" id="user_style">{{ S_STYLE_OPTIONS }}</select></dd>
+	</dl>
+	{% endif %}
+	{% INCLUDE 'timezone_option.html' %}
+	<dl>
+		<dt><label for="dateformat">{{ lang('BOARD_DATE_FORMAT') }}{{ lang('COLON') }}</label><br /><span>{{ lang('BOARD_DATE_FORMAT_EXPLAIN') }}</span></dt>
+		<dd>
+			<select name="dateoptions" id="dateoptions" onchange="if(this.value=='custom'){phpbb.toggleDisplay('custom_date',1);}else{phpbb.toggleDisplay('custom_date',-1);} if (this.value == 'custom') { document.getElementById('dateformat').value = default_dateformat; } else { document.getElementById('dateformat').value = this.value; }">
+				{{ S_DATEFORMAT_OPTIONS }}
+			</select>
+		</dd>
+		<dd id="custom_date" style="display:none;"><input type="text" name="dateformat" id="dateformat" value="{{ DATE_FORMAT }}" maxlength="64" class="inputbox narrow" style="margin-top: 3px;" /></dd>
+	</dl>
+	{% EVENT ucp_prefs_personal_append %}
+	</fieldset>
+
+	</div>
+</div>
+
+<fieldset class="submit-buttons">
+	{S_HIDDEN_FIELDS}
+	<input type="submit" name="submit" value="{{ lang('SUBMIT') }}" class="button1" />
+	{{ S_FORM_TOKEN }}
+</fieldset>
+</form>
+
+<script>
+	var date_format = '{{ A_DATE_FORMAT }}';
+	var default_dateformat = '{{ A_DEFAULT_DATEFORMAT }}';
+
+	function customDates()
+	{
+		var e = document.getElementById('dateoptions');
+
+		e.selectedIndex = e.length - 1;
+
+		// Loop and match date_format in menu
+		for (var i = 0; i < e.length; i++)
+		{
+			if (e.options[i].value == date_format)
+			{
+				e.selectedIndex = i;
+				break;
+			}
+		}
+
+		// Show/hide custom field
+		if (e.selectedIndex == e.length - 1)
+		{
+			phpbb.toggleDisplay('custom_date',1);
+		}
+		else
+		{
+			phpbb.toggleDisplay('custom_date',-1);
+		}
+	}
+
+	window.onload = customDates;
+</script>
+
+{% INCLUDE 'ucp_footer.html' %}
