@@ -83,6 +83,7 @@ class release_1_0_0 extends \phpbb\db\migration\migration
 	public function update_data()
 	{
 		return [
+			['custom', [[$this, 'remove_extension_modules']]],
 			['config.add', ['freemitbbs_adultaccess_version', '1.0.3']],
 			['config.add', ['freemitbbs_adult_group_id', 0]],
 			['config.add', ['freemitbbs_adult_forum_ids', '']],
@@ -98,7 +99,7 @@ class release_1_0_0 extends \phpbb\db\migration\migration
 				[
 					'module_langname' => 'ACP_ADULTACCESS',
 					'module_basename' => '\freemitbbs\adultaccess\acp\acp_adultaccess_module',
-					'module_mode' => ['main'],
+					'module_mode' => 'main',
 					'module_auth' => 'ext_freemitbbs/adultaccess && acl_a_board',
 				],
 			]],
@@ -108,7 +109,7 @@ class release_1_0_0 extends \phpbb\db\migration\migration
 				[
 					'module_langname' => 'UCP_ADULTACCESS',
 					'module_basename' => '\freemitbbs\adultaccess\ucp\main_module',
-					'module_mode' => ['settings'],
+					'module_mode' => 'settings',
 					'module_auth' => 'ext_freemitbbs/adultaccess',
 				],
 			]],
@@ -118,8 +119,193 @@ class release_1_0_0 extends \phpbb\db\migration\migration
 	public function revert_data()
 	{
 		return [
+			['custom', [[$this, 'restore_all_forum_permissions']]],
+			['custom', [[$this, 'remove_extension_modules']]],
 			['custom', [[$this, 'remove_opt_in_group']]],
+			['config.remove', ['freemitbbs_adult_forum_ids']],
+			['config.remove', ['freemitbbs_adult_group_id']],
+			['config.remove', ['freemitbbs_adultaccess_version']],
+			['custom', [[$this, 'clear_acl_cache']]],
 		];
+	}
+
+	public function restore_all_forum_permissions(): void
+	{
+		$sql = 'SELECT forum_id
+			FROM ' . $this->acl_backup_sets_table() . '
+			ORDER BY forum_id ASC';
+		$result = $this->db->sql_query($sql);
+
+		$forum_ids = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$forum_ids[] = (int) $row['forum_id'];
+		}
+		$this->db->sql_freeresult($result);
+
+		if (empty($forum_ids))
+		{
+			return;
+		}
+
+		$this->db->sql_transaction('begin');
+		try
+		{
+			foreach ($forum_ids as $forum_id)
+			{
+				$this->restore_forum_acl_backup($forum_id);
+			}
+			$this->db->sql_transaction('commit');
+		}
+		catch (\Throwable $e)
+		{
+			$this->db->sql_transaction('rollback');
+			throw $e;
+		}
+	}
+
+	protected function restore_forum_acl_backup(int $forum_id): void
+	{
+		$backup_group_rows = $this->get_backup_group_acl_rows($forum_id);
+		$backup_user_rows = $this->get_backup_user_acl_rows($forum_id);
+
+		$this->db->sql_query('DELETE FROM ' . ACL_GROUPS_TABLE . '
+			WHERE forum_id = ' . $forum_id);
+		$this->db->sql_query('DELETE FROM ' . ACL_USERS_TABLE . '
+			WHERE forum_id = ' . $forum_id);
+
+		if (!empty($backup_group_rows))
+		{
+			$this->db->sql_multi_insert(ACL_GROUPS_TABLE, $backup_group_rows);
+		}
+
+		if (!empty($backup_user_rows))
+		{
+			$this->db->sql_multi_insert(ACL_USERS_TABLE, $backup_user_rows);
+		}
+
+		$this->delete_forum_acl_backup($forum_id);
+	}
+
+	protected function get_backup_group_acl_rows(int $forum_id): array
+	{
+		$sql = 'SELECT group_id, forum_id, auth_option_id, auth_role_id, auth_setting
+			FROM ' . $this->acl_group_backups_table() . '
+			WHERE forum_id = ' . $forum_id . '
+			ORDER BY backup_id ASC';
+		$result = $this->db->sql_query($sql);
+
+		$rows = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$rows[] = [
+				'group_id' => (int) $row['group_id'],
+				'forum_id' => (int) $row['forum_id'],
+				'auth_option_id' => (int) $row['auth_option_id'],
+				'auth_role_id' => (int) $row['auth_role_id'],
+				'auth_setting' => (int) $row['auth_setting'],
+			];
+		}
+		$this->db->sql_freeresult($result);
+
+		return $rows;
+	}
+
+	protected function get_backup_user_acl_rows(int $forum_id): array
+	{
+		$sql = 'SELECT user_id, forum_id, auth_option_id, auth_role_id, auth_setting
+			FROM ' . $this->acl_user_backups_table() . '
+			WHERE forum_id = ' . $forum_id . '
+			ORDER BY backup_id ASC';
+		$result = $this->db->sql_query($sql);
+
+		$rows = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$rows[] = [
+				'user_id' => (int) $row['user_id'],
+				'forum_id' => (int) $row['forum_id'],
+				'auth_option_id' => (int) $row['auth_option_id'],
+				'auth_role_id' => (int) $row['auth_role_id'],
+				'auth_setting' => (int) $row['auth_setting'],
+			];
+		}
+		$this->db->sql_freeresult($result);
+
+		return $rows;
+	}
+
+	protected function delete_forum_acl_backup(int $forum_id): void
+	{
+		$this->db->sql_query('DELETE FROM ' . $this->acl_group_backups_table() . '
+			WHERE forum_id = ' . $forum_id);
+		$this->db->sql_query('DELETE FROM ' . $this->acl_user_backups_table() . '
+			WHERE forum_id = ' . $forum_id);
+		$this->db->sql_query('DELETE FROM ' . $this->acl_backup_sets_table() . '
+			WHERE forum_id = ' . $forum_id);
+	}
+
+	protected function acl_backup_sets_table(): string
+	{
+		return $this->table_prefix . 'adultaccess_acl_backup_sets';
+	}
+
+	protected function acl_group_backups_table(): string
+	{
+		return $this->table_prefix . 'adultaccess_acl_group_backups';
+	}
+
+	protected function acl_user_backups_table(): string
+	{
+		return $this->table_prefix . 'adultaccess_acl_user_backups';
+	}
+
+	public function remove_extension_modules(): void
+	{
+		$this->remove_modules_by_langname('ucp', 'UCP_ADULTACCESS');
+		$this->remove_modules_by_langname('acp', 'ACP_ADULTACCESS');
+		$this->remove_modules_by_langname('acp', 'ACP_ADULTACCESS_GRP');
+	}
+
+	protected function remove_modules_by_langname(string $module_class, string $module_langname): void
+	{
+		global $phpbb_container;
+
+		$sql = 'SELECT module_id
+			FROM ' . MODULES_TABLE . "
+			WHERE module_class = '" . $this->db->sql_escape($module_class) . "'
+				AND module_langname = '" . $this->db->sql_escape($module_langname) . "'
+			ORDER BY left_id DESC";
+		$result = $this->db->sql_query($sql);
+
+		$module_ids = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$module_ids[] = (int) $row['module_id'];
+		}
+		$this->db->sql_freeresult($result);
+
+		if (empty($module_ids))
+		{
+			return;
+		}
+
+		$module_manager = $phpbb_container->get('module.manager');
+		foreach ($module_ids as $module_id)
+		{
+			try
+			{
+				$module_manager->delete_module($module_id, $module_class);
+			}
+			catch (\phpbb\module\exception\module_exception $e)
+			{
+				$this->db->sql_query('DELETE FROM ' . MODULES_TABLE . '
+					WHERE module_id = ' . $module_id . "
+						AND module_class = '" . $this->db->sql_escape($module_class) . "'");
+			}
+		}
+
+		$module_manager->remove_cache_file($module_class);
 	}
 
 	public function ensure_opt_in_group(): void
@@ -196,5 +382,16 @@ class release_1_0_0 extends \phpbb\db\migration\migration
 		$this->db->sql_freeresult($result);
 
 		return $group_id;
+	}
+
+	public function clear_acl_cache(): void
+	{
+		if (!class_exists('auth_admin'))
+		{
+			include_once($this->phpbb_root_path . 'includes/acp/auth.' . $this->php_ext);
+		}
+
+		$auth_admin = new \auth_admin();
+		$auth_admin->acl_clear_prefetch();
 	}
 }

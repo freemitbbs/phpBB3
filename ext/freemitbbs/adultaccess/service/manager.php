@@ -388,11 +388,7 @@ class manager
 				throw new \RuntimeException('ADULTACCESS_SKIP_NO_SOURCE');
 			}
 
-			if ($has_backup)
-			{
-				$this->refresh_acl_backup_from_current_acl($forum_id, $adult_group_id);
-			}
-			else
+			if (!$has_backup)
 			{
 				$this->backup_forum_acl($forum_id);
 			}
@@ -513,7 +509,7 @@ class manager
 			'forum_id' => $forum_id,
 			'auth_option_id' => 0,
 			'auth_role_id' => $role_id,
-			'auth_setting' => ACL_NEVER,
+			'auth_setting' => 0,
 		]]);
 	}
 
@@ -836,43 +832,22 @@ class manager
 
 	protected function restore_forum_acl_backup(int $forum_id): void
 	{
-		$staff_group_ids = $this->get_group_ids(self::STAFF_GROUPS);
-		$adult_group_id = $this->get_adult_group_id();
-		$this->refresh_acl_backup_from_current_acl($forum_id, $adult_group_id);
+		$backup_group_rows = $this->get_backup_group_acl_rows($forum_id);
+		$backup_user_rows = $this->get_backup_user_acl_rows($forum_id);
 
-		$backup_group_rows = array_values(array_filter($this->get_backup_group_acl_rows($forum_id), static function (array $row) use ($staff_group_ids, $adult_group_id): bool
+		$this->db->sql_query('DELETE FROM ' . ACL_GROUPS_TABLE . '
+			WHERE forum_id = ' . $forum_id);
+		$this->db->sql_query('DELETE FROM ' . ACL_USERS_TABLE . '
+			WHERE forum_id = ' . $forum_id);
+
+		if (!empty($backup_group_rows))
 		{
-			return (int) $row['group_id'] !== $adult_group_id && !in_array((int) $row['group_id'], $staff_group_ids, true);
-		}));
-		if ($adult_group_id > 0)
-		{
-			$this->delete_group_forum_acl($forum_id, [$adult_group_id]);
+			$this->db->sql_multi_insert(ACL_GROUPS_TABLE, $backup_group_rows);
 		}
 
-		$current_group_rows = $this->get_acl_group_rows_by_subject($forum_id);
-		foreach ($this->group_acl_rows_by_subject($backup_group_rows, 'group_id') as $group_id => $group_rows)
+		if (!empty($backup_user_rows))
 		{
-			$replacement_rows = $this->merge_current_acl_rows_with_backup_access(
-				$current_group_rows[$group_id] ?? [],
-				$group_rows,
-				'group_id',
-				$group_id,
-				$forum_id
-			);
-			$this->replace_group_forum_subject_acl($forum_id, $group_id, $replacement_rows);
-		}
-
-		$current_user_rows = $this->get_acl_user_rows_by_subject($forum_id);
-		foreach ($this->group_acl_rows_by_subject($this->get_backup_user_acl_rows($forum_id), 'user_id') as $user_id => $user_rows)
-		{
-			$replacement_rows = $this->merge_current_acl_rows_with_backup_access(
-				$current_user_rows[$user_id] ?? [],
-				$user_rows,
-				'user_id',
-				$user_id,
-				$forum_id
-			);
-			$this->replace_user_forum_subject_acl($forum_id, $user_id, $replacement_rows);
+			$this->db->sql_multi_insert(ACL_USERS_TABLE, $backup_user_rows);
 		}
 
 		$this->delete_forum_acl_backup($forum_id);
