@@ -1,0 +1,66 @@
+{% include 'simple_header.html' %}
+
+<div class="panel bg3">
+	<div>
+		<div class="navbar">
+			<div class="maintitle">
+				{{ lang('MOT_DIM_CHECK_RESULT') }}
+			</div>
+		</div>
+
+		<br>
+
+		<div class="pagination top-pagination">
+			{{ MOT_DIM_TOTAL_USERS }}
+			{% if pagination %}
+				&nbsp;-&nbsp;{% include 'pagination.html' %}
+			{% endif %}
+		</div>
+
+		<p><br></p>
+
+		<div class="forabg">
+			<table class="table1 zebra-list">
+				<thead>
+					<tr>
+						<th>{{ lang('USERNAME') }}</th>
+						<th>{{ lang('GROUP') }}</th>
+						<th>{{ lang('MOT_DIM_REGISTERED') }}</th>
+						<th>{{ lang('REASON') }}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for user in users %}
+						<tr>
+							<td>{{ user.USERNAME }}</td>
+							<td>{{ user.GROUP }}</td>
+							<td>{{ user.REG_DATE }}</td>
+							<td>{{ user.REASON }}</td>
+						</tr>
+					{% else %}
+						<tr>
+							<td colspan="4" style="text-align: center;">{{ lang('MOT_DIM_NO_ITEMS') }}</td>
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+
+		{% if pagination %}
+			<div class="pagination">
+				{% include 'pagination.html' %}
+			</div>
+		{% endif %}
+
+		<p><br></p>
+	</div>
+</div>
+
+<br>
+
+<div style="text-align: center; clear: both;">
+	<br>
+	<a href="#" onclick="window.close(); return false;">{{ lang('CLOSE_WINDOW') }}</a>
+</div>
+
+{% include 'simple_footer.html' %}

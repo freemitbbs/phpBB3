@@ -1,0 +1,113 @@
+{% INCLUDE 'overall_header.html' %}
+
+{% INCLUDECSS '@stoker_topstats/topstats_acp.css' %}
+
+<p><img src="https://img.shields.io/badge/{{ lang('ACP_TOPSTATSTP_BADGE') }}-green.svg?style=plastic" height="28" alt="{{ lang('ACP_TOPSTATSTP_BADGE') }}"></p>
+
+<p class="font-size">{{ lang('ACP_TOPSTATS_SETTINGS_EXPLAIN') ~ lang('COLON') }}<br>
+	<a class="font-weight" href="https://phpbb3bbcodes.com/donate" target="_blank" rel="noopener noreferrer"><i class="fa fa-paypal" aria-hidden="true"></i> {{ lang('ACP_TOPSTATS_DONATION') }}</a><br>
+	<a class="font-weight" href="https://phpbb3bbcodes.com/home" target="_blank" rel="noopener noreferrer"><i class="fa fa-link" aria-hidden="true"></i> {{ lang('ACP_TOPSTATS_MEMBER') }}</a><br>
+	<a class="font-weight" href="https://phpbb3bbcodes.com/viewtopic.php?t=2749" target="_blank" rel="noopener noreferrer"><i class="fa fa-ticket" aria-hidden="true"></i> {{ lang('ACP_TOPSTATS_SUPPORT') }}</a>
+</p>
+
+<p>{{ lang('ACP_TS_TOPPOSTER_EXPLAIN') }}</p>
+
+<form id="acp_topstats_topposter" method="post" action="{{ U_ACTION }}">
+	<fieldset class="ts-fieldset">
+		<legend class="ts-legend"><i class="fa fa-cogs fa-lg" aria-hidden="true"></i>{{ lang('ACP_TS_TOPPOSTER') }}</legend>
+		<dl>
+			<dt>
+				<label>{{ lang('DISPLAY_TOP_STATS_TOPPOSTER') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('DISPLAY_TOP_STATS_TOPPOSTER_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<span class="toggle-switch" data-toggle-url="{{ U_TOGGLE_TOPPOSTER }}" data-toggle-error="{{ lang('ACP_STOKER_TOGGLE_ERROR') }}" tabindex="0" role="switch" aria-checked="{% if DISPLAY_TOP_STATS_TOPPOSTER %}true{% else %}false{% endif %}" aria-label="{{ lang('DISPLAY_TOP_STATS_TOPPOSTER') }}">
+					<input type="checkbox" id="display_top_stats_topposter" tabindex="-1"{% if DISPLAY_TOP_STATS_TOPPOSTER %} checked="checked"{% endif %}>
+					<span class="toggle-slider"></span>
+				</span>
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label for="tsttm_numbertp">{{ lang('TS_THISMONTH_TOP_NUMBER') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_THISMONTH_TOP_NUMBER_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<input type="text" name="tsttm_numbertp" id="tsttm_numbertp" size="5" value="{{ TSTTM_NUMBERTP }}">
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label for="tstlm_numbertp">{{ lang('TS_LASTMONTH_TOP_NUMBER') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_LASTMONTH_TOP_NUMBER_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<input type="text" name="tstlm_numbertp" id="tstlm_numbertp" size="5" value="{{ TSTLM_NUMBERTP }}">
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label for="ts_topposter_cache_time">{{ lang('TS_TOPPOSTER_CACHE_TIME') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_TOPPOSTER_CACHE_TIME_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<select id="ts_topposter_cache_time" name="ts_topposter_cache_time">
+					<option value="0"{% if TS_TOPPOSTER_CACHE_TIME == 0 %} selected="selected"{% endif %}>{{ lang('TS_TP_CACHE_DISABLED') }}</option>
+					<option value="1"{% if TS_TOPPOSTER_CACHE_TIME == 1 %} selected="selected"{% endif %}>{{ lang('TS_TP_CACHE_1_HOUR') }}</option>
+					<option value="2"{% if TS_TOPPOSTER_CACHE_TIME == 2 %} selected="selected"{% endif %}>{{ lang('TS_TP_CACHE_2_HOURS') }}</option>
+					<option value="3"{% if TS_TOPPOSTER_CACHE_TIME == 3 %} selected="selected"{% endif %}>{{ lang('TS_TP_CACHE_3_HOURS') }}</option>
+					<option value="4"{% if TS_TOPPOSTER_CACHE_TIME == 4 %} selected="selected"{% endif %}>{{ lang('TS_TP_CACHE_4_HOURS') }}</option>
+					<option value="8"{% if TS_TOPPOSTER_CACHE_TIME == 8 %} selected="selected"{% endif %}>{{ lang('TS_TP_CACHE_8_HOURS') }}</option>
+					<option value="-1"{% if TS_TOPPOSTER_CACHE_TIME == -1 %} selected="selected"{% endif %}>{{ lang('TS_TP_CACHE_REST_OF_DAY') }}</option>
+				</select>
+			</dd>
+		</dl>
+	</fieldset>
+
+	<fieldset class="ts-fieldset">
+		<legend class="ts-legend"><i class="fa fa-share-square-o fa-lg" aria-hidden="true"></i>{{ lang('TS_SUBMIT_CHANGES') }}</legend>
+		<p class="submit-buttons">
+			<input class="button1" type="submit" id="submit" name="submit" value="{{ lang('SUBMIT') }}"> &nbsp; 
+			<input class="button2" type="reset" id="reset" name="reset" value="{{ lang('RESET') }}">
+	{{ S_FORM_TOKEN }}
+	</fieldset>
+</form>
+
+<form id="acp_topstats_excluded" method="post" action="{{ U_ACTION }}">
+	<fieldset class="ts-fieldset">
+		<legend class="ts-legend"><i class="fa fa-user-times fa-lg" aria-hidden="true"></i>{{ lang('TS_TOPSTATS_TP_EXCLUDE') }}</legend>
+		<dl>
+			<dt><label for="topstats_excluded_users">{{ lang('TS_EXCLUDED_USERS') ~ lang('COLON') }}</label><br>
+			<span>{{ lang('TS_EXCLUDED_USERS_EXPLAIN') }}</span></dt>
+			<dd><textarea name="topstats_excluded_users" id="topstats_excluded_users" rows="3" cols="80">{{ TOPSTATS_EXCLUDED_USERS }}</textarea></dd>
+		</dl>
+		<p class="submit-buttons">
+			<input class="button1" type="submit" id="submit_excluded_users" name="submit_excluded_users" value="{{ lang('SUBMIT_EXCLUDED_USERS') }}"> &nbsp; 
+			<input class="button2" type="reset" id="reset_excluded_users" name="reset_excluded_users" value="{{ lang('RESET') }}">
+		</p>
+	</fieldset>
+  {{ S_FORM_TOKEN }}
+</form>
+
+<form id="acp_topstats_excluded_forums" method="post" action="{{ U_ACTION }}">
+	<fieldset class="ts-fieldset">
+		<legend class="ts-legend"><i class="fa fa-calendar-times-o fa-lg" aria-hidden="true"></i>{{ lang('TS_TOPSTATS_EXCLUDE_FORUMS') }}</legend>
+		<dl>
+			<dt><label for="topstats_excluded_forums">{{ lang('TS_EXCLUDED_FORUMS') ~ lang('COLON') }}</label><br>
+			<span>{{ lang('TS_EXCLUDED_FORUMS_EXPLAIN') }}</span></dt>
+			<dd><textarea name="topstats_excluded_forums" id="topstats_excluded_forums" rows="3" cols="80">{{ TOPSTATS_EXCLUDED_FORUMS }}</textarea></dd>
+		</dl>
+		<p class="submit-buttons">
+			<input class="button1" type="submit" id="submit_excluded_forums" name="submit_excluded_forums" value="{{ lang('SUBMIT_EXCLUDED_FORUMS') }}"> &nbsp; 
+			<input class="button2" type="reset" id="reset_excluded_forums" name="reset_excluded_forums" value="{{ lang('RESET') }}">
+		</p>
+	</fieldset>
+	{{ S_FORM_TOKEN }}
+</form>
+
+{% INCLUDEJS '@stoker_topstats/acp_topstats.js' %}
+
+{% INCLUDE 'overall_footer.html' %}

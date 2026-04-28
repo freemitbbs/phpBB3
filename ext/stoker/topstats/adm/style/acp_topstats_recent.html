@@ -1,0 +1,166 @@
+{% INCLUDE 'overall_header.html' %}
+
+{% INCLUDECSS '@stoker_topstats/topstats_acp.css' %}
+
+<p><img src="https://img.shields.io/badge/{{ lang('ACP_TOPSTATSRA_BADGE') }}-green.svg?style=plastic" height="28" alt="{{ lang('ACP_TOPSTATSRA_BADGE') }}"></p>
+
+<p class="font-size">{{ lang('ACP_TOPSTATS_SETTINGS_EXPLAIN') ~ lang('COLON') }}<br>
+	<a class="font-weight" href="https://phpbb3bbcodes.com/donate" target="_blank" rel="noopener noreferrer"><i class="fa fa-paypal" aria-hidden="true"></i> {{ lang('ACP_TOPSTATS_DONATION') }}</a><br>
+	<a class="font-weight" href="https://phpbb3bbcodes.com/home" target="_blank" rel="noopener noreferrer"><i class="fa fa-link" aria-hidden="true"></i> {{ lang('ACP_TOPSTATS_MEMBER') }}</a><br>
+	<a class="font-weight" href="https://phpbb3bbcodes.com/viewtopic.php?t=2749" target="_blank" rel="noopener noreferrer"><i class="fa fa-ticket" aria-hidden="true"></i> {{ lang('ACP_TOPSTATS_SUPPORT') }}</a>
+</p>
+
+<form id="acp_topstats_recent" method="post" action="{{ U_ACTION }}">
+	<fieldset class="ts-fieldset">
+	<legend class="ts-legend"><i class="fa fa-cogs fa-lg" aria-hidden="true"></i>{{ lang('TS_RECENT_SETTINGS') }}</legend>
+		<dl>
+			<dt><label>{{ lang('DISPLAY_TOP_RECENT_INDEX') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('DISPLAY_TOP_RECENT_INDEX_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<span class="toggle-switch" data-toggle-url="{{ U_TOGGLE_RECENT_INDEX }}" data-toggle-error="{{ lang('ACP_STOKER_TOGGLE_ERROR') }}" tabindex="0" role="switch" aria-checked="{% if DISPLAY_TOP_RECENT_INDEX %}true{% else %}false{% endif %}" aria-label="{{ lang('DISPLAY_TOP_RECENT_INDEX') }}">
+					<input type="checkbox" id="display_top_recent_index" tabindex="-1"{% if DISPLAY_TOP_RECENT_INDEX %} checked="checked"{% endif %}>
+					<span class="toggle-slider"></span>
+				</span>
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt><label>{{ lang('DISPLAY_TOP_RECENT_PORTAL') ~ lang('COLON') }}</label><br>
+				<span>{% if PORTAL_INSTALLED_ENABLED %}{{ lang('DISPLAY_TOP_RECENT_PORTAL_EXPLAIN') }}{% else %}<em>{{ lang('TS_PORTAL_NOT_AVAILABLE') }}</em>{% endif %}</span>
+			</dt>
+			<dd>
+				<span class="toggle-switch" data-toggle-url="{{ U_TOGGLE_RECENT_PORTAL }}" data-toggle-error="{{ lang('ACP_STOKER_TOGGLE_ERROR') }}" tabindex="0" role="switch" aria-checked="{% if DISPLAY_TOP_RECENT_PORTAL %}true{% else %}false{% endif %}"{% if not PORTAL_INSTALLED_ENABLED %} style="pointer-events: none; opacity: 0.5;"{% endif %} aria-label="{{ lang('DISPLAY_TOP_RECENT_PORTAL') }}">
+					<input type="checkbox" id="display_top_recent_portal" tabindex="-1"{% if DISPLAY_TOP_RECENT_PORTAL %} checked="checked"{% endif %}{% if not PORTAL_INSTALLED_ENABLED %} disabled="disabled"{% endif %}>
+					<span class="toggle-slider"></span>
+				</span>
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt><label>{{ lang('DISPLAY_TOP_RECENT_CUSTOM') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('DISPLAY_TOP_RECENT_CUSTOM_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<span class="toggle-switch" data-toggle-url="{{ U_TOGGLE_RECENT_CUSTOM }}" data-toggle-error="{{ lang('ACP_STOKER_TOGGLE_ERROR') }}" tabindex="0" role="switch" aria-checked="{% if DISPLAY_TOP_RECENT_CUSTOM %}true{% else %}false{% endif %}" aria-label="{{ lang('DISPLAY_TOP_RECENT_CUSTOM') }}">
+					<input type="checkbox" id="display_top_recent_custom" tabindex="-1"{% if DISPLAY_TOP_RECENT_CUSTOM %} checked="checked"{% endif %}>
+					<span class="toggle-slider"></span>
+				</span>
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label for="tsrat_number">{{ lang('TSRAT_NUMBER') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TSRAT_NUMBER_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<span class="topstats">{{ lang('TS_INDEX') ~ lang('COLON') }}</span><input type="text" name="tsrat_number" id="tsrat_number" size="4" value="{{ TSRAT_NUMBER }}"><br>
+				<span class="topstats">{{ lang('TS_CUSTOM') ~ lang('COLON') }}</span><input type="text" name="tsrat_numberc" id="tsrat_numberc" size="4" value="{{ TSRAT_NUMBERC }}">
+				{% if PORTAL_INSTALLED_ENABLED %}<br><span class="topstats">{{ lang('TS_PORTAL') ~ lang('COLON') }}</span><input type="text" name="tsrat_numberp" id="tsrat_numberp" size="4" value="{{ TSRAT_NUMBERP }}">{% endif %}
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label for="ts_recent_cache_time">{{ lang('TS_RECENT_CACHE_TIME') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_RECENT_CACHE_TIME_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<select id="ts_recent_cache_time" name="ts_recent_cache_time">
+					<option value="0"{% if TS_RECENT_CACHE_TIME == 0 %} selected="selected"{% endif %}>{{ lang('TS_CACHE_DISABLED') }}</option>
+					<option value="1"{% if TS_RECENT_CACHE_TIME == 1 %} selected="selected"{% endif %}>{{ lang('TS_CACHE_1_MIN') }}</option>
+					<option value="2"{% if TS_RECENT_CACHE_TIME == 2 %} selected="selected"{% endif %}>{{ lang('TS_CACHE_2_MIN') }}</option>
+					<option value="3"{% if TS_RECENT_CACHE_TIME == 3 %} selected="selected"{% endif %}>{{ lang('TS_CACHE_3_MIN') }}</option>
+					<option value="5"{% if TS_RECENT_CACHE_TIME == 5 %} selected="selected"{% endif %}>{{ lang('TS_CACHE_5_MIN') }}</option>
+					<option value="10"{% if TS_RECENT_CACHE_TIME == 10 %} selected="selected"{% endif %}>{{ lang('TS_CACHE_10_MIN') }}</option>
+					<option value="15"{% if TS_RECENT_CACHE_TIME == 15 %} selected="selected"{% endif %}>{{ lang('TS_CACHE_15_MIN') }}</option>
+					<option value="30"{% if TS_RECENT_CACHE_TIME == 30 %} selected="selected"{% endif %}>{{ lang('TS_CACHE_30_MIN') }}</option>
+				</select>
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label>{{ lang('TS_JSSCROLL') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_JSSCROLL_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<span class="toggle-switch" data-toggle-url="{{ U_TOGGLE_JSSCROLL }}" data-toggle-error="{{ lang('ACP_STOKER_TOGGLE_ERROR') }}" tabindex="0" role="switch" aria-checked="{% if TS_JSSCROLL %}true{% else %}false{% endif %}" aria-label="{{ lang('TS_JSSCROLL') }}">
+					<input type="checkbox" id="ts_jsscroll" tabindex="-1"{% if TS_JSSCROLL %} checked="checked"{% endif %}>
+					<span class="toggle-slider"></span>
+				</span>
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label for="ts_jsspeed">{{ lang('TS_JSSCROLL_SPEED') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_JSSCROLL_SPEED_EXPLAIN') }}</span>
+			</dt>
+			<dd class="recent">
+				<input type="text" name="ts_jsspeed" id="ts_jsspeed" size="5" value="{{ TS_JSSPEED }}">
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label for="ts_jsinterval">{{ lang('TS_JSSCROLL_INTERVAL') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_JSSCROLL_INTERVAL_EXPLAIN') }}</span>
+			</dt>
+			<dd class="recent">
+				<input type="text" name="ts_jsinterval" id="ts_jsinterval" size="5" value="{{ TS_JSINTERVAL }}">
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label for="ts_jsscroll_direction">{{ lang('TS_JSSCROLL_DIRECTION') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_JSSCROLL_DIRECTION_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<label><input type="radio" class="radio" name="ts_jsscroll_direction" value="1"{% if TS_JSSCROLL_DIRECTION %} id="ts_jsscroll_direction" checked="checked"{% endif %}> {{ lang('TS_JSSCROLL_DIRECTION_UP') }}</label>
+				<label><input type="radio" class="radio" name="ts_jsscroll_direction" value="0"{% if not TS_JSSCROLL_DIRECTION %} id="ts_jsscroll_direction" checked="checked"{% endif %}> {{ lang('TS_JSSCROLL_DIRECTION_DOWN') }}</label>
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label>{{ lang('TS_JSSCROLL_PAUSE') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_JSSCROLL_PAUSE_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<span class="toggle-switch" data-toggle-url="{{ U_TOGGLE_JSSCROLL_PAUSE }}" data-toggle-error="{{ lang('ACP_STOKER_TOGGLE_ERROR') }}" tabindex="0" role="switch" aria-checked="{% if TS_JSSCROLL_PAUSE %}true{% else %}false{% endif %}" aria-label="{{ lang('TS_JSSCROLL_PAUSE') }}">
+					<input type="checkbox" id="ts_jsscroll_pause" tabindex="-1"{% if TS_JSSCROLL_PAUSE %} checked="checked"{% endif %}>
+					<span class="toggle-slider"></span>
+				</span>
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label>{{ lang('TS_JSSCROLL_NAVIGATION') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_JSSCROLL_NAVIGATION_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<span class="toggle-switch" data-toggle-url="{{ U_TOGGLE_JSSCROLL_NAVIGATION }}" data-toggle-error="{{ lang('ACP_STOKER_TOGGLE_ERROR') }}" tabindex="0" role="switch" aria-checked="{% if TS_JSSCROLL_NAVIGATION %}true{% else %}false{% endif %}" aria-label="{{ lang('TS_JSSCROLL_NAVIGATION') }}">
+					<input type="checkbox" id="ts_jsscroll_navigation" tabindex="-1"{% if TS_JSSCROLL_NAVIGATION %} checked="checked"{% endif %}>
+					<span class="toggle-slider"></span>
+				</span>
+			</dd>
+		</dl>
+	</fieldset>
+
+	<fieldset class="ts-fieldset">
+		<legend class="ts-legend"><i class="fa fa-share-square-o fa-lg" aria-hidden="true"></i>{{ lang('TS_SUBMIT_CHANGES') }}</legend>
+		<p class="submit-buttons">
+			<input class="button1" type="submit" id="submit" name="submit" value="{{ lang('SUBMIT') }}"> &nbsp; 
+			<input class="button2" type="reset" id="reset" name="reset" value="{{ lang('RESET') }}">
+		</p>
+	</fieldset>
+	{{ S_FORM_TOKEN }}
+</form>
+
+{% INCLUDEJS '@stoker_topstats/acp_topstats.js' %}
+
+{% INCLUDE 'overall_footer.html' %}

@@ -1,0 +1,13 @@
+{% INCLUDE 'overall_header.html' %}
+
+<h2>{{ SITENAME }} {{ lang('TOP_STATS_PAGE_TITLE') }}</h2>
+
+{% if DISPLAY_TOP_RECENT_CUSTOM %}
+	{% INCLUDE 'recent_active_body.html' %}
+{% endif %}
+
+{% if DISPLAY_TOP_STATS_CUSTOM %}
+	{% INCLUDE 'top_stats_body.html' %}
+{% endif %}
+
+{% INCLUDE 'overall_footer.html' %}

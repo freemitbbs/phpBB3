@@ -1,0 +1,46 @@
+services:
+    mot.dim.listener:
+        class: mot\dim\event\mot_dim_listener
+        tags:
+            - { name: event.listener }
+
+    mot.dim.controller.mot_dim_acp:
+        class: mot\dim\controller\mot_dim_acp
+        arguments:
+            - '@config'
+            - '@dbal.conn'
+            - '@group_helper'
+            - '@controller.helper'
+            - '@language'
+            - '@ext.manager'
+            - '@request'
+            - '@template'
+            - '@user'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+
+    mot.dim.cron.task.mot_dim_cron:
+        class: mot\dim\cron\task\mot_dim_cron
+        arguments:
+            - '@config'
+            - '@dbal.conn'
+            - '@log'
+            - '@user'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+        calls:
+            - [set_name, [cron.task.mot_dim_cron]]
+        tags:
+            - { name: cron.task }
+
+    mot.dim.controller.mot_dim_result_check:
+        class: mot\dim\controller\mot_dim_result_check
+        arguments:
+            - '@config'
+            - '@dbal.conn'
+            - '@controller.helper'
+            - '@language'
+            - '@pagination'
+            - '@request'
+            - '@template'
+            - '@user'

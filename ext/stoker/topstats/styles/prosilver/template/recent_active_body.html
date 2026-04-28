@@ -1,0 +1,78 @@
+{# Cache language strings #}
+{% set lang_post_by = lang('POST_BY_AUTHOR') %}
+{% set lang_in = lang('IN') %}
+{% set lang_posts = lang('POSTS') %}
+{% set lang_views = lang('VIEWS') %}
+{% set lang_last_post = lang('LAST_POST') %}
+{% set lang_recent = lang('RECENT_ACTIVE') %}
+
+<div class="forumlist">
+	<div class="forabg">
+		<div class="inner">
+			<ul class="topiclist">
+				<li class="header">
+					<dl class="row-item">
+						<dt>
+							<div class="list-inner">{{ TSRAT_NUMBER }} {{ lang_recent }}</div>
+						</dt>
+						<dd class="topics">{{ lang_posts }}</dd>
+						<dd class="posts">{{ lang_views }}</dd>
+						<dd class="lastpost">
+							<span>{{ lang_last_post }}</span>
+							{% if S_TS_JSSCROLL and TS_JSSCROLL_NAVIGATION %}
+							<span class="tsticker responsive-hide">
+								<a href="#" role="button" aria-controls="vertical-ticker" title="{{ lang('PREVIOUS_SCROLL') }}" id="ticker-previous">
+									<i class="fa fa-arrow-circle-o-left tsportalfa" aria-hidden="true"></i>
+								</a>
+								<a href="#" role="button" aria-controls="vertical-ticker" title="{{ lang('NEXT_SCROLL') }}" id="ticker-next">
+									<i class="fa fa-arrow-circle-o-right tsportalfa" aria-hidden="true"></i>
+								</a>
+								<a href="#" role="button" aria-controls="vertical-ticker" title="{{ lang('STOP_SCROLL') }}" id="stop">
+									<i class="fa fa-stop-circle-o tsportalfa" aria-hidden="true"></i>
+								</a>
+								<a href="#" role="button" aria-controls="vertical-ticker" title="{{ lang('START_SCROLL') }}" id="start">
+									<i class="fa fa-play-circle-o tsportalfa" aria-hidden="true"></i>
+								</a>
+							</span>
+							{% endif %}
+						</dd>
+					</dl>	
+				</li>
+			</ul>
+			
+			<ul{% if S_TS_JSSCROLL %} id="vertical-ticker" aria-live="polite" aria-atomic="false"{% endif %} class="topiclist forums">
+			{% for topic in loops.recent_active %}
+			<li class="row">
+				<dl class="row-item {{ topic.TOPIC_IMG_STYLE }}" title="{{ topic.TOPIC_FOLDER_IMG_ALT }}">
+					<dt>
+						<div class="list-inner ellipsis">
+							{% EVENT stoker_topstats_recent_row_prepend %}
+							{% if topic.S_UNREAD_TOPIC %}
+							<a class="unread" href="{{ topic.U_FIRST_TOPIC }}">
+								<i class="icon fa-file fa-fw icon-red icon-md" aria-hidden="true"></i>
+							</a>
+							{% endif %}
+							<a href="{{ topic.U_FIRST_TOPIC }}" class="forumtitle">{{ topic.TOPIC_TITLE }}</a><br>
+							{{ lang_post_by }} {{ topic.USER_FULL_FIRST }}
+							{{ lang_in }} <a href="{{ topic.FORUM_URL }}">{{ topic.FORUM_NAME }}</a>
+							{{ topic.TOPIC_TIME }}
+						</div>
+					</dt>
+					<dd class="topics">{{ topic.TOPIC_REPLIES }}</dd>
+					<dd class="posts">{{ topic.TOPIC_VIEWS }}</dd>
+					<dd class="lastpost">
+						<span>
+							{{ lang_post_by }} {{ topic.USER_FULL_LAST }}
+							<a href="{{ topic.U_LAST_TOPIC }}" aria-label="{{ lang('VIEW_LATEST_POST') }}">
+								<i class="icon fa-external-link-square fa-fw icon-lightgray icon-md" aria-hidden="true"></i>
+							</a><br>
+							{{ topic.TOPIC_LAST_POST_TIME }}
+						</span>
+					</dd>
+				</dl>
+			</li>
+			{% endfor %}
+			</ul>
+		</div>
+	</div>
+</div>

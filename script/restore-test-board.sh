@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # Edit this block for your test restore.
-BASE_PHPBB_ARCHIVE="/Users/hyang/Downloads/phpBB-3.3.15.zip"
+BASE_PHPBB_ARCHIVE="/Users/hyang/Downloads/phpBB-3.3.16.zip"
 MANDARIN_LANGUAGE_PACK="/Users/hyang/Downloads/mandarin_chinese_simplified_script_25_04_0.zip"
 DB_DUMP_FILE="/Users/hyang/Downloads/phpBB3/db_2026-04-16.sql.gz"
 FILES_ARCHIVE="/Users/hyang/Downloads/phpBB3/files_2026-04-16.tar.gz"

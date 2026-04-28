@@ -1,0 +1,36 @@
+{
+    "name": "stoker/topstats",
+    "type": "phpbb-extension",
+    "description": "The Top Stats extension displays some cool stats on your forum index.",
+    "homepage": "https://www.phpbb3bbcodes.com",
+    "version": "2.0.9",
+    "time": "2025-08-08",
+    "license": "GPL-2.0-only",
+    "authors": [
+        {
+            "name": "Ulrik Christensen",
+            "username": "Stoker",
+            "homepage": "https://www.phpbb3bbcodes.com",
+            "role": "Developer/Founder"
+        }
+    ],
+    "require": {
+        "php": ">=7.4",
+        "phpbb/phpbb": ">=3.3.0, <4.0.0@dev"
+    },
+    "require-dev": {
+        "phpbb/epv": "dev-master"
+    },
+    "extra": {
+        "display-name": "Top Stats & Top Posters",
+        "soft-require": {
+            "phpbb/phpbb": ">=3.3.0, <4.0.0@dev"
+        },
+        "version-check": {
+            "host": "www.phpbb3bbcodes.com",
+            "directory": "/versioncheck",
+            "filename": "topstats_version.json",
+            "ssl": true
+        }
+    }
+}

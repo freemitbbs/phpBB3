@@ -1,0 +1,85 @@
+services:
+    stoker.topstats.topstats_manager:
+        class: stoker\topstats\service\topstats_manager
+        arguments:
+            - '@dbal.conn'
+            - '@template'
+            - '@config'
+            - '@user'
+            - '@auth'
+            - '@content.visibility'
+            - '@cache'
+            - '@stoker.topstats.helper.number_helper'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+
+    stoker.topstats.recent_manager:
+        class: stoker\topstats\service\recent_manager
+        arguments:
+            - '@dbal.conn'
+            - '@template'
+            - '@config'
+            - '@user'
+            - '@auth'
+            - '@content.visibility'
+            - '@cache'
+            - '@stoker.topstats.helper.number_helper'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+
+    stoker.topstats.listener:
+        class: stoker\topstats\event\listener
+        arguments:
+            - '@config'
+            - '@controller.helper'
+            - '@template'
+            - '@language'
+            - '@auth'
+            - '@stoker.topstats.topstats_manager'
+            - '@stoker.topstats.recent_manager'
+        tags:
+            - { name: event.listener }
+            
+    stoker.topstats.controller.topposter:
+        class: stoker\topstats\controller\topposter
+        arguments:
+            - '@config'
+            - '@controller.helper'
+            - '@language'
+            - '@request'
+            - '@template'
+            - '@auth'
+            - '@stoker.topstats.topstats_manager'
+            - '@cache'
+        public: true
+        
+    stoker.topstats.controller.page:
+        class: stoker\topstats\controller\page
+        arguments:
+            - '@config'
+            - '@controller.helper'
+            - '@language'
+            - '@template'
+            - '@auth'
+            - '@stoker.topstats.topstats_manager'
+            - '@stoker.topstats.recent_manager'
+        public: true
+            
+    stoker.topstats.helper.number_helper:
+        class: stoker\topstats\helper\number_helper
+        arguments:
+            - '@language'
+
+    stoker.topstats.controller.acp:
+        class: stoker\topstats\controller\acp_controller
+        arguments:
+            - '@cache'
+            - '@config'
+            - '@dbal.conn'
+            - '@ext.manager'
+            - '@language'
+            - '@log'
+            - '@request'
+            - '@template'
+            - '@user'
+            - '%core.root_path%'

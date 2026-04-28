@@ -1,0 +1,194 @@
+{% INCLUDE 'overall_header.html' %}
+
+{% INCLUDECSS '@stoker_topstats/topstats_acp.css' %}
+
+<p><img src="https://img.shields.io/badge/{{ lang('ACP_TOPSTATSSB_BADGE') }}-green.svg?style=plastic" height="28" alt="{{ lang('ACP_TOPSTATSSB_BADGE') }}"></p>
+
+<p class="font-size">{{ lang('ACP_TOPSTATS_SETTINGS_EXPLAIN') ~ lang('COLON') }}<br>
+	<a class="font-weight" href="https://phpbb3bbcodes.com/donate" target="_blank" rel="noopener noreferrer"><i class="fa fa-paypal" aria-hidden="true"></i> {{ lang('ACP_TOPSTATS_DONATION') }}</a><br>
+	<a class="font-weight" href="https://phpbb3bbcodes.com/home" target="_blank" rel="noopener noreferrer"><i class="fa fa-link" aria-hidden="true"></i> {{ lang('ACP_TOPSTATS_MEMBER') }}</a><br>
+	<a class="font-weight" href="https://phpbb3bbcodes.com/viewtopic.php?t=2749" target="_blank" rel="noopener noreferrer"><i class="fa fa-ticket" aria-hidden="true"></i> {{ lang('ACP_TOPSTATS_SUPPORT') }}</a>
+</p>
+
+<form id="acp_topstats_stats" method="post" action="{{ U_ACTION }}">
+	<fieldset class="ts-fieldset">
+	<legend class="ts-legend"><i class="fa fa-cogs fa-lg" aria-hidden="true"></i>{{ lang('TS_TOPSTATS_SETTINGS') }}</legend>
+
+		<dl>
+			<dt><label>{{ lang('DISPLAY_TOP_STATS_INDEX') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('DISPLAY_TOP_STATS_INDEX_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<span class="toggle-switch" data-toggle-url="{{ U_TOGGLE_STATS_INDEX }}" data-toggle-error="{{ lang('ACP_STOKER_TOGGLE_ERROR') }}" tabindex="0" role="switch" aria-checked="{% if DISPLAY_TOP_STATS_INDEX %}true{% else %}false{% endif %}" aria-label="{{ lang('DISPLAY_TOP_STATS_INDEX') }}">
+					<input type="checkbox" id="display_top_stats_index" tabindex="-1"{% if DISPLAY_TOP_STATS_INDEX %} checked="checked"{% endif %}>
+					<span class="toggle-slider"></span>
+				</span>
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt><label>{{ lang('DISPLAY_TOP_STATS_PORTAL') ~ lang('COLON') }}</label><br>
+				<span>{% if PORTAL_INSTALLED_ENABLED %}{{ lang('DISPLAY_TOP_STATS_PORTAL_EXPLAIN') }}{% else %}<em>{{ lang('TS_PORTAL_NOT_AVAILABLE') }}</em>{% endif %}</span>
+			</dt>
+			<dd>
+				<span class="toggle-switch" data-toggle-url="{{ U_TOGGLE_STATS_PORTAL }}" data-toggle-error="{{ lang('ACP_STOKER_TOGGLE_ERROR') }}" tabindex="0" role="switch" aria-checked="{% if DISPLAY_TOP_STATS_PORTAL %}true{% else %}false{% endif %}"{% if not PORTAL_INSTALLED_ENABLED %} style="pointer-events: none; opacity: 0.5;"{% endif %} aria-label="{{ lang('DISPLAY_TOP_STATS_PORTAL') }}">
+					<input type="checkbox" id="display_top_stats_portal" tabindex="-1"{% if DISPLAY_TOP_STATS_PORTAL %} checked="checked"{% endif %}{% if not PORTAL_INSTALLED_ENABLED %} disabled="disabled"{% endif %}>
+					<span class="toggle-slider"></span>
+				</span>
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt><label>{{ lang('DISPLAY_TOP_STATS_CUSTOM') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('DISPLAY_TOP_STATS_CUSTOM_EXPLAIN') }}</span>
+			</dt>
+			<dd class="dd-toggle">
+				<span class="toggle-switch" data-toggle-url="{{ U_TOGGLE_STATS_CUSTOM }}" data-toggle-error="{{ lang('ACP_STOKER_TOGGLE_ERROR') }}" tabindex="0" role="switch" aria-checked="{% if DISPLAY_TOP_STATS_CUSTOM %}true{% else %}false{% endif %}" aria-label="{{ lang('DISPLAY_TOP_STATS_CUSTOM') }}">
+					<input type="checkbox" id="display_top_stats_custom" tabindex="-1"{% if DISPLAY_TOP_STATS_CUSTOM %} checked="checked"{% endif %}>
+					<span class="toggle-slider"></span>
+				</span>
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label for="tsmvt_number">{{ lang('TS_MOSTVIEWED_NUMBER') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_MOSTVIEWED_NUMBER_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<span class="topstats">{{ lang('TS_INDEX') ~ lang('COLON') }}</span><input type="text" name="tsmvt_number" id="tsmvt_number" size="4" value="{{ TSMVT_NUMBER }}"><br>
+				<span class="topstats">{{ lang('TS_CUSTOM') ~ lang('COLON') }}</span><input type="text" name="tsmvt_numberc" id="tsmvt_numberc" size="4" value="{{ TSMVT_NUMBERC }}">
+				{% if PORTAL_INSTALLED_ENABLED %}<br><span class="topstats">{{ lang('TS_PORTAL') ~ lang('COLON') }}</span><input type="text" name="tsmvt_numberp" id="tsmvt_numberp" size="4" value="{{ TSMVT_NUMBERP }}">{% endif %}
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label for="tsmrt_number">{{ lang('TS_MOSTREPLIED_NUMBER') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_MOSTREPLIED_NUMBER_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<span class="topstats">{{ lang('TS_INDEX') ~ lang('COLON') }}</span><input type="text" name="tsmrt_number" id="tsmrt_number" size="4" value="{{ TSMRT_NUMBER }}"><br>
+				<span class="topstats">{{ lang('TS_CUSTOM') ~ lang('COLON') }}</span><input type="text" name="tsmrt_numberc" id="tsmrt_numberc" size="4" value="{{ TSMRT_NUMBERC }}">
+				{% if PORTAL_INSTALLED_ENABLED %}<br><span class="topstats">{{ lang('TS_PORTAL') ~ lang('COLON') }}</span><input type="text" name="tsmrt_numberp" id="tsmrt_numberp" size="4" value="{{ TSMRT_NUMBERP }}">{% endif %}
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label for="tsmau_number">{{ lang('TS_MOSTACTIVEUSER_NUMBER') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_MOSTACTIVEUSER_NUMBER_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<span class="topstats">{{ lang('TS_INDEX') ~ lang('COLON') }}</span><input type="text" name="tsmau_number" id="tsmau_number" size="4" value="{{ TSMAU_NUMBER }}"><br>
+				<span class="topstats">{{ lang('TS_CUSTOM') ~ lang('COLON') }}</span><input type="text" name="tsmau_numberc" id="tsmau_numberc" size="4" value="{{ TSMAU_NUMBERC }}">
+				{% if PORTAL_INSTALLED_ENABLED %}<br><span class="topstats">{{ lang('TS_PORTAL') ~ lang('COLON') }}</span><input type="text" name="tsmau_numberp" id="tsmau_numberp" size="4" value="{{ TSMAU_NUMBERP }}">{% endif %}
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label for="tsmaf_number">{{ lang('TS_MOSTACTIVEFORUM_NUMBER') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_MOSTACTIVEFORUM_NUMBER_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<span class="topstats">{{ lang('TS_INDEX') ~ lang('COLON') }}</span><input type="text" name="tsmaf_number" id="tsmaf_number" size="4" value="{{ TSMAF_NUMBER }}"><br>
+				<span class="topstats">{{ lang('TS_CUSTOM') ~ lang('COLON') }}</span><input type="text" name="tsmaf_numberc" id="tsmaf_numberc" size="4" value="{{ TSMAF_NUMBERC }}">
+				{% if PORTAL_INSTALLED_ENABLED %}<br><span class="topstats">{{ lang('TS_PORTAL') ~ lang('COLON') }}</span><input type="text" name="tsmaf_numberp" id="tsmaf_numberp" size="4" value="{{ TSMAF_NUMBERP }}">{% endif %}
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label for="tslvb_number">{{ lang('TS_LASTVISITEDBOT_NUMBER') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_LASTVISITEDBOT_NUMBER_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<span class="topstats">{{ lang('TS_INDEX') ~ lang('COLON') }}</span><input type="text" name="tslvb_number" id="tslvb_number" size="4" value="{{ TSLVB_NUMBER }}"><br>
+				<span class="topstats">{{ lang('TS_CUSTOM') ~ lang('COLON') }}</span><input type="text" name="tslvb_numberc" id="tslvb_numberc" size="4" value="{{ TSLVB_NUMBERC }}">
+				{% if PORTAL_INSTALLED_ENABLED %}<br><span class="topstats">{{ lang('TS_PORTAL') ~ lang('COLON') }}</span><input type="text" name="tslvb_numberp" id="tslvb_numberp" size="4" value="{{ TSLVB_NUMBERP }}">{% endif %}
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label for="tslru_number">{{ lang('TS_LASTREGISTEREDUSER_NUMBER') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_LASTREGISTEREDUSER_NUMBER_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<span class="topstats">{{ lang('TS_INDEX') ~ lang('COLON') }}</span><input type="text" name="tslru_number" id="tslru_number" size="4" value="{{ TSLRU_NUMBER }}"><br>
+				<span class="topstats">{{ lang('TS_CUSTOM') ~ lang('COLON') }}</span><input type="text" name="tslru_numberc" id="tslru_numberc" size="4" value="{{ TSLRU_NUMBERC }}">
+				{% if PORTAL_INSTALLED_ENABLED %}<br><span class="topstats">{{ lang('TS_PORTAL') ~ lang('COLON') }}</span><input type="text" name="tslru_numberp" id="tslru_numberp" size="4" value="{{ TSLRU_NUMBERP }}">{% endif %}
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label for="tsttm_number">{{ lang('TS_THISMONTH_TOP_NUMBER') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_THISMONTH_TOP_NUMBER_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<span class="topstats">{{ lang('TS_INDEX') ~ lang('COLON') }}</span><input type="text" name="tsttm_number" id="tsttm_number" size="4" value="{{ TSTTM_NUMBER }}"><br>
+				<span class="topstats">{{ lang('TS_CUSTOM') ~ lang('COLON') }}</span><input type="text" name="tsttm_numberc" id="tsttm_numberc" size="4" value="{{ TSTTM_NUMBERC }}">
+				{% if PORTAL_INSTALLED_ENABLED %}<br><span class="topstats">{{ lang('TS_PORTAL') ~ lang('COLON') }}</span><input type="text" name="tsttm_numberp" id="tsttm_numberp" size="4" value="{{ TSTTM_NUMBERP }}">{% endif %}
+			</dd>
+		</dl>
+		<hr class="jq-hr">
+		<dl>
+			<dt>
+				<label for="tstlm_number">{{ lang('TS_LASTMONTH_TOP_NUMBER') ~ lang('COLON') }}</label><br>
+				<span>{{ lang('TS_LASTMONTH_TOP_NUMBER_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<span class="topstats">{{ lang('TS_INDEX') ~ lang('COLON') }}</span><input type="text" name="tstlm_number" id="tstlm_number" size="4" value="{{ TSTLM_NUMBER }}"><br>
+				<span class="topstats">{{ lang('TS_CUSTOM') ~ lang('COLON') }}</span><input type="text" name="tstlm_numberc" id="tstlm_numberc" size="4" value="{{ TSTLM_NUMBERC }}">
+				{% if PORTAL_INSTALLED_ENABLED %}<br><span class="topstats">{{ lang('TS_PORTAL') ~ lang('COLON') }}</span><input type="text" name="tstlm_numberp" id="tstlm_numberp" size="4" value="{{ TSTLM_NUMBERP }}">{% endif %}
+			</dd>
+		</dl>
+	</fieldset>
+
+	<fieldset class="ts-fieldset">
+		<legend class="ts-legend"><i class="fa fa-share-square-o fa-lg" aria-hidden="true"></i>{{ lang('TS_SUBMIT_CHANGES') }}</legend>
+		<p class="submit-buttons">
+			<input class="button1" type="submit" id="submit" name="submit" value="{{ lang('SUBMIT') }}"> &nbsp; 
+			<input class="button2" type="reset" id="reset" name="reset" value="{{ lang('RESET') }}">
+			{{ S_FORM_TOKEN }}
+		</p>
+	</fieldset>
+</form>
+
+<form id="acp_topstats_excluded" method="post" action="{{ U_ACTION }}">
+	<fieldset class="ts-fieldset">
+		<legend class="ts-legend"><i class="fa fa-user-times fa-lg" aria-hidden="true"></i> {{ lang('TS_TOPSTATS_TP_EXCLUDE') }}</legend>
+		<dl>
+			<dt><label for="topstats_excluded_users">{{ lang('TS_EXCLUDED_USERS') ~ lang('COLON') }}</label><br>
+			<span>{{ lang('TS_EXCLUDED_USERS_EXPLAIN') }}</span></dt>
+			<dd><textarea name="topstats_excluded_users" id="topstats_excluded_users" rows="3" cols="80">{{ TOPSTATS_EXCLUDED_USERS }}</textarea></dd>
+		</dl>
+		<p class="submit-buttons">
+			<input class="button1" type="submit" id="submit_excluded_users" name="submit_excluded_users" value="{{ lang('SUBMIT_EXCLUDED_USERS') }}"> &nbsp; 
+			<input class="button2" type="reset" id="reset_excluded_users" name="reset_excluded_users" value="{{ lang('RESET') }}">
+		</p>
+	</fieldset>
+  {{ S_FORM_TOKEN }}
+</form>
+
+<form id="acp_topstats_excluded_forums" method="post" action="{{ U_ACTION }}">
+	<fieldset class="ts-fieldset">
+		<legend class="ts-legend"><i class="fa fa-calendar-times-o fa-lg" aria-hidden="true"></i>{{ lang('TS_TOPSTATS_EXCLUDE_FORUMS') }}</legend>
+		<dl>
+			<dt><label for="topstats_excluded_forums">{{ lang('TS_EXCLUDED_FORUMS') ~ lang('COLON') }}</label><br>
+			<span>{{ lang('TS_EXCLUDED_FORUMS_EXPLAIN') }}</span></dt>
+			<dd><textarea name="topstats_excluded_forums" id="topstats_excluded_forums" rows="3" cols="80">{{ TOPSTATS_EXCLUDED_FORUMS }}</textarea></dd>
+		</dl>
+		<p class="submit-buttons">
+			<input class="button1" type="submit" id="submit_excluded_forums" name="submit_excluded_forums" value="{{ lang('SUBMIT_EXCLUDED_FORUMS') }}"> &nbsp; 
+			<input class="button2" type="reset" id="reset_excluded_forums" name="reset_excluded_forums" value="{{ lang('RESET') }}">
+		</p>
+	</fieldset>
+	{{ S_FORM_TOKEN }}
+</form>
+
+{% INCLUDEJS '@stoker_topstats/acp_topstats.js' %}
+
+{% INCLUDE 'overall_footer.html' %}

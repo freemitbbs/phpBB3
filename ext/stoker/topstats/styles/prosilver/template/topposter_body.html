@@ -1,0 +1,140 @@
+{# Macro for rendering a single top poster card #}
+{% macro poster_card(poster, rank, podium_class) %}
+<div class="top-poster {{ podium_class }}">
+	<div class="avatar">{{ poster.USER_AVATAR }}</div>
+	<div class="username">{{ poster.USER_FULL }}</div>
+	<div class="stats">{{ poster.TOTAL_POSTS }} {{ poster.PERCENTAGE }}</div>
+	{% if podium_class in ['gold', 'silver', 'bronze'] %}
+	<div class="podium {{ podium_class }}"><span class="podium-number">{{ rank }}</span></div>
+	{% else %}
+	<div class="rank">#{{ rank }}</div>
+	{% endif %}
+</div>
+{% endmacro %}
+
+{# Cache language strings #}
+{% set lang_no_top_poster = lang('NO_TOP_POSTER') %}
+{% set lang_go = lang('GO') %}
+{% set lang_select_month = lang('SELECT_MONTH') %}
+{% set lang_previous = lang('PREVIOUS') %}
+{% set lang_next = lang('NEXT') %}
+
+{% INCLUDE 'overall_header.html' %}
+
+<div class="month-picker-bar">
+	{% if not DISABLE_MONTH_PREV %}
+	<a class="stoker-prefetch-hover month-nav prev" href="{{ U_MONTH_PREV }}" title="{{ PREV_MONTH_LABEL }}" aria-label="{{ lang_previous ~ lang('COLON') }} {{ PREV_MONTH_LABEL }}">
+		<i class="fa fa-angle-double-left" aria-hidden="true"></i><span class="responsive-hide"> {{ lang('PREVIOUS') }}</span>
+	</a>
+	{% else %}
+	<span class="month-nav prev disabled" aria-disabled="true"><i class="fa fa-angle-double-left" aria-hidden="true"></i><span class="responsive-hide"> {{ lang('PREVIOUS') }}</span></span>
+	{% endif %}
+	
+	<form method="get" action="{{ U_TOP_POSTERS }}" class="month-picker" style="margin:0;">
+		<label for="ym" class="sr-only">{{ lang_select_month }}</label>
+		<select id="ym" name="ym" class="month-select" onchange="this.form.submit()">
+			{% for m in month_options %}
+			<option value="{{ m.VALUE }}"{% if m.SELECTED %} selected{% endif %}>{{ m.LABEL }}</option>
+			{% endfor %}
+		</select>
+		<noscript><button type="submit">{{ lang_go }}</button></noscript>
+	</form>
+	
+	{% if not DISABLE_MONTH_NEXT %}
+	<a class="stoker-prefetch-hover month-nav next" href="{{ U_MONTH_NEXT }}" title="{{ NEXT_MONTH_LABEL }}" aria-label="{{ lang_next }}: {{ NEXT_MONTH_LABEL }}">
+		<span class="responsive-hide">{{ lang('NEXT') }} </span><i class="fa fa-angle-double-right" aria-hidden="true"></i>
+	</a>
+	{% else %}
+	<span class="month-nav next disabled" aria-disabled="true"><span class="responsive-hide">{{ lang('NEXT') }} </span><i class="fa fa-angle-double-right" aria-hidden="true"></i></span>
+	{% endif %}
+</div>
+
+{# Selected Month Display #}
+{% if TSTTM_NUMBERTP > 0 %}
+{% set posters_selected = top_posters_selected %}
+{% set count_selected = posters_selected|length %}
+
+<div class="top-posters-section">
+	<p class="tp-head">
+		{% if SUPPRESS_LAST_MONTH_BLOCK %}{{ lang('TS_TOP_POSTERSFOR') }} <strong>{{ MONTH_LABEL }}</strong>{% else %}{{ lang('TM_TOP_POSTERS') }}{% endif %}
+	</p>
+
+	{% if count_selected > 0 %}
+	<div class="top-posters podium-row">
+		{# Silver (2nd place) #}
+		{% if posters_selected[1] is defined %}
+			{{ _self.poster_card(posters_selected[1], 2, 'silver') }}
+		{% endif %}
+
+		{# Gold (1st place) #}
+		{% if posters_selected[0] is defined %}
+			{{ _self.poster_card(posters_selected[0], 1, 'gold') }}
+		{% else %}
+		<p class="no-topposter">{{ lang_no_top_poster }}</p>
+		{% endif %}
+
+		{# Bronze (3rd place) #}
+		{% if posters_selected[2] is defined %}
+			{{ _self.poster_card(posters_selected[2], 3, 'bronze') }}
+		{% endif %}
+	</div>
+
+	{# Remaining posters (4+) #}
+	{% if count_selected > 3 %}
+	<div class="top-posters rest-row">
+		{% for poster in posters_selected|slice(3) %}
+			{{ _self.poster_card(poster, loop.index + 3, 'rest') }}
+		{% endfor %}
+	</div>
+	{% endif %}
+	{% else %}
+	<p class="no-topposter">{{ lang_no_top_poster }}</p>
+	{% endif %}
+</div>
+{% endif %}
+
+{# Last Month Display (only when not viewing specific month) #}
+{% if TSTLM_NUMBERTP > 0 and not SUPPRESS_LAST_MONTH_BLOCK %}
+{% set posters_last = top_posters_last_month %}
+{% set count_last = posters_last|length %}
+
+<div class="top-posters-section">
+	<p class="tp-head">
+		{{ lang('LM_TOP_POSTERS') }}
+	</p>
+
+	{% if count_last > 0 %}
+	<div class="top-posters podium-row">
+		{# Silver (2nd place) #}
+		{% if posters_last[1] is defined %}
+			{{ _self.poster_card(posters_last[1], 2, 'silver') }}
+		{% endif %}
+
+		{# Gold (1st place) #}
+		{% if posters_last[0] is defined %}
+			{{ _self.poster_card(posters_last[0], 1, 'gold') }}
+		{% else %}
+		<p class="no-topposter">{{ lang_no_top_poster }}</p>
+		{% endif %}
+
+		{# Bronze (3rd place) #}
+		{% if posters_last[2] is defined %}
+			{{ _self.poster_card(posters_last[2], 3, 'bronze') }}
+		{% endif %}
+	</div>
+
+	{# Remaining posters (4+) #}
+	{% if count_last > 3 %}
+	<div class="top-posters rest-row">
+		{% for poster in posters_last|slice(3) %}
+			{{ _self.poster_card(poster, loop.index + 3, 'rest') }}
+		{% endfor %}
+	</div>
+	{% endif %}
+	{% else %}
+	<p class="no-topposter">{{ lang_no_top_poster }}</p>
+	{% endif %}
+</div>
+{% endif %}
+
+{% INCLUDE 'overall_footer.html' %}

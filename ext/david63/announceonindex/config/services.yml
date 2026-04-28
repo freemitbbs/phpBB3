@@ -1,0 +1,17 @@
+services:
+    david63.announceonindex.listener:
+        class: david63\announceonindex\event\listener
+        arguments:
+            - '@config'
+            - '@template'
+            - '@user'
+            - '@dbal.conn'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+            - '@service_container'
+            - '@auth'
+            - '@cache'
+            - '@?phpbb.collapsiblecategories.operator'
+            - '@?rmcgirr83.nationalflags.nationalflags'
+        tags:
+            - { name: event.listener }

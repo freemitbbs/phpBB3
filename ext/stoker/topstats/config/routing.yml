@@ -1,0 +1,9 @@
+stoker_topstats_page:
+    path: /top-stats
+    defaults:
+        _controller: 'stoker.topstats.controller.page:handle'
+
+stoker_topstats_topposter:
+    path: /top-posters
+    defaults:
+        _controller: 'stoker.topstats.controller.topposter:handle'

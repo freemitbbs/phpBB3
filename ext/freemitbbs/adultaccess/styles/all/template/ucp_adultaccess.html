@@ -1,0 +1,58 @@
+<!-- INCLUDE ucp_header.html -->
+
+<h2>{L_UCP_ADULTACCESS}</h2>
+
+<!-- IF not S_ADULTACCESS_GROUP_READY -->
+	<div class="panel">
+		<div class="inner">
+			<p>{L_ADULTACCESS_NOT_READY}</p>
+		</div>
+	</div>
+<!-- ELSE -->
+	<form id="ucp_adultaccess" method="post" action="{U_ACTION}">
+		<div class="panel">
+			<div class="inner">
+				<!-- IF S_ADULTACCESS_OPTED_IN -->
+					<h3>{L_ADULTACCESS_ENABLED_TITLE}</h3>
+					<p>{L_ADULTACCESS_ENABLED_EXPLAIN}</p>
+					<!-- IF ADULTACCESS_LAST_CONFIRM_TIME -->
+						<p>{L_ADULTACCESS_LAST_CONFIRMED}{L_COLON} <strong>{ADULTACCESS_LAST_CONFIRM_TIME}</strong></p>
+					<!-- ENDIF -->
+					<!-- IF S_ADULTACCESS_CONFIGURED -->
+						<fieldset class="submit-buttons">
+							<input type="submit" name="disable_access" value="{L_ADULTACCESS_DISABLE_BUTTON}" class="button1" />
+							<input type="button" value="{L_ADULTACCESS_KEEP_BUTTON}" class="button2" onclick="location.href='{U_CANCEL}';" />
+						</fieldset>
+					<!-- ELSE -->
+						<p>{L_ADULTACCESS_NO_FORUMS_CONFIGURED}</p>
+						<fieldset class="submit-buttons">
+							<input type="submit" name="disable_access" value="{L_ADULTACCESS_DISABLE_BUTTON}" class="button1" />
+						</fieldset>
+					<!-- ENDIF -->
+				<!-- ELSE -->
+					<h3>{L_ADULTACCESS_CONFIRM_TITLE}</h3>
+					<p>{L_ADULTACCESS_CONFIRM_EXPLAIN}</p>
+					<div class="rules">
+						<div class="inner">
+							{L_ADULTACCESS_ATTESTATION}
+						</div>
+					</div>
+					<!-- IF S_ADULTACCESS_CONFIGURED -->
+						<fieldset class="submit-buttons">
+							<input type="submit" name="confirm_opt_in" value="{L_ADULTACCESS_CONFIRM_BUTTON}" class="button1" />
+							<input type="button" value="{L_ADULTACCESS_CANCEL_BUTTON}" class="button2" onclick="location.href='{U_CANCEL}';" />
+						</fieldset>
+					<!-- ELSE -->
+						<p>{L_ADULTACCESS_NO_FORUMS_CONFIGURED}</p>
+						<fieldset class="submit-buttons">
+							<a href="{U_CANCEL}" class="button1">{L_ADULTACCESS_RETURN_BUTTON}</a>
+						</fieldset>
+					<!-- ENDIF -->
+				<!-- ENDIF -->
+			</div>
+		</div>
+		{S_FORM_TOKEN}
+	</form>
+<!-- ENDIF -->
+
+<!-- INCLUDE ucp_footer.html -->

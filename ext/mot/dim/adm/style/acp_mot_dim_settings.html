@@ -1,0 +1,103 @@
+{% include 'overall_header.html' %}
+{% INCLUDECSS '@mot_dim/mot_dim_acp.css' %}
+{% INCLUDEJS '@mot_dim/mot_dim_acp.js' %}
+{% set switch_type = TOGGLECTRL_TYPE ?? 'toggle' %}
+
+<h1>{{ lang('ACP_MOT_DIM') }}</h1>
+<p>{{ lang('ACP_MOT_DIM_SETTINGS_EXPL') }}</p>
+
+<form id="acp_mot_dim_settings" method="post" enctype="application/x-www-form-urlencoded" action="{{ U_ACTION }}">
+	<fieldset>
+		<legend>{{ lang('ACP_MOT_DIM_GENERAL_SETTINGS') }}</legend>
+
+		<dl>
+			<dt><label for="mot_dim_enable">{{ lang('ACP_MOT_DIM_ENABLE') ~ lang('COLON') }}</label><br><span>{{ lang('ACP_MOT_DIM_ENABLE_EXPL') }}</span></dt>
+			<dd>{{ _self.switch('mot_dim_enable', ACP_MOT_DIM_ENABLE, switch_type) }}</dd>
+		</dl>
+	</fieldset>
+
+	<fieldset>
+		<legend>{{ lang('ACP_MOT_DIM_DELETE_SETTINGS') }}</legend>
+
+		<dl>
+			<dt><label for="mot_dim_days_delete">{{ lang('ACP_MOT_DIM_DAYS_DELETE') ~ lang('COLON') }}</label><br><span>{{ lang('ACP_MOT_DIM_DAYS_DELETE_EXP') }}</span></dt>
+			<dd><input id="mot_dim_days_delete" type="number" min="1" max="70" name="mot_dim_days_delete" value={{ ACP_MOT_DIM_DAYS_DELETE }}></dd>
+		</dl>
+
+
+		<dl>
+			<dt><label for="mot_dim_enable">{{ lang('ACP_MOT_DIM_ENABLE_SLEEPER') ~ lang('COLON') }}</label><br><span>{{ lang('ACP_MOT_DIM_ENABLE_SLEEPER_EXPL') }}</span></dt>
+			<dd>{{ _self.switch('mot_dim_enable_sleeper', ACP_MOT_DIM_ENABLE_SLEEPER, switch_type) }}</dd>
+		</dl>
+
+		<dl>
+			<dt><label for="mot_dim_enable">{{ lang('ACP_MOT_DIM_ENABLE_ZEROPOST') ~ lang('COLON') }}</label><br><span>{{ lang('ACP_MOT_DIM_ENABLE_ZEROPOST_EXPL') }}</span></dt>
+			<dd>{{ _self.switch('mot_dim_enable_zeropost', ACP_MOT_DIM_ENABLE_ZEROPOST, switch_type) }}</dd>
+		</dl>
+		<dl>
+			<dt><label for="mot_dim_protected_users">{{ lang('ACP_MOT_DIM_PROTECTED_USERS') ~ lang('COLON') }}</label><br><span>{{ lang('ACP_MOT_DIM_PROTECTED_USERS_EXPL') }}</span></dt>
+			<dd><textarea id="mot_dim_protected_users" name="mot_dim_protected_users" rows="10">{{ ACP_MOT_DIM_PROTECTED_USERS }}</textarea></dd>
+		</dl>
+
+		<dl>
+			<dt><label for="mot_dim_protected_groups">{{ lang('ACP_MOT_DIM_PROTECTED_GROUPS') ~ lang('COLON') }}</label><br><span>{{ lang('ACP_MOT_DIM_PROTECTED_GROUPS_EXPL') }}</span></dt>
+            <dd><select class="no-scroll" id="mot_dim_protected_groups" name="mot_dim_protected_groups[]" size="{{ ACP_MOT_DIM_GROUP_COUNT }}" multiple="multiple">{{ ACP_MOT_DIM_PROTECTED_GROUPS }}</select></dd>
+		</dl>
+
+		<hr>
+
+		<dl>
+			<dt><label for="mot_dim_check_results">{{ lang('ACP_MOT_DIM_CHECK_RESULT') ~ lang('COLON') }}</label><br><span>{{ lang('ACP_MOT_DIM_CHECK_RESULT_EXPL') }}</span></dt>
+            <dd>
+				<a href="{{ U_ACTION_TEST_SETTINGS }}" onclick="javascript:popup(this.href, 818, 750, '_matchstats'); return false;">
+					<input class="dim-button button1" type="submit" value="{{ lang('ACP_MOT_DIM_CHECK_RESULT') }}">
+				</a>
+			</dd>
+		</dl>
+	</fieldset>
+
+	<fieldset>
+		<legend>{{ lang('ACP_MOT_DIM_CRON_SETTINGS') }}</legend>
+
+		<dl>
+			<dt><label>{{ lang('ACP_MOT_DIM_CRON_INTERVAL') ~ lang('COLON') }}</label><br><span>{{ lang('ACP_MOT_DIM_CRON_INTERVAL_EXPL') }}</span></dt>
+			<dd>
+				<input id="mot_dim_cron_interval" type="number" min="1" max="23" name="mot_dim_cron_interval" value={{ ACP_MOT_DIM_CRON_INTERVAL }}>
+				<select id="mot_dim_cron_unit" name="mot_dim_cron_unit">{{ ACP_MOT_DIM_CRON_UNIT_SELECT }}</select>
+			</dd>
+		</dl>
+
+		<dl>
+			<dt><label>{{ lang('ACP_MOT_DIM_LAST_CRON_RUN') ~ lang('COLON') }}</label></dt>
+			<dd>{{ ACP_MOT_DIM_LAST_CRON_RUN }}</dd>
+		</dl>
+{#
+		<dl>
+			<dt><label>{{ lang('ACP_MOT_DIM_NEXT_CRON_RUN') ~ lang('COLON') }}</label></dt>
+			<dd>{{ ACP_MOT_DIM_NEXT_CRON_RUN }}</dd>
+		</dl>#}
+	</fieldset>
+
+	<fieldset>
+		<legend>{{ lang('ACP_MOT_DIM_SUBMIT_CHANGES') }}</legend>
+
+		<p class="submit-buttons">
+			<input class="button1" type="submit" id="submit" name="submit" value="{{ lang('SUBMIT') }}">&nbsp;
+			<input class="button2" type="reset" id="reset" name="reset" value="{{ lang('RESET') }}">
+		</p>
+	</fieldset>
+	{{ S_FORM_TOKEN }}
+</form>
+
+<p class="centered_text">{{ ACP_MOT_DIM_VERSION_STRING }}</p>
+
+{% include 'overall_footer.html' %}
+
+{% macro switch(name, checked = false, type = 'toggle') -%}
+	{% if type == 'toggle' || type == 'checkbox' -%}
+		<input type="checkbox" class="{{ type }}" name="{{ name }}" value="1"{{ checked ? ' checked' }}>
+	{%- elseif type == 'radio' -%}
+		<label><input type="radio" class="radio" name="{{ name }}" value="1"{{ checked ? ' checked' }}> {{ lang('YES') }}</label>
+		<label><input type="radio" class="radio" name="{{ name }}" value="0"{{ !checked ? ' checked' }}> {{ lang('NO') }}</label>
+	{%- endif %}
+{%- endmacro %}

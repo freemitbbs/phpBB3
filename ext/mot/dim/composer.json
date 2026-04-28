@@ -1,0 +1,38 @@
+{
+    "name": "mot/dim",
+    "type": "phpbb-extension",
+    "description": "This extension lets the administrator after a selectable number of days automatically delete any members who have neither activated their account nor visited the site in question after activation nor posted.",
+    "homepage": "https://www.mike-on-tour.com",
+    "version": "1.2.0",
+    "time": "2025-11-25 12:11:57",
+    "keywords": [
+        "phpbb",
+        "extension"
+    ],
+    "license": "GPL-2.0-only",
+    "authors": [
+        {
+            "name": "Michael Vormwald (Mike-on-Tour)",
+            "homepage": "https://www.mike-on-tour.com",
+            "email": "admin@mike-on-tour.com",
+            "role": "Ext Developer"
+        }
+    ],
+    "require": {
+        "php": ">=8.0.30, <8.6.0@dev",
+        "phpbb/phpbb": ">=3.3.4, <3.4.0@dev",
+        "composer/installers": "~1.0.0"
+    },
+    "extra": {
+        "display-name": "Delete Inactive Members",
+        "soft-require": {
+            "phpbb/phpbb": ">=3.3.4, <3.4.0@dev"
+        },
+        "version-check": {
+            "host": "www.phpbb.com",
+            "directory": "/customise/db/extension/delete_inactive_members",
+            "filename": "version_check",
+            "ssl": true
+        }
+    }
+}

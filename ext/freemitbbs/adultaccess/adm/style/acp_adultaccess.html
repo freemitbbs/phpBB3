@@ -1,0 +1,51 @@
+<form id="acp_adultaccess" method="post" action="{U_ACTION}">
+	<fieldset>
+		<legend>{L_ACP_ADULTACCESS}</legend>
+		<dl>
+			<dt><label for="adultaccess_forum_ids">{L_ADULTACCESS_FORUM_IDS}{L_COLON}</label><br /><span>{L_ADULTACCESS_FORUM_IDS_EXPLAIN}</span></dt>
+			<dd><input type="text" id="adultaccess_forum_ids" name="adultaccess_forum_ids" value="{ADULTACCESS_FORUM_IDS}" size="40" class="inputbox" /></dd>
+		</dl>
+		<dl>
+			<dt>{L_ADULTACCESS_GROUP_LABEL}{L_COLON}</dt>
+			<dd>{ADULTACCESS_GROUP_NAME}<!-- IF ADULTACCESS_GROUP_ID --> (#{ADULTACCESS_GROUP_ID})<!-- ENDIF --></dd>
+		</dl>
+		<p>{L_ADULTACCESS_SYNC_EXPLAIN}</p>
+	</fieldset>
+
+	<!-- IF S_ADULTACCESS_HAS_FORUMS -->
+	<fieldset>
+		<legend>{L_ADULTACCESS_FORUM_STATUS}</legend>
+		<table class="table1">
+			<thead>
+				<tr>
+					<th>{L_FORUM}</th>
+					<th>{L_ADULTACCESS_ADULT_GROUP_ACCESS}</th>
+					<th>{L_ADULTACCESS_BLOCKED_GROUPS}</th>
+					<th>{L_ADULTACCESS_OTHER_GROUPS}</th>
+				</tr>
+			</thead>
+			<tbody>
+			<!-- BEGIN forum_status -->
+				<tr>
+					<td>
+						<!-- IF forum_status.S_FORUM_EXISTS -->
+							#{forum_status.FORUM_ID} {forum_status.FORUM_NAME}
+						<!-- ELSE -->
+							#{forum_status.FORUM_ID} {L_ADULTACCESS_FORUM_MISSING}
+						<!-- ENDIF -->
+					</td>
+					<td><!-- IF forum_status.S_ADULT_GROUP_HAS_ACCESS -->{L_YES}<!-- ELSE -->{L_NO}<!-- ENDIF --></td>
+					<td><!-- IF forum_status.BLOCKED_GROUP_NAMES -->{forum_status.BLOCKED_GROUP_NAMES}<!-- ELSE -->{L_NONE}<!-- ENDIF --></td>
+					<td><!-- IF forum_status.OTHER_GROUP_NAMES -->{forum_status.OTHER_GROUP_NAMES}<!-- ELSE -->{L_NONE}<!-- ENDIF --></td>
+				</tr>
+			<!-- END forum_status -->
+			</tbody>
+		</table>
+	</fieldset>
+	<!-- ENDIF -->
+
+	<fieldset class="submit-buttons">
+		<input class="button1" type="submit" name="submit" value="{L_SUBMIT}" />
+		{S_FORM_TOKEN}
+	</fieldset>
+</form>

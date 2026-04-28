@@ -1,0 +1,23 @@
+{
+	"name": "freemitbbs/adultaccess",
+	"type": "phpbb-extension",
+	"description": "Adult forum opt-in access management with UCP confirmation and ACP forum gating.",
+	"homepage": "https://freemitbbs.com",
+	"version": "1.0.3",
+	"license": "GPL-2.0-only",
+	"authors": [
+		{
+			"name": "FreeMITBBS"
+		}
+	],
+	"require": {
+		"php": ">=8.0",
+		"phpbb/phpbb": ">=3.3.10,<4.0.0"
+	},
+	"extra": {
+		"display-name": "Adult Forum Access",
+		"soft-require": {
+			"phpbb/phpbb": ">=3.3.10,<4.0.0"
+		}
+	}
+}

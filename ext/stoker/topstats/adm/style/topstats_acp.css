@@ -1,0 +1,176 @@
+hr.jq-hr {margin-bottom: 1px;border-top: 1px solid #CCCCCC;}
+fieldset.ts-fieldset p.submit-buttons {margin-top: 0px;  padding-top: 0;}
+fieldset.ts-fieldset {border-radius: 5px; padding-top: 2px; padding-bottom: 2px;}
+legend.ts-legend {background-color: #fff;color:#000066;padding: 4px 8px;border: 1px solid #D7D7D7;border-radius: 5px;}
+legend.ts-legend i {margin-right: 4px;}
+span.topstats {
+    min-width: 150px;
+    display: inline-block;
+}
+p.font-size {font-size:1em;}
+a.font-weight {font-weight:bold;}
+@media (min-width: 700px) {
+	fieldset.ts-fieldset dl {
+		display: flex;
+		align-items: center;
+	}
+	fieldset.ts-fieldset dl dt {
+		float: none;
+		flex: 0 0 50%;
+	}
+	fieldset.ts-fieldset dl dd {
+		float: none;
+		margin-left: 0;
+		border-left: none;
+		flex: 1;
+	}
+}
+@media (max-width: 700px) {
+	hr.jq-hr {display:none;}
+	.toggle-switch { margin-top: 2px; }
+}
+/* Toggle button */
+.toggle-switch { position: relative; top: -1.1em; display: inline-block; width: 3.025em; height: 1.65em; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-switch:focus { outline: none; }
+.toggle-switch:focus-visible .toggle-slider { outline: 2px solid #4688c2; outline-offset: 2px; }
+.toggle-slider {
+	position: relative;
+	display: block;
+	width: 3.025em;
+	height: 1.65em;
+	cursor: pointer;
+	border-radius: 0.825em;
+	transition: background 350ms;
+	background: linear-gradient(rgba(0,0,0,0.07), rgba(255,255,255,0)), #ddd;
+	box-shadow:
+		0 0.077em 0.11em -0.11em rgba(0,0,0,0.4) inset,
+		0 0.055em 0.088em -0.011em rgba(255,255,255,0.7);
+}
+.toggle-slider::after {
+	position: absolute;
+	content: '';
+	width: 1.1em;
+	height: 1.1em;
+	top: 0.275em;
+	left: 0.275em;
+	border-radius: 50%;
+	transition: 250ms ease-in-out;
+	background:
+		url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwMDAwIiBzdHJva2Utd2lkdGg9IjIuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48bGluZSB4MT0iNyIgeTE9IjciIHgyPSIxNyIgeTI9IjE3Ij48L2xpbmU+PGxpbmUgeDE9IjE3IiB5MT0iNyIgeDI9IjciIHkyPSIxNyI+PC9saW5lPjwvc3ZnPg==") center / 10px 10px no-repeat,
+		linear-gradient(#f5f5f5 10%, #eee);
+	box-shadow:
+		0 0.11em 0.165em -0.055em rgba(255,255,255,0.9) inset,
+		0 0.22em 0.22em -0.132em rgba(0,0,0,0.5);
+}
+.toggle-slider::before {
+	position: absolute;
+	content: '';
+	width: 2.2em;
+	height: 0.825em;
+	top: 0.4125em;
+	left: 0.4125em;
+	border-radius: 0.4125em;
+	transition: 250ms ease-in-out;
+	background: linear-gradient(rgba(0,0,0,0.07), rgba(255,255,255,0.1)), #d0d0d0;
+	box-shadow:
+		0 0.088em 0.165em -0.11em rgba(0,0,0,0.5) inset,
+		0 0.055em 0.088em -0.011em rgba(255,255,255,0.7),
+		-1.65em 0 0 0 rgba(220,53,69,0.7) inset;
+}
+.toggle-switch input:checked + .toggle-slider::before {
+	box-shadow:
+		0 0.088em 0.165em -0.11em rgba(0,0,0,0.5) inset,
+		0 0.055em 0.088em -0.011em rgba(255,255,255,0.7),
+		1.65em 0 0 0 rgba(68,204,102,0.7) inset;
+}
+.toggle-switch input:checked + .toggle-slider::after {
+	left: 1.65em;
+	background:
+		url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMjdhZTYwIiBzdHJva2Utd2lkdGg9IjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBvbHlsaW5lIHBvaW50cz0iMjAgNiA5IDE3IDQgMTIiPjwvcG9seWxpbmU+PC9zdmc+") center / 10px 10px no-repeat,
+		linear-gradient(#f5f5f5 10%, #eee);
+}
+.toggle-switch input:disabled + .toggle-slider { opacity: 0.5; cursor: not-allowed; }
+fieldset.ts-fieldset dl dd { padding-left: 10px; }
+fieldset.ts-fieldset dl dt { padding-right: 10px; }
+fieldset.ts-fieldset input.button1,
+fieldset.ts-fieldset input.button2 {
+	background: linear-gradient(#fdfdfd, #eaeaea);
+	border: 1px solid #999;
+	border-radius: 5px;
+	font-size: 11px;
+	padding: 6px 10px;
+	margin-bottom: 8px;
+	color: #111;
+	cursor: pointer;
+	transition: background .2s, box-shadow .2s;
+}
+
+fieldset.ts-fieldset input.button1:hover,
+fieldset.ts-fieldset input.button2:hover {
+	background: linear-gradient(#ffffff, #dcdcdc);
+	border-color: #666;
+	box-shadow: 0 2px 6px rgba(0,0,0,.2);
+}
+
+fieldset.ts-fieldset input.button1:active,
+fieldset.ts-fieldset input.button2:active,
+fieldset.ts-fieldset input.button1:focus-visible,
+fieldset.ts-fieldset input.button2:focus-visible {
+	background: #d8d8d8;
+	border-color: #555;
+	box-shadow: inset 0 2px 3px rgba(0,0,0,.25);
+}
+
+fieldset.ts-fieldset input[type="text"],
+fieldset.ts-fieldset input[type="password"],
+fieldset.ts-fieldset textarea {
+	font-size: 12px;
+	background: #f2f2f2;
+	border: 1px solid #bbb;
+	border-radius: 3px;
+	padding: 3px 5px;
+	color: #111;
+	box-shadow: none;
+}
+
+fieldset.ts-fieldset input[type="text"]:focus,
+fieldset.ts-fieldset input[type="password"]:focus,
+fieldset.ts-fieldset textarea:focus {
+	border-color: #666;
+	box-shadow: 0 0 0 1px rgba(0,0,0,.15);
+	outline: none;
+}
+fieldset.ts-fieldset input[type="number"] {
+	font-size: 12px;
+	background: #f2f2f2;
+	border: 1px solid #bbb;
+	border-radius: 3px;
+	padding: 3px 5px;
+	color: #111;
+	box-shadow: none;
+}
+fieldset.ts-fieldset input[type="number"]:focus {
+	border-color: #666;
+	box-shadow: 0 0 0 1px rgba(0,0,0,.15);
+	outline: none;
+}
+fieldset.ts-fieldset input::placeholder { color: #999; }
+
+fieldset.ts-fieldset select {
+	font-size: 12px;
+	background: #fff;
+	border: 1px solid #bbb;
+	border-radius: 3px;
+	padding: 3px 8px 3px 8px;
+	color: #111;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+fieldset.ts-fieldset select:hover,
+fieldset.ts-fieldset select:focus {
+	border-color: #666;
+	box-shadow: 0 0 0 1px rgba(0,0,0,.15);
+	outline: none;
+}

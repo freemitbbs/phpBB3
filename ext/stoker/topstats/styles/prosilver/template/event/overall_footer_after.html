@@ -1,0 +1,43 @@
+{% if S_TS_JSSCROLL and TSRAT_NUMBER > 0 %}
+{% INCLUDEJS '@stoker_topstats/jquery.totemticker.min.js' %}
+<script>
+(function($) {
+	'use strict';
+	
+	// Wait for DOM to be ready
+	$(function() {
+		var $ticker = $('#vertical-ticker');
+		
+		// Exit if ticker doesn't exist
+		if (!$ticker.length) return;
+		
+		// Detect reduced motion preference
+		var prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		
+		// Disable ticker entirely for users with reduced motion preference
+		if (prefersReduced) {
+			return;
+		}
+
+		var speed = {{ JSSCROLL_SPEED|default(400) }};
+		var interval = {{ JSSCROLL_INTERVAL|default(4000) }};
+
+		// Initialize ticker
+		$ticker.totemticker({
+			row_height: 'auto',
+			max_items: 3,
+			speed: speed,
+			interval: interval,
+			{% if TS_JSSCROLL_NAVIGATION %}
+			next: '#ticker-next',
+			previous: '#ticker-previous',
+			stop: '#stop',
+			start: '#start',
+			{% endif %}
+			mousestop: {{ TS_JSSCROLL_PAUSE ? 'true' : 'false' }},
+			direction: '{{ TS_JSSCROLL_DIRECTION ? "down" : "up" }}'
+		});
+	});
+})(jQuery);
+</script>
+{% endif %}

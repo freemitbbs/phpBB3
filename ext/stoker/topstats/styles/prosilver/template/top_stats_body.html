@@ -1,0 +1,264 @@
+{# Cache frequently used language strings #}
+{% set lang_posts = lang('POSTS') %}
+{% set lang_views = lang('VIEWS') %}
+{% set lang_replies = lang('REPLIES') %}
+{% set lang_time = lang('TIME') %}
+{% set lang_post_by = lang('POST_BY_AUTHOR') %}
+{% set lang_posted_on = lang('POSTED_ON_DATE') %}
+
+{# Topic-based statistics (Most Viewed & Most Replied) #}
+{% if TSMVT_NUMBER > 0 or TSMRT_NUMBER > 0 %}
+<div class="container">
+	{% if TSMVT_NUMBER > 0 %}
+	<div class="stat-block">
+		<div class="forabg">
+			<div class="inner">
+				<ul class="topiclist">
+					<li class="header">
+						<dl>
+							<dt>{{ TSMVT_NUMBER }} {{ lang('MOST_VIEWED') }}</dt>
+							<dd><span class="stats_info">{{ lang_views }}</span></dd>
+						</dl>
+					</li>
+				</ul>
+				<ul class="topiclist forums">
+				{% for topic in loops.most_viewed %}
+					<li class="row">
+						<dl>
+							<dt>
+								<a class="stats_topic_title" href="{{ topic.U_FIRST_TOPIC }}">{{ topic.TOPIC_TITLE }}</a>
+								<span class="stats_author">
+									{{ lang_post_by }} {{ topic.USER_FULL }}
+									{{ lang_posted_on }} {{ topic.TOPIC_TIME }}
+								</span>
+							</dt>
+							<dd><span class="stats_infos-off">{{ topic.TOPIC_VIEWS }}</span></dd>
+						</dl>
+					</li>
+				{% endfor %}
+				</ul>
+			</div>
+		</div>
+	</div>
+	{% endif %}
+
+	{% if TSMRT_NUMBER > 0 %}
+	<div class="stat-block">
+		<div class="forabg">
+			<div class="inner">
+				<ul class="topiclist">
+					<li class="header">
+						<dl>
+							<dt>{{ TSMRT_NUMBER }} {{ lang('MOST_REPLIED') }}</dt>
+							<dd><span class="stats_info">{{ lang_replies }}</span></dd>
+						</dl>
+					</li>
+				</ul>
+				<ul class="topiclist forums">
+				{% for topic in loops.most_replied %}
+					<li class="row">
+						<dl>
+							<dt>
+								<a class="stats_topic_title" href="{{ topic.U_FIRST_TOPIC }}">{{ topic.TOPIC_TITLE }}</a>
+								<span class="stats_author">
+									{{ lang_post_by }} {{ topic.USER_FULL }}
+									{{ lang_posted_on }} {{ topic.TOPIC_TIME }}
+								</span>
+							</dt>
+							<dd><span class="stats_infos-off">{{ topic.TOPIC_REPLIES }}</span></dd>
+						</dl>
+					</li>
+				{% endfor %}
+				</ul>
+			</div>
+		</div>
+	</div>
+	{% endif %}
+</div>
+{% endif %}
+
+{# User and Forum statistics #}
+{% set show_user_forum_stats = TSMAU_NUMBER > 0 or TSMAF_NUMBER > 0 or TSLVB_NUMBER > 0 or TSLRU_NUMBER > 0 or TSTTM_NUMBER > 0 or TSTLM_NUMBER > 0 %}
+{% if show_user_forum_stats %}
+<div class="container">
+	{% if TSMAU_NUMBER > 0 %}
+	<div class="stat-block">
+		<div class="forabg">
+			<div class="inner">
+				<ul class="topiclist">
+					<li class="header">
+						<dl>
+							<dt>{{ TSMAU_NUMBER }} {{ lang('MOST_ACTIVE_USERS') }}</dt>
+							<dd><span class="stats_info">{{ lang_posts }}</span></dd>
+						</dl>
+					</li>
+				</ul>
+				<ul class="topiclist forums">
+				{% for user in loops.most_active_users %}
+					<li class="row">
+						<dl>
+							<dt><span class="stats_name">{{ user.USER_FULL }}</span></dt>
+							<dd>
+								<span class="stats_date-off">
+									<a href="{{ user.USER_POST_SEARCH }}">
+										{{ user.USER_POSTS }} {{ user.USER_POST_PERCENT }}
+									</a>
+								</span>
+							</dd>
+						</dl>
+					</li>
+				{% endfor %}
+				</ul>
+			</div>
+		</div>
+	</div>
+	{% endif %}
+
+	{% if TSMAF_NUMBER > 0 %}
+	<div class="stat-block">
+		<div class="forabg">
+			<div class="inner">
+				<ul class="topiclist">
+					<li class="header">
+						<dl>
+							<dt>{{ TSMAF_NUMBER }} {{ lang('MOST_ACTIVE_FORUMS') }}</dt>
+							<dd><span class="stats_info">{{ lang_posts }}</span></dd>
+						</dl>
+					</li>
+				</ul>
+				<ul class="topiclist forums">
+				{% for forum in loops.most_active_forums %}
+					<li class="row">
+						<dl>
+							<dt>
+								<span class="stats_name">
+									{% if forum.FORUM_URL %}
+										<a href="{{ forum.FORUM_URL }}">{{ forum.FORUM_NAME }}</a>
+									{% else %}
+										{{ forum.FORUM_NAME }}
+									{% endif %}
+								</span>
+							</dt>
+							<dd>
+								<span class="stats_date-off">
+									{{ forum.FORUM_POSTS }} {{ forum.FORUM_POST_PERCENT }}
+								</span>
+							</dd>
+						</dl>
+					</li>
+				{% endfor %}
+				</ul>
+			</div>
+		</div>
+	</div>
+	{% endif %}
+
+	{% if TSLVB_NUMBER > 0 %}
+	<div class="stat-block">
+		<div class="forabg">
+			<div class="inner">
+				<ul class="topiclist">
+					<li class="header">
+						<dl>
+							<dt>{{ TSLVB_NUMBER }} {{ lang('LAST_VISITED_BOTS') }}</dt>
+							<dd><span class="stats_info">{{ lang_time }}</span></dd>
+						</dl>
+					</li>
+				</ul>
+				<ul class="topiclist forums">
+				{% for bot in loops.last_visited_bots %}
+					<li class="row">
+						<dl>
+							<dt><span class="stats_name">{{ bot.USER_FULL }}</span></dt>
+							<dd><span class="stats_date-off">{{ bot.USER_LAST_VISIT }}</span></dd>
+						</dl>
+					</li>
+				{% endfor %}
+				</ul>
+			</div>
+		</div>
+	</div>
+	{% endif %}
+
+	{% if TSLRU_NUMBER > 0 %}
+	<div class="stat-block">
+		<div class="forabg">
+			<div class="inner">
+				<ul class="topiclist">
+					<li class="header">
+						<dl>
+							<dt>{{ TSLRU_NUMBER }} {{ lang('LAST_REGISTERED_USERS') }}</dt>
+							<dd><span class="stats_info">{{ lang_time }}</span></dd>
+						</dl>
+					</li>
+				</ul>
+				<ul class="topiclist forums">
+				{% for user in loops.last_registered_user %}
+					<li class="row">
+						<dl>
+							<dt><span class="stats_name">{{ user.USER_FULL }}</span></dt>
+							<dd><span class="stats_date-off">{{ user.USER_REGISTERED }}</span></dd>
+						</dl>
+					</li>
+				{% endfor %}
+				</ul>
+			</div>
+		</div>
+	</div>
+	{% endif %}
+
+	{% if TSTTM_NUMBER > 0 %}
+	<div class="stat-block">
+		<div class="forabg">
+			<div class="inner">
+				<ul class="topiclist">
+					<li class="header">
+						<dl>
+							<dt>{{ TSTTM_NUMBER }} {{ lang('TOP_POSTERS_THIS_MONTH') }} {{ TS_THIS_MONTH_NAME }}</dt>	
+							<dd><span class="stats_info">{{ lang_posts }}</span></dd>
+						</dl>
+					</li>
+				</ul>
+				<ul class="topiclist forums">
+				{% for poster in loops.top_posters_this_month %}
+					<li class="row">
+						<dl>
+							<dt><span class="stats_name">{{ poster.USER_FULL }}</span></dt>
+							<dd><span class="stats_date-off">{{ poster.TOTAL_POSTS }} {{ poster.PERCENTAGE }}</span></dd>
+						</dl>
+					</li>
+				{% endfor %}
+				</ul>
+			</div>
+		</div>
+	</div>
+	{% endif %}
+
+	{% if TSTLM_NUMBER > 0 %}
+	<div class="stat-block">
+		<div class="forabg">
+			<div class="inner">
+				<ul class="topiclist">
+					<li class="header">
+						<dl>
+							<dt>{{ TSTLM_NUMBER }} {{ lang('TOP_POSTERS_LAST_MONTH') }} {{ TS_LAST_MONTH_NAME }}</dt>
+							<dd><span class="stats_info">{{ lang_posts }}</span></dd>
+						</dl>
+					</li>
+				</ul>
+				<ul class="topiclist forums">
+				{% for poster in loops.top_posters_last_month %}
+					<li class="row">
+						<dl>
+							<dt><span class="stats_name">{{ poster.USER_FULL }}</span></dt>
+							<dd><span class="stats_date-off">{{ poster.TOTAL_POSTS }} {{ poster.PERCENTAGE }}</span></dd>
+						</dl>
+					</li>
+				{% endfor %}
+				</ul>
+			</div>
+		</div>
+	</div>
+	{% endif %}
+</div>
+{% endif %}
