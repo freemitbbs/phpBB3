@@ -30,6 +30,4 @@ Disallow: /*&hilit=
 Disallow: /*?view=print
 Disallow: /*&view=print
 
-# After enabling freemitbbs/sitemap in production, add the absolute URL here.
-# Use /app.php/sitemap.xml if phpBB URL rewriting is disabled.
-# Sitemap: https://example.com/sitemap.xml
+Sitemap: https://themitbbs.com/app.php/sitemap.xml
