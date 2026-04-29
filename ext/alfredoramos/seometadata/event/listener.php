@@ -54,7 +54,7 @@ class listener implements EventSubscriberInterface
 	public function page_header($event)
 	{
 		$this->helper->set_metadata([
-			'title' => $event['page_title']
+			'title' => $this->helper->format_page_title($event['page_title'])
 		]);
 
 		$this->helper->metadata_template_vars();

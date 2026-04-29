@@ -1,0 +1,23 @@
+{
+	"name": "freemitbbs/sitemap",
+	"type": "phpbb-extension",
+	"description": "Public XML sitemaps for forums, topics, and blog entries.",
+	"homepage": "https://www.phpbb.com",
+	"version": "1.0.0",
+	"license": "GPL-2.0-only",
+	"authors": [
+		{
+			"name": "freemitbbs"
+		}
+	],
+	"require": {
+		"php": ">=7.4",
+		"phpbb/phpbb": ">=3.3.0"
+	},
+	"extra": {
+		"display-name": "FreemitBBS Sitemap",
+		"soft-require": {
+			"phpbb/phpbb": ">=3.3.0"
+		}
+	}
+}

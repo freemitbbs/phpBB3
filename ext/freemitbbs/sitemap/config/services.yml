@@ -1,0 +1,12 @@
+services:
+    freemitbbs.sitemap.controller:
+        class: freemitbbs\sitemap\controller\sitemap
+        arguments:
+            - '@config'
+            - '@controller.helper'
+            - '@dbal.conn'
+            - '@ext.manager'
+            - '@user'
+            - '%core.table_prefix%'
+            - '%core.php_ext%'
+        public: true

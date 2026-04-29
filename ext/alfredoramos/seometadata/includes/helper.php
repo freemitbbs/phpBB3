@@ -728,6 +728,32 @@ class helper
 	}
 
 	/**
+	 * Format metadata titles like phpBB's visible page title.
+	 *
+	 * @param string $page_title
+	 *
+	 * @return string
+	 */
+	public function format_page_title($page_title = '')
+	{
+		$page_title = trim($page_title);
+		$site_name = trim($this->config->offsetGet('sitename'));
+
+		if (empty($page_title) || empty($site_name) || strpos($page_title, $site_name) !== false)
+		{
+			return $page_title;
+		}
+
+		$page_name = $this->user->page['page_name'] ?? '';
+		if (in_array($page_name, ['viewtopic.php', 'viewforum.php'], true))
+		{
+			return sprintf('%s - %s', $page_title, $site_name);
+		}
+
+		return sprintf('%s - %s', $site_name, $page_title);
+	}
+
+	/**
 	 * Generates correct localization name for Open Graph.
 	 *
 	 * @param string $locale The localization in the format en-gb (ISO 639-1 + - + ISO 3166-2)
@@ -1378,10 +1404,7 @@ class helper
 			return false;
 		}
 
-		$is_wide = ($width >= 300 && $height >= 157);
-		$is_wide = $is_wide && ($width >= (($height - 10) * 1.5));
-
-		return $is_wide;
+		return ($width >= 300 && $height >= 157);
 	}
 
 	/**

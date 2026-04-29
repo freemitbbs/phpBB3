@@ -1,0 +1,35 @@
+User-agent: *
+
+# Private/admin areas
+Disallow: /adm/
+Disallow: /cache/
+Disallow: /files/
+Disallow: /includes/
+Disallow: /install/
+Disallow: /store/
+Disallow: /vendor/
+
+# User/session/action pages
+Disallow: /ucp.php
+Disallow: /mcp.php
+Disallow: /posting.php
+Disallow: /report.php
+Disallow: /search.php
+
+# Duplicate URL variants
+Disallow: /*?sid=
+Disallow: /*&sid=
+Disallow: /*?style=
+Disallow: /*&style=
+Disallow: /*?sk=
+Disallow: /*&sk=
+Disallow: /*?sd=
+Disallow: /*&sd=
+Disallow: /*?hilit=
+Disallow: /*&hilit=
+Disallow: /*?view=print
+Disallow: /*&view=print
+
+# After enabling freemitbbs/sitemap in production, add the absolute URL here.
+# Use /app.php/sitemap.xml if phpBB URL rewriting is disabled.
+# Sitemap: https://example.com/sitemap.xml
