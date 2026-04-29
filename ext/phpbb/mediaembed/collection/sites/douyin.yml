@@ -1,0 +1,27 @@
+name: Douyin
+host:
+    - douyin.com
+    - iesdouyin.com
+    - v.douyin.com
+    - open.douyin.com
+example:
+    - https://www.douyin.com/video/7629683740613063781
+    - https://v.douyin.com/pPnhnGDjI3E/
+extract:
+    - "!//(?:www\\.)?douyin\\.com/video/(?'id'\\d+)!"
+    - "!//(?:www\\.)?douyin\\.com/share/video/(?'id'\\d+)!"
+    - "!//(?:www\\.)?douyin\\.com/(?:discover|search/[^?]+|user/[^?]+)\\?[^#\\s]*\\bmodal_id=(?'id'\\d+)!"
+    - "!//www\\.iesdouyin\\.com/share/video/(?'id'\\d+)!"
+    - "!//open\\.douyin\\.com/player/video\\?vid=(?'id'\\d+)!"
+scrape:
+    match: "!//v\\.douyin\\.com/[-\\w]+/?!"
+    extract:
+        - "!Location:\\s*https://www\\.iesdouyin\\.com/share/video/(?'id'\\d+)!i"
+        - "!Location:\\s*https://www\\.douyin\\.com/video/(?'id'\\d+)!i"
+        - "!Location:\\s*https://www\\.douyin\\.com/share/video/(?'id'\\d+)!i"
+        - "!Location:\\s*https://www\\.douyin\\.com/(?:discover|search/[^?\\s]+|user/[^?\\s]+)\\?[^\\r\\n\\s]*\\bmodal_id=(?'id'\\d+)!i"
+iframe:
+    allow: autoplay; fullscreen
+    height: 640
+    src: "https://open.douyin.com/player/video?vid={@id}&autoplay=0"
+    width: 360
