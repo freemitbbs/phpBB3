@@ -1,4 +1,7 @@
 {%- import '@alfredoramos_seometadata/metatag.html' as seo_metadata -%}
+{% if SEO_METADATA_ROBOTS %}
+<meta name="robots" content="{{ SEO_METADATA_ROBOTS }}">
+{% endif %}
 {% for CATEGORIES in SEO_METADATA %}
 {% for ITEM in attribute(CATEGORIES, CATEGORIES.NAME) %}
 {% if CATEGORIES.NAME is same as('JSON_LD') %}

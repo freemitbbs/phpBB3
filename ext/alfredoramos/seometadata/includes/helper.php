@@ -372,6 +372,9 @@ class helper
 	{
 		$this->template->destroy_block_vars('SEO_METADATA');
 		$data = $this->get_metadata();
+		$robots = $this->get_robots_directive();
+
+		$this->template->assign_var('SEO_METADATA_ROBOTS', $robots);
 
 		// Open Graph extra check for default image
 		if (empty($data['open_graph']['og:image']))
@@ -471,6 +474,78 @@ class helper
 				}
 			}
 		}
+	}
+
+	/**
+	 * Return a robots directive for low-value or duplicate pages.
+	 *
+	 * @return string
+	 */
+	protected function get_robots_directive()
+	{
+		return $this->is_noindex_page() ? 'noindex, follow' : '';
+	}
+
+	/**
+	 * Check whether the current request should be kept out of search results.
+	 *
+	 * @return bool
+	 */
+	protected function is_noindex_page()
+	{
+		$script_name = $this->current_script_name();
+
+		if (strpos($script_name, '/adm/') !== false)
+		{
+			return true;
+		}
+
+		$basename = basename($script_name);
+		$mode = $this->request->variable('mode', '');
+
+		if (in_array($basename, [
+			'search.php',
+			'ucp.php',
+			'mcp.php',
+			'posting.php',
+			'report.php',
+			'viewonline.php',
+		], true))
+		{
+			return true;
+		}
+
+		if ($basename === 'memberlist.php' && $mode !== 'viewprofile')
+		{
+			return true;
+		}
+
+		foreach (['sid', 'style', 'sk', 'sd', 'st', 'hilit'] as $param)
+		{
+			if ($this->request->is_set($param, \phpbb\request\request_interface::GET))
+			{
+				return true;
+			}
+		}
+
+		return $this->request->variable('view', '') === 'print';
+	}
+
+	/**
+	 * Get the current script path as provided by the web server.
+	 *
+	 * @return string
+	 */
+	protected function current_script_name()
+	{
+		$script_name = (string) $this->request->server('SCRIPT_NAME', '');
+
+		if ($script_name === '')
+		{
+			$script_name = (string) $this->request->server('PHP_SELF', '');
+		}
+
+		return str_replace('\\', '/', $script_name);
 	}
 
 	/**
