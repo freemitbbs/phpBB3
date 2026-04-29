@@ -37,7 +37,7 @@ class ranker
 	private const DEFAULT_REFRESH_BATCH_SIZE = 10;
 	private const CONTENT_LENGTH_CAP = 4000;
 	private const CONTENT_LENGTH_SCALE = 120.0;
-	private const RANK_MODEL_REVISION = 2;
+	private const RANK_MODEL_REVISION = 3;
 	private const MATERIALIZED_TOPIC_PAYLOAD_FIELDS = [
 		'topic_last_post_id',
 		'topic_last_poster_id',
@@ -59,6 +59,7 @@ class ranker
 	protected string $topic_overrides_table;
 	protected string $scope_snapshots_table;
 	protected string $scope_forums_table;
+	protected string $post_quality_table;
 	protected ?bool $has_post_reactions_table = null;
 	protected ?array $foe_user_id_map = null;
 
@@ -74,7 +75,8 @@ class ranker
 		string $dislikes_table,
 		string $topic_overrides_table,
 		string $scope_snapshots_table,
-		string $scope_forums_table
+		string $scope_forums_table,
+		?string $post_quality_table = null
 	)
 	{
 		$this->auth = $auth;
@@ -90,6 +92,7 @@ class ranker
 		$this->topic_overrides_table = $topic_overrides_table;
 		$this->scope_snapshots_table = $scope_snapshots_table;
 		$this->scope_forums_table = $scope_forums_table;
+		$this->post_quality_table = $post_quality_table ?? $this->derive_post_quality_table($likes_table);
 	}
 
 	public function get_topics(array $forum_ids, int $limit): array
@@ -463,7 +466,7 @@ class ranker
 		$candidate_reaction_topic_sql = $this->db->sql_in_set('pr.topic_id', $candidate_topic_ids);
 		$now = time();
 		$early_window_seconds = $options['early_window_hours'] * 3600;
-		$content_length_sql = $this->get_text_length_sql('base.first_post_text');
+		$content_length_sql = 'base.first_post_quality_length';
 		$points_sql = '(base.like_count - base.dislike_count)';
 		$display_replies_sql = 'CASE WHEN base.topic_posts_approved > 0 THEN base.topic_posts_approved - 1 ELSE 0 END';
 		$ranking_replies_sql = 'CASE WHEN base.non_author_reply_count > 0 THEN base.non_author_reply_count ELSE 0 END';
@@ -535,7 +538,7 @@ class ranker
 					t.topic_last_poster_id, t.topic_last_poster_name, t.topic_last_poster_colour, t.topic_type,
 					t.topic_status, t.poll_start, t.topic_posts_approved, t.topic_views,
 					t.topic_poster, t.topic_first_poster_name, t.topic_first_poster_colour,
-					COALESCE(fp.post_text, \'\') AS first_post_text,
+					COALESCE(first_post_quality.quality_length, 0) AS first_post_quality_length,
 					COALESCE(ov.override_state, \'\') AS override_state,
 					f.forum_name, COALESCE(u.user_posts, 0) AS user_posts,
 					COALESCE(like_data.like_count, 0) AS like_count,
@@ -546,7 +549,9 @@ class ranker
 					. $reaction_select_sql . '
 				FROM ' . TOPICS_TABLE . ' t
 				INNER JOIN ' . FORUMS_TABLE . ' f ON f.forum_id = t.forum_id
-				LEFT JOIN ' . POSTS_TABLE . ' fp ON fp.post_id = t.topic_first_post_id
+				LEFT JOIN ' . $this->post_quality_table . ' first_post_quality
+					ON first_post_quality.post_id = t.topic_first_post_id
+						AND first_post_quality.is_counted = 1
 				LEFT JOIN ' . $this->topic_overrides_table . ' ov ON ov.topic_id = t.topic_id
 				LEFT JOIN ' . USERS_TABLE . ' u ON u.user_id = t.topic_poster
 				LEFT JOIN (
@@ -777,9 +782,10 @@ class ranker
 			'display_unapproved_posts' => (bool) $this->config['display_unapproved_posts'],
 		];
 
-		if ($scope['display_unapproved_posts'] && (int) $this->user->data['user_id'] !== ANONYMOUS)
+		$current_user_id = (int) ($this->user->data['user_id'] ?? ANONYMOUS);
+		if ($scope['display_unapproved_posts'] && $current_user_id !== ANONYMOUS)
 		{
-			$scope['user_id'] = (int) $this->user->data['user_id'];
+			$scope['user_id'] = $current_user_id;
 		}
 
 		return $scope;
@@ -825,6 +831,17 @@ class ranker
 		}
 
 		return substr($likes_table, 0, -strlen($likes_suffix)) . 'post_reactions';
+	}
+
+	protected function derive_post_quality_table(string $likes_table): string
+	{
+		$likes_suffix = 'posts_likes';
+		if (substr($likes_table, -strlen($likes_suffix)) !== $likes_suffix)
+		{
+			return 'toptopics_post_quality';
+		}
+
+		return substr($likes_table, 0, -strlen($likes_suffix)) . 'toptopics_post_quality';
 	}
 
 	protected function has_post_reactions_table(): bool
@@ -1300,26 +1317,6 @@ class ranker
 	protected function release_materialized_scope_lock(string $lock_key): void
 	{
 		$this->cache->destroy($lock_key);
-	}
-
-	protected function get_text_length_sql(string $column_name): string
-	{
-		switch ($this->db->get_sql_layer())
-		{
-			case 'mssql_odbc':
-			case 'mssqlnative':
-				return 'LEN(' . $column_name . ')';
-
-			case 'sqlite3':
-			case 'postgres':
-			case 'oracle':
-				return 'LENGTH(' . $column_name . ')';
-
-			case 'mysqli':
-			case 'mysql4':
-			default:
-				return 'CHAR_LENGTH(' . $column_name . ')';
-		}
 	}
 
 	protected function sql_ln(string $expression): string

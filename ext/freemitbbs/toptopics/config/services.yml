@@ -29,6 +29,7 @@ services:
             - '%tables.freemitbbs.toptopics.topic_overrides%'
             - '%tables.freemitbbs.toptopics.scope_snapshots%'
             - '%tables.freemitbbs.toptopics.scope_forums%'
+            - '%tables.freemitbbs.toptopics.post_quality%'
 
     freemitbbs.toptopics.reputation:
         class: freemitbbs\toptopics\service\reputation
