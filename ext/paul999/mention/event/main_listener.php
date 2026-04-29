@@ -162,10 +162,11 @@ class main_listener implements EventSubscriberInterface
 			// Quick reply enabled forum
 			$s_quick_reply = (($event['topic_data']['forum_status'] == ITEM_UNLOCKED && $event['topic_data']['topic_status'] == ITEM_UNLOCKED) || $this->auth->acl_get('m_edit', $event['forum_id'])) ? true : false;
 		}
-		if ($s_quick_reply)
+		if ($s_quick_reply && $this->auth->acl_get('u_can_mention'))
 		{
 			$this->template->assign_vars([
-				'UA_AJAX_MENTION_URL'    => $this->helper->route('paul999_mention_controller'),
+				'U_AJAX_MENTION_URL'		=> $this->helper->route('paul999_mention_controller'),
+				'MIN_MENTION_LENGTH'		=> $this->config['simple_mention_minlength'],
 			]);
 		}
 	}

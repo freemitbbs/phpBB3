@@ -5,3 +5,18 @@
 .tribute-container {
     min-width: 85px;
 }
+
+/* Keep mentions distinct from regular emphasized text. */
+.mention {
+    color: #1e88e5 !important;
+    font-weight: bold;
+    background-color: #e3f2fd;
+    padding: 1px 4px;
+    border-radius: 3px;
+    text-decoration: none !important;
+}
+
+.mention:hover {
+    color: #1565c0 !important;
+    background-color: #bbdefb;
+}

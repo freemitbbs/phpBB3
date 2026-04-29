@@ -396,17 +396,21 @@ class release_1_0_0 extends \phpbb\db\migration\container_aware_migration
 
                 $parent_id = (int) $ucp_prefs['module_id'];
 
-                // Trouver le dernier enfant de UCP_PREFS pour calculer la position
-                $sql = 'SELECT MAX(right_id) as max_right FROM ' . $this->table_prefix . "modules
-                        WHERE parent_id = " . $parent_id . "
-                        AND module_class = 'ucp'";
-                $result = $this->db->sql_query($sql);
-                $row = $this->db->sql_fetchrow($result);
-                $this->db->sql_freeresult($result);
-
-                // Calculer la position (après le dernier enfant existant)
-                $new_left = $row && $row['max_right'] ? (int) $row['max_right'] + 1 : (int) $ucp_prefs['left_id'] + 1;
+                // Insert before the parent's right edge and expand the nested set.
+                $new_left = (int) $ucp_prefs['right_id'];
                 $new_right = $new_left + 1;
+
+                $sql = 'UPDATE ' . $this->table_prefix . "modules
+                        SET right_id = right_id + 2
+                        WHERE module_class = 'ucp'
+                        AND right_id >= " . $new_left;
+                $this->db->sql_query($sql);
+
+                $sql = 'UPDATE ' . $this->table_prefix . "modules
+                        SET left_id = left_id + 2
+                        WHERE module_class = 'ucp'
+                        AND left_id > " . $new_left;
+                $this->db->sql_query($sql);
 
                 // Créer le module avec la bonne position
                 $sql = 'INSERT INTO ' . $this->table_prefix . 'modules ' .
