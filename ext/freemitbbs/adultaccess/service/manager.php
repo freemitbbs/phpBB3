@@ -2,6 +2,7 @@
 
 namespace freemitbbs\adultaccess\service;
 
+use phpbb\cache\driver\driver_interface as cache_driver_interface;
 use phpbb\config\config;
 use phpbb\db\driver\driver_interface;
 
@@ -9,6 +10,8 @@ class manager
 {
 	private const GROUP_NAME = '18+ Opt-In';
 	private const GROUP_DESC = 'Managed by freemitbbs/adultaccess';
+	private const CONFIG_ADULT_GROUP_ID = 'freemitbbs_adult_group_id';
+	private const CONFIG_ADULT_FORUM_IDS = 'freemitbbs_adult_forum_ids';
 	private const SOURCE_GROUPS = ['REGISTERED', 'REGISTERED_COPPA'];
 	private const STAFF_GROUPS = ['ADMINISTRATORS', 'GLOBAL_MODERATORS'];
 	private const ADULT_GROUP_FORUM_ROLE = 'ROLE_FORUM_STANDARD';
@@ -22,6 +25,7 @@ class manager
 
 	protected config $config;
 	protected driver_interface $db;
+	protected cache_driver_interface $cache;
 	protected string $table_prefix;
 	protected string $phpbb_root_path;
 	protected string $php_ext;
@@ -31,10 +35,11 @@ class manager
 	protected array $auth_option_id_cache = [];
 	protected array $role_option_setting_cache = [];
 
-	public function __construct(config $config, driver_interface $db, string $table_prefix, string $phpbb_root_path, string $php_ext)
+	public function __construct(config $config, driver_interface $db, cache_driver_interface $cache, string $table_prefix, string $phpbb_root_path, string $php_ext)
 	{
 		$this->config = $config;
 		$this->db = $db;
+		$this->cache = $cache;
 		$this->table_prefix = $table_prefix;
 		$this->phpbb_root_path = $phpbb_root_path;
 		$this->php_ext = $php_ext;
@@ -47,7 +52,7 @@ class manager
 
 	public function get_adult_group_id(): int
 	{
-		$configured_group_id = isset($this->config['freemitbbs_adult_group_id']) ? (int) $this->config['freemitbbs_adult_group_id'] : 0;
+		$configured_group_id = (int) $this->get_config_value(self::CONFIG_ADULT_GROUP_ID, '0');
 		if ($configured_group_id > 0 && $this->group_exists($configured_group_id))
 		{
 			return $configured_group_id;
@@ -56,7 +61,7 @@ class manager
 		$group_id = $this->find_managed_group_id();
 		if ($group_id > 0)
 		{
-			$this->config->set('freemitbbs_adult_group_id', (string) $group_id);
+			$this->set_config_value(self::CONFIG_ADULT_GROUP_ID, (string) $group_id);
 		}
 
 		return $group_id;
@@ -64,7 +69,12 @@ class manager
 
 	public function get_forum_ids(): array
 	{
-		return $this->parse_forum_ids((string) ($this->config['freemitbbs_adult_forum_ids'] ?? ''));
+		return $this->parse_forum_ids($this->get_config_value(self::CONFIG_ADULT_FORUM_IDS));
+	}
+
+	public function set_forum_ids(array $forum_ids): void
+	{
+		$this->set_config_value(self::CONFIG_ADULT_FORUM_IDS, implode(',', $forum_ids));
 	}
 
 	public function normalize_forum_id_list(string $value): string
@@ -1462,6 +1472,67 @@ class manager
 		$this->db->sql_freeresult($result);
 
 		return $exists;
+	}
+
+	protected function get_config_value(string $key, string $default = ''): string
+	{
+		if (isset($this->config[$key]))
+		{
+			return (string) $this->config[$key];
+		}
+
+		$db_value = $this->fetch_config_value($key);
+		if ($db_value === null)
+		{
+			return $default;
+		}
+
+		$this->config[$key] = $db_value;
+
+		return $db_value;
+	}
+
+	protected function set_config_value(string $key, string $value): void
+	{
+		$cached_value = isset($this->config[$key]) ? (string) $this->config[$key] : null;
+		$db_value = $this->fetch_config_value($key);
+
+		if ($db_value === null)
+		{
+			$sql = 'INSERT INTO ' . CONFIG_TABLE . ' ' . $this->db->sql_build_array('INSERT', [
+				'config_name' => $key,
+				'config_value' => $value,
+				'is_dynamic' => 0,
+			]);
+			$this->db->sql_query($sql);
+			$this->cache->destroy('config');
+		}
+		else if ($db_value !== $value)
+		{
+			$sql = 'UPDATE ' . CONFIG_TABLE . "
+				SET config_value = '" . $this->db->sql_escape($value) . "'
+				WHERE config_name = '" . $this->db->sql_escape($key) . "'";
+			$this->db->sql_query($sql);
+			$this->cache->destroy('config');
+		}
+		else if ($cached_value !== $value)
+		{
+			$this->cache->destroy('config');
+		}
+
+		$this->config[$key] = $value;
+	}
+
+	protected function fetch_config_value(string $key): ?string
+	{
+		$sql = 'SELECT config_value
+			FROM ' . CONFIG_TABLE . "
+			WHERE config_name = '" . $this->db->sql_escape($key) . "'";
+		$result = $this->db->sql_query_limit($sql, 1);
+		$value = $this->db->sql_fetchfield('config_value');
+		$this->db->sql_freeresult($result);
+
+		return ($value === false) ? null : (string) $value;
 	}
 
 	protected function run_acl_transaction(callable $callback)

@@ -6,6 +6,7 @@ class release_1_0_0 extends \phpbb\db\migration\migration
 {
 	private const GROUP_NAME = '18+ Opt-In';
 	private const GROUP_DESC = 'Managed by freemitbbs/adultaccess';
+	private const CONFIG_ADULT_GROUP_ID = 'freemitbbs_adult_group_id';
 
 	public static function depends_on()
 	{
@@ -330,7 +331,7 @@ class release_1_0_0 extends \phpbb\db\migration\migration
 			$group_id = (int) $this->db->sql_nextid();
 		}
 
-		$this->config->set('freemitbbs_adult_group_id', (string) $group_id);
+		$this->set_adult_group_config($group_id);
 	}
 
 	public function remove_opt_in_group(): void
@@ -370,6 +371,44 @@ class release_1_0_0 extends \phpbb\db\migration\migration
 		$this->db->sql_freeresult($result);
 
 		return $group_id;
+	}
+
+	protected function set_adult_group_config(int $group_id): void
+	{
+		$key = self::CONFIG_ADULT_GROUP_ID;
+		$value = (string) $group_id;
+		$db_value = $this->fetch_config_value($key);
+
+		if ($db_value === null)
+		{
+			$sql = 'INSERT INTO ' . CONFIG_TABLE . ' ' . $this->db->sql_build_array('INSERT', [
+				'config_name' => $key,
+				'config_value' => $value,
+				'is_dynamic' => 0,
+			]);
+			$this->db->sql_query($sql);
+		}
+		else if ($db_value !== $value)
+		{
+			$sql = 'UPDATE ' . CONFIG_TABLE . "
+				SET config_value = '" . $this->db->sql_escape($value) . "'
+				WHERE config_name = '" . $this->db->sql_escape($key) . "'";
+			$this->db->sql_query($sql);
+		}
+
+		$this->config[$key] = $value;
+	}
+
+	protected function fetch_config_value(string $key): ?string
+	{
+		$sql = 'SELECT config_value
+			FROM ' . CONFIG_TABLE . "
+			WHERE config_name = '" . $this->db->sql_escape($key) . "'";
+		$result = $this->db->sql_query_limit($sql, 1);
+		$value = $this->db->sql_fetchfield('config_value');
+		$this->db->sql_freeresult($result);
+
+		return ($value === false) ? null : (string) $value;
 	}
 
 	protected function find_group_id_by_name(string $group_name): int

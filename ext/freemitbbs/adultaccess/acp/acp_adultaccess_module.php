@@ -14,8 +14,6 @@ class acp_adultaccess_module
 	{
 		global $phpbb_container;
 
-		/** @var \phpbb\config\config $config */
-		$config = $phpbb_container->get('config');
 		/** @var \phpbb\template\template $template */
 		$template = $phpbb_container->get('template');
 		/** @var \phpbb\request\request $request */
@@ -49,7 +47,7 @@ class acp_adultaccess_module
 			$old_forum_ids = $manager->get_forum_ids();
 			$sync_result = $manager->sync_forum_permissions($old_forum_ids, $valid_forum_ids);
 			$active_forum_ids = $sync_result['active_forum_ids'];
-			$config->set('freemitbbs_adult_forum_ids', implode(',', $active_forum_ids));
+			$manager->set_forum_ids($active_forum_ids);
 
 			$messages = [$language->lang('CONFIG_UPDATED')];
 			if (!empty($invalid_forum_ids))
@@ -74,7 +72,7 @@ class acp_adultaccess_module
 		$forum_ids = $manager->get_forum_ids();
 		$template->assign_vars([
 			'U_ACTION' => $this->u_action,
-			'ADULTACCESS_FORUM_IDS' => isset($config['freemitbbs_adult_forum_ids']) ? $config['freemitbbs_adult_forum_ids'] : '',
+			'ADULTACCESS_FORUM_IDS' => implode(',', $forum_ids),
 			'ADULTACCESS_GROUP_NAME' => $manager->get_group_name(),
 			'ADULTACCESS_GROUP_ID' => $manager->get_adult_group_id(),
 			'S_ADULTACCESS_HAS_FORUMS' => !empty($forum_ids),

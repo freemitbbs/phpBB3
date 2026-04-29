@@ -4,6 +4,7 @@ services:
         arguments:
             - '@config'
             - '@dbal.conn'
+            - '@cache.driver'
             - '%core.table_prefix%'
             - '%core.root_path%'
             - '%core.php_ext%'

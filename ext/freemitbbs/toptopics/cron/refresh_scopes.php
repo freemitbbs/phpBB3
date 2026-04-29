@@ -14,7 +14,8 @@ class refresh_scopes extends \phpbb\cron\task\base
 	public function __construct(
 		\phpbb\cache\service $cache,
 		\phpbb\config\config $config,
-		\freemitbbs\toptopics\service\ranker $ranker
+		\freemitbbs\toptopics\service\ranker $ranker,
+		...$unused
 	)
 	{
 		$this->cache = $cache;
@@ -24,8 +25,27 @@ class refresh_scopes extends \phpbb\cron\task\base
 
 	public function run()
 	{
-		$this->ranker->refresh_stale_materialized_scopes(self::STALE_SCOPE_BATCH_SIZE);
-		$this->cache->put(self::LAST_RUN_CACHE_KEY, time(), 86400);
+		$started = time();
+		$started_microtime = microtime(true);
+		$this->write_stdout('start batch_size=' . self::STALE_SCOPE_BATCH_SIZE . ' time=' . $this->format_time($started));
+
+		try
+		{
+			$refreshed = $this->ranker->refresh_stale_materialized_scopes(self::STALE_SCOPE_BATCH_SIZE);
+			$duration_ms = $this->elapsed_milliseconds($started_microtime);
+
+			$this->cache->put(self::LAST_RUN_CACHE_KEY, $started, 86400);
+			$this->write_stdout('finish status=ok refreshed_scopes=' . $refreshed . ' duration_ms=' . $duration_ms . ' time=' . $this->format_time(time()));
+		}
+		catch (\Throwable $e)
+		{
+			$duration_ms = $this->elapsed_milliseconds($started_microtime);
+			$error = substr(get_class($e) . ': ' . $e->getMessage(), 0, 255);
+
+			$this->write_stdout('finish status=failed duration_ms=' . $duration_ms . ' error=' . $this->quote_log_value($error) . ' time=' . $this->format_time(time()));
+
+			throw $e;
+		}
 	}
 
 	public function is_runnable()
@@ -54,5 +74,30 @@ class refresh_scopes extends \phpbb\cron\task\base
 		}
 
 		return max(15, min(60, (int) floor($cache_ttl / 4)));
+	}
+
+	protected function elapsed_milliseconds(float $started_microtime): int
+	{
+		return max(0, (int) round((microtime(true) - $started_microtime) * 1000));
+	}
+
+	protected function format_time(int $time): string
+	{
+		return gmdate('Y-m-d\TH:i:s\Z', $time);
+	}
+
+	protected function quote_log_value(string $value): string
+	{
+		return '"' . str_replace(['\\', '"', "\r", "\n"], ['\\\\', '\"', ' ', ' '], $value) . '"';
+	}
+
+	protected function write_stdout(string $message): void
+	{
+		if (PHP_SAPI !== 'cli' || !defined('STDOUT'))
+		{
+			return;
+		}
+
+		fwrite(STDOUT, '[toptopics:refresh_scopes] ' . $message . PHP_EOL);
 	}
 }
