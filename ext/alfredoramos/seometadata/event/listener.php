@@ -95,12 +95,21 @@ class listener implements EventSubscriberInterface
 
 		// Helpers
 		$first_post_id = $event['topic_data']['topic_first_post_id'];
+		$first_post_data = $event['rowset'][$first_post_id] ?? $this->helper->extract_post_schema_data($first_post_id);
+		$first_post_text = $first_post_data['post_text'] ?? '';
 		$post_id = $first_post_id;
 		$data['title'] = $event['topic_data']['topic_title'];
 		$data['author'] = $this->helper->extract_author($event['topic_data']['topic_first_poster_name'], $event['topic_data']['topic_poster']);
 		$data['published_time'] = (int) $event['topic_data']['topic_time'];
 		$data['section'] = $event['topic_data']['forum_name'];
 		$data['description'] = '';
+		$data['text'] = $first_post_text;
+		$data['interaction_statistics'] = $this->helper->topic_interaction_statistics($event['topic_data']);
+
+		if (!empty($first_post_data['post_edit_count']) && !empty($first_post_data['post_edit_time']))
+		{
+			$data['modified_time'] = (int) $first_post_data['post_edit_time'];
+		}
 
 		// Extract description
 		if ($this->helper->check_replies() && $this->helper->is_reply($event['post_list'], $first_post_id, $post_id))
@@ -120,6 +129,10 @@ class listener implements EventSubscriberInterface
 
 		// Extract image
 		$data['image'] = $this->helper->extract_image($data['description'], $post_id, $event['topic_data']['forum_id']);
+		if (empty($data['image']['url']))
+		{
+			$data['remove_json_ld_image'] = true;
+		}
 
 		$this->helper->set_metadata($data);
 	}
@@ -133,7 +146,12 @@ class listener implements EventSubscriberInterface
 	 */
 	public function post_row($event)
 	{
-		if (empty($event['row']['post_id']) || empty($event['row']['post_text']))
+		if (empty($event['row']['post_id']) || empty($event['row']['post_text']) || !empty($event['row']['hide_post']))
+		{
+			return;
+		}
+
+		if (!empty($event['topic_data']['topic_first_post_id']) && (int) $event['row']['post_id'] === (int) $event['topic_data']['topic_first_post_id'])
 		{
 			return;
 		}
@@ -145,8 +163,14 @@ class listener implements EventSubscriberInterface
 		$data['comment'] = [
 			'identifier' => $this->helper->generate_post_url($event['row']['post_id']),
 			'text' => $this->helper->clean_post_data($event['row']['post_text']),
+			'date_published' => (int) $event['row']['post_time'],
 			'author' => $this->helper->extract_author($event['row']['username'], $event['row']['user_id'])
 		];
+
+		if (!empty($event['row']['post_edit_count']) && !empty($event['row']['post_edit_time']))
+		{
+			$data['comment']['date_modified'] = (int) $event['row']['post_edit_time'];
+		}
 
 		$this->helper->set_metadata($data);
 	}

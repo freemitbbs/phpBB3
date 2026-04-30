@@ -74,6 +74,9 @@ class helper
 	/** @var integer */
 	public const MAX_IMG_EXTRACTION = 10;
 
+	/** @var string */
+	public const SEO_BRAND_NAME = 'the Mitbbs';
+
 	/**
 	 * Helper constructor.
 	 *
@@ -114,14 +117,18 @@ class helper
 
 		// Assign tables
 		if (empty($this->tables))
-		{
-			$this->tables = [
-				'users' => $users_table,
-				'posts' => $posts_table,
-				'attachments' => $attachments_table
-			];
+			{
+				$table_prefix = preg_replace('#posts$#', '', $posts_table);
+				$this->tables = [
+					'users' => $users_table,
+					'posts' => $posts_table,
+					'attachments' => $attachments_table,
+					'post_reactions' => $table_prefix . 'post_reactions',
+					'post_likes' => $table_prefix . 'posts_likes',
+					'post_dislikes' => $table_prefix . 'posts_dislikes'
+				];
+			}
 		}
-	}
 
 	/**
 	 * Add or replace metadata.
@@ -136,7 +143,9 @@ class helper
 		if (empty($this->metadata))
 		{
 			$default = [
-				'description' => $this->clean_description($this->config->offsetGet('site_desc')),
+				'description' => $this->brand_description(
+					$this->clean_description($this->config->offsetGet('site_desc'))
+				),
 				'image' => [
 					'url' => $this->clean_image($this->config->offsetGet('seo_metadata_default_image')),
 					'width' => (int) $this->config->offsetGet('seo_metadata_default_image_width'),
@@ -173,6 +182,7 @@ class helper
 					'og:image:height' => $default['image']['height'],
 					'article:author' => '',
 					'article:published_time' => '',
+					'article:modified_time' => '',
 					'article:section' => '',
 					'article:publisher' => trim($this->config->offsetGet('seo_metadata_facebook_publisher'))
 				],
@@ -191,6 +201,7 @@ class helper
 						'url' => ''
 					],
 					'datePublished' => '',
+					'dateModified' => '',
 					'articleSection' => '',
 					'publisher' => [
 						'@type' => 'Organization',
@@ -203,19 +214,8 @@ class helper
 							'height' => (int) $this->config->offsetGet('seo_metadata_json_ld_logo_height')
 						]
 					],
-					'comment' => [
-						// ! Template
-						// [
-						// 	'@type' => 'Comment',
-						// 	'identifier' => '',
-						// 	'text' => '',
-						// 	'author' => [
-						// 		'@type' => 'Person',
-						// 		'name' => '',
-						// 		'url' => ''
-						// 	]
-						// ]
-					]
+					'comment' => [],
+					'interactionStatistic' => []
 				]
 			];
 		}
@@ -231,6 +231,7 @@ class helper
 			switch ($key)
 			{
 				case 'title':
+					$value = $this->append_brand_to_title($value);
 					$this->metadata['open_graph']['og:title'] = $value;
 					$this->metadata['twitter_cards']['twitter:title'] = $value;
 					$this->metadata['json_ld']['headline'] = $value;
@@ -245,11 +246,21 @@ class helper
 						$value = trim($data['title'] . ' ' . $value);
 					}
 
+					$value = $this->brand_description($value);
+
 					$this->metadata['meta_description']['description'] = $value;
 					$this->metadata['open_graph']['og:description'] = $value;
 					$this->metadata['twitter_cards']['twitter:description'] = $value;
 					$this->metadata['json_ld']['description'] = $value;
 					$this->metadata['json_ld']['text'] = $value;
+				break;
+
+				case 'text':
+					$value = $this->clean_post_data($value);
+					if (!empty($value))
+					{
+						$this->metadata['json_ld']['text'] = $value;
+					}
 				break;
 
 				case 'image':
@@ -285,6 +296,12 @@ class helper
 					$this->metadata['json_ld']['datePublished'] = $value;
 				break;
 
+				case 'modified_time':
+					$value = date('c', (int) $value);
+					$this->metadata['open_graph']['article:modified_time'] = $value;
+					$this->metadata['json_ld']['dateModified'] = $value;
+				break;
+
 				case 'section':
 					$this->metadata['open_graph']['article:section'] = $value;
 					$this->metadata['json_ld']['articleSection'] = $value;
@@ -306,7 +323,7 @@ class helper
 				case 'comment':
 					if (isset($value['text'], $value['identifier']))
 					{
-						$data = [
+						$comment = [
 							'identifier' => $value['identifier'],
 							'text' => $value['text'],
 						];
@@ -314,6 +331,8 @@ class helper
 							'@type' => 'Comment',
 							'identifier' => '',
 							'text' => '',
+							'datePublished' => '',
+							'dateModified' => '',
 							'author' => [
 								'@type' => 'Person',
 								'name' => '',
@@ -323,19 +342,37 @@ class helper
 
 						if (isset($value['author']['name']))
 						{
-							$data['author']['name'] = $value['author']['name'];
+							$comment['author']['name'] = $value['author']['name'];
 						}
 
 						if (isset($value['author']['url']))
 						{
-							$data['author']['url'] = $value['author']['url'];
+							$comment['author']['url'] = $value['author']['url'];
+						}
+
+						if (!empty($value['date_published']))
+						{
+							$comment['datePublished'] = date('c', (int) $value['date_published']);
+						}
+
+						if (!empty($value['date_modified']))
+						{
+							$comment['dateModified'] = date('c', (int) $value['date_modified']);
 						}
 
 						if (!$this->comment_exists($this->metadata['json_ld']['comment'], $value['identifier']))
 						{
-							$this->metadata['json_ld']['comment'][] = array_replace_recursive($default, $data);
+							$this->metadata['json_ld']['comment'][] = array_replace_recursive($default, $comment);
 						}
 					}
+				break;
+
+				case 'interaction_statistics':
+					$this->metadata['json_ld']['interactionStatistic'] = $this->build_interaction_statistics($value);
+				break;
+
+				case 'remove_json_ld_image':
+					unset($this->metadata['json_ld']['image']);
 				break;
 			}
 		}
@@ -364,6 +401,150 @@ class helper
 	}
 
 	/**
+	 * Build topic-level interaction counters for JSON-LD.
+	 *
+	 * @param array $topic_data
+	 *
+	 * @return array
+	 */
+	public function topic_interaction_statistics($topic_data = [])
+	{
+		$topic_id = (int) ($topic_data['topic_id'] ?? 0);
+		$post_count = (int) ($topic_data['topic_posts_approved'] ?? 0);
+		$views = (int) ($topic_data['topic_views'] ?? 0);
+
+		if (empty($topic_id))
+		{
+			return [];
+		}
+
+		return [
+			'comments' => max(0, $post_count - 1),
+			'views' => max(0, $views),
+			'likes' => $this->count_topic_post_events($topic_id, 'post_likes', 'postlove_version'),
+			'dislikes' => $this->count_topic_post_events($topic_id, 'post_dislikes', 'toptopics_version'),
+			'reactions' => $this->count_topic_reactions($topic_id),
+		];
+	}
+
+	/**
+	 * Build InteractionCounter objects.
+	 *
+	 * @param array $counts
+	 *
+	 * @return array
+	 */
+	protected function build_interaction_statistics($counts = [])
+	{
+		$statistics = [];
+
+		$this->add_interaction_statistic($statistics, 'CommentAction', (int) ($counts['comments'] ?? 0));
+		$this->add_interaction_statistic($statistics, 'ViewAction', (int) ($counts['views'] ?? 0));
+		$this->add_interaction_statistic($statistics, 'LikeAction', (int) ($counts['likes'] ?? 0) + (int) ($counts['reactions'] ?? 0));
+		$this->add_interaction_statistic($statistics, 'DislikeAction', (int) ($counts['dislikes'] ?? 0));
+
+		return $statistics;
+	}
+
+	/**
+	 * Append a non-empty InteractionCounter.
+	 *
+	 * @param array   $statistics
+	 * @param string  $action
+	 * @param integer $count
+	 *
+	 * @return void
+	 */
+	protected function add_interaction_statistic(&$statistics, $action, $count)
+	{
+		$count = max(0, (int) $count);
+
+		if ($count === 0)
+		{
+			return;
+		}
+
+		$statistics[] = [
+			'@type' => 'InteractionCounter',
+			'interactionType' => sprintf('https://schema.org/%s', $action),
+			'userInteractionCount' => $count,
+		];
+	}
+
+	/**
+	 * Count reactions stored by the reactions extension.
+	 *
+	 * @param integer $topic_id
+	 *
+	 * @return integer
+	 */
+	protected function count_topic_reactions($topic_id)
+	{
+		$topic_id = (int) $topic_id;
+
+		if (empty($topic_id) || empty($this->config['bastien59960_reactions_version']) ||
+			(isset($this->config['bastien59960_reactions_enabled']) && !(int) $this->config['bastien59960_reactions_enabled']))
+		{
+			return 0;
+		}
+
+		$approved = defined('ITEM_APPROVED') ? ITEM_APPROVED : 1;
+		$sql = 'SELECT COUNT(pr.reaction_id) AS total
+			FROM ' . $this->tables['post_reactions'] . ' pr
+			INNER JOIN ' . $this->tables['posts'] . ' p
+				ON p.post_id = pr.post_id
+			WHERE pr.topic_id = ' . $topic_id . '
+				AND p.post_visibility = ' . (int) $approved;
+
+		return $this->count_sql_result($sql);
+	}
+
+	/**
+	 * Count post-level rows from optional like/dislike tables.
+	 *
+	 * @param integer $topic_id
+	 * @param string  $table_key
+	 * @param string  $config_key
+	 *
+	 * @return integer
+	 */
+	protected function count_topic_post_events($topic_id, $table_key, $config_key)
+	{
+		$topic_id = (int) $topic_id;
+
+		if (empty($topic_id) || empty($this->tables[$table_key]) || empty($this->config[$config_key]))
+		{
+			return 0;
+		}
+
+		$approved = defined('ITEM_APPROVED') ? ITEM_APPROVED : 1;
+		$sql = 'SELECT COUNT(*) AS total
+			FROM ' . $this->tables[$table_key] . ' px
+			INNER JOIN ' . $this->tables['posts'] . ' p
+				ON p.post_id = px.post_id
+			WHERE p.topic_id = ' . $topic_id . '
+				AND p.post_visibility = ' . (int) $approved;
+
+		return $this->count_sql_result($sql);
+	}
+
+	/**
+	 * Run a COUNT query and normalize its result.
+	 *
+	 * @param string $sql
+	 *
+	 * @return integer
+	 */
+	protected function count_sql_result($sql)
+	{
+		$result = $this->db->sql_query($sql);
+		$total = (int) $this->db->sql_fetchfield('total');
+		$this->db->sql_freeresult($result);
+
+		return max(0, $total);
+	}
+
+	/**
 	 * Assign or update template variables.
 	 *
 	 * @return void
@@ -373,8 +554,12 @@ class helper
 		$this->template->destroy_block_vars('SEO_METADATA');
 		$data = $this->get_metadata();
 		$robots = $this->get_robots_directive();
+		$page_title = $data['open_graph']['og:title'] ?? '';
 
-		$this->template->assign_var('SEO_METADATA_ROBOTS', $robots);
+		$this->template->assign_vars([
+			'SEO_METADATA_PAGE_TITLE' => $page_title,
+			'SEO_METADATA_ROBOTS' => $robots,
+		]);
 
 		// Open Graph extra check for default image
 		if (empty($data['open_graph']['og:image']))
@@ -389,12 +574,13 @@ class helper
 		// Open Graph article metadata
 		if ($data['open_graph']['og:type'] !== 'article')
 		{
-			unset(
-				$data['open_graph']['article:author'],
-				$data['open_graph']['article:published_time'],
-				$data['open_graph']['article:section'],
-				$data['open_graph']['article:publisher']
-			);
+				unset(
+					$data['open_graph']['article:author'],
+					$data['open_graph']['article:published_time'],
+					$data['open_graph']['article:modified_time'],
+					$data['open_graph']['article:section'],
+					$data['open_graph']['article:publisher']
+				);
 		}
 
 		// JSON-LD author
@@ -816,16 +1002,66 @@ class helper
 
 		if (empty($page_title) || empty($site_name) || strpos($page_title, $site_name) !== false)
 		{
-			return $page_title;
+			return $this->append_brand_to_title($page_title);
 		}
 
 		$page_name = $this->user->page['page_name'] ?? '';
 		if (in_array($page_name, ['viewtopic.php', 'viewforum.php'], true))
 		{
-			return sprintf('%s - %s', $page_title, $site_name);
+			return $this->append_brand_to_title(sprintf('%s - %s', $page_title, $site_name));
 		}
 
-		return sprintf('%s - %s', $site_name, $page_title);
+		return $this->append_brand_to_title(sprintf('%s - %s', $site_name, $page_title));
+	}
+
+	/**
+	 * Append the English brand name to a title when it is missing.
+	 *
+	 * @param string $title
+	 *
+	 * @return string
+	 */
+	public function append_brand_to_title($title = '')
+	{
+		$title = trim($title);
+
+		if (empty($title) || $this->contains_seo_brand($title))
+		{
+			return $title;
+		}
+
+		return sprintf('%s - %s', $title, self::SEO_BRAND_NAME);
+	}
+
+	/**
+	 * Prefix descriptions with the English brand name when it is missing.
+	 *
+	 * @param string $description
+	 *
+	 * @return string
+	 */
+	protected function brand_description($description = '')
+	{
+		$description = trim($description);
+
+		if (empty($description) || $this->contains_seo_brand($description))
+		{
+			return $description;
+		}
+
+		return sprintf('%s: %s', self::SEO_BRAND_NAME, $description);
+	}
+
+	/**
+	 * Check whether text already contains the English brand name.
+	 *
+	 * @param string $value
+	 *
+	 * @return bool
+	 */
+	protected function contains_seo_brand($value = '')
+	{
+		return stripos((string) $value, self::SEO_BRAND_NAME) !== false;
 	}
 
 	/**
@@ -894,6 +1130,32 @@ class helper
 		$this->db->sql_freeresult($result);
 
 		return $description;
+	}
+
+	/**
+	 * Fetch post fields needed for structured data.
+	 *
+	 * @param integer $post_id
+	 *
+	 * @return array
+	 */
+	public function extract_post_schema_data($post_id = 0)
+	{
+		$post_id = (int) $post_id;
+
+		if (empty($post_id))
+		{
+			return [];
+		}
+
+		$sql = 'SELECT post_text, post_time, post_edit_count, post_edit_time
+			FROM ' . $this->tables['posts'] . '
+			WHERE ' . $this->db->sql_build_array('SELECT', ['post_id' => $post_id]);
+		$result = $this->db->sql_query($sql);
+		$post_data = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+
+		return !empty($post_data) ? $post_data : [];
 	}
 
 	/**
