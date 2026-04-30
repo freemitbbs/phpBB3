@@ -25,9 +25,10 @@ class rtng_functions
 	private ?array $toptopics_index_topic_ids;
 	private ?array $index_topic_ids_for_dedupe;
 	private array $displayed_topic_ids_for_dedupe;
-	private ?array $forum_id_list;
+	private array $forum_id_list;
 	private ?array $prepared_index_topic_list_for_display;
 	private ?array $foe_user_id_map;
+	private ?array $user_home_excluded_forum_id_map;
 
 	public function __construct
 	(
@@ -55,9 +56,10 @@ class rtng_functions
 		$this->toptopics_index_topic_ids = null;
 		$this->index_topic_ids_for_dedupe = null;
 		$this->displayed_topic_ids_for_dedupe = [];
-		$this->forum_id_list = null;
+		$this->forum_id_list = [];
 		$this->prepared_index_topic_list_for_display = null;
 		$this->foe_user_id_map = null;
+		$this->user_home_excluded_forum_id_map = null;
 	}
 
 	/**
@@ -122,7 +124,7 @@ class rtng_functions
 			]
 		);
 
-		$forum_id_list = $this->getforumlist();
+		$forum_id_list = $this->getforumlist($this->should_apply_user_home_forum_exclusions($tpl_loopname));
 
 		// No forums to display
 		if (count($forum_id_list) == 0)
@@ -251,7 +253,7 @@ class rtng_functions
 			return $this->index_topic_ids_for_dedupe;
 		}
 
-		$forum_id_list = $this->getforumlist();
+		$forum_id_list = $this->getforumlist($this->should_apply_user_home_forum_exclusions($tpl_loopname));
 		if (empty($forum_id_list))
 		{
 			return $this->index_topic_ids_for_dedupe;
@@ -332,11 +334,12 @@ class rtng_functions
 	/**
 	 * Get the forums we take our topics from
 	 */
-	private function getforumlist(): array
+	private function getforumlist(bool $exclude_home_forums = false): array
 	{
-		if ($this->forum_id_list !== null)
+		$cache_key = $exclude_home_forums ? 'home' : 'default';
+		if (isset($this->forum_id_list[$cache_key]))
 		{
-			return $this->forum_id_list;
+			return $this->forum_id_list[$cache_key];
 		}
 
 		// Get the allowed forums
@@ -359,13 +362,17 @@ class rtng_functions
 			$forum_ids_disp = array_values(array_filter(array_map('intval', $forum_ids), static function ($forum_id) use ($enabled_forum_map) {
 				return isset($enabled_forum_map[$forum_id]);
 			}));
-			$this->forum_id_list = $forum_ids_disp;
-			return $this->forum_id_list;
+			if ($exclude_home_forums)
+			{
+				$forum_ids_disp = $this->exclude_forum_ids_by_map($forum_ids_disp, $this->get_user_home_excluded_forum_id_map());
+			}
+			$this->forum_id_list[$cache_key] = $forum_ids_disp;
+			return $this->forum_id_list[$cache_key];
 		}
 		else
 		{
-			$this->forum_id_list = [];
-			return $this->forum_id_list;
+			$this->forum_id_list[$cache_key] = [];
+			return $this->forum_id_list[$cache_key];
 		}
 	}
 
@@ -396,6 +403,58 @@ class rtng_functions
 		$this->cache->put(self::CACHE_RTNG_ENABLED_FORUM_IDS, $forum_ids, self::CACHE_SECONDS);
 
 		return $forum_ids;
+	}
+
+	private function should_apply_user_home_forum_exclusions(string $tpl_loopname): bool
+	{
+		return $tpl_loopname === 'rtng_topics'
+			&& ((string) ($this->user->page['page_name'] ?? '')) === 'index.php';
+	}
+
+	private function get_user_home_excluded_forum_id_map(): array
+	{
+		if ($this->user_home_excluded_forum_id_map !== null)
+		{
+			return $this->user_home_excluded_forum_id_map;
+		}
+
+		$configured_ids = (string) ($this->user->data['user_home_topic_hide_forums'] ?? '');
+		if (version_compare((string) ($this->config['toptopics_version'] ?? '0.0.0'), '1.1.21', '>='))
+		{
+			$user_id = (int) ($this->user->data['user_id'] ?? ANONYMOUS);
+			if ($user_id > 0)
+			{
+				$sql = 'SELECT user_home_topic_hide_forums
+					FROM ' . USERS_TABLE . '
+					WHERE user_id = ' . $user_id;
+				$result = $this->db->sql_query($sql);
+				$configured_ids = (string) $this->db->sql_fetchfield('user_home_topic_hide_forums');
+				$this->db->sql_freeresult($result);
+			}
+		}
+
+		$this->user_home_excluded_forum_id_map = $this->parse_topic_id_csv_to_map($configured_ids);
+		return $this->user_home_excluded_forum_id_map;
+	}
+
+	private function exclude_forum_ids_by_map(array $forum_ids, array $excluded_forum_map): array
+	{
+		$forum_ids = $this->normalise_topic_ids($forum_ids);
+		if (empty($forum_ids) || empty($excluded_forum_map))
+		{
+			return $forum_ids;
+		}
+
+		$filtered_forum_ids = [];
+		foreach ($forum_ids as $forum_id)
+		{
+			if (!isset($excluded_forum_map[$forum_id]))
+			{
+				$filtered_forum_ids[] = $forum_id;
+			}
+		}
+
+		return $filtered_forum_ids;
 	}
 
 	private function build_topic_list_cache_key(string $tpl_loopname, int $rtng_start, int $total_topics_limit, array $excluded_topics, array $forum_id_list): string
@@ -752,17 +811,10 @@ class rtng_functions
 			}
 		}
 
-		$forum_ids = array_values(array_unique($forum_ids));
-		$excluded_forum_map = $this->parse_topic_id_csv_to_map((string) ($this->config['toptopics_index_excluded_forum_ids'] ?? ''));
-		if (!empty($excluded_forum_map))
-		{
-			$forum_ids = array_values(array_filter($forum_ids, static function ($forum_id) use ($excluded_forum_map) {
-				return !isset($excluded_forum_map[$forum_id]);
-			}));
-		}
+		$excluded_forum_map = $this->parse_topic_id_csv_to_map((string) ($this->config['toptopics_index_excluded_forum_ids'] ?? ''))
+			+ $this->get_user_home_excluded_forum_id_map();
 
-		sort($forum_ids);
-		return $forum_ids;
+		return $this->exclude_forum_ids_by_map($forum_ids, $excluded_forum_map);
 	}
 
 	private function parse_topic_id_csv_to_map(string $csv): array
@@ -811,9 +863,7 @@ class rtng_functions
 		}
 
 		return ' AND '
-			. $this->db->sql_in_set($topic_alias . '.topic_poster', $foe_user_ids, true)
-			. ' AND '
-			. $this->db->sql_in_set($topic_alias . '.topic_last_poster_id', $foe_user_ids, true);
+			. $this->db->sql_in_set($topic_alias . '.topic_poster', $foe_user_ids, true);
 	}
 
 	private function get_current_user_foe_id_map(): array

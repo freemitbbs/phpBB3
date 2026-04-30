@@ -347,12 +347,6 @@ class ranker
 			return true;
 		}
 
-		$topic_last_poster = (int) ($topic['topic_last_poster_id'] ?? 0);
-		if ($topic_last_poster > 0 && !empty($foe_user_id_map[$topic_last_poster]))
-		{
-			return true;
-		}
-
 		return false;
 	}
 

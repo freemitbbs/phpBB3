@@ -45,6 +45,8 @@ class listener implements EventSubscriberInterface
 	protected ?int $index_category_candidate_limit = null;
 	protected ?array $index_excluded_forum_id_map = null;
 	protected ?array $index_category_excluded_forum_id_map = null;
+	protected ?array $user_home_excluded_forum_id_map = null;
+	protected ?array $selectable_home_forum_id_map = null;
 	protected ?array $index_recenttopics_topic_id_map = null;
 	protected ?array $index_forum_viewership_order = null;
 	protected ?array $foe_user_id_map = null;
@@ -170,6 +172,14 @@ class listener implements EventSubscriberInterface
 			'toptopics_show_mobile_topic_stats',
 			$this->user_shows_mobile_topic_stats()
 		);
+		if ($this->has_user_home_forum_exclusion_column())
+		{
+			$selected_forum_ids = !empty($event['submit'])
+				? $this->request->variable('user_home_topic_hide_forums', [0])
+				: $this->get_user_home_excluded_forum_ids();
+			$data['user_home_topic_hide_forums'] = $this->normalise_forum_ids($selected_forum_ids);
+			$this->assign_home_topic_forum_exclusion_template_vars($data['user_home_topic_hide_forums']);
+		}
 		$event['data'] = $data;
 
 		$this->template->assign_var('S_TOPTOPICS_SHOW_MOBILE_TOPIC_STATS', $data['toptopics_show_mobile_topic_stats']);
@@ -184,6 +194,12 @@ class listener implements EventSubscriberInterface
 			(bool) ($data['toptopics_show_mobile_topic_stats'] ?? false),
 			(int) $sql_ary['user_options']
 		);
+		if ($this->has_user_home_forum_exclusion_column())
+		{
+			$sql_ary['user_home_topic_hide_forums'] = $this->format_forum_id_csv(
+				$this->filter_selectable_home_forum_ids($this->request->variable('user_home_topic_hide_forums', [0]))
+			);
+		}
 		$event['sql_ary'] = $sql_ary;
 	}
 
@@ -852,6 +868,140 @@ class listener implements EventSubscriberInterface
 		return phpbb_optionget(self::USER_OPTION_SHOW_MOBILE_TOPIC_STATS, (int) $this->user->data['user_options']);
 	}
 
+	protected function has_user_home_forum_exclusion_column(): bool
+	{
+		return version_compare((string) ($this->config['toptopics_version'] ?? '0.0.0'), '1.1.21', '>=');
+	}
+
+	protected function get_user_home_excluded_forum_ids(): array
+	{
+		$forum_ids = array_keys($this->get_user_home_excluded_forum_id_map());
+		sort($forum_ids);
+
+		return $forum_ids;
+	}
+
+	protected function get_user_home_excluded_forum_id_map(): array
+	{
+		if ($this->user_home_excluded_forum_id_map !== null)
+		{
+			return $this->user_home_excluded_forum_id_map;
+		}
+
+		$configured_ids = (string) ($this->user->data['user_home_topic_hide_forums'] ?? '');
+		if ($this->has_user_home_forum_exclusion_column())
+		{
+			$user_id = $this->get_current_user_id();
+			if ($user_id > 0)
+			{
+				$sql = 'SELECT user_home_topic_hide_forums
+					FROM ' . USERS_TABLE . '
+					WHERE user_id = ' . $user_id;
+				$result = $this->db->sql_query($sql);
+				$configured_ids = (string) $this->db->sql_fetchfield('user_home_topic_hide_forums');
+				$this->db->sql_freeresult($result);
+			}
+		}
+
+		$this->user_home_excluded_forum_id_map = $this->parse_forum_id_map($configured_ids);
+		return $this->user_home_excluded_forum_id_map;
+	}
+
+	protected function get_current_user_id(): int
+	{
+		$user_id = (int) ($this->user->data['user_id'] ?? 0);
+		if ($user_id > 0)
+		{
+			return $user_id;
+		}
+
+		return (int) $this->request->variable('u', ANONYMOUS);
+	}
+
+	protected function format_forum_id_csv(array $forum_ids): string
+	{
+		return implode(',', $this->normalise_forum_ids($forum_ids));
+	}
+
+	protected function filter_selectable_home_forum_ids(array $forum_ids): array
+	{
+		$selectable_forums = $this->get_selectable_home_forum_id_map();
+		if (empty($selectable_forums))
+		{
+			return [];
+		}
+
+		$filtered_forum_ids = [];
+		foreach ($this->normalise_forum_ids($forum_ids) as $forum_id)
+		{
+			if (isset($selectable_forums[$forum_id]))
+			{
+				$filtered_forum_ids[] = $forum_id;
+			}
+		}
+
+		return $filtered_forum_ids;
+	}
+
+	protected function get_selectable_home_forum_id_map(): array
+	{
+		if ($this->selectable_home_forum_id_map !== null)
+		{
+			return $this->selectable_home_forum_id_map;
+		}
+
+		$this->selectable_home_forum_id_map = [];
+		$forum_list_ary = $this->auth->acl_getf('f_list');
+		foreach ($this->auth->acl_getf('f_read') as $forum_id => $allowed)
+		{
+			if (!empty($allowed['f_read']) && !empty($forum_list_ary[$forum_id]['f_list']))
+			{
+				$this->selectable_home_forum_id_map[(int) $forum_id] = true;
+			}
+		}
+
+		return $this->selectable_home_forum_id_map;
+	}
+
+	protected function assign_home_topic_forum_exclusion_template_vars(array $selected_forum_ids): void
+	{
+		$selectable_forums = $this->get_selectable_home_forum_id_map();
+		if (empty($selectable_forums))
+		{
+			return;
+		}
+
+		$sql = 'SELECT forum_id, forum_name
+			FROM ' . FORUMS_TABLE . '
+			WHERE forum_type = ' . FORUM_POST . '
+				AND ' . $this->db->sql_in_set('forum_id', array_keys($selectable_forums)) . '
+			ORDER BY left_id';
+		$result = $this->db->sql_query($sql);
+
+		$selected_forum_map = array_fill_keys($this->normalise_forum_ids($selected_forum_ids), true);
+		$has_forum_options = false;
+		$forum_checkbox_html = '';
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$forum_id = (int) ($row['forum_id'] ?? 0);
+			if ($forum_id <= 0)
+			{
+				continue;
+			}
+
+			$has_forum_options = true;
+			$forum_checkbox_html .= '<label><input type="checkbox" name="user_home_topic_hide_forums[]" value="' . $forum_id . '"'
+				. (isset($selected_forum_map[$forum_id]) ? ' checked="checked"' : '')
+				. ' /> ' . htmlspecialchars((string) ($row['forum_name'] ?? ''), ENT_COMPAT, 'UTF-8') . '</label><br />';
+		}
+		$this->db->sql_freeresult($result);
+
+		$this->template->assign_vars([
+			'S_TOPTOPICS_HOME_FORUM_EXCLUSIONS' => $has_forum_options,
+			'S_TOPTOPICS_HOME_FORUM_EXCLUSION_OPTIONS' => $forum_checkbox_html,
+		]);
+	}
+
 	protected function get_index_summary_topic_id_map(): array
 	{
 		if ($this->index_summary_topic_ids === null)
@@ -990,12 +1140,18 @@ class listener implements EventSubscriberInterface
 
 	protected function exclude_index_forum_ids(array $forum_ids): array
 	{
-		return $this->exclude_forum_ids_by_map($forum_ids, $this->get_index_excluded_forum_id_map());
+		return $this->exclude_forum_ids_by_map(
+			$forum_ids,
+			$this->get_index_excluded_forum_id_map() + $this->get_user_home_excluded_forum_id_map()
+		);
 	}
 
 	protected function exclude_index_category_forum_ids(array $forum_ids): array
 	{
-		return $this->exclude_forum_ids_by_map($forum_ids, $this->get_index_category_excluded_forum_id_map());
+		return $this->exclude_forum_ids_by_map(
+			$forum_ids,
+			$this->get_index_category_excluded_forum_id_map() + $this->get_user_home_excluded_forum_id_map()
+		);
 	}
 
 	protected function get_index_excluded_forum_id_map(): array
@@ -1776,9 +1932,7 @@ class listener implements EventSubscriberInterface
 		foreach ($topics as $topic)
 		{
 			$topic_poster = (int) ($topic['topic_poster'] ?? 0);
-			$topic_last_poster = (int) ($topic['topic_last_poster_id'] ?? 0);
-			if (($topic_poster > 0 && isset($foe_user_id_map[$topic_poster]))
-				|| ($topic_last_poster > 0 && isset($foe_user_id_map[$topic_last_poster])))
+			if ($topic_poster > 0 && isset($foe_user_id_map[$topic_poster]))
 			{
 				continue;
 			}
@@ -1849,9 +2003,7 @@ class listener implements EventSubscriberInterface
 		}
 
 		return ' AND '
-			. $this->db->sql_in_set($topic_alias . '.topic_poster', $foe_user_ids, true)
-			. ' AND '
-			. $this->db->sql_in_set($topic_alias . '.topic_last_poster_id', $foe_user_ids, true);
+			. $this->db->sql_in_set($topic_alias . '.topic_poster', $foe_user_ids, true);
 	}
 
 	protected function assign_topicpreview_template_vars(array $topicpreview): void
