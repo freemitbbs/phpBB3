@@ -9,6 +9,34 @@
  #}
 
 {% if S_VIEWTOPIC or S_DISPLAY_PREVIEW or S_POST_REVIEW or SCRIPT_NAME == 'search' or S_BLOG_ENTRY %}
-{% INCLUDEJS '@kinerity_mathjax/mathjax/mathjax_3-2-2.js' %}
-{{ lang('KMJ_POWERED_BY') }} <a href="https://www.mathjax.org"><img style="display:block; height:1em; border:0;" title="{{ lang('KMJ_POWERED_BY') }} MathJax" src="{{ BOARD_URL }}ext/kinerity/mathjax/styles/all/template/mathjax/logo2.png" alt="MathJax" ></a>
+<span id="kmj-powered-by" style="display:none">{{ lang('KMJ_POWERED_BY') }} <a href="https://www.mathjax.org"><img style="display:block; height:1em; border:0;" title="{{ lang('KMJ_POWERED_BY') }} MathJax" src="{{ BOARD_URL }}ext/kinerity/mathjax/styles/all/template/mathjax/logo2.png" alt="MathJax" width="96" height="20" loading="lazy"></a></span>
+<script>
+(function (d)
+{
+	'use strict';
+
+	var mathText = '';
+	var blocks = d.querySelectorAll('.postbody .content, #preview .content, #post_review .content, .searchresults .content, .blog-entry .content');
+	for (var i = 0; i < blocks.length; i++)
+	{
+		mathText += '\n' + blocks[i].textContent;
+	}
+
+	if (!/(\\\(|\\\[|\\begin\{)/.test(mathText))
+	{
+		return;
+	}
+
+	var poweredBy = d.getElementById('kmj-powered-by');
+	if (poweredBy)
+	{
+		poweredBy.style.display = '';
+	}
+
+	var script = d.createElement('script');
+	script.src = '{{ ROOT_PATH }}ext/kinerity/mathjax/styles/all/template/mathjax/mathjax_3-2-2.js?assets_version={{ T_ASSETS_VERSION }}';
+	script.defer = true;
+	d.head.appendChild(script);
+})(document);
+</script>
 {% endif %}

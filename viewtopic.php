@@ -1416,7 +1416,7 @@ while ($row = $db->sql_fetchrow($result))
 				'sig_bbcode_bitfield'	=> '',
 
 				'online'			=> false,
-				'avatar'			=> ($user->optionget('viewavatars')) ? phpbb_get_user_avatar($row) : '',
+				'avatar'			=> ($user->optionget('viewavatars')) ? phpbb_get_user_avatar($row, 'USER_AVATAR', false, true) : '',
 				'rank_title'		=> '',
 				'rank_image'		=> '',
 				'rank_image_src'	=> '',
@@ -1480,7 +1480,7 @@ while ($row = $db->sql_fetchrow($result))
 				'viewonline'	=> $row['user_allow_viewonline'],
 				'allow_pm'		=> $row['user_allow_pm'],
 
-				'avatar'		=> ($user->optionget('viewavatars')) ? phpbb_get_user_avatar($row) : '',
+				'avatar'		=> ($user->optionget('viewavatars')) ? phpbb_get_user_avatar($row, 'USER_AVATAR', false, true) : '',
 				'age'			=> '',
 
 				'rank_title'		=> '',
