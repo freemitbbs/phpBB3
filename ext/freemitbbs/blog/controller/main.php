@@ -273,7 +273,7 @@ class main
 		return new \Symfony\Component\HttpFoundation\Response($image, 200, [
 			'Content-Type' => 'image/png',
 			'Content-Disposition' => 'inline; filename="' . $filename . '"',
-			'Cache-Control' => 'public, max-age=3600',
+			'Cache-Control' => 'no-store, max-age=0',
 			'X-Content-Type-Options' => 'nosniff',
 		]);
 	}
@@ -2057,6 +2057,7 @@ class main
 	protected function share_image_font_path(): ?string
 	{
 		$paths = [
+			$this->root_path . 'ext/freemitbbs/blog/assets/fonts/NotoSansCJKsc-Regular.otf',
 			'/System/Library/Fonts/PingFang.ttc',
 			'/System/Library/Fonts/Hiragino Sans GB.ttc',
 			'/System/Library/Fonts/STHeiti Medium.ttc',
@@ -2094,7 +2095,13 @@ class main
 
 	protected function find_share_post_image(array $entry, array $attachments, string $html_text)
 	{
-		foreach ($this->extract_share_image_sources($html_text) as $src)
+		$sources = array_merge(
+			$this->extract_share_image_sources($html_text),
+			$this->extract_share_image_sources((string) ($entry['post_text'] ?? '')),
+			$this->extract_share_image_sources_from_plain_text((string) ($entry['post_text'] ?? ''))
+		);
+
+		foreach (array_values(array_unique($sources)) as $src)
 		{
 			$image = $this->load_share_image_from_html_src($entry, $attachments, $src);
 			if ($this->is_gd_image($image))
@@ -2146,6 +2153,31 @@ class main
 		return array_values(array_unique(array_map(static fn($src) => html_entity_decode(trim($src), ENT_QUOTES, 'UTF-8'), $sources)));
 	}
 
+	protected function extract_share_image_sources_from_plain_text(string $text): array
+	{
+		$sources = [];
+		if (preg_match_all('#\[img(?:=[^\]]*)?\](.*?)\[/img\]#isu', $text, $matches))
+		{
+			foreach ($matches[1] as $src)
+			{
+				$sources[] = $src;
+			}
+		}
+		if (preg_match_all('#!\[[^\]]*\]\(([^)\s]+)(?:\s+["\'][^"\']*["\'])?\)#u', $text, $matches))
+		{
+			foreach ($matches[1] as $src)
+			{
+				$sources[] = $src;
+			}
+		}
+
+		return array_values(array_unique(array_map(static function($src) {
+			$src = html_entity_decode(strip_tags((string) $src), ENT_QUOTES, 'UTF-8');
+
+			return trim($src, " \t\n\r\0\x0B\"'");
+		}, $sources)));
+	}
+
 	protected function load_share_image_from_html_src(array $entry, array $attachments, string $src)
 	{
 		$attachment_id = $this->share_image_attachment_id_from_src($src);
@@ -2163,10 +2195,70 @@ class main
 		$path = $this->share_image_local_path_from_src($entry, $src);
 		if ($path === null)
 		{
-			return null;
+			return $this->load_share_image_from_remote_src($src);
 		}
 
 		return $this->load_share_image_from_path($path);
+	}
+
+	protected function load_share_image_from_remote_src(string $src)
+	{
+		$url = $this->share_image_remote_url($src);
+		if ($url === null)
+		{
+			return null;
+		}
+
+		return $this->load_share_image_from_url($url);
+	}
+
+	protected function share_image_remote_url(string $src): ?string
+	{
+		$src = trim(html_entity_decode($src, ENT_QUOTES, 'UTF-8'));
+		$parts = parse_url($src);
+		if (!is_array($parts))
+		{
+			return null;
+		}
+
+		$scheme = strtolower((string) ($parts['scheme'] ?? ''));
+		$host = strtolower((string) ($parts['host'] ?? ''));
+		if (!in_array($scheme, ['http', 'https'], true) || $host === '' || !$this->share_image_remote_host_allowed($host))
+		{
+			return null;
+		}
+
+		return $src;
+	}
+
+	protected function share_image_remote_host_allowed(string $host): bool
+	{
+		$host = trim($host, " \t\n\r\0\x0B[]");
+		if ($host === '' || in_array($host, ['localhost', '127.0.0.1', '::1'], true) || preg_match('#(?:^|\.)local(?:host)?$#i', $host))
+		{
+			return false;
+		}
+
+		if (filter_var($host, FILTER_VALIDATE_IP))
+		{
+			return (bool) filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+		}
+
+		$addresses = @gethostbynamel($host);
+		if (!$addresses)
+		{
+			return true;
+		}
+
+		foreach ($addresses as $address)
+		{
+			if (!filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE))
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	protected function share_image_attachment_id_from_src(string $src): int
