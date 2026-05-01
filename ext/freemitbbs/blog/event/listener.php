@@ -17,6 +17,8 @@ class listener implements EventSubscriberInterface
 	protected string $blog_topics_table;
 	protected array $blog_comments_disabled_topic_cache = [];
 	protected array $blog_profile_link_cache = [];
+	protected ?bool $nickname_profile_field_exists = null;
+	protected array $nickname_cache = [];
 
 	public function __construct(
 		\phpbb\auth\auth $auth,
@@ -45,6 +47,7 @@ class listener implements EventSubscriberInterface
 	{
 		return [
 			'core.user_setup' => 'load_language',
+			'core.modify_username_string' => 'append_profile_nickname_to_username',
 			'core.page_header' => 'assign_header_links',
 			'core.permissions' => 'add_permissions',
 			'core.viewtopic_modify_post_row' => 'add_send_to_blog_button',
@@ -75,6 +78,47 @@ class listener implements EventSubscriberInterface
 	public function load_ucp_language(): void
 	{
 		$this->language->add_lang('common', 'freemitbbs/blog');
+	}
+
+	public function append_profile_nickname_to_username($event): void
+	{
+		$mode = (string) ($event['mode'] ?? '');
+		$user_id = (int) ($event['user_id'] ?? 0);
+		if (!in_array($mode, ['full', 'no_profile'], true) || $user_id <= 0 || $user_id === ANONYMOUS)
+		{
+			return;
+		}
+
+		$nickname = $this->profile_nickname($user_id);
+		if ($nickname === '')
+		{
+			return;
+		}
+
+		$username = trim(html_entity_decode(strip_tags((string) ($event['username'] ?? '')), ENT_QUOTES, 'UTF-8'));
+		if ($username !== '' && utf8_clean_string($username) === utf8_clean_string($nickname))
+		{
+			return;
+		}
+
+		$suffix = '（' . htmlspecialchars(censor_text($nickname), ENT_QUOTES, 'UTF-8') . '）';
+		$username_string = (string) ($event['username_string'] ?? '');
+		if ($username_string === '' || strpos($username_string, $suffix) !== false)
+		{
+			return;
+		}
+
+		if (preg_match('#</(?:a|span)>$#', $username_string, $match, PREG_OFFSET_CAPTURE))
+		{
+			$position = (int) $match[0][1];
+			$username_string = substr($username_string, 0, $position) . $suffix . substr($username_string, $position);
+		}
+		else
+		{
+			$username_string .= $suffix;
+		}
+
+		$event['username_string'] = $username_string;
 	}
 
 	public function assign_header_links(): void
@@ -541,6 +585,48 @@ class listener implements EventSubscriberInterface
 			&& !$this->blog_comments_enabled_for_user($topic_poster);
 
 		return $this->blog_comments_disabled_topic_cache[$topic_id];
+	}
+
+	protected function profile_nickname(int $user_id): string
+	{
+		if (array_key_exists($user_id, $this->nickname_cache))
+		{
+			return $this->nickname_cache[$user_id];
+		}
+
+		$this->nickname_cache[$user_id] = '';
+		if (!$this->nickname_profile_field_exists())
+		{
+			return '';
+		}
+
+		$sql = 'SELECT pf_nick_name
+			FROM ' . PROFILE_FIELDS_DATA_TABLE . '
+			WHERE user_id = ' . (int) $user_id;
+		$result = $this->db->sql_query_limit($sql, 1);
+		$nickname = (string) $this->db->sql_fetchfield('pf_nick_name');
+		$this->db->sql_freeresult($result);
+
+		$this->nickname_cache[$user_id] = trim(html_entity_decode(strip_tags($nickname), ENT_QUOTES, 'UTF-8'));
+
+		return $this->nickname_cache[$user_id];
+	}
+
+	protected function nickname_profile_field_exists(): bool
+	{
+		if ($this->nickname_profile_field_exists !== null)
+		{
+			return $this->nickname_profile_field_exists;
+		}
+
+		$sql = 'SELECT field_id
+			FROM ' . PROFILE_FIELDS_TABLE . "
+			WHERE field_ident = 'nick_name'";
+		$result = $this->db->sql_query_limit($sql, 1);
+		$this->nickname_profile_field_exists = (bool) $this->db->sql_fetchfield('field_id');
+		$this->db->sql_freeresult($result);
+
+		return $this->nickname_profile_field_exists;
 	}
 
 	protected function has_public_blog_entries(int $user_id): bool
