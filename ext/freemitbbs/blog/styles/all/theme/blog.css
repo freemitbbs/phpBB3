@@ -89,6 +89,71 @@
 	margin: 0 0 8px;
 }
 
+.blog-share {
+	margin: 10px 0 14px;
+}
+
+.blog-share-heading {
+	color: #666666;
+	font-size: 0.92em;
+	font-weight: bold;
+	margin: 0 0 6px;
+}
+
+.blog-share-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.blog-share-button {
+	align-items: center;
+	display: inline-flex;
+	gap: 6px;
+	line-height: 1.35;
+	min-height: 32px;
+}
+
+.blog-share-mark {
+	align-items: center;
+	border-radius: 3px;
+	display: inline-flex;
+	font-size: 0.78em;
+	font-weight: bold;
+	height: 18px;
+	justify-content: center;
+	line-height: 1;
+	min-width: 18px;
+	padding: 0 3px;
+	text-shadow: none;
+}
+
+.blog-share-button:focus .blog-share-mark,
+.blog-share-button:hover .blog-share-mark {
+	text-shadow: none;
+}
+
+.blog-share-mark-xiaohongshu {
+	background: #ff2442;
+	color: #ffffff;
+}
+
+.blog-share-mark-zhihu {
+	background: #1772f6;
+	color: #ffffff;
+}
+
+.blog-share-feedback {
+	color: #666666;
+	font-size: 0.9em;
+	margin: 6px 0 0;
+	min-height: 1.35em;
+}
+
+.blog-share-feedback.error {
+	color: #bc2a4d;
+}
+
 .blog-read-more {
 	margin-top: 8px;
 }

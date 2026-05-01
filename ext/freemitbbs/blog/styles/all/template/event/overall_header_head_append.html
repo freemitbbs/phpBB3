@@ -1,3 +1,18 @@
 <!-- IF S_FREEMITBBS_BLOG_PAGE or S_FREEMITBBS_BLOG_POSTING -->
 	<!-- INCLUDECSS @freemitbbs_blog/blog.css -->
 <!-- ENDIF -->
+<!-- IF S_BLOG_ENTRY and not .SEO_METADATA -->
+	<meta name="description" content="{BLOG_META_DESCRIPTION}">
+	<meta property="og:type" content="article">
+	<meta property="og:title" content="{BLOG_META_TITLE}">
+	<meta property="og:description" content="{BLOG_META_DESCRIPTION}">
+	<meta property="og:url" content="{BLOG_SHARE_URL}">
+	<meta property="og:image" content="{BLOG_SHARE_IMAGE_URL}">
+	<meta property="article:published_time" content="{ENTRY_TIME_RFC3339}">
+	<meta name="twitter:card" content="summary">
+	<meta name="twitter:title" content="{BLOG_META_TITLE}">
+	<meta name="twitter:description" content="{BLOG_META_DESCRIPTION}">
+<!-- ENDIF -->
+<!-- IF S_BLOG_ENTRY -->
+	<!-- INCLUDEJS @freemitbbs_blog/js/blog_share.js -->
+<!-- ENDIF -->

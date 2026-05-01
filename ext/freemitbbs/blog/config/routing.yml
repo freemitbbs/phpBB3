@@ -20,6 +20,12 @@ freemitbbs_blog_entry:
     requirements:
         entry_id: \d+
 
+freemitbbs_blog_share_image:
+    path: /blog/entry/{entry_id}/share-image
+    defaults: { _controller: freemitbbs.blog.controller:share_image }
+    requirements:
+        entry_id: \d+
+
 freemitbbs_blog_manage:
     path: /blog/manage
     defaults: { _controller: freemitbbs.blog.controller:manage }

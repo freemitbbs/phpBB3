@@ -7,6 +7,9 @@ class main
 	private const PAGE_SIZE = 20;
 	private const TOP_BLOG_SIZE = 5;
 	private const EXCERPT_LENGTH = 100;
+	private const SHARE_EXCERPT_LENGTH = 180;
+	private const SHARE_IMAGE_WIDTH = 1080;
+	private const SHARE_IMAGE_HEIGHT = 1440;
 	private const COMMENT_PAGE_SIZE = 50;
 	private const TOP_BLOG_COLLAPSE_ID = 'freemitbbs_blog_top';
 	private const BLOG_HEADER_IMAGE_EXTENSIONS = ['gif', 'jpg', 'jpeg', 'png', 'webp'];
@@ -226,6 +229,53 @@ class main
 		$this->assign_common_vars($forum);
 
 		return $this->helper->render('@freemitbbs_blog/blog_entry.html', censor_text($entry['topic_title']));
+	}
+
+	public function share_image(int $entry_id): \Symfony\Component\HttpFoundation\Response
+	{
+		$this->boot();
+
+		$forum = $this->require_blog_forum();
+		$entry = $this->get_topic_entry((int) $entry_id, (int) $forum['forum_id']);
+		if (!$entry || !$this->can_view_topic($entry) || !empty($entry['is_draft']) || (int) $entry['topic_visibility'] !== ITEM_APPROVED)
+		{
+			throw new \phpbb\exception\http_exception(404, 'BLOG_ENTRY_NOT_FOUND');
+		}
+
+		if (!extension_loaded('gd') || !function_exists('imagecreatetruecolor') || !function_exists('imagepng'))
+		{
+			throw new \phpbb\exception\http_exception(500, 'GENERAL_ERROR');
+		}
+
+		$text = generate_text_for_display(
+			$entry['post_text'],
+			$entry['bbcode_uid'],
+			$entry['bbcode_bitfield'],
+			$this->post_options($entry)
+		);
+		$attachments = $this->get_post_attachments($entry);
+		$display_text = $text;
+		if (!empty($attachments))
+		{
+			$display_attachments = $attachments;
+			$update_count = [];
+			parse_attachments((int) $entry['forum_id'], $display_text, $display_attachments, $update_count);
+		}
+
+		$post_image = $this->find_share_post_image($entry, $attachments, $display_text);
+		$image = $this->render_share_image($entry, $display_text, $post_image);
+		if ($this->is_gd_image($post_image))
+		{
+			imagedestroy($post_image);
+		}
+		$filename = 'blog-share-' . (int) $entry['topic_id'] . '.png';
+
+		return new \Symfony\Component\HttpFoundation\Response($image, 200, [
+			'Content-Type' => 'image/png',
+			'Content-Disposition' => 'inline; filename="' . $filename . '"',
+			'Cache-Control' => 'public, max-age=3600',
+			'X-Content-Type-Options' => 'nosniff',
+		]);
 	}
 
 	public function manage()
@@ -1787,6 +1837,7 @@ class main
 		);
 
 		$this->template->assign_vars($this->entry_template_vars($entry, false));
+		$this->template->assign_vars($this->entry_share_template_vars($entry, $text));
 		$this->template->assign_vars([
 			'BLOG_TEXT' => $text,
 			'BLOG_COMMENT_COUNT' => $comment_total,
@@ -1849,6 +1900,1105 @@ class main
 				't=' . (int) ($row['source_topic_id'] ?? 0) . '&amp;p=' . $source_post_id . '#p' . $source_post_id
 			) : '',
 		];
+	}
+
+	protected function entry_share_template_vars(array $entry, string $html_text): array
+	{
+		$topic_id = (int) $entry['topic_id'];
+		$title = censor_text((string) $entry['topic_title']);
+		$share_url = $this->absolute_entry_url($topic_id);
+		$share_image_url = $this->absolute_share_image_url($topic_id);
+		$excerpt = $this->share_excerpt($this->plain_text_from_html($html_text));
+		$description = $excerpt !== '' ? $excerpt : $title;
+		$reddit_url = 'https://www.reddit.com/submit?url=' . rawurlencode($share_url) . '&title=' . rawurlencode($title);
+
+		return [
+			'BLOG_SHARE_TITLE' => $this->escape_attribute($title),
+			'BLOG_SHARE_EXCERPT' => $this->escape_attribute($excerpt),
+			'BLOG_SHARE_URL' => $this->escape_attribute($share_url),
+			'BLOG_SHARE_IMAGE_URL' => $this->escape_attribute($share_image_url),
+			'BLOG_META_TITLE' => $this->escape_attribute($title),
+			'BLOG_META_DESCRIPTION' => $this->escape_attribute($description),
+			'U_BLOG_SHARE_IMAGE' => $this->escape_attribute($this->helper->route('freemitbbs_blog_share_image', ['entry_id' => $topic_id])),
+			'U_BLOG_SHARE_REDDIT' => $this->escape_attribute($reddit_url),
+			'U_CANONICAL' => $this->escape_attribute($share_url),
+		];
+	}
+
+	protected function absolute_entry_url(int $topic_id): string
+	{
+		return $this->helper->route(
+			'freemitbbs_blog_entry',
+			['entry_id' => $topic_id],
+			false,
+			'',
+			\Symfony\Component\Routing\Generator\UrlGeneratorInterface::ABSOLUTE_URL
+		);
+	}
+
+	protected function absolute_share_image_url(int $topic_id): string
+	{
+		return $this->helper->route(
+			'freemitbbs_blog_share_image',
+			['entry_id' => $topic_id],
+			false,
+			'',
+			\Symfony\Component\Routing\Generator\UrlGeneratorInterface::ABSOLUTE_URL
+		);
+	}
+
+	protected function plain_text_from_html(string $html_text): string
+	{
+		$text = html_entity_decode(strip_tags($html_text), ENT_QUOTES, 'UTF-8');
+
+		return trim((string) preg_replace('/\s+/u', ' ', $text));
+	}
+
+	protected function share_excerpt(string $plain_text): string
+	{
+		$excerpt = trim(truncate_string($plain_text, self::SHARE_EXCERPT_LENGTH, self::SHARE_EXCERPT_LENGTH, false));
+		if ($excerpt === '')
+		{
+			return '';
+		}
+
+		return rtrim((string) preg_replace('/(?:\.\.\.|…)\s*$/u', '', $excerpt));
+	}
+
+	protected function render_share_image(array $entry, string $html_text, $post_image = null): string
+	{
+		$image = imagecreatetruecolor(self::SHARE_IMAGE_WIDTH, self::SHARE_IMAGE_HEIGHT);
+		imagealphablending($image, true);
+		if (function_exists('imageantialias'))
+		{
+			imageantialias($image, true);
+		}
+
+		$background = $this->allocate_hex_color($image, 'f8f5ef');
+		$card = $this->allocate_hex_color($image, 'ffffff');
+		$red = $this->allocate_hex_color($image, 'ff2442');
+		$ink = $this->allocate_hex_color($image, '232323');
+		$muted = $this->allocate_hex_color($image, '686868');
+		$rule = $this->allocate_hex_color($image, 'e6ded2');
+		$soft = $this->allocate_hex_color($image, 'fff3f5');
+		$qr_light = $this->allocate_hex_color($image, 'ffffff');
+
+		imagefilledrectangle($image, 0, 0, self::SHARE_IMAGE_WIDTH, self::SHARE_IMAGE_HEIGHT, $background);
+		imagefilledrectangle($image, 0, 0, self::SHARE_IMAGE_WIDTH, 18, $red);
+		$this->draw_rounded_rectangle($image, 54, 54, self::SHARE_IMAGE_WIDTH - 54, self::SHARE_IMAGE_HEIGHT - 54, 38, $card);
+
+		$font = $this->share_image_font_path();
+		$title = censor_text((string) $entry['topic_title']);
+		$plain_text = $this->plain_text_from_html($html_text);
+		$excerpt = $this->share_excerpt($plain_text);
+		$site_name = trim((string) ($this->config['sitename'] ?? ''));
+		$site_name = $site_name !== '' ? $site_name : $this->language->lang('BLOGS');
+		$author = trim((string) ($entry['username'] ?? ''));
+		$time = (int) ($entry['topic_time'] ?: $entry['topic_last_post_time']);
+		$share_url = $this->absolute_entry_url((int) $entry['topic_id']);
+		$has_post_image = $this->is_gd_image($post_image);
+
+		$this->draw_rounded_rectangle($image, 132, 108, 226, 154, 10, $red);
+		$this->draw_share_image_text($image, 'RED', 24, 154, 140, $card, $font);
+		$this->draw_share_image_text($image, $this->language->lang('BLOG_SHARE_XIAOHONGSHU_IMAGE'), 25, 246, 141, $muted, $font);
+
+		$y = 214;
+		$y = $this->draw_share_image_text_box($image, $title, $font, 56, 132, $y, 816, 72, $ink, $has_post_image ? 3 : 5);
+		$y += $has_post_image ? 20 : 30;
+
+		if ($excerpt !== '')
+		{
+			$y = $this->draw_share_image_text_box($image, $excerpt, $font, 31, 132, $y, 792, 46, $muted, $has_post_image ? 3 : 8);
+		}
+
+		if ($has_post_image)
+		{
+			$hero_x = 132;
+			$hero_y = max($y + 30, 560);
+			$hero_width = 816;
+			$hero_height = max(320, min(430, 1000 - $hero_y));
+			$this->draw_rounded_rectangle($image, $hero_x - 2, $hero_y - 2, $hero_x + $hero_width + 2, $hero_y + $hero_height + 2, 24, $rule);
+			$this->draw_rounded_image($image, $post_image, $hero_x, $hero_y, $hero_width, $hero_height, 22);
+		}
+
+		$meta = $author !== ''
+			? $this->language->lang('BLOG_SHARE_POSTER_BY', $author)
+			: $site_name;
+		$meta .= ' / ' . $this->user->format_date($time);
+		$this->draw_share_image_text($image, $meta, 24, 132, 1046, $muted, $font);
+		imagefilledrectangle($image, 132, 1078, 948, 1080, $rule);
+
+		$qr_matrix = $this->build_qr_matrix($share_url);
+		$qr_x = 708;
+		$qr_y = 1128;
+		$qr_size = 220;
+		$this->draw_rounded_rectangle($image, $qr_x - 22, $qr_y - 22, $qr_x + $qr_size + 22, $qr_y + $qr_size + 22, 24, $soft);
+		if ($qr_matrix !== null)
+		{
+			$this->draw_qr_code($image, $qr_matrix, $qr_x, $qr_y, $qr_size, $ink, $qr_light);
+			$this->draw_share_image_text($image, $this->language->lang('BLOG_SHARE_POSTER_SCAN'), 22, $qr_x + 38, $qr_y + $qr_size + 34, $muted, $font);
+		}
+		else
+		{
+			$this->draw_share_image_text_box($image, $share_url, $font, 20, $qr_x, $qr_y + 38, $qr_size, 30, $ink, 5);
+		}
+
+		$this->draw_share_image_text($image, $this->language->lang('BLOG_SHARE_POSTER_FROM', $site_name), 28, 132, 1164, $ink, $font);
+		$this->draw_share_image_text_box($image, $share_url, $font, 22, 132, 1204, 516, 34, $muted, 3);
+
+		ob_start();
+		imagepng($image, null, 9);
+		$png = (string) ob_get_clean();
+		imagedestroy($image);
+
+		return $png;
+	}
+
+	protected function share_image_font_path(): ?string
+	{
+		$paths = [
+			'/System/Library/Fonts/PingFang.ttc',
+			'/System/Library/Fonts/Hiragino Sans GB.ttc',
+			'/System/Library/Fonts/STHeiti Medium.ttc',
+			'/System/Library/Fonts/STHeiti Light.ttc',
+			'/Library/Fonts/NotoSansCJK-Regular.ttc',
+			'/Library/Fonts/NotoSansSC-Regular.otf',
+			'/Library/Fonts/SourceHanSansSC-Regular.otf',
+			'/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+			'/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf',
+			'/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.otf',
+			'/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+			'/usr/share/fonts/truetype/noto/NotoSansCJKsc-Regular.otf',
+			'/usr/share/fonts/truetype/noto/NotoSansSC-Regular.ttf',
+			'/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
+			'/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+			'/usr/share/fonts/truetype/arphic/uming.ttc',
+			'/usr/share/fonts/truetype/arphic/ukai.ttc',
+			'/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
+			'/Library/Fonts/Arial Unicode.ttf',
+			'/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
+			'/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+			'/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+		];
+
+		foreach ($paths as $path)
+		{
+			if (is_readable($path))
+			{
+				return $path;
+			}
+		}
+
+		return null;
+	}
+
+	protected function find_share_post_image(array $entry, array $attachments, string $html_text)
+	{
+		foreach ($this->extract_share_image_sources($html_text) as $src)
+		{
+			$image = $this->load_share_image_from_html_src($entry, $attachments, $src);
+			if ($this->is_gd_image($image))
+			{
+				return $image;
+			}
+		}
+
+		foreach ($attachments as $attachment)
+		{
+			$image = $this->load_share_image_from_attachment($attachment);
+			if ($this->is_gd_image($image))
+			{
+				return $image;
+			}
+		}
+
+		return null;
+	}
+
+	protected function extract_share_image_sources(string $html_text): array
+	{
+		$sources = [];
+		if (class_exists('\DOMDocument'))
+		{
+			$document = new \DOMDocument();
+			$previous = libxml_use_internal_errors(true);
+			$loaded = $document->loadHTML('<?xml encoding="utf-8" ?><div>' . $html_text . '</div>');
+			libxml_clear_errors();
+			libxml_use_internal_errors($previous);
+			if ($loaded)
+			{
+				foreach ($document->getElementsByTagName('img') as $image)
+				{
+					$src = trim((string) $image->getAttribute('src'));
+					if ($src !== '')
+					{
+						$sources[] = $src;
+					}
+				}
+			}
+		}
+
+		if (!$sources && preg_match_all('#<img\b[^>]*\bsrc=(["\']?)([^"\'\s>]+)\1#iu', $html_text, $matches))
+		{
+			$sources = $matches[2];
+		}
+
+		return array_values(array_unique(array_map(static fn($src) => html_entity_decode(trim($src), ENT_QUOTES, 'UTF-8'), $sources)));
+	}
+
+	protected function load_share_image_from_html_src(array $entry, array $attachments, string $src)
+	{
+		$attachment_id = $this->share_image_attachment_id_from_src($src);
+		if ($attachment_id > 0)
+		{
+			foreach ($attachments as $attachment)
+			{
+				if ((int) ($attachment['attach_id'] ?? 0) === $attachment_id)
+				{
+					return $this->load_share_image_from_attachment($attachment);
+				}
+			}
+		}
+
+		$path = $this->share_image_local_path_from_src($entry, $src);
+		if ($path === null)
+		{
+			return null;
+		}
+
+		return $this->load_share_image_from_path($path);
+	}
+
+	protected function share_image_attachment_id_from_src(string $src): int
+	{
+		$src = html_entity_decode($src, ENT_QUOTES, 'UTF-8');
+		$parts = parse_url($src);
+		if (!is_array($parts))
+		{
+			return 0;
+		}
+
+		$path = (string) ($parts['path'] ?? '');
+		if (!preg_match('#(?:^|/)download/file\.' . preg_quote($this->php_ext, '#') . '$#', $path))
+		{
+			return 0;
+		}
+
+		$params = [];
+		parse_str(str_replace('&amp;', '&', (string) ($parts['query'] ?? '')), $params);
+
+		return (int) ($params['id'] ?? 0);
+	}
+
+	protected function share_image_local_path_from_src(array $entry, string $src): ?string
+	{
+		$src = trim(html_entity_decode($src, ENT_QUOTES, 'UTF-8'));
+		if ($src === '' || preg_match('#^(?:data|javascript):#i', $src))
+		{
+			return null;
+		}
+
+		$parts = parse_url($src);
+		if ($parts === false)
+		{
+			return null;
+		}
+
+		if (!empty($parts['scheme']) || !empty($parts['host']))
+		{
+			if (empty($parts['host']) || !$this->is_share_image_same_host($entry, $parts))
+			{
+				return null;
+			}
+		}
+
+		$path = rawurldecode((string) ($parts['path'] ?? ''));
+		if ($path === '' || preg_match('#(?:^|/)download/file\.' . preg_quote($this->php_ext, '#') . '$#', $path))
+		{
+			return null;
+		}
+
+		$root = realpath($this->root_path);
+		if ($root === false)
+		{
+			return null;
+		}
+
+		$path = $this->strip_share_image_board_web_root($entry, $path);
+		if ($path[0] === '/')
+		{
+			$candidate = $root . '/' . ltrim($path, '/');
+		}
+		else
+		{
+			$candidate = $root . '/' . preg_replace('#^(?:\./|\../)+#', '', $path);
+		}
+
+		$real = realpath($candidate);
+		if ($real === false || !is_file($real) || strpos($real, $root . DIRECTORY_SEPARATOR) !== 0)
+		{
+			return null;
+		}
+
+		return $real;
+	}
+
+	protected function strip_share_image_board_web_root(array $entry, string $path): string
+	{
+		$board = parse_url($this->absolute_entry_url((int) $entry['topic_id']));
+		if (!is_array($board))
+		{
+			return $path;
+		}
+
+		$board_path = (string) ($board['path'] ?? '');
+		$app_position = strpos($board_path, '/app.' . $this->php_ext);
+		if ($app_position === false)
+		{
+			return $path;
+		}
+
+		$web_root = rtrim(substr($board_path, 0, $app_position), '/');
+		if ($web_root === '' || strpos($path, $web_root . '/') !== 0)
+		{
+			return $path;
+		}
+
+		return substr($path, strlen($web_root));
+	}
+
+	protected function is_share_image_same_host(array $entry, array $parts): bool
+	{
+		$board = parse_url($this->absolute_entry_url((int) $entry['topic_id']));
+		if (!is_array($board))
+		{
+			return false;
+		}
+
+		$host = strtolower((string) ($parts['host'] ?? ''));
+		$board_host = strtolower((string) ($board['host'] ?? ''));
+		$port = (int) ($parts['port'] ?? 0);
+		$board_port = (int) ($board['port'] ?? 0);
+
+		return $host !== '' && $host === $board_host && $port === $board_port;
+	}
+
+	protected function load_share_image_from_attachment(array $attachment)
+	{
+		if (!$this->share_attachment_is_image($attachment))
+		{
+			return null;
+		}
+
+		$physical_filename = utf8_basename((string) ($attachment['physical_filename'] ?? ''));
+		if ($physical_filename !== '' && $this->attachment_local_file_is_usable($physical_filename, false))
+		{
+			return $this->load_share_image_from_path($this->attachment_path($physical_filename, false));
+		}
+
+		if ($this->attachment_storage && method_exists($this->attachment_storage, 'build_download_url'))
+		{
+			$url = $this->attachment_storage->build_download_url($attachment, ATTACHMENT_CATEGORY_IMAGE, 'view', false);
+			if ($url !== null)
+			{
+				return $this->load_share_image_from_url($url);
+			}
+		}
+
+		return null;
+	}
+
+	protected function share_attachment_is_image(array $attachment): bool
+	{
+		$mimetype = strtolower((string) ($attachment['mimetype'] ?? ''));
+		$extension = strtolower((string) ($attachment['extension'] ?? ''));
+
+		return strpos($mimetype, 'image/') === 0 || in_array($extension, ['gif', 'jpg', 'jpeg', 'png', 'webp'], true);
+	}
+
+	protected function load_share_image_from_path(string $path)
+	{
+		if (!is_readable($path) || (is_file($path) && filesize($path) > 20 * 1024 * 1024))
+		{
+			return null;
+		}
+
+		$data = @file_get_contents($path);
+		if ($data === false || $data === '')
+		{
+			return null;
+		}
+
+		return $this->load_share_image_from_string($data);
+	}
+
+	protected function load_share_image_from_url(string $url)
+	{
+		if (!preg_match('#^https?://#i', $url))
+		{
+			return null;
+		}
+
+		$context = stream_context_create([
+			'http' => [
+				'timeout' => 5,
+				'follow_location' => 0,
+			],
+		]);
+		$data = @file_get_contents($url, false, $context);
+		if ($data === false || $data === '' || strlen($data) > 20 * 1024 * 1024)
+		{
+			return null;
+		}
+
+		return $this->load_share_image_from_string($data);
+	}
+
+	protected function load_share_image_from_string(string $data)
+	{
+		if (substr($data, 0, 4) === '<svg')
+		{
+			return null;
+		}
+
+		$image = @imagecreatefromstring($data);
+
+		return $this->is_gd_image($image) ? $image : null;
+	}
+
+	protected function is_gd_image($image): bool
+	{
+		return $image instanceof \GdImage || (is_resource($image) && get_resource_type($image) === 'gd');
+	}
+
+	protected function allocate_hex_color($image, string $hex): int
+	{
+		$hex = ltrim($hex, '#');
+
+		return imagecolorallocate(
+			$image,
+			hexdec(substr($hex, 0, 2)),
+			hexdec(substr($hex, 2, 2)),
+			hexdec(substr($hex, 4, 2))
+		);
+	}
+
+	protected function draw_rounded_rectangle($image, int $x1, int $y1, int $x2, int $y2, int $radius, int $color): void
+	{
+		$radius = max(0, min($radius, (int) floor(($x2 - $x1) / 2), (int) floor(($y2 - $y1) / 2)));
+		imagefilledrectangle($image, $x1 + $radius, $y1, $x2 - $radius, $y2, $color);
+		imagefilledrectangle($image, $x1, $y1 + $radius, $x2, $y2 - $radius, $color);
+		imagefilledellipse($image, $x1 + $radius, $y1 + $radius, $radius * 2, $radius * 2, $color);
+		imagefilledellipse($image, $x2 - $radius, $y1 + $radius, $radius * 2, $radius * 2, $color);
+		imagefilledellipse($image, $x1 + $radius, $y2 - $radius, $radius * 2, $radius * 2, $color);
+		imagefilledellipse($image, $x2 - $radius, $y2 - $radius, $radius * 2, $radius * 2, $color);
+	}
+
+	protected function draw_rounded_image($image, $source, int $x, int $y, int $width, int $height, int $radius): void
+	{
+		if (!$this->is_gd_image($source) || $width < 1 || $height < 1)
+		{
+			return;
+		}
+
+		$source_width = imagesx($source);
+		$source_height = imagesy($source);
+		if ($source_width < 1 || $source_height < 1)
+		{
+			return;
+		}
+
+		$scale = max($width / $source_width, $height / $source_height);
+		$crop_width = min($source_width, (int) ceil($width / $scale));
+		$crop_height = min($source_height, (int) ceil($height / $scale));
+		$source_x = max(0, (int) floor(($source_width - $crop_width) / 2));
+		$source_y = max(0, (int) floor(($source_height - $crop_height) / 2));
+
+		$canvas = imagecreatetruecolor($width, $height);
+		imagealphablending($canvas, false);
+		imagesavealpha($canvas, true);
+		$transparent = imagecolorallocatealpha($canvas, 0, 0, 0, 127);
+		imagefilledrectangle($canvas, 0, 0, $width, $height, $transparent);
+		imagecopyresampled($canvas, $source, 0, 0, $source_x, $source_y, $width, $height, $crop_width, $crop_height);
+		$this->mask_rounded_image_corners($canvas, $width, $height, $radius);
+
+		imagecopy($image, $canvas, $x, $y, 0, 0, $width, $height);
+		imagedestroy($canvas);
+	}
+
+	protected function mask_rounded_image_corners($image, int $width, int $height, int $radius): void
+	{
+		$radius = max(0, min($radius, (int) floor($width / 2), (int) floor($height / 2)));
+		if ($radius < 1)
+		{
+			return;
+		}
+
+		$transparent = imagecolorallocatealpha($image, 0, 0, 0, 127);
+		$radius_squared = $radius * $radius;
+		for ($py = 0; $py < $radius; $py++)
+		{
+			for ($px = 0; $px < $radius; $px++)
+			{
+				$dx = $radius - $px;
+				$dy = $radius - $py;
+				if ($dx * $dx + $dy * $dy <= $radius_squared)
+				{
+					continue;
+				}
+
+				imagesetpixel($image, $px, $py, $transparent);
+				imagesetpixel($image, $width - $px - 1, $py, $transparent);
+				imagesetpixel($image, $px, $height - $py - 1, $transparent);
+				imagesetpixel($image, $width - $px - 1, $height - $py - 1, $transparent);
+			}
+		}
+	}
+
+	protected function draw_share_image_text($image, string $text, int $size, int $x, int $baseline, int $color, ?string $font): void
+	{
+		$text = trim($text);
+		if ($text === '')
+		{
+			return;
+		}
+
+		if ($font !== null && function_exists('imagettftext'))
+		{
+			imagettftext($image, $size, 0, $x, $baseline, $color, $font, $text);
+			return;
+		}
+
+		imagestring($image, 5, $x, max(0, $baseline - 18), $text, $color);
+	}
+
+	protected function draw_share_image_text_box($image, string $text, ?string $font, int $size, int $x, int $y, int $max_width, int $line_height, int $color, int $max_lines): int
+	{
+		$lines = $this->wrap_share_image_text($text, $font, $size, $max_width, $max_lines);
+		foreach ($lines as $line)
+		{
+			$this->draw_share_image_text($image, $line, $size, $x, $y + $size, $color, $font);
+			$y += $line_height;
+		}
+
+		return $y;
+	}
+
+	protected function wrap_share_image_text(string $text, ?string $font, int $size, int $max_width, int $max_lines): array
+	{
+		$text = trim((string) preg_replace('/\s+/u', ' ', $text));
+		if ($text === '' || $max_lines < 1)
+		{
+			return [];
+		}
+
+		$words = preg_split('/\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY);
+		if ($words === false)
+		{
+			$words = [$text];
+		}
+		$lines = [];
+		$line = '';
+		$truncated = false;
+
+		foreach ($words as $word_index => $word)
+		{
+			$candidate = $line === '' ? $word : $line . ' ' . $word;
+			if ($this->share_image_text_width($candidate, $font, $size) <= $max_width)
+			{
+				$line = $candidate;
+				continue;
+			}
+
+			if ($line !== '')
+			{
+				$lines[] = rtrim($line);
+				$line = '';
+				if (count($lines) >= $max_lines)
+				{
+					$truncated = true;
+					break;
+				}
+			}
+
+			if ($this->share_image_text_width($word, $font, $size) <= $max_width)
+			{
+				$line = $word;
+				continue;
+			}
+
+			$chars = preg_split('//u', $word, -1, PREG_SPLIT_NO_EMPTY);
+			if ($chars === false)
+			{
+				$chars = str_split($word);
+			}
+
+			foreach ($chars as $char)
+			{
+				$candidate = $line . $char;
+				if ($line !== '' && $this->share_image_text_width($candidate, $font, $size) > $max_width)
+				{
+					$lines[] = rtrim($line);
+					$line = ltrim($char);
+					if (count($lines) >= $max_lines)
+					{
+						$truncated = true;
+						break 2;
+					}
+					continue;
+				}
+
+				$line = $candidate;
+			}
+
+			if ($word_index < count($words) - 1 && count($lines) >= $max_lines)
+			{
+				$truncated = true;
+				break;
+			}
+		}
+
+		if ($line !== '' && count($lines) < $max_lines)
+		{
+			$lines[] = rtrim($line);
+		}
+
+		if ($truncated && count($lines) > 0)
+		{
+			$last = min($max_lines, count($lines)) - 1;
+			$lines[$last] = $this->fit_share_image_text($lines[$last], $font, $size, $max_width, '...');
+		}
+
+		return $lines;
+	}
+
+	protected function share_image_text_width(string $text, ?string $font, int $size): int
+	{
+		if ($font !== null && function_exists('imagettfbbox'))
+		{
+			$box = imagettfbbox($size, 0, $font, $text);
+			if (is_array($box))
+			{
+				return abs((int) $box[2] - (int) $box[0]);
+			}
+		}
+
+		$length = function_exists('mb_strlen') ? mb_strlen($text, 'UTF-8') : strlen($text);
+
+		return $length * imagefontwidth(5);
+	}
+
+	protected function fit_share_image_text(string $text, ?string $font, int $size, int $max_width, string $suffix): string
+	{
+		$text = rtrim($text);
+		while ($text !== '' && $this->share_image_text_width($text . $suffix, $font, $size) > $max_width)
+		{
+			$text = function_exists('mb_substr')
+				? mb_substr($text, 0, -1, 'UTF-8')
+				: substr($text, 0, -1);
+			$text = rtrim($text);
+		}
+
+		return $text . $suffix;
+	}
+
+	protected function draw_qr_code($image, array $matrix, int $x, int $y, int $size, int $dark, int $light): void
+	{
+		$module_count = count($matrix);
+		$quiet_zone = 4;
+		$module_size = max(1, (int) floor($size / ($module_count + $quiet_zone * 2)));
+		$actual_size = $module_size * ($module_count + $quiet_zone * 2);
+		$offset_x = $x + (int) floor(($size - $actual_size) / 2);
+		$offset_y = $y + (int) floor(($size - $actual_size) / 2);
+
+		imagefilledrectangle($image, $offset_x, $offset_y, $offset_x + $actual_size, $offset_y + $actual_size, $light);
+		for ($row = 0; $row < $module_count; $row++)
+		{
+			for ($col = 0; $col < $module_count; $col++)
+			{
+				if (empty($matrix[$row][$col]))
+				{
+					continue;
+				}
+
+				$left = $offset_x + ($col + $quiet_zone) * $module_size;
+				$top = $offset_y + ($row + $quiet_zone) * $module_size;
+				imagefilledrectangle($image, $left, $top, $left + $module_size - 1, $top + $module_size - 1, $dark);
+			}
+		}
+	}
+
+	protected function build_qr_matrix(string $text): ?array
+	{
+		$bytes = array_values(unpack('C*', $text));
+		$specs = [
+			1 => ['data' => 19, 'ecc' => 7, 'blocks' => [19]],
+			2 => ['data' => 34, 'ecc' => 10, 'blocks' => [34]],
+			3 => ['data' => 55, 'ecc' => 15, 'blocks' => [55]],
+			4 => ['data' => 80, 'ecc' => 20, 'blocks' => [80]],
+			5 => ['data' => 108, 'ecc' => 26, 'blocks' => [108]],
+			6 => ['data' => 136, 'ecc' => 18, 'blocks' => [68, 68]],
+		];
+
+		$version = 0;
+		$spec = null;
+		foreach ($specs as $candidate_version => $candidate_spec)
+		{
+			if (4 + 8 + count($bytes) * 8 <= $candidate_spec['data'] * 8)
+			{
+				$version = $candidate_version;
+				$spec = $candidate_spec;
+				break;
+			}
+		}
+
+		if ($spec === null)
+		{
+			return null;
+		}
+
+		$bits = [];
+		$this->qr_append_bits($bits, 4, 4);
+		$this->qr_append_bits($bits, count($bytes), 8);
+		foreach ($bytes as $byte)
+		{
+			$this->qr_append_bits($bits, $byte, 8);
+		}
+
+		$capacity_bits = $spec['data'] * 8;
+		$terminator = min(4, $capacity_bits - count($bits));
+		for ($i = 0; $i < $terminator; $i++)
+		{
+			$bits[] = 0;
+		}
+		while (count($bits) % 8 !== 0)
+		{
+			$bits[] = 0;
+		}
+
+		$data = [];
+		for ($i = 0; $i < count($bits); $i += 8)
+		{
+			$value = 0;
+			for ($j = 0; $j < 8; $j++)
+			{
+				$value = ($value << 1) | $bits[$i + $j];
+			}
+			$data[] = $value;
+		}
+		for ($pad = 0xec; count($data) < $spec['data']; $pad = $pad === 0xec ? 0x11 : 0xec)
+		{
+			$data[] = $pad;
+		}
+
+		$blocks = [];
+		$offset = 0;
+		foreach ($spec['blocks'] as $block_length)
+		{
+			$blocks[] = array_slice($data, $offset, $block_length);
+			$offset += $block_length;
+		}
+
+		$ecc_blocks = [];
+		foreach ($blocks as $block)
+		{
+			$ecc_blocks[] = $this->qr_reed_solomon_remainder($block, $spec['ecc']);
+		}
+
+		$codewords = [];
+		$max_data_length = max($spec['blocks']);
+		for ($i = 0; $i < $max_data_length; $i++)
+		{
+			foreach ($blocks as $block)
+			{
+				if (array_key_exists($i, $block))
+				{
+					$codewords[] = $block[$i];
+				}
+			}
+		}
+		for ($i = 0; $i < $spec['ecc']; $i++)
+		{
+			foreach ($ecc_blocks as $block)
+			{
+				$codewords[] = $block[$i];
+			}
+		}
+
+		$codeword_bits = [];
+		foreach ($codewords as $codeword)
+		{
+			$this->qr_append_bits($codeword_bits, $codeword, 8);
+		}
+
+		return $this->qr_draw_matrix($version, $codeword_bits);
+	}
+
+	protected function qr_append_bits(array &$bits, int $value, int $length): void
+	{
+		for ($i = $length - 1; $i >= 0; $i--)
+		{
+			$bits[] = ($value >> $i) & 1;
+		}
+	}
+
+	protected function qr_reed_solomon_remainder(array $data, int $degree): array
+	{
+		$generator = $this->qr_reed_solomon_generator($degree);
+		$result = array_fill(0, $degree, 0);
+		foreach ($data as $byte)
+		{
+			$factor = $byte ^ $result[0];
+			array_shift($result);
+			$result[] = 0;
+			foreach ($generator as $i => $coefficient)
+			{
+				$result[$i] ^= $this->qr_gf_multiply($coefficient, $factor);
+			}
+		}
+
+		return $result;
+	}
+
+	protected function qr_reed_solomon_generator(int $degree): array
+	{
+		$poly = [1];
+		[$exp] = $this->qr_gf_tables();
+		for ($i = 0; $i < $degree; $i++)
+		{
+			$next = array_fill(0, count($poly) + 1, 0);
+			foreach ($poly as $j => $coefficient)
+			{
+				$next[$j] ^= $this->qr_gf_multiply($coefficient, 1);
+				$next[$j + 1] ^= $this->qr_gf_multiply($coefficient, $exp[$i]);
+			}
+			$poly = $next;
+		}
+		array_shift($poly);
+
+		return $poly;
+	}
+
+	protected function qr_gf_multiply(int $x, int $y): int
+	{
+		if ($x === 0 || $y === 0)
+		{
+			return 0;
+		}
+
+		[$exp, $log] = $this->qr_gf_tables();
+
+		return $exp[$log[$x] + $log[$y]];
+	}
+
+	protected function qr_gf_tables(): array
+	{
+		static $tables = null;
+		if ($tables !== null)
+		{
+			return $tables;
+		}
+
+		$exp = [];
+		$log = [];
+		$x = 1;
+		for ($i = 0; $i < 255; $i++)
+		{
+			$exp[$i] = $x;
+			$log[$x] = $i;
+			$x <<= 1;
+			if (($x & 0x100) !== 0)
+			{
+				$x ^= 0x11d;
+			}
+		}
+		for ($i = 255; $i < 512; $i++)
+		{
+			$exp[$i] = $exp[$i - 255];
+		}
+
+		$tables = [$exp, $log];
+
+		return $tables;
+	}
+
+	protected function qr_draw_matrix(int $version, array $bits): array
+	{
+		$size = 21 + ($version - 1) * 4;
+		$matrix = [];
+		$reserved = [];
+		for ($y = 0; $y < $size; $y++)
+		{
+			$matrix[$y] = array_fill(0, $size, false);
+			$reserved[$y] = array_fill(0, $size, false);
+		}
+
+		$this->qr_place_finder($matrix, $reserved, 0, 0);
+		$this->qr_place_finder($matrix, $reserved, $size - 7, 0);
+		$this->qr_place_finder($matrix, $reserved, 0, $size - 7);
+		$this->qr_place_alignment_patterns($matrix, $reserved, $version);
+		$this->qr_place_timing_patterns($matrix, $reserved);
+		$this->qr_place_format_bits($matrix, $reserved, 0);
+
+		$bit_index = 0;
+		$upward = true;
+		for ($right = $size - 1; $right >= 1; $right -= 2)
+		{
+			if ($right === 6)
+			{
+				$right--;
+			}
+
+			for ($vertical = 0; $vertical < $size; $vertical++)
+			{
+				$y = $upward ? $size - 1 - $vertical : $vertical;
+				for ($offset = 0; $offset < 2; $offset++)
+				{
+					$x = $right - $offset;
+					if ($reserved[$y][$x])
+					{
+						continue;
+					}
+
+					$bit = $bit_index < count($bits) ? $bits[$bit_index++] : 0;
+					if ((($x + $y) & 1) === 0)
+					{
+						$bit ^= 1;
+					}
+					$matrix[$y][$x] = (bool) $bit;
+				}
+			}
+			$upward = !$upward;
+		}
+
+		return $matrix;
+	}
+
+	protected function qr_place_finder(array &$matrix, array &$reserved, int $left, int $top): void
+	{
+		for ($dy = -1; $dy <= 7; $dy++)
+		{
+			for ($dx = -1; $dx <= 7; $dx++)
+			{
+				$x = $left + $dx;
+				$y = $top + $dy;
+				if (!isset($matrix[$y][$x]))
+				{
+					continue;
+				}
+
+				$is_black = $dx >= 0 && $dx <= 6 && $dy >= 0 && $dy <= 6
+					&& ($dx === 0 || $dx === 6 || $dy === 0 || $dy === 6 || ($dx >= 2 && $dx <= 4 && $dy >= 2 && $dy <= 4));
+				$this->qr_set_module($matrix, $reserved, $x, $y, $is_black);
+			}
+		}
+	}
+
+	protected function qr_place_alignment_patterns(array &$matrix, array &$reserved, int $version): void
+	{
+		if ($version === 1)
+		{
+			return;
+		}
+
+		$last = 18 + ($version - 2) * 4;
+		$positions = [6, $last];
+		foreach ($positions as $cy)
+		{
+			foreach ($positions as $cx)
+			{
+				if (!empty($reserved[$cy][$cx]))
+				{
+					continue;
+				}
+
+				for ($dy = -2; $dy <= 2; $dy++)
+				{
+					for ($dx = -2; $dx <= 2; $dx++)
+					{
+						$is_black = max(abs($dx), abs($dy)) !== 1;
+						$this->qr_set_module($matrix, $reserved, $cx + $dx, $cy + $dy, $is_black);
+					}
+				}
+			}
+		}
+	}
+
+	protected function qr_place_timing_patterns(array &$matrix, array &$reserved): void
+	{
+		$size = count($matrix);
+		for ($i = 0; $i < $size; $i++)
+		{
+			$is_black = $i % 2 === 0;
+			if (!$reserved[6][$i])
+			{
+				$this->qr_set_module($matrix, $reserved, $i, 6, $is_black);
+			}
+			if (!$reserved[$i][6])
+			{
+				$this->qr_set_module($matrix, $reserved, 6, $i, $is_black);
+			}
+		}
+	}
+
+	protected function qr_place_format_bits(array &$matrix, array &$reserved, int $mask): void
+	{
+		$size = count($matrix);
+		$bits = $this->qr_format_bits($mask);
+		for ($i = 0; $i <= 5; $i++)
+		{
+			$this->qr_set_module($matrix, $reserved, 8, $i, $this->qr_get_bit($bits, $i));
+		}
+		$this->qr_set_module($matrix, $reserved, 8, 7, $this->qr_get_bit($bits, 6));
+		$this->qr_set_module($matrix, $reserved, 8, 8, $this->qr_get_bit($bits, 7));
+		$this->qr_set_module($matrix, $reserved, 7, 8, $this->qr_get_bit($bits, 8));
+		for ($i = 9; $i < 15; $i++)
+		{
+			$this->qr_set_module($matrix, $reserved, 14 - $i, 8, $this->qr_get_bit($bits, $i));
+		}
+		for ($i = 0; $i < 8; $i++)
+		{
+			$this->qr_set_module($matrix, $reserved, $size - 1 - $i, 8, $this->qr_get_bit($bits, $i));
+		}
+		for ($i = 8; $i < 15; $i++)
+		{
+			$this->qr_set_module($matrix, $reserved, 8, $size - 15 + $i, $this->qr_get_bit($bits, $i));
+		}
+
+		$this->qr_set_module($matrix, $reserved, 8, $size - 8, true);
+	}
+
+	protected function qr_format_bits(int $mask): int
+	{
+		$data = (1 << 3) | $mask;
+		$remainder = $data;
+		for ($i = 0; $i < 10; $i++)
+		{
+			$remainder = ($remainder << 1) ^ (((($remainder >> 9) & 1) !== 0) ? 0x537 : 0);
+		}
+
+		return (($data << 10) | ($remainder & 0x3ff)) ^ 0x5412;
+	}
+
+	protected function qr_get_bit(int $value, int $bit): bool
+	{
+		return (($value >> $bit) & 1) !== 0;
+	}
+
+	protected function qr_set_module(array &$matrix, array &$reserved, int $x, int $y, bool $is_black): void
+	{
+		if (!isset($matrix[$y][$x]))
+		{
+			return;
+		}
+
+		$matrix[$y][$x] = $is_black;
+		$reserved[$y][$x] = true;
+	}
+
+	protected function escape_attribute(string $value): string
+	{
+		return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 	}
 
 	protected function entry_excerpt(string $plain_text): string
