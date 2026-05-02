@@ -9,7 +9,8 @@
 	var TEXT_CARD_PADDING = 88;
 	var TEXT_CARD_BODY_TOP = 210;
 	var TEXT_CARD_BODY_BOTTOM = 1260;
-	var TEXT_CARD_LINE_HEIGHT = 52;
+	var TEXT_CARD_BODY_FONT_SIZE = 42;
+	var TEXT_CARD_LINE_HEIGHT = 64;
 
 	function onReady(callback) {
 		if (document.readyState !== 'loading') {
@@ -405,7 +406,7 @@
 			return Promise.resolve([]);
 		}
 
-		context.font = '34px -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif';
+		context.font = TEXT_CARD_BODY_FONT_SIZE + 'px -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif';
 		lines = wrapCanvasText(context, text, maxWidth);
 		for (i = 0; i < lines.length; i += maxLines) {
 			pages.push(lines.slice(i, i + maxLines));
@@ -493,7 +494,7 @@
 		context.fillText(fitCanvasText(context, title, TEXT_CARD_WIDTH - (TEXT_CARD_PADDING * 2) - 110), TEXT_CARD_PADDING + 104, 96);
 
 		context.fillStyle = '#333333';
-		context.font = '34px -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif';
+		context.font = TEXT_CARD_BODY_FONT_SIZE + 'px -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif';
 		for (i = 0; i < lines.length; i++) {
 			context.fillText(lines[i], TEXT_CARD_PADDING, y);
 			y += TEXT_CARD_LINE_HEIGHT;
