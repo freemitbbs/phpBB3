@@ -1,6 +1,9 @@
 (function() {
 	'use strict';
 
+	var SHARE_IMAGE_MIN_SIDE = 120;
+	var SHARE_IMAGE_MIN_AREA = 20000;
+
 	function onReady(callback) {
 		if (document.readyState !== 'loading') {
 			callback();
@@ -44,19 +47,35 @@
 		return root.getAttribute(name) || '';
 	}
 
-	function buildShareText(root) {
+	function buildShareText(root, options) {
+		options = options || {};
 		var title = rootData(root, 'data-share-title') || document.title;
-		var excerpt = rootData(root, 'data-share-excerpt');
+		var body = options.fullText ? (rootData(root, 'data-share-full-text') || rootData(root, 'data-share-excerpt')) : rootData(root, 'data-share-excerpt');
 		var url = rootData(root, 'data-share-url') || window.location.href;
 		var lines = [title];
 
-		if (excerpt) {
-			lines.push('', excerpt);
+		if (body) {
+			lines.push('', body);
 		}
 
-		lines.push('', url);
+		if (options.includeUrl !== false) {
+			lines.push('', url);
+		}
 
 		return lines.join('\n');
+	}
+
+	function appendMissingUrls(text, urls) {
+		var additions = [];
+		var i;
+
+		for (i = 0; i < urls.length; i++) {
+			if (urls[i] && text.indexOf(urls[i]) === -1) {
+				additions.push(urls[i]);
+			}
+		}
+
+		return additions.length ? (text + '\n\n' + additions.join('\n')) : text;
 	}
 
 	function showFeedback(root, message, isError) {
@@ -131,16 +150,203 @@
 		return !!(navigator.share && navigator.canShare && window.fetch && window.File);
 	}
 
-	function shareImageFile(root, imageUrl) {
-		var title = rootData(root, 'data-share-title') || document.title;
-		var excerpt = rootData(root, 'data-share-excerpt');
+	function contentImageUrls() {
+		var images = document.querySelectorAll('.blog-entry-postbody .content img[src]');
+		var seen = {};
+		var urls = [];
+		var i;
+		var url;
 
-		if (!imageUrl || !canTryFileShare()) {
-			openShareImage(imageUrl);
-			return;
+		for (i = 0; i < images.length; i++) {
+			url = images[i].currentSrc || images[i].src || images[i].getAttribute('src') || '';
+			url = url.trim();
+
+			if (url && !seen[url] && isShareContentImage(images[i], url)) {
+				seen[url] = true;
+				urls.push(url);
+			}
 		}
 
-		window.fetch(imageUrl, {
+		return urls;
+	}
+
+	function isShareContentImage(image, url) {
+		var className = String(image.className || '').toLowerCase();
+		var lowerUrl = String(url || '').toLowerCase();
+		var size = shareImageRenderedSize(image);
+
+		if (size.width > 0 && size.height > 0
+			&& (Math.max(size.width, size.height) < SHARE_IMAGE_MIN_SIDE || (size.width * size.height) < SHARE_IMAGE_MIN_AREA))
+		{
+			return false;
+		}
+
+		// Keep these as secondary guards. Size is the primary filter above.
+		if (/\b(?:emoji|smilies|modernsmiley-emoji)\b/.test(className)) {
+			return false;
+		}
+
+		if (image.hasAttribute('data-modernsmiley-hover-src')
+			|| image.hasAttribute('data-modernsmiley-hover-fallback-src')
+			|| image.hasAttribute('data-modernsmiley-static-fallback-src'))
+		{
+			return false;
+		}
+
+		if (lowerUrl.indexOf('/images/smilies/') !== -1
+			|| lowerUrl.indexOf('/ext/freemitbbs/modernsmiley/') !== -1
+			|| lowerUrl.indexOf('fonts.gstatic.com/s/e/notoemoji/') !== -1
+			|| lowerUrl.indexOf('?modernsmiley=') !== -1
+			|| lowerUrl.indexOf('&modernsmiley=') !== -1)
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	function shareImageRenderedSize(image) {
+		var rect = image.getBoundingClientRect ? image.getBoundingClientRect() : null;
+		var width = rect && rect.width ? rect.width : 0;
+		var height = rect && rect.height ? rect.height : 0;
+
+		if (width > 0 && height > 0) {
+			return {
+				width: width,
+				height: height
+			};
+		}
+
+		return {
+			width: image.naturalWidth || image.width || parseInt(image.getAttribute('width') || '0', 10) || 0,
+			height: image.naturalHeight || image.height || parseInt(image.getAttribute('height') || '0', 10) || 0
+		};
+	}
+
+	function addUniqueUrl(urls, seen, url) {
+		url = (url || '').trim();
+
+		if (url && !seen[url]) {
+			seen[url] = true;
+			urls.push(url);
+		}
+	}
+
+	function hasVideoExtension(url) {
+		var path = '';
+
+		try {
+			path = new URL(url, window.location.href).pathname.toLowerCase();
+		} catch (error) {
+			path = (url || '').toLowerCase().split('#')[0].split('?')[0];
+		}
+
+		return /\.(?:mp4|m4v|mov|webm|ogv|ogg)$/.test(path);
+	}
+
+	function contentVideoUrls() {
+		var content = document.querySelector('.blog-entry-postbody .content');
+		var seen = {};
+		var urls = [];
+		var nodes;
+		var i;
+
+		if (!content) {
+			return urls;
+		}
+
+		nodes = content.querySelectorAll('video[src], video source[src]');
+		for (i = 0; i < nodes.length; i++) {
+			addUniqueUrl(urls, seen, nodes[i].src || nodes[i].getAttribute('src') || '');
+		}
+
+		nodes = content.querySelectorAll('a[href]');
+		for (i = 0; i < nodes.length; i++) {
+			if (hasVideoExtension(nodes[i].href || nodes[i].getAttribute('href') || '')) {
+				addUniqueUrl(urls, seen, nodes[i].href || nodes[i].getAttribute('href') || '');
+			}
+		}
+
+		return urls;
+	}
+
+	function mediaExtension(type) {
+		type = (type || '').toLowerCase();
+
+		if (type.indexOf('jpeg') !== -1 || type.indexOf('jpg') !== -1) {
+			return 'jpg';
+		}
+		if (type.indexOf('webp') !== -1) {
+			return 'webp';
+		}
+		if (type.indexOf('gif') !== -1) {
+			return 'gif';
+		}
+		if (type.indexOf('quicktime') !== -1) {
+			return 'mov';
+		}
+		if (type.indexOf('mp4') !== -1) {
+			return 'mp4';
+		}
+		if (type.indexOf('webm') !== -1) {
+			return 'webm';
+		}
+		if (type.indexOf('ogg') !== -1) {
+			return 'ogv';
+		}
+
+		return 'png';
+	}
+
+	function mediaTypeFromUrl(url) {
+		var path = '';
+
+		try {
+			path = new URL(url, window.location.href).pathname.toLowerCase();
+		} catch (error) {
+			path = (url || '').toLowerCase();
+		}
+
+		if (/\.(?:jpe?g)$/.test(path)) {
+			return 'image/jpeg';
+		}
+		if (/\.webp$/.test(path)) {
+			return 'image/webp';
+		}
+		if (/\.gif$/.test(path)) {
+			return 'image/gif';
+		}
+		if (/\.png$/.test(path)) {
+			return 'image/png';
+		}
+		if (/\.mp4$|\.m4v$/.test(path)) {
+			return 'video/mp4';
+		}
+		if (/\.mov$/.test(path)) {
+			return 'video/quicktime';
+		}
+		if (/\.webm$/.test(path)) {
+			return 'video/webm';
+		}
+		if (/\.ogv$|\.ogg$/.test(path)) {
+			return 'video/ogg';
+		}
+
+		return '';
+	}
+
+	function mediaTypeForBlob(blob, url, fallbackType) {
+		var type = (blob.type || '').toLowerCase();
+
+		if (type.indexOf('image/') === 0 || type.indexOf('video/') === 0) {
+			return blob.type;
+		}
+
+		return mediaTypeFromUrl(url) || fallbackType;
+	}
+
+	function fetchShareMediaFile(url, name, fallbackType) {
+		return window.fetch(url, {
 			credentials: 'same-origin'
 		}).then(function(response) {
 			if (!response.ok) {
@@ -149,23 +355,128 @@
 
 			return response.blob();
 		}).then(function(blob) {
-			var file = new window.File([blob], 'xiaohongshu-share.png', {
-				type: blob.type || 'image/png'
-			});
-			var payload = {
-				title: title,
-				text: excerpt || title,
-				files: [file]
-			};
+			var type = mediaTypeForBlob(blob, url, fallbackType);
 
-			if (!navigator.canShare(payload)) {
-				openShareImage(imageUrl);
-				return;
+			return new window.File([blob], name + '.' + mediaExtension(type), {
+				type: type
+			});
+		});
+	}
+
+	function fetchOptionalShareImageFile(url, index) {
+		return fetchShareMediaFile(url, 'xiaohongshu-image-' + index, 'image/png').catch(function() {
+			return null;
+		});
+	}
+
+	function fetchOptionalShareVideoFile(url, index) {
+		return fetchShareMediaFile(url, 'xiaohongshu-video-' + index, mediaTypeFromUrl(url) || 'video/mp4').catch(function() {
+			return null;
+		});
+	}
+
+	function shareImageFile(root, imageUrl) {
+		var title = rootData(root, 'data-share-title') || document.title;
+		var url = rootData(root, 'data-share-url') || window.location.href;
+		var videoUrls = contentVideoUrls();
+		var text = appendMissingUrls(buildShareText(root, {
+			fullText: true
+		}), videoUrls);
+		var textWithoutUrl = appendMissingUrls(buildShareText(root, {
+			fullText: true,
+			includeUrl: false
+		}), videoUrls);
+
+		if (!imageUrl || !canTryFileShare()) {
+			openShareImage(imageUrl);
+			return;
+		}
+
+		fetchShareMediaFile(imageUrl, 'xiaohongshu-share', 'image/png').then(function(posterFile) {
+			var imageUrls = contentImageUrls();
+			var fetches = [];
+			var i;
+
+			for (i = 0; i < imageUrls.length; i++) {
+				fetches.push(fetchOptionalShareImageFile(imageUrls[i], i + 1));
+			}
+			for (i = 0; i < videoUrls.length; i++) {
+				fetches.push(fetchOptionalShareVideoFile(videoUrls[i], i + 1));
 			}
 
-			return navigator.share(payload).catch(function() {
-				// User cancellation is expected.
+			return Promise.all(fetches).then(function(files) {
+				var imageFiles = [];
+				var videoFiles = [];
+				var mediaFiles;
+
+				for (i = 0; i < files.length; i++) {
+					if (!files[i]) {
+						continue;
+					}
+
+					if (files[i].type.indexOf('video/') === 0) {
+						videoFiles.push(files[i]);
+					} else {
+						imageFiles.push(files[i]);
+					}
+				}
+
+				files.unshift(posterFile);
+				mediaFiles = files.filter(function(file) {
+					return !!file;
+				});
+
+				return {
+					all: mediaFiles,
+					images: [posterFile].concat(imageFiles),
+					videos: videoFiles
+				};
 			});
+		}).then(function(fileSets) {
+			var sets = [fileSets.all];
+			var payloads = [];
+			var files;
+			var i;
+
+			if (fileSets.videos.length) {
+				sets.push(fileSets.videos);
+			}
+			sets.push(fileSets.images);
+
+			for (i = 0; i < sets.length; i++) {
+				files = sets[i];
+				if (!files.length) {
+					continue;
+				}
+
+				payloads.push(
+					{
+						title: title,
+						text: textWithoutUrl,
+						url: url,
+						files: files
+					},
+					{
+						title: title,
+						text: text,
+						files: files
+					},
+					{
+						files: files
+					}
+				);
+			}
+
+			for (i = 0; i < payloads.length; i++) {
+				if (navigator.canShare(payloads[i])) {
+					return navigator.share(payloads[i]).catch(function() {
+						// User cancellation is expected.
+					});
+				}
+			}
+
+			openShareImage(imageUrl);
+			return;
 		}).catch(function() {
 			openShareImage(imageUrl);
 		});
@@ -175,7 +486,9 @@
 		var imageUrl = button.getAttribute('data-share-image-url') || rootData(root, 'data-share-image-url');
 		var feedback = button.getAttribute('data-blog-share-feedback') || '';
 
-		copyText(buildShareText(root)).then(function() {
+		copyText(buildShareText(root, {
+			fullText: true
+		})).then(function() {
 			showFeedback(root, feedback, false);
 		}).catch(function() {
 			showFeedback(root, rootData(root, 'data-copy-failed'), true);

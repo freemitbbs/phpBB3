@@ -10,6 +10,8 @@ class main
 	private const SHARE_EXCERPT_LENGTH = 180;
 	private const SHARE_IMAGE_WIDTH = 1080;
 	private const SHARE_IMAGE_HEIGHT = 1440;
+	private const SHARE_CONTENT_IMAGE_MIN_SIDE = 120;
+	private const SHARE_CONTENT_IMAGE_MIN_AREA = 20000;
 	private const COMMENT_PAGE_SIZE = 50;
 	private const TOP_BLOG_COLLAPSE_ID = 'freemitbbs_blog_top';
 	private const BLOG_HEADER_IMAGE_EXTENSIONS = ['gif', 'jpg', 'jpeg', 'png', 'webp'];
@@ -1908,13 +1910,15 @@ class main
 		$title = censor_text((string) $entry['topic_title']);
 		$share_url = $this->absolute_entry_url($topic_id);
 		$share_image_url = $this->absolute_share_image_url($topic_id);
-		$excerpt = $this->share_excerpt($this->plain_text_from_html($html_text));
+		$full_text = $this->plain_text_from_html($html_text);
+		$excerpt = $this->share_excerpt($full_text);
 		$description = $excerpt !== '' ? $excerpt : $title;
 		$reddit_url = 'https://www.reddit.com/submit?url=' . rawurlencode($share_url) . '&title=' . rawurlencode($title);
 
 		return [
 			'BLOG_SHARE_TITLE' => $this->escape_attribute($title),
 			'BLOG_SHARE_EXCERPT' => $this->escape_attribute($excerpt),
+			'BLOG_SHARE_FULL_TEXT' => $this->escape_attribute($full_text),
 			'BLOG_SHARE_URL' => $this->escape_attribute($share_url),
 			'BLOG_SHARE_IMAGE_URL' => $this->escape_attribute($share_image_url),
 			'BLOG_META_TITLE' => $this->escape_attribute($title),
@@ -2095,27 +2099,29 @@ class main
 
 	protected function find_share_post_image(array $entry, array $attachments, string $html_text)
 	{
-		$sources = array_merge(
-			$this->extract_share_image_sources($html_text),
-			$this->extract_share_image_sources((string) ($entry['post_text'] ?? '')),
-			$this->extract_share_image_sources_from_plain_text((string) ($entry['post_text'] ?? ''))
-		);
-
-		foreach (array_values(array_unique($sources)) as $src)
+		foreach ($this->extract_share_image_sources($html_text) as $src)
 		{
 			$image = $this->load_share_image_from_html_src($entry, $attachments, $src);
-			if ($this->is_gd_image($image))
+			if ($this->share_image_is_content_size($image))
 			{
 				return $image;
+			}
+			if ($this->is_gd_image($image))
+			{
+				imagedestroy($image);
 			}
 		}
 
 		foreach ($attachments as $attachment)
 		{
 			$image = $this->load_share_image_from_attachment($attachment);
-			if ($this->is_gd_image($image))
+			if ($this->share_image_is_content_size($image))
 			{
 				return $image;
+			}
+			if ($this->is_gd_image($image))
+			{
+				imagedestroy($image);
 			}
 		}
 
@@ -2136,11 +2142,7 @@ class main
 			{
 				foreach ($document->getElementsByTagName('img') as $image)
 				{
-					$src = trim((string) $image->getAttribute('src'));
-					if ($src !== '')
-					{
-						$sources[] = $src;
-					}
+					$sources = array_merge($sources, $this->share_image_sources_from_img_element($image));
 				}
 			}
 		}
@@ -2153,29 +2155,78 @@ class main
 		return array_values(array_unique(array_map(static fn($src) => html_entity_decode(trim($src), ENT_QUOTES, 'UTF-8'), $sources)));
 	}
 
-	protected function extract_share_image_sources_from_plain_text(string $text): array
+	protected function share_image_sources_from_img_element(\DOMElement $image): array
 	{
-		$sources = [];
-		if (preg_match_all('#\[img(?:=[^\]]*)?\](.*?)\[/img\]#isu', $text, $matches))
+		$src = trim((string) $image->getAttribute('src'));
+		if ($src === '' || !$this->share_image_element_is_content_image($image, $src))
 		{
-			foreach ($matches[1] as $src)
-			{
-				$sources[] = $src;
-			}
+			return [];
 		}
-		if (preg_match_all('#!\[[^\]]*\]\(([^)\s]+)(?:\s+["\'][^"\']*["\'])?\)#u', $text, $matches))
+
+		return [$src];
+	}
+
+	protected function share_image_element_is_content_image(\DOMElement $image, string $src): bool
+	{
+		$width = (int) $image->getAttribute('width');
+		$height = (int) $image->getAttribute('height');
+		if ($width > 0 && $height > 0 && !$this->share_dimensions_are_content_size($width, $height))
 		{
-			foreach ($matches[1] as $src)
+			return false;
+		}
+
+		$class = strtolower((string) $image->getAttribute('class'));
+		if (preg_match('/\b(?:emoji|smilies|modernsmiley-emoji)\b/', $class))
+		{
+			return false;
+		}
+
+		foreach ([
+			'data-modernsmiley-hover-src',
+			'data-modernsmiley-hover-fallback-src',
+			'data-modernsmiley-static-fallback-src',
+		] as $attribute)
+		{
+			if ($image->hasAttribute($attribute))
 			{
-				$sources[] = $src;
+				return false;
 			}
 		}
 
-		return array_values(array_unique(array_map(static function($src) {
-			$src = html_entity_decode(strip_tags((string) $src), ENT_QUOTES, 'UTF-8');
+		$src = strtolower($src);
+		foreach ([
+			'/images/smilies/',
+			'/ext/freemitbbs/modernsmiley/',
+			'fonts.gstatic.com/s/e/notoemoji/',
+			'?modernsmiley=',
+			'&modernsmiley=',
+		] as $needle)
+		{
+			if (strpos($src, $needle) !== false)
+			{
+				return false;
+			}
+		}
 
-			return trim($src, " \t\n\r\0\x0B\"'");
-		}, $sources)));
+		return true;
+	}
+
+	protected function share_image_is_content_size($image): bool
+	{
+		if (!$this->is_gd_image($image))
+		{
+			return false;
+		}
+
+		return $this->share_dimensions_are_content_size(imagesx($image), imagesy($image));
+	}
+
+	protected function share_dimensions_are_content_size(int $width, int $height): bool
+	{
+		return $width > 0
+			&& $height > 0
+			&& max($width, $height) >= self::SHARE_CONTENT_IMAGE_MIN_SIDE
+			&& ($width * $height) >= self::SHARE_CONTENT_IMAGE_MIN_AREA;
 	}
 
 	protected function load_share_image_from_html_src(array $entry, array $attachments, string $src)
