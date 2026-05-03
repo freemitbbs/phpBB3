@@ -1,6 +1,8 @@
 (function($) {
 	'use strict';
 
+	var DISLIKE_FADE_CLASSES = 'toptopics-dislike-fade toptopics-dislike-fade-level-1 toptopics-dislike-fade-level-2 toptopics-dislike-fade-level-3 toptopics-dislike-fade-level-4';
+
 	function getActionButton(postId, selector) {
 		var $icon = $('#' + selector + 'img_' + postId);
 		return $icon.closest('.button');
@@ -121,6 +123,100 @@
 		});
 	}
 
+	function updateDislikeFade(postId, fadeClass) {
+		var $wrapper;
+		var $content;
+
+		postId = String(postId || '').replace(/[^\d]/g, '');
+		fadeClass = fadeClass || '';
+		if (!postId) {
+			return;
+		}
+
+		$wrapper = $('#toptopics-dislike-fade_' + postId);
+		if (!$wrapper.length) {
+			if (!fadeClass) {
+				return;
+			}
+
+			$content = $('#post_content' + postId).children('.content').first();
+			if (!$content.length) {
+				return;
+			}
+
+			$content.wrap('<div id="toptopics-dislike-fade_' + postId + '"></div>');
+			$wrapper = $('#toptopics-dislike-fade_' + postId);
+		}
+
+		$wrapper.removeClass(DISLIKE_FADE_CLASSES);
+		if (fadeClass) {
+			$wrapper.addClass(fadeClass);
+		}
+	}
+
+	function buildDisplayPostHref(postId) {
+		var url;
+
+		try {
+			url = new URL(window.location.href);
+			url.searchParams.set('p', postId);
+			url.searchParams.set('view', 'show');
+			url.hash = 'p' + postId;
+			return url.href;
+		} catch (e) {
+			return '#p' + postId;
+		}
+	}
+
+	function displayCollapsedPost(postId) {
+		$('#post_content' + postId).show();
+		$('#profile' + postId).show();
+		$('#post_hidden' + postId).hide();
+	}
+
+	function updateCollapsedPost(postId, collapsed, message, displayTitle) {
+		var $content;
+		var $hidden;
+		var $link;
+
+		postId = String(postId || '').replace(/[^\d]/g, '');
+		if (!postId) {
+			return;
+		}
+
+		$hidden = $('#post_hidden' + postId + '.toptopics-post-hidden');
+		if (!collapsed) {
+			if ($hidden.length) {
+				$hidden.remove();
+				displayCollapsedPost(postId);
+			}
+			return;
+		}
+
+		$content = $('#post_content' + postId);
+		if (!$content.length) {
+			return;
+		}
+
+		if (!$hidden.length) {
+			$hidden = $('<div/>', {
+				'class': 'ignore toptopics-post-hidden',
+				id: 'post_hidden' + postId
+			}).insertBefore($content);
+		}
+
+		$link = $('<a/>', {
+			'class': 'display_post toptopics-display-post',
+			'data-post-id': postId,
+			href: buildDisplayPostHref(postId)
+		}).text(displayTitle || 'Display post');
+
+		$hidden.empty().text(message || '').append('<br>').append($link).show();
+		$content.hide();
+		$('#profile' + postId).hide();
+		$('#p' + postId).removeClass('online');
+	}
+
 	function updateDislikeUI(data) {
 		var $icon = $('#dislikeimg_' + data.toggle_post);
 		var $count = $('#dislike_' + data.toggle_post);
@@ -143,6 +239,14 @@
 			}
 		}
 
+		if (typeof data.toggle_fade_class !== 'undefined') {
+			updateDislikeFade(data.toggle_post, data.toggle_fade_class);
+		}
+
+		if (typeof data.toggle_collapse !== 'undefined') {
+			updateCollapsedPost(data.toggle_post, data.toggle_collapse, data.toggle_collapse_message, data.toggle_collapse_display_title);
+		}
+
 		if (data.toggle_title) {
 			$icon.attr('title', data.toggle_title);
 			$button.attr('title', data.toggle_title);
@@ -157,6 +261,9 @@
 
 	phpbb.addAjaxCallback('toggle_toptopics_dislike', function(data) {
 		if (!data || data.error) {
+			if (data && data.message && !data.MESSAGE_TITLE && typeof phpbb.alert === 'function') {
+				phpbb.alert('', data.message);
+			}
 			return;
 		}
 
@@ -173,6 +280,14 @@
 			event.stopImmediatePropagation();
 		}
 	}, true);
+
+	document.addEventListener('click', function(event) {
+		var displayLink = event.target.closest('a.toptopics-display-post');
+		if (displayLink) {
+			event.preventDefault();
+			displayCollapsedPost(displayLink.getAttribute('data-post-id'));
+		}
+	});
 
 	document.addEventListener('keydown', function(event) {
 		var blockedButton = event.target.closest('a.toptopics-blocked');

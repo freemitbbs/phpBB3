@@ -6,6 +6,8 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 
 class ajaxify
 {
+	private const DEFAULT_POST_COLLAPSE_DISLIKE_THRESHOLD = 5;
+
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
 	protected \phpbb\content_visibility $content_visibility;
@@ -113,7 +115,7 @@ class ajaxify
 	{
 		if ($current_user_disliked)
 		{
-			return $this->build_success_response($post_id, 'add', $this->get_dislike_count($post_id));
+			return $this->build_success_response($post_id, 'add', $this->get_post_reaction_counts($post_id));
 		}
 
 		if ($current_user_liked)
@@ -142,7 +144,7 @@ class ajaxify
 			$this->reputation->refresh_user($poster_id);
 		}
 
-		return $this->build_success_response($post_id, 'add', $this->get_dislike_count($post_id));
+		return $this->build_success_response($post_id, 'add', $this->get_post_reaction_counts($post_id));
 	}
 
 	protected function remove_dislike(int $post_id, int $forum_id, int $poster_id, bool $current_user_disliked): JsonResponse
@@ -160,7 +162,7 @@ class ajaxify
 			}
 		}
 
-		return $this->build_success_response($post_id, 'remove', $this->get_dislike_count($post_id));
+		return $this->build_success_response($post_id, 'remove', $this->get_post_reaction_counts($post_id));
 	}
 
 	protected function resolve_action(string $action, bool $current_user_disliked): string
@@ -201,16 +203,23 @@ class ajaxify
 		return $row;
 	}
 
-	protected function get_dislike_count(int $post_id): int
+	protected function get_post_reaction_counts(int $post_id): array
 	{
-		$sql = 'SELECT COUNT(*) AS dislike_count
-			FROM ' . $this->dislikes_table . '
-			WHERE post_id = ' . $post_id;
+		$sql = 'SELECT
+				(SELECT COUNT(*) FROM ' . $this->dislikes_table . ' WHERE post_id = ' . $post_id . ') AS dislike_count,
+				(SELECT COUNT(*) FROM ' . $this->likes_table . ' WHERE post_id = ' . $post_id . ') AS like_count';
 		$result = $this->db->sql_query($sql);
-		$count = (int) $this->db->sql_fetchfield('dislike_count');
+		$row = $this->db->sql_fetchrow($result) ?: [];
 		$this->db->sql_freeresult($result);
 
-		return $count;
+		$dislike_count = (int) ($row['dislike_count'] ?? 0);
+		$like_count = (int) ($row['like_count'] ?? 0);
+
+		return [
+			'dislike_count' => $dislike_count,
+			'like_count' => $like_count,
+			'net_dislike_score' => $dislike_count - $like_count,
+		];
 	}
 
 	protected function has_user_disliked(int $post_id): bool
@@ -294,9 +303,13 @@ class ajaxify
 		];
 	}
 
-	protected function build_success_response(int $post_id, string $action, int $dislike_count): JsonResponse
+	protected function build_success_response(int $post_id, string $action, array $counts): JsonResponse
 	{
 		$is_disliked = ($action === 'add');
+		$dislike_count = (int) ($counts['dislike_count'] ?? 0);
+		$net_dislike_score = (int) ($counts['net_dislike_score'] ?? $dislike_count);
+		$collapse_threshold = $this->get_post_collapse_dislike_threshold();
+		$should_collapse = ($collapse_threshold > 0 && $net_dislike_score >= $collapse_threshold);
 
 		return new JsonResponse([
 			'toggle_action' => $action,
@@ -304,18 +317,52 @@ class ajaxify
 			'toggle_title' => $this->language->lang($is_disliked ? 'CLICK_TO_UNDISLIKE' : 'CLICK_TO_DISLIKE'),
 			'toggle_count' => $dislike_count,
 			'toggle_count_title' => $this->language->lang('TOPTOPICS_DISLIKES_COUNT', $dislike_count),
+			'toggle_net_dislike_score' => $net_dislike_score,
+			'toggle_fade_class' => $this->get_post_dislike_fade_class($net_dislike_score),
+			'toggle_collapse' => $should_collapse,
+			'toggle_collapse_message' => $should_collapse ? $this->language->lang('TOPTOPICS_POST_COLLAPSED', $net_dislike_score, $collapse_threshold) : '',
+			'toggle_collapse_display_title' => $this->language->lang('POST_DISPLAY'),
 			'next_action' => $is_disliked ? 'remove' : 'add',
 		]);
 	}
 
+	protected function get_post_collapse_dislike_threshold(): int
+	{
+		return max(0, (int) ($this->config['toptopics_post_collapse_dislike_threshold'] ?? self::DEFAULT_POST_COLLAPSE_DISLIKE_THRESHOLD));
+	}
+
+	protected function get_post_dislike_fade_class(int $net_dislike_score): string
+	{
+		$level = $this->get_post_dislike_fade_level($net_dislike_score);
+		return $level > 0 ? 'toptopics-dislike-fade toptopics-dislike-fade-level-' . $level : '';
+	}
+
+	protected function get_post_dislike_fade_level(int $net_dislike_score): int
+	{
+		$threshold = $this->get_post_collapse_dislike_threshold();
+		if ($threshold <= 0 || $net_dislike_score <= 0)
+		{
+			return 0;
+		}
+
+		if ($threshold <= 1 || $net_dislike_score >= $threshold)
+		{
+			return 4;
+		}
+
+		$visible_range = max(1, $threshold - 1);
+		return max(1, min(4, (int) ceil(($net_dislike_score / $visible_range) * 4)));
+	}
+
 	protected function json_error(string $message = ''): JsonResponse
 	{
-		$response = ['error' => 1];
-
-		if ($message !== '')
-		{
-			$response['message'] = $message;
-		}
+		$message = ($message !== '') ? $message : $this->language->lang('FORM_INVALID');
+		$response = [
+			'error' => 1,
+			'message' => $message,
+			'MESSAGE_TITLE' => $this->language->lang('INFORMATION'),
+			'MESSAGE_TEXT' => $message,
+		];
 
 		return new JsonResponse($response);
 	}

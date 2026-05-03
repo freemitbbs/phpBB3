@@ -84,7 +84,6 @@ class moderation
 		}
 
 		$this->ranker->invalidate_forums([(int) $topic_row['forum_id']]);
-		$this->ranker->clear_materialized_scopes_for_forums([(int) $topic_row['forum_id']]);
 
 		return new RedirectResponse($redirect_url);
 	}

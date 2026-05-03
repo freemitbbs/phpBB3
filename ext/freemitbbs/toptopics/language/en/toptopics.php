@@ -57,6 +57,7 @@ $lang = array_merge($lang, [
 	'TOPTOPICS_HOME_FORUM_EXCLUSIONS_EXPLAIN' => 'Selected forums will not appear in the homepage Recent Topics or Top Topics lists.',
 	'TOPTOPICS_SHOW_MOBILE_TOPIC_STATS' => 'Show reply and view counts on mobile',
 	'TOPTOPICS_SHOW_MOBILE_TOPIC_STATS_EXPLAIN' => 'Display reply and view counts in mobile topic lists, including forum topics, recent topics, and top topics.',
+	'TOPTOPICS_POST_COLLAPSED' => 'This post is collapsed because dislikes exceed likes by %1$d.',
 	'CLICK_TO_DISLIKE' => 'click to dislike this post',
 	'CLICK_TO_UNDISLIKE' => 'click to remove your dislike from this post',
 	'LOGIN_TO_DISLIKE_POST' => 'login to dislike this post',

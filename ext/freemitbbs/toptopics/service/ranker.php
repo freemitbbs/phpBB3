@@ -31,19 +31,23 @@ class ranker
 	private const DEFAULT_CANDIDATE_POOL_MIN = 250;
 	private const DEFAULT_CANDIDATE_POOL_MULTIPLIER = 50;
 	private const DEFAULT_CANDIDATE_POOL_LIMIT = 2000;
+	private const DEFAULT_POST_COLLAPSE_DISLIKE_THRESHOLD = 5;
 	private const MATERIALIZED_REBUILD_LOCK_SECONDS = 30;
 	private const MATERIALIZED_SCOPE_READ_CACHE_PREFIX = '_freemitbbs_toptopics_scope_read_';
 	private const MATERIALIZED_SCOPE_READ_CACHE_GENERATION = '_freemitbbs_toptopics_scope_read_generation';
 	private const DEFAULT_REFRESH_BATCH_SIZE = 10;
 	private const CONTENT_LENGTH_CAP = 4000;
 	private const CONTENT_LENGTH_SCALE = 120.0;
-	private const RANK_MODEL_REVISION = 3;
+	private const RANK_MODEL_REVISION = 5;
 	private const MATERIALIZED_TOPIC_PAYLOAD_FIELDS = [
 		'topic_last_post_id',
 		'topic_last_poster_id',
 		'topic_last_poster_name',
 		'topic_last_poster_colour',
 		'ranking_replies',
+		'first_post_dislike_count',
+		'first_post_like_count',
+		'first_post_net_dislike_score',
 	];
 
 	protected \phpbb\auth\auth $auth;
@@ -457,6 +461,8 @@ class ranker
 		$topic_sql = $this->db->sql_in_set('t.topic_id', $candidate_topic_ids);
 		$candidate_post_sql = $this->db->sql_in_set('p.topic_id', $candidate_topic_ids);
 		$candidate_topic_join_sql = $this->db->sql_in_set('tt.topic_id', $candidate_topic_ids);
+		$candidate_first_post_topic_sql = $this->db->sql_in_set('fpt.topic_id', $candidate_topic_ids);
+		$candidate_first_post_like_topic_sql = $this->db->sql_in_set('fplt.topic_id', $candidate_topic_ids);
 		$candidate_reaction_topic_sql = $this->db->sql_in_set('pr.topic_id', $candidate_topic_ids);
 		$now = time();
 		$early_window_seconds = $options['early_window_hours'] * 3600;
@@ -538,6 +544,9 @@ class ranker
 					COALESCE(like_data.like_count, 0) AS like_count,
 					COALESCE(like_data.early_like_count, 0) AS early_like_count,
 					COALESCE(dislike_data.dislike_count, 0) AS dislike_count,
+					COALESCE(first_post_dislike_data.first_post_dislike_count, 0) AS first_post_dislike_count,
+					COALESCE(first_post_like_data.first_post_like_count, 0) AS first_post_like_count,
+					(COALESCE(first_post_dislike_data.first_post_dislike_count, 0) - COALESCE(first_post_like_data.first_post_like_count, 0)) AS first_post_net_dislike_score,
 					COALESCE(report_data.flag_count, 0) AS flag_count,
 					COALESCE(reply_data.non_author_reply_count, 0) AS non_author_reply_count'
 					. $reaction_select_sql . '
@@ -566,6 +575,22 @@ class ranker
 					WHERE ' . $candidate_post_sql . '
 					GROUP BY p.topic_id
 				) dislike_data ON dislike_data.topic_id = t.topic_id
+				LEFT JOIN (
+					SELECT fpt.topic_id, COUNT(fpd.user_id) AS first_post_dislike_count
+					FROM ' . TOPICS_TABLE . ' fpt
+					INNER JOIN ' . $this->dislikes_table . ' fpd
+						ON fpd.post_id = fpt.topic_first_post_id
+					WHERE ' . $candidate_first_post_topic_sql . '
+					GROUP BY fpt.topic_id
+				) first_post_dislike_data ON first_post_dislike_data.topic_id = t.topic_id
+				LEFT JOIN (
+					SELECT fplt.topic_id, COUNT(fpl.user_id) AS first_post_like_count
+					FROM ' . TOPICS_TABLE . ' fplt
+					INNER JOIN ' . $this->likes_table . ' fpl
+						ON fpl.post_id = fplt.topic_first_post_id
+					WHERE ' . $candidate_first_post_like_topic_sql . '
+					GROUP BY fplt.topic_id
+				) first_post_like_data ON first_post_like_data.topic_id = t.topic_id
 				LEFT JOIN (
 					SELECT p.topic_id, COUNT(r.report_id) AS flag_count
 					FROM ' . REPORTS_TABLE . ' r
@@ -623,6 +648,10 @@ class ranker
 						AND ranked.points > ' . $options['hide_point_threshold'] . '
 					)
 				)
+				AND (
+					' . $options['post_collapse_dislike_threshold'] . ' <= 0
+					OR ranked.first_post_net_dislike_score < ' . $options['post_collapse_dislike_threshold'] . '
+				)
 				AND ranked.rank > 0
 			ORDER BY ranked.rank DESC, ranked.topic_time DESC';
 
@@ -650,6 +679,9 @@ class ranker
 				'forum_name' => (string) $row['forum_name'],
 				'like_count' => (int) $row['like_count'],
 				'dislike_count' => (int) $row['dislike_count'],
+				'first_post_dislike_count' => (int) $row['first_post_dislike_count'],
+				'first_post_like_count' => (int) $row['first_post_like_count'],
+				'first_post_net_dislike_score' => (int) $row['first_post_net_dislike_score'],
 				'flag_count' => (int) $row['flag_count'],
 				'replies' => (int) $row['replies'],
 				'ranking_replies' => (int) $row['ranking_replies'],
@@ -728,6 +760,7 @@ class ranker
 	public function invalidate_forums(array $forum_ids): void
 	{
 		$this->cache_invalidator->invalidate_forums($forum_ids);
+		$this->clear_materialized_scopes_for_forums($forum_ids);
 	}
 
 	public function invalidate_all(): void
@@ -809,6 +842,7 @@ class ranker
 			'flag_hard_penalty' => $this->get_float_config('toptopics_flag_hard_penalty', self::DEFAULT_FLAG_HARD_PENALTY, 0.01, 1.0),
 			'hide_flag_threshold' => $this->get_int_config('toptopics_hide_flag_threshold', self::DEFAULT_HIDE_FLAG_THRESHOLD, 0),
 			'hide_point_threshold' => $this->get_int_config('toptopics_hide_point_threshold', self::DEFAULT_HIDE_POINT_THRESHOLD),
+			'post_collapse_dislike_threshold' => $this->get_int_config('toptopics_post_collapse_dislike_threshold', self::DEFAULT_POST_COLLAPSE_DISLIKE_THRESHOLD, 0),
 			'reaction_weight' => $this->get_float_config('toptopics_reaction_weight', self::DEFAULT_REACTION_WEIGHT, 0.0, 10.0),
 			'trust_boost_cap' => $this->get_float_config('toptopics_trust_boost_cap', self::DEFAULT_TRUST_BOOST_CAP, 0.0, 1.0),
 			'reply_weight' => $this->get_float_config('toptopics_reply_weight', self::DEFAULT_REPLY_WEIGHT, 0.0, 10.0),

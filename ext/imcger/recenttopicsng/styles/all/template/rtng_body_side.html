@@ -58,7 +58,7 @@
 									{% else %}
 										{{ rtng.S_DISP_LAST_POST ? rtng.U_LAST_POST : rtng.U_VIEW_TOPIC }}
 									{% endif %}
-								" class="topictitle">
+									" class="topictitle {{ rtng.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS }}">
 									{% if rtng.S_DISP_FIRST_UNREAD_POST %}
 										{{ rtng.FIRST_UNREAD_POST_SUBJECT }}
 									{% else %}

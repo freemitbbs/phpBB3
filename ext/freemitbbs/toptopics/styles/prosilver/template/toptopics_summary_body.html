@@ -37,8 +37,8 @@
 									<i class="icon fa-file fa-fw icon-red icon-md" aria-hidden="true"></i><span class="sr-only">{NEW_POST}</span>
 								</a>
 							<!-- ENDIF -->
-								<a href="{top_topics.U_TOPIC}" class="topictitle">{top_topics.TOPIC_TITLE}</a>
-								<div class="toptopics-meta">
+									<a href="{top_topics.U_TOPIC}" class="topictitle {top_topics.TOPIC_DISLIKE_FADE_CLASS}">{top_topics.TOPIC_TITLE}</a>
+									<div class="toptopics-meta {top_topics.TOPIC_DISLIKE_FADE_CLASS}">
 									{L_POST_BY_AUTHOR} {top_topics.USERNAME_FULL} &bull; {top_topics.POST_TIME}
 									<!-- IF S_TOPTOPICS_INCLUDE_FORUM_NAME --> &bull; <a href="{top_topics.U_FORUM}">{top_topics.FORUM_NAME}</a><!-- ENDIF -->
 								</div>

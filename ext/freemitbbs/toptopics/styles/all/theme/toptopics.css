@@ -58,6 +58,35 @@
 	cursor: default;
 }
 
+.postbody .toptopics-dislike-fade .content,
+.postbody .toptopics-dislike-fade .content a,
+.postbody .toptopics-dislike-fade .content cite,
+.postbody .toptopics-dislike-fade .content code {
+	color: var(--toptopics-dislike-fade-color);
+}
+
+a.topictitle.toptopics-topic-dislike-fade,
+.toptopics-meta.toptopics-topic-dislike-fade,
+.toptopics-meta.toptopics-topic-dislike-fade a {
+	color: var(--toptopics-dislike-fade-color);
+}
+
+.toptopics-dislike-fade-level-1 {
+	--toptopics-dislike-fade-color: #666666;
+}
+
+.toptopics-dislike-fade-level-2 {
+	--toptopics-dislike-fade-color: #8a8a8a;
+}
+
+.toptopics-dislike-fade-level-3 {
+	--toptopics-dislike-fade-color: #aaaaaa;
+}
+
+.toptopics-dislike-fade-level-4 {
+	--toptopics-dislike-fade-color: #c4c4c4;
+}
+
 .postprofile .toptopics-reputation-badge {
 	--rep-accent: #7f8b96;
 	--rep-accent-dark: #43515d;

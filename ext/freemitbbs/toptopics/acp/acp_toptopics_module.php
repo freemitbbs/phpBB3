@@ -19,6 +19,7 @@ class acp_toptopics_module
 		['key' => 'toptopics_downvote_min_posts', 'type' => 'int', 'default' => 5, 'min' => 0, 'max' => 1000000],
 		['key' => 'toptopics_downvote_per_minute', 'type' => 'int', 'default' => 2, 'min' => 0, 'max' => 1000000],
 		['key' => 'toptopics_downvote_per_day', 'type' => 'int', 'default' => 20, 'min' => 0, 'max' => 1000000],
+		['key' => 'toptopics_post_collapse_dislike_threshold', 'type' => 'int', 'default' => 5, 'min' => 0, 'max' => 1000000],
 	];
 
 	private const REPUTATION_SETTINGS = [

@@ -11,6 +11,7 @@ class listener implements EventSubscriberInterface
 	private const DEFAULT_PER_FORUM_TOPIC_LIMIT = 3;
 	private const BALANCED_TOPIC_FETCH_MULTIPLIER = 5;
 	private const DEFAULT_CANDIDATE_POOL_LIMIT = 2000;
+	private const DEFAULT_POST_COLLAPSE_DISLIKE_THRESHOLD = 5;
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
@@ -29,6 +30,7 @@ class listener implements EventSubscriberInterface
 	protected $topicpreview_renderer;
 	protected $collapsible_operator;
 	protected string $dislikes_table;
+	protected string $likes_table;
 	protected string $dislike_history_table;
 	protected string $topic_overrides_table;
 	protected string $user_reputation_table;
@@ -36,6 +38,7 @@ class listener implements EventSubscriberInterface
 	protected string $php_ext;
 
 	protected array $post_dislike_counts = [];
+	protected array $post_net_dislike_scores = [];
 	protected array $user_disliked_posts = [];
 	protected array $user_reputation_scores = [];
 	protected ?int $current_user_reputation = null;
@@ -91,6 +94,7 @@ class listener implements EventSubscriberInterface
 		$this->topicpreview_renderer = $topicpreview_renderer;
 		$this->collapsible_operator = $collapsible_operator;
 		$this->dislikes_table = $dislikes_table;
+		$this->likes_table = $this->derive_likes_table($dislikes_table);
 		$this->dislike_history_table = $dislike_history_table;
 		$this->topic_overrides_table = $topic_overrides_table;
 		$this->user_reputation_table = $user_reputation_table;
@@ -98,36 +102,51 @@ class listener implements EventSubscriberInterface
 		$this->php_ext = $php_ext;
 	}
 
+	protected function derive_likes_table(string $dislikes_table): string
+	{
+		$dislikes_suffix = 'posts_dislikes';
+		if (substr($dislikes_table, -strlen($dislikes_suffix)) === $dislikes_suffix)
+		{
+			return substr($dislikes_table, 0, -strlen($dislikes_suffix)) . 'posts_likes';
+		}
+
+		return preg_replace('/dislikes$/', 'likes', $dislikes_table) ?: $dislikes_table;
+	}
+
 	public static function getSubscribedEvents()
 	{
-				return [
-					'core.user_setup' => 'load_language_on_setup',
-					'core.permissions' => 'add_permissions',
-					'core.ucp_prefs_personal_data' => 'ucp_prefs_personal_data',
-					'core.ucp_prefs_personal_update_data' => 'ucp_prefs_personal_update_data',
-					'core.ucp_prefs_view_data' => 'ucp_prefs_view_data',
-					'core.ucp_prefs_view_update_data' => 'ucp_prefs_view_update_data',
-					'core.page_header_after' => 'assign_page_template_vars',
-						'core.memberlist_view_profile' => 'user_profile_reaction_records',
-					'core.viewforum_get_topic_ids_data' => 'viewforum_exclude_foe_topics',
-					'core.viewforum_get_announcement_topic_ids_data' => 'viewforum_exclude_foe_topics',
-					'core.viewtopic_modify_post_data' => 'prefetch_dislikes',
-					'core.viewtopic_modify_post_row' => 'modify_post_row',
-					'core.viewtopic_modify_page_title' => 'viewtopic_admin_override',
-				'core.display_forums_before' => 'index_category_blocks',
-				'core.display_forums_modify_category_template_vars' => 'display_forums_modify_category_template_vars',
-				'core.report_post_auth' => 'report_post_auth',
-				'core.index_modify_page_title' => 'index_page_summary',
-				'core.viewforum_modify_page_title' => 'forum_page_summary',
-				'core.submit_post_end' => 'submit_post_end',
-				'core.set_post_visibility_after' => 'post_visibility_after',
-				'core.set_topic_visibility_after' => 'topic_visibility_after',
-				'core.notification_manager_add_notifications' => 'report_notification_added',
-				'core.add_log' => 'report_log_added',
-				'core.delete_posts_after' => 'clean_posts_after',
-				'core.delete_user_after' => 'clean_users_after',
-			];
-		}
+		return [
+			'core.user_setup' => 'load_language_on_setup',
+			'core.permissions' => 'add_permissions',
+			'core.ucp_prefs_personal_data' => 'ucp_prefs_personal_data',
+			'core.ucp_prefs_personal_update_data' => 'ucp_prefs_personal_update_data',
+			'core.ucp_prefs_view_data' => 'ucp_prefs_view_data',
+			'core.ucp_prefs_view_update_data' => 'ucp_prefs_view_update_data',
+			'core.page_header_after' => 'assign_page_template_vars',
+			'core.memberlist_view_profile' => 'user_profile_reaction_records',
+			'core.viewforum_get_topic_ids_data' => 'viewforum_exclude_foe_topics',
+			'core.viewforum_get_announcement_topic_ids_data' => 'viewforum_exclude_foe_topics',
+			'imcger.recenttopicsng.sql_pull_topics_list' => 'recenttopics_exclude_first_post_disliked_topics',
+			'imcger.recenttopicsng.sql_pull_topics_data' => 'recenttopics_exclude_first_post_disliked_topics',
+			'imcger.recenttopicsng.modify_topics_list' => 'recenttopics_filter_first_post_disliked_topics',
+			'imcger.recenttopicsng.modify_tpl_ary' => 'recenttopics_fade_first_post_disliked_topic',
+			'core.viewtopic_modify_post_data' => 'prefetch_dislikes',
+			'core.viewtopic_modify_post_row' => 'modify_post_row',
+			'core.viewtopic_modify_page_title' => 'viewtopic_admin_override',
+			'core.display_forums_before' => 'index_category_blocks',
+			'core.display_forums_modify_category_template_vars' => 'display_forums_modify_category_template_vars',
+			'core.report_post_auth' => 'report_post_auth',
+			'core.index_modify_page_title' => 'index_page_summary',
+			'core.viewforum_modify_page_title' => 'forum_page_summary',
+			'core.submit_post_end' => 'submit_post_end',
+			'core.set_post_visibility_after' => 'post_visibility_after',
+			'core.set_topic_visibility_after' => 'topic_visibility_after',
+			'core.notification_manager_add_notifications' => 'report_notification_added',
+			'core.add_log' => 'report_log_added',
+			'core.delete_posts_after' => 'clean_posts_after',
+			'core.delete_user_after' => 'clean_users_after',
+		];
+	}
 
 	public function load_language_on_setup($event)
 	{
@@ -239,6 +258,12 @@ class listener implements EventSubscriberInterface
 			return;
 		}
 
+		foreach ($post_list as $post_id)
+		{
+			$this->post_dislike_counts[$post_id] = 0;
+			$this->post_net_dislike_scores[$post_id] = 0;
+		}
+
 		$sql = 'SELECT post_id, COUNT(user_id) AS dislike_count
 			FROM ' . $this->dislikes_table . '
 			WHERE ' . $this->db->sql_in_set('post_id', $post_list) . '
@@ -246,7 +271,22 @@ class listener implements EventSubscriberInterface
 		$result = $this->db->sql_query($sql);
 		while ($row = $this->db->sql_fetchrow($result))
 		{
-			$this->post_dislike_counts[(int) $row['post_id']] = (int) $row['dislike_count'];
+			$post_id = (int) $row['post_id'];
+			$dislike_count = (int) $row['dislike_count'];
+			$this->post_dislike_counts[$post_id] = $dislike_count;
+			$this->post_net_dislike_scores[$post_id] = $dislike_count;
+		}
+		$this->db->sql_freeresult($result);
+
+		$sql = 'SELECT post_id, COUNT(user_id) AS like_count
+			FROM ' . $this->likes_table . '
+			WHERE ' . $this->db->sql_in_set('post_id', $post_list) . '
+			GROUP BY post_id';
+		$result = $this->db->sql_query($sql);
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$post_id = (int) $row['post_id'];
+			$this->post_net_dislike_scores[$post_id] = ($this->post_net_dislike_scores[$post_id] ?? 0) - (int) $row['like_count'];
 		}
 		$this->db->sql_freeresult($result);
 
@@ -294,6 +334,7 @@ class listener implements EventSubscriberInterface
 		$poster_id = isset($event['poster_id']) ? (int) $event['poster_id'] : (int) ($event['row']['user_id'] ?? ANONYMOUS);
 		$current_user_id = (int) $this->user->data['user_id'];
 		$dislike_count = $this->post_dislike_counts[$post_id] ?? 0;
+		$net_dislike_score = $this->post_net_dislike_scores[$post_id] ?? 0;
 		$current_user_disliked = !empty($this->user_disliked_posts[$post_id]);
 
 		$disabled = false;
@@ -332,6 +373,17 @@ class listener implements EventSubscriberInterface
 		$post_row['POST_DISLIKE_ACTION'] = $action;
 		$post_row['POST_DISLIKE_URL'] = $this->build_dislike_url($post_id, $current_user_disliked);
 		$post_row['POST_DISLIKE_DISABLED'] = $disabled;
+		$post_row['POST_DISLIKE_FADE_CLASS'] = $this->get_post_dislike_fade_class($net_dislike_score);
+		if ($this->should_collapse_post_for_dislikes($post_id, $net_dislike_score, $post_row))
+		{
+			$post_row['S_IGNORE_POST'] = true;
+			$post_row['S_POST_HIDDEN'] = true;
+			$post_row['L_IGNORE_POST'] = $this->language->lang(
+				'TOPTOPICS_POST_COLLAPSED',
+				$net_dislike_score,
+				$this->get_post_collapse_dislike_threshold()
+			);
+		}
 		if ($poster_id !== ANONYMOUS)
 		{
 			$reputation_score = $this->user_reputation_scores[$poster_id] ?? 0;
@@ -578,6 +630,109 @@ class listener implements EventSubscriberInterface
 		$event['sql_ary'] = $sql_ary;
 	}
 
+	public function recenttopics_exclude_first_post_disliked_topics($event): void
+	{
+		$sql_array = $event['sql_array'] ?? null;
+		if (!is_array($sql_array) || empty($sql_array['WHERE']))
+		{
+			return;
+		}
+
+		$exclusion_sql = $this->build_first_post_disliked_topic_exclusion_sql('t');
+		if ($exclusion_sql === '')
+		{
+			return;
+		}
+
+		$sql_array['WHERE'] .= $exclusion_sql;
+		$event['sql_array'] = $sql_array;
+	}
+
+	public function recenttopics_filter_first_post_disliked_topics($event): void
+	{
+		$topic_list = $event['topic_list'] ?? [];
+		$rowset = $event['rowset'] ?? [];
+		if (!is_array($topic_list) || !is_array($rowset))
+		{
+			return;
+		}
+
+		$topic_ids = [];
+		foreach ($topic_list as $topic_id)
+		{
+			$topic_id = (int) $topic_id;
+			if ($topic_id > 0)
+			{
+				$topic_ids[$topic_id] = true;
+			}
+		}
+
+		foreach ($rowset as $row)
+		{
+			$topic_id = is_array($row) ? (int) ($row['topic_id'] ?? 0) : 0;
+			if ($topic_id > 0)
+			{
+				$topic_ids[$topic_id] = true;
+			}
+		}
+
+		$first_post_net_dislike_scores = $this->get_first_post_net_dislike_score_map(array_keys($topic_ids));
+		$excluded_topic_ids = $this->filter_first_post_net_dislike_scores_at_threshold($first_post_net_dislike_scores);
+		if (empty($excluded_topic_ids))
+		{
+			if (!empty($first_post_net_dislike_scores))
+			{
+				foreach ($rowset as &$row)
+				{
+					if (is_array($row))
+					{
+						$topic_id = (int) ($row['topic_id'] ?? 0);
+						$row['TOPTOPICS_FIRST_POST_NET_DISLIKE_SCORE'] = $first_post_net_dislike_scores[$topic_id] ?? 0;
+					}
+				}
+				unset($row);
+				$event['rowset'] = $rowset;
+			}
+			return;
+		}
+
+		$event['topic_list'] = array_values(array_filter($topic_list, static function ($topic_id) use ($excluded_topic_ids) {
+			return !isset($excluded_topic_ids[(int) $topic_id]);
+		}));
+
+		$filtered_rowset = [];
+		foreach ($rowset as $row)
+		{
+			$topic_id = is_array($row) ? (int) ($row['topic_id'] ?? 0) : 0;
+			if ($topic_id > 0 && isset($excluded_topic_ids[$topic_id]))
+			{
+				continue;
+			}
+
+			if (is_array($row))
+			{
+				$row['TOPTOPICS_FIRST_POST_NET_DISLIKE_SCORE'] = $first_post_net_dislike_scores[$topic_id] ?? 0;
+			}
+			$filtered_rowset[] = $row;
+		}
+		$event['rowset'] = $filtered_rowset;
+	}
+
+	public function recenttopics_fade_first_post_disliked_topic($event): void
+	{
+		$row = $event['row'] ?? [];
+		$tpl_ary = $event['tpl_ary'] ?? [];
+		if (!is_array($row) || !is_array($tpl_ary))
+		{
+			return;
+		}
+
+		$tpl_ary['TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS'] = $this->get_topic_dislike_fade_class(
+			(int) ($row['TOPTOPICS_FIRST_POST_NET_DISLIKE_SCORE'] ?? 0)
+		);
+		$event['tpl_ary'] = $tpl_ary;
+	}
+
 	public function display_forums_modify_category_template_vars($event): void
 	{
 		$category_id = (int) (($event['row']['forum_id'] ?? 0));
@@ -709,7 +864,6 @@ class listener implements EventSubscriberInterface
 		if ($forum_id > 0)
 		{
 			$this->invalidate_rank_cache_for_forums([$forum_id]);
-			$this->ranker->clear_materialized_scopes_for_forums([$forum_id]);
 		}
 		else
 		{
@@ -725,7 +879,6 @@ class listener implements EventSubscriberInterface
 		if ($forum_id > 0)
 		{
 			$this->invalidate_rank_cache_for_forums([$forum_id]);
-			$this->ranker->clear_materialized_scopes_for_forums([$forum_id]);
 			$this->sync_reputation_for_topic_id((int) ($event['topic_id'] ?? 0));
 			return;
 		}
@@ -801,6 +954,62 @@ class listener implements EventSubscriberInterface
 			'state' => $state,
 			'hash' => generate_link_hash('toptopics_override_' . $topic_id . '_' . $state),
 		]);
+	}
+
+	protected function should_collapse_post_for_dislikes(int $post_id, int $net_dislike_score, array $post_row): bool
+	{
+		$threshold = $this->get_post_collapse_dislike_threshold();
+		if ($threshold <= 0 || $net_dislike_score < $threshold)
+		{
+			return false;
+		}
+
+		if (!empty($post_row['S_POST_DELETED']) || !empty($post_row['S_IGNORE_POST']))
+		{
+			return false;
+		}
+
+		return !$this->is_explicitly_showing_post($post_id);
+	}
+
+	protected function get_post_collapse_dislike_threshold(): int
+	{
+		return max(0, (int) ($this->config['toptopics_post_collapse_dislike_threshold'] ?? self::DEFAULT_POST_COLLAPSE_DISLIKE_THRESHOLD));
+	}
+
+	protected function get_post_dislike_fade_class(int $net_dislike_score): string
+	{
+		$level = $this->get_post_dislike_fade_level($net_dislike_score);
+		return $level > 0 ? 'toptopics-dislike-fade toptopics-dislike-fade-level-' . $level : '';
+	}
+
+	protected function get_topic_dislike_fade_class(int $net_dislike_score): string
+	{
+		$level = $this->get_post_dislike_fade_level($net_dislike_score);
+		return $level > 0 ? 'toptopics-topic-dislike-fade toptopics-dislike-fade-level-' . $level : '';
+	}
+
+	protected function get_post_dislike_fade_level(int $net_dislike_score): int
+	{
+		$threshold = $this->get_post_collapse_dislike_threshold();
+		if ($threshold <= 0 || $net_dislike_score <= 0)
+		{
+			return 0;
+		}
+
+		if ($threshold <= 1 || $net_dislike_score >= $threshold)
+		{
+			return 4;
+		}
+
+		$visible_range = max(1, $threshold - 1);
+		return max(1, min(4, (int) ceil(($net_dislike_score / $visible_range) * 4)));
+	}
+
+	protected function is_explicitly_showing_post(int $post_id): bool
+	{
+		return $this->request->variable('view', '') === 'show'
+			&& $this->request->variable('p', 0) === $post_id;
 	}
 
 	protected function get_readable_forum_ids(): array
@@ -1538,6 +1747,7 @@ class listener implements EventSubscriberInterface
 		foreach ($topics as $index => $topic)
 		{
 			$row_class = ($index % 2 === 0) ? 'bg1' : 'bg2';
+			$topic_fade_class = $this->escape_attr($this->get_topic_dislike_fade_class((int) ($topic['first_post_net_dislike_score'] ?? 0)));
 			$topic_url = append_sid($this->root_path . 'viewtopic.' . $this->php_ext, 'f=' . (int) $topic['forum_id'] . '&t=' . (int) $topic['topic_id']);
 			$forum_url = append_sid($this->root_path . 'viewforum.' . $this->php_ext, 'f=' . (int) $topic['forum_id']);
 			$topic_title = $this->escape_text(censor_text((string) $topic['topic_title']));
@@ -1556,24 +1766,24 @@ class listener implements EventSubscriberInterface
 					. '</a>';
 			}
 
-				$html .= '<li class="row ' . $row_class . ' toptopics-category-row">'
-					. '<dl class="row-item ' . $this->escape_attr((string) ($topic['topic_img_style'] ?? '')) . '">'
-					. '<dt title="' . $this->escape_attr((string) ($topic['topic_folder_img_alt'] ?? '')) . '">'
-					. ((!empty($topic['unread_topic']) && !$this->user->data['is_bot']) ? '<a href="' . $topic['u_newest_post'] . '" class="row-item-link"></a>' : '')
-					. '<div class="list-inner">'
-					. $unread_icon
-					. '<a href="' . $topic_url . '" class="topictitle">' . $topic_title . '</a>'
-					. '<div class="toptopics-meta">' . $meta . '</div>'
-					. $this->build_mobile_stats_html($topic)
-					. $this->build_mobile_lastpost_html($topic)
-					. '</div>'
-					. '</dt>'
-					. '<dd class="topics">' . (int) ($topic['replies'] ?? 0) . ' <dfn>' . $this->escape_text($this->language->lang('REPLIES')) . '</dfn></dd>'
-					. '<dd class="posts">' . (int) ($topic['views'] ?? 0) . ' <dfn>' . $this->escape_text($this->language->lang('VIEWS')) . '</dfn></dd>'
-					. $this->build_lastpost_column_html($topic)
-					. '</dl>'
-					. $this->build_topic_preview_html($topic)
-					. '</li>';
+			$html .= '<li class="row ' . $row_class . ' toptopics-category-row">'
+				. '<dl class="row-item ' . $this->escape_attr((string) ($topic['topic_img_style'] ?? '')) . '">'
+				. '<dt title="' . $this->escape_attr((string) ($topic['topic_folder_img_alt'] ?? '')) . '">'
+				. ((!empty($topic['unread_topic']) && !$this->user->data['is_bot']) ? '<a href="' . $topic['u_newest_post'] . '" class="row-item-link"></a>' : '')
+				. '<div class="list-inner">'
+				. $unread_icon
+				. '<a href="' . $topic_url . '" class="topictitle' . ($topic_fade_class !== '' ? ' ' . $topic_fade_class : '') . '">' . $topic_title . '</a>'
+				. '<div class="toptopics-meta' . ($topic_fade_class !== '' ? ' ' . $topic_fade_class : '') . '">' . $meta . '</div>'
+				. $this->build_mobile_stats_html($topic)
+				. $this->build_mobile_lastpost_html($topic)
+				. '</div>'
+				. '</dt>'
+				. '<dd class="topics">' . (int) ($topic['replies'] ?? 0) . ' <dfn>' . $this->escape_text($this->language->lang('REPLIES')) . '</dfn></dd>'
+				. '<dd class="posts">' . (int) ($topic['views'] ?? 0) . ' <dfn>' . $this->escape_text($this->language->lang('VIEWS')) . '</dfn></dd>'
+				. $this->build_lastpost_column_html($topic)
+				. '</dl>'
+				. $this->build_topic_preview_html($topic)
+				. '</li>';
 		}
 
 		return $html;
@@ -1889,9 +2099,9 @@ class listener implements EventSubscriberInterface
 				'U_NEWEST_POST' => $topic['u_newest_post'],
 				'TOPIC_TITLE' => censor_text($topic['topic_title']),
 				'TOPIC_IMG_STYLE' => $topic['topic_img_style'],
-				'TOPIC_FOLDER_IMG_ALT' => $topic['topic_folder_img_alt'],
-				'FORUM_NAME' => $topic['forum_name'],
-				'USERNAME_FULL' => get_username_string('full', (int) $topic['topic_poster'], $topic['topic_first_poster_name'], $topic['topic_first_poster_colour']),
+					'TOPIC_FOLDER_IMG_ALT' => $topic['topic_folder_img_alt'],
+					'FORUM_NAME' => $topic['forum_name'],
+					'USERNAME_FULL' => get_username_string('full', (int) $topic['topic_poster'], $topic['topic_first_poster_name'], $topic['topic_first_poster_colour']),
 					'POST_TIME' => $this->user->format_date((int) $topic['topic_time']),
 					'U_LAST_POST' => $this->build_last_post_url($topic),
 					'LAST_POST_AUTHOR_FULL' => $this->get_last_post_author_full($topic),
@@ -1900,10 +2110,11 @@ class listener implements EventSubscriberInterface
 					'REPLIES' => (int) $topic['replies'],
 					'VIEWS' => (int) $topic['views'],
 					'LIKES' => (int) $topic['like_count'],
-				'DISLIKES' => (int) $topic['dislike_count'],
-				'FLAGS' => (int) $topic['flag_count'],
-				'S_UNREAD_TOPIC' => !empty($topic['unread_topic']),
-			];
+					'DISLIKES' => (int) $topic['dislike_count'],
+					'FLAGS' => (int) $topic['flag_count'],
+					'TOPIC_DISLIKE_FADE_CLASS' => $this->get_topic_dislike_fade_class((int) ($topic['first_post_net_dislike_score'] ?? 0)),
+					'S_UNREAD_TOPIC' => !empty($topic['unread_topic']),
+				];
 
 			$topic_id = (int) ($topic['topic_id'] ?? 0);
 			if ($topic_id > 0 && $this->is_topic_preview_enabled())
@@ -1953,7 +2164,45 @@ class listener implements EventSubscriberInterface
 		$vars = ['topics', 'context'];
 		extract($this->dispatcher->trigger_event('freemitbbs.toptopics.modify_topic_list', compact($vars)));
 
-		return is_array($topics) ? array_values($topics) : [];
+		return is_array($topics) ? $this->exclude_first_post_disliked_topics(array_values($topics)) : [];
+	}
+
+	protected function exclude_first_post_disliked_topics(array $topics): array
+	{
+		if (empty($topics) || $this->get_post_collapse_dislike_threshold() <= 0)
+		{
+			return array_values($topics);
+		}
+
+		$topic_ids = [];
+		foreach ($topics as $topic)
+		{
+			$topic_id = is_array($topic) ? (int) ($topic['topic_id'] ?? 0) : 0;
+			if ($topic_id > 0)
+			{
+				$topic_ids[$topic_id] = true;
+			}
+		}
+
+		$excluded_topic_ids = $this->get_first_post_disliked_topic_id_map(array_keys($topic_ids));
+		if (empty($excluded_topic_ids))
+		{
+			return array_values($topics);
+		}
+
+		$filtered_topics = [];
+		foreach ($topics as $topic)
+		{
+			$topic_id = is_array($topic) ? (int) ($topic['topic_id'] ?? 0) : 0;
+			if ($topic_id > 0 && isset($excluded_topic_ids[$topic_id]))
+			{
+				continue;
+			}
+
+			$filtered_topics[] = $topic;
+		}
+
+		return $filtered_topics;
 	}
 
 	protected function get_current_user_foe_id_map(): array
@@ -2004,6 +2253,87 @@ class listener implements EventSubscriberInterface
 
 		return ' AND '
 			. $this->db->sql_in_set($topic_alias . '.topic_poster', $foe_user_ids, true);
+	}
+
+	protected function build_first_post_disliked_topic_exclusion_sql(string $topic_alias = 't'): string
+	{
+		$threshold = $this->get_post_collapse_dislike_threshold();
+		if ($threshold <= 0)
+		{
+			return '';
+		}
+
+		return ' AND ((
+			SELECT COUNT(ttfpd.user_id)
+			FROM ' . $this->dislikes_table . ' ttfpd
+			WHERE ttfpd.post_id = ' . $topic_alias . '.topic_first_post_id
+		) - (
+			SELECT COUNT(ttfpl.user_id)
+			FROM ' . $this->likes_table . ' ttfpl
+			WHERE ttfpl.post_id = ' . $topic_alias . '.topic_first_post_id
+		)) < ' . $threshold;
+	}
+
+	protected function get_first_post_disliked_topic_id_map(array $topic_ids): array
+	{
+		return $this->filter_first_post_net_dislike_scores_at_threshold(
+			$this->get_first_post_net_dislike_score_map($topic_ids)
+		);
+	}
+
+	protected function get_first_post_net_dislike_score_map(array $topic_ids): array
+	{
+		$topic_ids = array_values(array_unique(array_filter(array_map('intval', $topic_ids), static function ($topic_id) {
+			return $topic_id > 0;
+		})));
+		if (empty($topic_ids))
+		{
+			return [];
+		}
+
+		$sql = 'SELECT t.topic_id,
+				(SELECT COUNT(ttfpd.user_id)
+					FROM ' . $this->dislikes_table . ' ttfpd
+					WHERE ttfpd.post_id = t.topic_first_post_id) AS first_post_dislike_count,
+				(SELECT COUNT(ttfpl.user_id)
+					FROM ' . $this->likes_table . ' ttfpl
+					WHERE ttfpl.post_id = t.topic_first_post_id) AS first_post_like_count
+			FROM ' . TOPICS_TABLE . ' t
+			WHERE ' . $this->db->sql_in_set('t.topic_id', $topic_ids);
+		$result = $this->db->sql_query($sql);
+		$net_dislike_scores = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$topic_id = (int) ($row['topic_id'] ?? 0);
+			$net_dislike_score = (int) ($row['first_post_dislike_count'] ?? 0) - (int) ($row['first_post_like_count'] ?? 0);
+			if ($topic_id > 0 && $net_dislike_score > 0)
+			{
+				$net_dislike_scores[$topic_id] = $net_dislike_score;
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		return $net_dislike_scores;
+	}
+
+	protected function filter_first_post_net_dislike_scores_at_threshold(array $net_dislike_scores): array
+	{
+		$threshold = $this->get_post_collapse_dislike_threshold();
+		if ($threshold <= 0 || empty($net_dislike_scores))
+		{
+			return [];
+		}
+
+		$disliked_topic_ids = [];
+		foreach ($net_dislike_scores as $topic_id => $net_dislike_score)
+		{
+			if ((int) $net_dislike_score >= $threshold)
+			{
+				$disliked_topic_ids[(int) $topic_id] = true;
+			}
+		}
+
+		return $disliked_topic_ids;
 	}
 
 	protected function assign_topicpreview_template_vars(array $topicpreview): void
