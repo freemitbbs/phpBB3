@@ -87,6 +87,61 @@
 			</dt>
 			<dd><input type="number" min="10" max="3600" id="cardgamesauth_token_rate_window" name="cardgamesauth_token_rate_window" value="{CARDGAMESAUTH_TOKEN_RATE_WINDOW}" /></dd>
 		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_token_clock_tolerance">{{ lang('CARDGAMESAUTH_TOKEN_CLOCK_TOLERANCE') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_TOKEN_CLOCK_TOLERANCE_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="number" min="0" max="300" id="cardgamesauth_token_clock_tolerance" name="cardgamesauth_token_clock_tolerance" value="{CARDGAMESAUTH_TOKEN_CLOCK_TOLERANCE}" /></dd>
+		</dl>
+	</fieldset>
+
+	<fieldset>
+		<legend>{{ lang('CARDGAMESAUTH_FIELDSET_PROXY') }}</legend>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_proxy_enabled">{{ lang('CARDGAMESAUTH_PROXY_ENABLED') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_PROXY_ENABLED_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<label><input type="radio" class="radio" id="cardgamesauth_proxy_enabled" name="cardgamesauth_proxy_enabled" value="1"{% if CARDGAMESAUTH_PROXY_ENABLED %} checked="checked"{% endif %} /> {{ lang('YES') }}</label>
+				<label><input type="radio" class="radio" name="cardgamesauth_proxy_enabled" value="0"{% if not CARDGAMESAUTH_PROXY_ENABLED %} checked="checked"{% endif %} /> {{ lang('NO') }}</label>
+			</dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_proxy_secret">{{ lang('CARDGAMESAUTH_PROXY_SECRET') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_PROXY_SECRET_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="cardgamesauth_proxy_secret" name="cardgamesauth_proxy_secret" value="{CARDGAMESAUTH_PROXY_SECRET}" class="inputbox" autocomplete="off" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_proxy_clock_skew">{{ lang('CARDGAMESAUTH_PROXY_CLOCK_SKEW') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_PROXY_CLOCK_SKEW_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="number" min="30" max="3600" id="cardgamesauth_proxy_clock_skew" name="cardgamesauth_proxy_clock_skew" value="{CARDGAMESAUTH_PROXY_CLOCK_SKEW}" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_proxy_nonce_ttl">{{ lang('CARDGAMESAUTH_PROXY_NONCE_TTL') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_PROXY_NONCE_TTL_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="number" min="30" max="3600" id="cardgamesauth_proxy_nonce_ttl" name="cardgamesauth_proxy_nonce_ttl" value="{CARDGAMESAUTH_PROXY_NONCE_TTL}" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_proxy_max_body_bytes">{{ lang('CARDGAMESAUTH_PROXY_MAX_BODY_BYTES') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_PROXY_MAX_BODY_BYTES_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="number" min="1024" max="1048576" id="cardgamesauth_proxy_max_body_bytes" name="cardgamesauth_proxy_max_body_bytes" value="{CARDGAMESAUTH_PROXY_MAX_BODY_BYTES}" /></dd>
+		</dl>
 	</fieldset>
 
 	<fieldset class="submit-buttons">

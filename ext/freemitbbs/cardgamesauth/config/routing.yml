@@ -12,3 +12,50 @@ freemitbbs_cardgamesauth_config:
     path: /card-games/config
     defaults: { _controller: freemitbbs.cardgamesauth.controller.auth:config }
     methods: [GET]
+
+freemitbbs_cardgamesauth_server_verify:
+    path: /card-games/server/auth/verify
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:verify_auth }
+    methods: [POST]
+
+freemitbbs_cardgamesauth_server_room_configs:
+    path: /card-games/server/room-configs
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:room_configs }
+    methods: [GET]
+
+freemitbbs_cardgamesauth_server_session_create:
+    path: /card-games/server/session
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:create_session }
+    methods: [POST]
+
+freemitbbs_cardgamesauth_server_session_update:
+    path: /card-games/server/session/{id}
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:update_session }
+    requirements:
+        id: \d+
+    methods: [PATCH]
+
+freemitbbs_cardgamesauth_server_events:
+    path: /card-games/server/events
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:events }
+    methods: [POST]
+
+freemitbbs_cardgamesauth_server_snapshots:
+    path: /card-games/server/snapshots
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:snapshots }
+    methods: [POST]
+
+freemitbbs_cardgamesauth_server_finished_summary:
+    path: /card-games/server/finished-summary
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:finished_summary }
+    methods: [POST]
+
+freemitbbs_cardgamesauth_server_player_stats:
+    path: /card-games/server/player-stats
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:player_stats }
+    methods: [POST]
+
+freemitbbs_cardgamesauth_server_cleanup:
+    path: /card-games/server/cleanup
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:cleanup }
+    methods: [POST]

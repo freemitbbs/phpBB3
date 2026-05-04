@@ -45,6 +45,16 @@ class acp_cardgamesauth_module
 			$config->set('cardgamesauth_token_ttl', (string) $this->bounded_int($request->variable('cardgamesauth_token_ttl', 120), 30, 600));
 			$config->set('cardgamesauth_token_rate_limit', (string) $this->bounded_int($request->variable('cardgamesauth_token_rate_limit', 20), 1, 120));
 			$config->set('cardgamesauth_token_rate_window', (string) $this->bounded_int($request->variable('cardgamesauth_token_rate_window', 60), 10, 3600));
+			$config->set('cardgamesauth_token_clock_tolerance', (string) $this->bounded_int($request->variable('cardgamesauth_token_clock_tolerance', 10), 0, 300));
+			$config->set('cardgamesauth_proxy_enabled', (string) ((int) $request->variable('cardgamesauth_proxy_enabled', 0) ? 1 : 0));
+			$proxy_secret = trim((string) $request->variable('cardgamesauth_proxy_secret', '', true));
+			if ($proxy_secret !== '')
+			{
+				$config->set('cardgamesauth_proxy_secret', $proxy_secret);
+			}
+			$config->set('cardgamesauth_proxy_clock_skew', (string) $this->bounded_int($request->variable('cardgamesauth_proxy_clock_skew', 300), 30, 3600));
+			$config->set('cardgamesauth_proxy_nonce_ttl', (string) $this->bounded_int($request->variable('cardgamesauth_proxy_nonce_ttl', 300), 30, 3600));
+			$config->set('cardgamesauth_proxy_max_body_bytes', (string) $this->bounded_int($request->variable('cardgamesauth_proxy_max_body_bytes', 262144), 1024, 1048576));
 
 			trigger_error($language->lang('CONFIG_UPDATED') . adm_back_link($this->u_action));
 		}
@@ -59,6 +69,12 @@ class acp_cardgamesauth_module
 			'CARDGAMESAUTH_TOKEN_TTL' => (int) ($config['cardgamesauth_token_ttl'] ?? 120),
 			'CARDGAMESAUTH_TOKEN_RATE_LIMIT' => (int) ($config['cardgamesauth_token_rate_limit'] ?? 20),
 			'CARDGAMESAUTH_TOKEN_RATE_WINDOW' => (int) ($config['cardgamesauth_token_rate_window'] ?? 60),
+			'CARDGAMESAUTH_TOKEN_CLOCK_TOLERANCE' => (int) ($config['cardgamesauth_token_clock_tolerance'] ?? 10),
+			'CARDGAMESAUTH_PROXY_ENABLED' => (int) ($config['cardgamesauth_proxy_enabled'] ?? 1),
+			'CARDGAMESAUTH_PROXY_SECRET' => (string) ($config['cardgamesauth_proxy_secret'] ?? ''),
+			'CARDGAMESAUTH_PROXY_CLOCK_SKEW' => (int) ($config['cardgamesauth_proxy_clock_skew'] ?? 300),
+			'CARDGAMESAUTH_PROXY_NONCE_TTL' => (int) ($config['cardgamesauth_proxy_nonce_ttl'] ?? 300),
+			'CARDGAMESAUTH_PROXY_MAX_BODY_BYTES' => (int) ($config['cardgamesauth_proxy_max_body_bytes'] ?? 262144),
 		]);
 	}
 

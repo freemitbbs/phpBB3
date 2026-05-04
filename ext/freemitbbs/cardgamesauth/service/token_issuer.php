@@ -64,6 +64,67 @@ class token_issuer
 		return $audience !== '' ? $audience : self::DEFAULT_AUDIENCE;
 	}
 
+	public function verify(string $token, int $clock_tolerance_seconds = 10): array
+	{
+		if (strlen($token) > 4096)
+		{
+			throw new \InvalidArgumentException('token_too_large');
+		}
+
+		$parts = explode('.', $token);
+		if (count($parts) !== 3)
+		{
+			throw new \InvalidArgumentException('invalid_token');
+		}
+
+		$header = json_decode($this->base64url_decode($parts[0]), true);
+		$payload = json_decode($this->base64url_decode($parts[1]), true);
+		if (!is_array($header) || !is_array($payload))
+		{
+			throw new \InvalidArgumentException('invalid_token_json');
+		}
+
+		if (($header['alg'] ?? '') !== 'HS256')
+		{
+			throw new \InvalidArgumentException('invalid_token_algorithm');
+		}
+
+		$expected_signature = $this->base64url(hash_hmac('sha256', $parts[0] . '.' . $parts[1], $this->secret(), true));
+		if (!hash_equals($expected_signature, $parts[2]))
+		{
+			throw new \InvalidArgumentException('invalid_token_signature');
+		}
+
+		$now = time();
+		$clock_tolerance_seconds = max(0, min(300, $clock_tolerance_seconds));
+		if ((string) ($payload['iss'] ?? '') !== $this->issuer())
+		{
+			throw new \InvalidArgumentException('invalid_token_issuer');
+		}
+		if ((string) ($payload['aud'] ?? '') !== $this->audience())
+		{
+			throw new \InvalidArgumentException('invalid_token_audience');
+		}
+		if ((int) ($payload['exp'] ?? 0) < ($now - $clock_tolerance_seconds))
+		{
+			throw new \InvalidArgumentException('token_expired');
+		}
+		if ((int) ($payload['nbf'] ?? 0) > ($now + $clock_tolerance_seconds))
+		{
+			throw new \InvalidArgumentException('token_not_active');
+		}
+		if ((int) ($payload['iat'] ?? 0) > ($now + $clock_tolerance_seconds))
+		{
+			throw new \InvalidArgumentException('token_issued_in_future');
+		}
+		if ((int) ($payload['user_id'] ?? 0) <= 0 || (string) ($payload['jti'] ?? '') === '')
+		{
+			throw new \InvalidArgumentException('invalid_token_claims');
+		}
+
+		return $payload;
+	}
+
 	protected function encode(array $header, array $payload): string
 	{
 		$secret = $this->secret();
@@ -106,5 +167,16 @@ class token_issuer
 	protected function base64url(string $value): string
 	{
 		return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+	}
+
+	protected function base64url_decode(string $value): string
+	{
+		$decoded = base64_decode(strtr($value, '-_', '+/'), true);
+		if ($decoded === false)
+		{
+			throw new \InvalidArgumentException('invalid_token_encoding');
+		}
+
+		return $decoded;
 	}
 }

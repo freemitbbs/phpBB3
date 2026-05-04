@@ -1,3 +1,15 @@
+parameters:
+    tables.freemitbbs.cardgamesauth.room_configs: '%core.table_prefix%game_room_configs'
+    tables.freemitbbs.cardgamesauth.sessions: '%core.table_prefix%game_sessions'
+    tables.freemitbbs.cardgamesauth.room_members: '%core.table_prefix%game_room_members'
+    tables.freemitbbs.cardgamesauth.events: '%core.table_prefix%game_events'
+    tables.freemitbbs.cardgamesauth.snapshots: '%core.table_prefix%game_snapshots'
+    tables.freemitbbs.cardgamesauth.finished_summaries: '%core.table_prefix%game_finished_summaries'
+    tables.freemitbbs.cardgamesauth.player_stats: '%core.table_prefix%game_player_stats'
+    tables.freemitbbs.cardgamesauth.player_settings: '%core.table_prefix%game_player_settings'
+    tables.freemitbbs.cardgamesauth.moderation_audit: '%core.table_prefix%game_moderation_audit'
+    tables.freemitbbs.cardgamesauth.proxy_nonces: '%core.table_prefix%cardgamesauth_proxy_nonces'
+
 services:
     freemitbbs.cardgamesauth.token_issuer:
         class: freemitbbs\cardgamesauth\service\token_issuer
@@ -17,6 +29,24 @@ services:
             - '@template'
             - '@user'
             - '@freemitbbs.cardgamesauth.token_issuer'
+
+    freemitbbs.cardgamesauth.controller.server:
+        class: freemitbbs\cardgamesauth\controller\server
+        arguments:
+            - '@config'
+            - '@dbal.conn'
+            - '@request'
+            - '@freemitbbs.cardgamesauth.token_issuer'
+            - '%tables.freemitbbs.cardgamesauth.room_configs%'
+            - '%tables.freemitbbs.cardgamesauth.sessions%'
+            - '%tables.freemitbbs.cardgamesauth.room_members%'
+            - '%tables.freemitbbs.cardgamesauth.events%'
+            - '%tables.freemitbbs.cardgamesauth.snapshots%'
+            - '%tables.freemitbbs.cardgamesauth.finished_summaries%'
+            - '%tables.freemitbbs.cardgamesauth.player_stats%'
+            - '%tables.freemitbbs.cardgamesauth.player_settings%'
+            - '%tables.freemitbbs.cardgamesauth.moderation_audit%'
+            - '%tables.freemitbbs.cardgamesauth.proxy_nonces%'
 
     freemitbbs.cardgamesauth.listener:
         class: freemitbbs\cardgamesauth\event\listener
