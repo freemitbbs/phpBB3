@@ -1,0 +1,31 @@
+services:
+    freemitbbs.cardgamesauth.token_issuer:
+        class: freemitbbs\cardgamesauth\service\token_issuer
+        arguments:
+            - '@config'
+            - '@user'
+
+    freemitbbs.cardgamesauth.controller.auth:
+        class: freemitbbs\cardgamesauth\controller\auth
+        arguments:
+            - '@auth'
+            - '@cache.driver'
+            - '@config'
+            - '@controller.helper'
+            - '@language'
+            - '@request'
+            - '@template'
+            - '@user'
+            - '@freemitbbs.cardgamesauth.token_issuer'
+
+    freemitbbs.cardgamesauth.listener:
+        class: freemitbbs\cardgamesauth\event\listener
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@controller.helper'
+            - '@language'
+            - '@template'
+            - '@user'
+        tags:
+            - { name: event.listener }

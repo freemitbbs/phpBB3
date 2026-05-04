@@ -1,0 +1,99 @@
+{% INCLUDE 'overall_header.html' %}
+
+<h1>{{ lang('ACP_CARDGAMESAUTH_SETTINGS') }}</h1>
+<p>{{ lang('CARDGAMESAUTH_EXPLAIN') }}</p>
+
+<form id="acp_cardgamesauth" method="post" action="{U_ACTION}">
+	<fieldset>
+		<legend>{{ lang('CARDGAMESAUTH_FIELDSET_GENERAL') }}</legend>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_enabled">{{ lang('CARDGAMESAUTH_ENABLED') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_ENABLED_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<label><input type="radio" class="radio" id="cardgamesauth_enabled" name="cardgamesauth_enabled" value="1"{% if CARDGAMESAUTH_ENABLED %} checked="checked"{% endif %} /> {{ lang('YES') }}</label>
+				<label><input type="radio" class="radio" name="cardgamesauth_enabled" value="0"{% if not CARDGAMESAUTH_ENABLED %} checked="checked"{% endif %} /> {{ lang('NO') }}</label>
+			</dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_nav_enabled">{{ lang('CARDGAMESAUTH_NAV_ENABLED') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_NAV_ENABLED_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<label><input type="radio" class="radio" id="cardgamesauth_nav_enabled" name="cardgamesauth_nav_enabled" value="1"{% if CARDGAMESAUTH_NAV_ENABLED %} checked="checked"{% endif %} /> {{ lang('YES') }}</label>
+				<label><input type="radio" class="radio" name="cardgamesauth_nav_enabled" value="0"{% if not CARDGAMESAUTH_NAV_ENABLED %} checked="checked"{% endif %} /> {{ lang('NO') }}</label>
+			</dd>
+		</dl>
+	</fieldset>
+
+	<fieldset>
+		<legend>{{ lang('CARDGAMESAUTH_FIELDSET_CLIENT') }}</legend>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_client_url">{{ lang('CARDGAMESAUTH_CLIENT_URL') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_CLIENT_URL_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="cardgamesauth_client_url" name="cardgamesauth_client_url" value="{CARDGAMESAUTH_CLIENT_URL}" class="inputbox" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_launch_redirect">{{ lang('CARDGAMESAUTH_LAUNCH_REDIRECT') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_LAUNCH_REDIRECT_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<label><input type="radio" class="radio" id="cardgamesauth_launch_redirect" name="cardgamesauth_launch_redirect" value="1"{% if CARDGAMESAUTH_LAUNCH_REDIRECT %} checked="checked"{% endif %} /> {{ lang('YES') }}</label>
+				<label><input type="radio" class="radio" name="cardgamesauth_launch_redirect" value="0"{% if not CARDGAMESAUTH_LAUNCH_REDIRECT %} checked="checked"{% endif %} /> {{ lang('NO') }}</label>
+			</dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_ws_url">{{ lang('CARDGAMESAUTH_WS_URL') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_WS_URL_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="cardgamesauth_ws_url" name="cardgamesauth_ws_url" value="{CARDGAMESAUTH_WS_URL}" class="inputbox" /></dd>
+		</dl>
+	</fieldset>
+
+	<fieldset>
+		<legend>{{ lang('CARDGAMESAUTH_FIELDSET_TOKEN') }}</legend>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_token_ttl">{{ lang('CARDGAMESAUTH_TOKEN_TTL') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_TOKEN_TTL_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="number" min="30" max="600" id="cardgamesauth_token_ttl" name="cardgamesauth_token_ttl" value="{CARDGAMESAUTH_TOKEN_TTL}" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_token_rate_limit">{{ lang('CARDGAMESAUTH_TOKEN_RATE_LIMIT') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_TOKEN_RATE_LIMIT_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="number" min="1" max="120" id="cardgamesauth_token_rate_limit" name="cardgamesauth_token_rate_limit" value="{CARDGAMESAUTH_TOKEN_RATE_LIMIT}" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_token_rate_window">{{ lang('CARDGAMESAUTH_TOKEN_RATE_WINDOW') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_TOKEN_RATE_WINDOW_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="number" min="10" max="3600" id="cardgamesauth_token_rate_window" name="cardgamesauth_token_rate_window" value="{CARDGAMESAUTH_TOKEN_RATE_WINDOW}" /></dd>
+		</dl>
+	</fieldset>
+
+	<fieldset class="submit-buttons">
+		{{ S_FORM_TOKEN }}
+		<input class="button1" type="submit" id="submit" name="submit" value="{{ lang('SUBMIT') }}" />&nbsp;
+		<input class="button2" type="reset" id="reset" name="reset" value="{{ lang('RESET') }}" />
+	</fieldset>
+</form>
+
+{% INCLUDE 'overall_footer.html' %}

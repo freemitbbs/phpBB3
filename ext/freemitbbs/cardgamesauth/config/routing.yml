@@ -1,0 +1,14 @@
+freemitbbs_cardgamesauth_launch:
+    path: /card-games
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.auth:launch }
+    methods: [GET]
+
+freemitbbs_cardgamesauth_token:
+    path: /card-games/token
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.auth:token }
+    methods: [POST]
+
+freemitbbs_cardgamesauth_config:
+    path: /card-games/config
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.auth:config }
+    methods: [GET]

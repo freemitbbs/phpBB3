@@ -1,0 +1,23 @@
+<!-- INCLUDE overall_header.html -->
+
+<h2>{L_CARDGAMES_LAUNCH_HEADING}</h2>
+
+<div class="panel">
+	<div class="inner">
+		<!-- IF S_CARDGAMES_CAN_PLAY -->
+			<p>{L_CARDGAMES_LAUNCH_BODY}</p>
+			<!-- IF U_CARDGAMES_CLIENT -->
+				<p><a class="button" href="{U_CARDGAMES_CLIENT}" id="cardgames-open-client">{L_CARDGAMES_OPEN_CLIENT}</a></p>
+			<!-- ELSE -->
+				<p>{L_CARDGAMES_CLIENT_NOT_CONFIGURED}</p>
+			<!-- ENDIF -->
+			<script>
+				window.freemitbbsCardGames = {CARDGAMES_BOOTSTRAP_JSON};
+			</script>
+		<!-- ELSE -->
+			<p>{L_CARDGAMES_NOT_ALLOWED}</p>
+		<!-- ENDIF -->
+	</div>
+</div>
+
+<!-- INCLUDE overall_footer.html -->
