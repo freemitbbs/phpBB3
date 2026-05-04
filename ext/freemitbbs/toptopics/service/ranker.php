@@ -310,6 +310,146 @@ class ranker
 		return $topics_by_scope;
 	}
 
+	public function get_topics_for_balanced_forum_scopes(array $scopes): array
+	{
+		$normalized_scopes = [];
+		foreach ($scopes as $scope_id => $scope)
+		{
+			$forum_ids = array_values(array_unique(array_filter(array_map('intval', $scope['forum_ids'] ?? []), static function ($forum_id) {
+				return $forum_id > 0;
+			})));
+			sort($forum_ids);
+			$normalized_scopes[(string) $scope_id] = [
+				'forum_ids' => $forum_ids,
+				'limit' => max(0, (int) ($scope['limit'] ?? 0)),
+				'per_forum_candidate_limit' => max(0, (int) ($scope['per_forum_candidate_limit'] ?? ($scope['limit'] ?? 0))),
+				'per_forum_result_limit' => max(0, (int) ($scope['per_forum_result_limit'] ?? ($scope['limit'] ?? 0))),
+			];
+		}
+		ksort($normalized_scopes);
+
+		if (empty($normalized_scopes))
+		{
+			return [];
+		}
+
+		$options = $this->get_rank_options();
+		$all_forum_ids = [];
+		$per_forum_candidate_limit = 0;
+		foreach ($normalized_scopes as $scope)
+		{
+			$per_forum_candidate_limit = max($per_forum_candidate_limit, $scope['per_forum_candidate_limit']);
+			foreach ($scope['forum_ids'] as $forum_id)
+			{
+				$all_forum_ids[$forum_id] = true;
+			}
+		}
+		$all_forum_ids = array_keys($all_forum_ids);
+		sort($all_forum_ids);
+
+		if (empty($all_forum_ids) || $per_forum_candidate_limit <= 0)
+		{
+			return array_fill_keys(array_keys($normalized_scopes), []);
+		}
+
+		$cache_ttl = $options['summary_cache_seconds'];
+		$cache_key = $this->build_balanced_forum_scopes_cache_key($normalized_scopes, $all_forum_ids, $options);
+		if ($cache_ttl > 0)
+		{
+			$cached_topics_by_scope = $this->cache->get($cache_key);
+			if (is_array($cached_topics_by_scope))
+			{
+				return $this->exclude_foe_authored_topics_by_scope($cached_topics_by_scope);
+			}
+		}
+
+		$candidate_topic_ids_by_forum = $this->get_balanced_candidate_topic_ids_by_forum($all_forum_ids, $per_forum_candidate_limit, $options);
+		$all_candidate_ids = [];
+		foreach ($candidate_topic_ids_by_forum as $topic_ids)
+		{
+			foreach ($topic_ids as $topic_id)
+			{
+				$all_candidate_ids[(int) $topic_id] = true;
+			}
+		}
+
+		$ranked_topics = !empty($all_candidate_ids)
+			? $this->compute_topics_from_candidate_ids(array_keys($all_candidate_ids), count($all_candidate_ids), $options)
+			: [];
+
+		$topics_by_scope = [];
+		foreach ($normalized_scopes as $scope_id => $scope)
+		{
+			if (empty($scope['forum_ids']) || $scope['limit'] <= 0)
+			{
+				$topics_by_scope[$scope_id] = [];
+				continue;
+			}
+
+			$candidate_lookup = [];
+			foreach ($scope['forum_ids'] as $forum_id)
+			{
+				foreach ($candidate_topic_ids_by_forum[$forum_id] ?? [] as $topic_id)
+				{
+					$candidate_lookup[(int) $topic_id] = true;
+				}
+			}
+
+			$scope_topics = [];
+			$forum_counts = [];
+			$per_forum_result_limit = max(1, (int) ($scope['per_forum_result_limit'] ?? $scope['limit']));
+			$topic_limit = max($scope['limit'], count($scope['forum_ids']) * $per_forum_result_limit);
+			if (!empty($candidate_lookup))
+			{
+				foreach ($ranked_topics as $topic)
+				{
+					$topic_id = (int) ($topic['topic_id'] ?? 0);
+					if ($topic_id > 0 && isset($candidate_lookup[$topic_id]))
+					{
+						$forum_id = (int) ($topic['forum_id'] ?? 0);
+						if ($forum_id > 0)
+						{
+							$forum_counts[$forum_id] = (int) ($forum_counts[$forum_id] ?? 0);
+							if ($forum_counts[$forum_id] >= $per_forum_result_limit)
+							{
+								continue;
+							}
+							$forum_counts[$forum_id]++;
+						}
+
+						$scope_topics[] = $topic;
+						if (count($scope_topics) >= $topic_limit)
+						{
+							break;
+						}
+					}
+				}
+			}
+
+			$topics_by_scope[$scope_id] = $scope_topics;
+		}
+
+		if ($cache_ttl > 0)
+		{
+			$this->cache->put($cache_key, $topics_by_scope, $cache_ttl);
+		}
+
+		return $this->exclude_foe_authored_topics_by_scope($topics_by_scope);
+	}
+
+	protected function exclude_foe_authored_topics_by_scope(array $topics_by_scope): array
+	{
+		$filtered_topics_by_scope = [];
+		foreach ($topics_by_scope as $scope_id => $topics)
+		{
+			$filtered_topics_by_scope[$scope_id] = is_array($topics)
+				? $this->exclude_foe_authored_topics($topics)
+				: [];
+		}
+
+		return $filtered_topics_by_scope;
+	}
+
 	protected function exclude_foe_authored_topics(array $topics): array
 	{
 		if (empty($topics))
@@ -736,6 +876,81 @@ class ranker
 		return $topic_ids;
 	}
 
+	protected function get_balanced_candidate_topic_ids_by_forum(array $forum_ids, int $candidate_limit, array $options): array
+	{
+		$forum_ids = array_values(array_unique(array_filter(array_map('intval', $forum_ids), static function ($forum_id) {
+			return $forum_id > 0;
+		})));
+		sort($forum_ids);
+		if (empty($forum_ids))
+		{
+			return [];
+		}
+
+		$configured_limit = $this->get_int_config('toptopics_candidate_pool_limit', self::DEFAULT_CANDIDATE_POOL_LIMIT, 50, 20000);
+		$candidate_limit = max(1, min($configured_limit, $candidate_limit));
+		$lookback_cutoff = time() - ($options['lookback_days'] * 86400);
+		$topic_ids_by_forum = array_fill_keys($forum_ids, []);
+
+		$sql_parts = [];
+		foreach ($forum_ids as $index => $forum_id)
+		{
+			$sql_parts[] = 'SELECT topic_id, forum_id
+				FROM (
+					SELECT t.topic_id, t.forum_id
+					FROM ' . TOPICS_TABLE . ' t
+					WHERE t.forum_id = ' . $forum_id . '
+						AND t.topic_type <> ' . ITEM_MOVED . '
+						AND t.topic_time >= ' . $lookback_cutoff . '
+						AND ' . $this->content_visibility->get_forums_visibility_sql('topic', [$forum_id], 't.') . '
+					ORDER BY t.topic_last_post_time DESC
+					LIMIT ' . $candidate_limit . '
+				) balanced_forum_candidates_' . $index;
+		}
+
+		$result = $this->db->sql_query(implode("\nUNION ALL\n", $sql_parts));
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$forum_id = (int) ($row['forum_id'] ?? 0);
+			$topic_id = (int) ($row['topic_id'] ?? 0);
+			if ($forum_id > 0 && $topic_id > 0 && isset($topic_ids_by_forum[$forum_id]))
+			{
+				$topic_ids_by_forum[$forum_id][$topic_id] = true;
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		$forum_sql = $this->db->sql_in_set('t.forum_id', $forum_ids);
+		$override_sql = 'SELECT t.topic_id, t.forum_id
+			FROM ' . TOPICS_TABLE . ' t
+			INNER JOIN ' . $this->topic_overrides_table . ' ov
+				ON ov.topic_id = t.topic_id
+			WHERE ' . $forum_sql . '
+				AND t.topic_type <> ' . ITEM_MOVED . '
+				AND t.topic_time >= ' . $lookback_cutoff . '
+				AND ' . $this->content_visibility->get_forums_visibility_sql('topic', $forum_ids, 't.');
+		$result = $this->db->sql_query($override_sql);
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$forum_id = (int) ($row['forum_id'] ?? 0);
+			$topic_id = (int) ($row['topic_id'] ?? 0);
+			if ($forum_id > 0 && $topic_id > 0 && isset($topic_ids_by_forum[$forum_id]))
+			{
+				$topic_ids_by_forum[$forum_id][$topic_id] = true;
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		foreach ($topic_ids_by_forum as $forum_id => $topic_ids)
+		{
+			$topic_ids = array_keys($topic_ids);
+			sort($topic_ids);
+			$topic_ids_by_forum[$forum_id] = $topic_ids;
+		}
+
+		return $topic_ids_by_forum;
+	}
+
 	protected function get_candidate_pool_limit(int $limit): int
 	{
 		$configured_limit = $this->get_int_config('toptopics_candidate_pool_limit', self::DEFAULT_CANDIDATE_POOL_LIMIT, 50, 20000);
@@ -751,6 +966,17 @@ class ranker
 		return '_freemitbbs_toptopics_' . md5(json_encode([
 			'forum_ids' => $forum_ids,
 			'limit' => $limit,
+			'options' => $options,
+			'generation' => $this->cache_invalidator->get_cache_scope($forum_ids),
+			'visibility' => $this->get_visibility_cache_scope($forum_ids),
+		]));
+	}
+
+	protected function build_balanced_forum_scopes_cache_key(array $scopes, array $forum_ids, array $options): string
+	{
+		return '_freemitbbs_toptopics_balanced_forum_scopes_' . md5(json_encode([
+			'scopes' => $scopes,
+			'forum_ids' => $forum_ids,
 			'options' => $options,
 			'generation' => $this->cache_invalidator->get_cache_scope($forum_ids),
 			'visibility' => $this->get_visibility_cache_scope($forum_ids),

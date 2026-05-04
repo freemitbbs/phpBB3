@@ -10,6 +10,7 @@ class listener implements EventSubscriberInterface
 	private const USER_OPTION_SHOW_MOBILE_TOPIC_STATS = 21;
 	private const DEFAULT_PER_FORUM_TOPIC_LIMIT = 3;
 	private const BALANCED_TOPIC_FETCH_MULTIPLIER = 5;
+	private const INDEX_CATEGORY_FORUM_CANDIDATE_MULTIPLIER = 2;
 	private const DEFAULT_CANDIDATE_POOL_LIMIT = 2000;
 	private const DEFAULT_POST_COLLAPSE_DISLIKE_THRESHOLD = 5;
 
@@ -504,6 +505,7 @@ class listener implements EventSubscriberInterface
 		}
 
 		$scope_map = [];
+		$balanced_scope_map = [];
 		$summary_scope_id = '__index_summary';
 		$summary_forum_ids = $this->exclude_index_forum_ids($this->get_readable_forum_ids());
 		$summary_display_limit = max(0, (int) $this->config['toptopics_index_limit']);
@@ -532,16 +534,33 @@ class listener implements EventSubscriberInterface
 			$category_topic_forum_ids[$category_id] = $topic_forum_ids;
 			if (!empty($topic_forum_ids))
 			{
-				$scope_map['category_' . $category_id] = [
-					'forum_ids' => $topic_forum_ids,
-					'limit' => $this->get_balanced_topic_fetch_limit($category_candidate_limit, $topic_forum_ids),
-				];
+				$scope_id = 'category_' . (int) $category_id;
+				if ($this->should_limit_topics_per_forum($topic_forum_ids))
+				{
+					$balanced_scope_map[$scope_id] = [
+						'forum_ids' => $topic_forum_ids,
+						'limit' => $category_candidate_limit,
+						'per_forum_candidate_limit' => $this->get_index_category_per_forum_candidate_limit($category_candidate_limit),
+						'per_forum_result_limit' => $category_candidate_limit,
+					];
+				}
+				else
+				{
+					$scope_map[$scope_id] = [
+						'forum_ids' => $topic_forum_ids,
+						'limit' => $this->get_balanced_topic_fetch_limit($category_candidate_limit, $topic_forum_ids),
+					];
+				}
 			}
 		}
 
 		$scope_topics = !empty($scope_map)
 			? $this->ranker->get_topics_for_scopes($scope_map)
 			: [];
+		if (!empty($balanced_scope_map))
+		{
+			$scope_topics += $this->ranker->get_topics_for_balanced_forum_scopes($balanced_scope_map);
+		}
 		$this->index_summary_topics = $this->apply_topic_list_limits(
 			$this->modify_topic_list(
 				$this->exclude_foe_authored_topics($scope_topics[$summary_scope_id] ?? []),
@@ -563,8 +582,11 @@ class listener implements EventSubscriberInterface
 		$all_topics = [];
 		foreach ($category_forums as $category_id => $forums)
 		{
+			$category_scope_topics = !empty($category_topic_forum_ids[$category_id])
+				? $this->get_index_category_scope_topics($scope_topics, (int) $category_id, $category_topic_forum_ids[$category_id])
+				: [];
 			$topics = !empty($category_topic_forum_ids[$category_id])
-				? $this->filter_index_category_topics($scope_topics['category_' . $category_id] ?? [], $category_topic_forum_ids[$category_id])
+				? $this->filter_index_category_topics($category_scope_topics, $category_topic_forum_ids[$category_id])
 				: [];
 
 			$this->index_category_blocks[$category_id] = [
@@ -1275,6 +1297,62 @@ class listener implements EventSubscriberInterface
 		);
 	}
 
+	protected function get_index_category_scope_topics(array $scope_topics, int $category_id, array $forum_ids): array
+	{
+		$forum_ids = $this->normalise_forum_ids($forum_ids);
+		if (empty($forum_ids))
+		{
+			return [];
+		}
+
+		return $scope_topics['category_' . $category_id] ?? [];
+	}
+
+	protected function get_index_category_candidate_topics(array $forum_ids): array
+	{
+		$forum_ids = $this->normalise_forum_ids($forum_ids);
+		if (empty($forum_ids))
+		{
+			return [];
+		}
+
+		$candidate_limit = $this->get_index_category_candidate_limit();
+		if (!$this->should_limit_topics_per_forum($forum_ids))
+		{
+			return $this->ranker->get_topics($forum_ids, $this->get_balanced_topic_fetch_limit($candidate_limit, $forum_ids));
+		}
+
+		$scope_id = '__index_category_fallback';
+		$topics_by_scope = $this->ranker->get_topics_for_balanced_forum_scopes([
+			$scope_id => [
+				'forum_ids' => $forum_ids,
+				'limit' => $candidate_limit,
+				'per_forum_candidate_limit' => $this->get_index_category_per_forum_candidate_limit($candidate_limit),
+				'per_forum_result_limit' => $candidate_limit,
+			],
+		]);
+
+		return $topics_by_scope[$scope_id] ?? [];
+	}
+
+	protected function get_index_category_per_forum_candidate_limit(int $candidate_limit): int
+	{
+		$candidate_limit = max(1, $candidate_limit);
+		$configured_candidate_limit = isset($this->config['toptopics_candidate_pool_limit'])
+			? (int) $this->config['toptopics_candidate_pool_limit']
+			: self::DEFAULT_CANDIDATE_POOL_LIMIT;
+		$configured_candidate_limit = max(50, min(20000, $configured_candidate_limit));
+
+		return min(
+			$configured_candidate_limit,
+			max(
+				$candidate_limit,
+				$candidate_limit * self::INDEX_CATEGORY_FORUM_CANDIDATE_MULTIPLIER,
+				$this->get_per_forum_topic_limit() * self::BALANCED_TOPIC_FETCH_MULTIPLIER
+			)
+		);
+	}
+
 	protected function apply_topic_list_limits(array $topics, int $display_limit, array $forum_ids): array
 	{
 		$display_limit = max(0, $display_limit);
@@ -1709,10 +1787,7 @@ class listener implements EventSubscriberInterface
 
 		$topic_forum_ids = $this->exclude_index_category_forum_ids($topic_forum_ids);
 		$topics = !empty($topic_forum_ids)
-			? $this->filter_index_category_topics(
-				$this->ranker->get_topics($topic_forum_ids, $this->get_balanced_topic_fetch_limit($this->get_index_category_candidate_limit(), $topic_forum_ids)),
-				$topic_forum_ids
-			)
+			? $this->filter_index_category_topics($this->get_index_category_candidate_topics($topic_forum_ids), $topic_forum_ids)
 			: [];
 		$topicpreview = $this->get_topicpreview_context();
 		if ($topicpreview['enabled'])

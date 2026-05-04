@@ -6,6 +6,8 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 class listener implements EventSubscriberInterface
 {
+	private const NICKNAME_PROFILE_FIELD_IDENT = 'nick_name';
+
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
 	protected \phpbb\controller\helper $helper;
@@ -144,6 +146,8 @@ class listener implements EventSubscriberInterface
 
 	public function add_send_to_blog_button($event): void
 	{
+		$this->remove_nickname_from_post_profile($event);
+
 		$post_row = $event['post_row'];
 
 		if ($this->blog_comments_disabled_for_topic(
@@ -188,6 +192,35 @@ class listener implements EventSubscriberInterface
 		$post_row['U_BLOG_SEND'] = $this->helper->route('freemitbbs_blog_send_post', ['post_id' => $post_id]);
 		$post_row['BLOG_SEND_HASH'] = generate_link_hash('freemitbbs_blog_send_' . $post_id);
 		$event['post_row'] = $post_row;
+	}
+
+	protected function remove_nickname_from_post_profile($event): void
+	{
+		$cp_row = $event['cp_row'] ?? [];
+		if (empty($cp_row) || !is_array($cp_row))
+		{
+			return;
+		}
+
+		if (!empty($cp_row['blockrow']) && is_array($cp_row['blockrow']))
+		{
+			$cp_row['blockrow'] = array_values(array_filter($cp_row['blockrow'], static function (array $field_data): bool {
+				return ($field_data['PROFILE_FIELD_IDENT'] ?? '') !== self::NICKNAME_PROFILE_FIELD_IDENT;
+			}));
+		}
+
+		if (!empty($cp_row['row']) && is_array($cp_row['row']))
+		{
+			foreach (array_keys($cp_row['row']) as $key)
+			{
+				if ($key === 'S_PROFILE_NICK_NAME' || strpos($key, 'PROFILE_NICK_NAME_') === 0)
+				{
+					unset($cp_row['row'][$key]);
+				}
+			}
+		}
+
+		$event['cp_row'] = $cp_row;
 	}
 
 	public function redirect_blog_viewtopic($event): void
