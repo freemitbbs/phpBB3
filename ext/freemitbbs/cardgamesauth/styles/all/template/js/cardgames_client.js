@@ -10,6 +10,7 @@ const state = {
   rooms: [],
   table: null,
   currentRoomKey: "",
+  skinProfile: null,
   chatEvents: [],
   chatDraft: "",
   emojiTarget: "",
@@ -48,6 +49,7 @@ const emojiTypes = ["goodjob", "hurryup", "sorry", "lol", "noproblem", "firework
 const els = {
   status: document.querySelector("#connection-status"),
   user: document.querySelector("#user-label"),
+  skin: document.querySelector("#skin-select"),
   connect: document.querySelector("#connect-button"),
   sound: document.querySelector("#sound-button"),
   refreshRooms: document.querySelector("#refresh-rooms-button"),
@@ -77,6 +79,9 @@ els.sound.addEventListener("click", () => {
 });
 els.refreshRooms.addEventListener("click", () => {
   void requestRooms();
+});
+els.skin.addEventListener("change", () => {
+  void selectSkin(els.skin.value);
 });
 els.leave.addEventListener("click", () => {
   if (state.currentRoomKey) {
@@ -221,6 +226,7 @@ async function authenticate() {
     const response = await sendCommand("auth.token", { payload: { token: state.token } });
     state.user = response.payload.user;
     state.authenticated = true;
+    await requestSkinProfile();
     await requestRooms();
     setStatus("Connected");
   } catch (error) {
@@ -236,6 +242,35 @@ async function requestRooms() {
   const response = await sendCommand("lobby.rooms", {});
   state.rooms = response.payload.rooms;
   render();
+}
+
+async function requestSkinProfile() {
+  if (!state.authenticated) {
+    return;
+  }
+
+  const response = await sendCommand("profile.skins", {});
+  applySkinProfile(response.payload);
+  render();
+}
+
+async function selectSkin(skinId) {
+  if (!skinId || !state.authenticated) {
+    return;
+  }
+
+  try {
+    const response = await sendCommand("profile.skin.select", {
+      payload: { skinId }
+    });
+    applySkinProfile(response.payload);
+    if (state.user) {
+      state.user.selectedSkinId = response.payload.selectedSkinId;
+    }
+    render();
+  } catch (error) {
+    reportError(error);
+  }
 }
 
 async function refreshTable(roomKey) {
@@ -299,6 +334,14 @@ function applyServerMessage(message, commandType = "") {
     case "auth.accepted":
       state.user = message.payload.user || state.user;
       playSound("effect/enter_hall_click.mp3");
+      break;
+    case "profile.skins":
+    case "profile.skin.selected":
+      applySkinProfile(message.payload);
+      if (state.user && message.payload.selectedSkinId) {
+        state.user.selectedSkinId = message.payload.selectedSkinId;
+      }
+      render();
       break;
     case "system.catchup":
       state.rooms = message.payload.rooms || state.rooms;
@@ -395,6 +438,7 @@ function render() {
   els.connect.textContent = state.connected ? "Reconnect" : "Connect";
   els.sound.textContent = state.soundEnabled ? "Sound on" : "Sound off";
   els.sound.setAttribute("aria-pressed", state.soundEnabled ? "true" : "false");
+  renderSkinSelect();
   renderRooms();
   renderTable();
   renderEmojiDock();
@@ -420,6 +464,25 @@ function renderRooms() {
     button.addEventListener("click", () => joinRoom(room.roomKey));
     return button;
   }));
+}
+
+function renderSkinSelect() {
+  const profile = state.skinProfile;
+  els.skin.hidden = !profile;
+  if (!profile) {
+    els.skin.replaceChildren();
+    return;
+  }
+
+  const owned = new Set(profile.ownedSkinIds || []);
+  els.skin.replaceChildren(...(profile.skins || []).map((skin) => {
+    const option = document.createElement("option");
+    option.value = skin.skinId;
+    option.textContent = skin.displayName || skin.skinId;
+    option.disabled = !owned.has(skin.skinId);
+    return option;
+  }));
+  els.skin.value = profile.selectedSkinId || "";
 }
 
 function renderTable() {
@@ -519,7 +582,7 @@ function seatActionsHtml(table, seat, isViewerSeat) {
 }
 
 function skinUrlForSeat(user, seatIndex) {
-  const skinName = user?.skinInUse || user?.skin || defaultSkins[Math.abs(Number(user?.userId ?? seatIndex)) % defaultSkins.length] || "skin_questionmark.webp";
+  const skinName = user?.selectedSkinId || user?.skinInUse || user?.skin || defaultSkins[Math.abs(Number(user?.userId ?? seatIndex)) % defaultSkins.length] || "skin_questionmark.webp";
   const fileName = skinName.includes(".") ? skinName : `${skinName}.webp`;
   return `${state.assetBaseUrl}/tractor/skin/${encodeURIComponent(fileName)}`;
 }
@@ -736,6 +799,18 @@ async function requestChatHistory(roomKey) {
   const response = await sendCommand("chat.history", { roomKey });
   setChatEvents(response.payload.events || []);
   render();
+}
+
+function applySkinProfile(profile) {
+  if (!profile || !Array.isArray(profile.skins)) {
+    return;
+  }
+
+  state.skinProfile = {
+    skins: profile.skins,
+    ownedSkinIds: Array.isArray(profile.ownedSkinIds) ? profile.ownedSkinIds : [],
+    selectedSkinId: profile.selectedSkinId || ""
+  };
 }
 
 async function sendChatMessage() {

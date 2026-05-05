@@ -85,6 +85,17 @@ button:disabled {
   min-width: 220px;
 }
 
+.userbar select {
+  min-height: 34px;
+  max-width: 150px;
+  border: 1px solid #9d8f79;
+  border-radius: 6px;
+  background: #fffdfa;
+  color: var(--ink);
+  font: inherit;
+  padding: 0 8px;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(230px, 300px) 1fr;

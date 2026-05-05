@@ -102,6 +102,19 @@ freemitbbs_cardgamesauth_server_player_stats:
     defaults: { _controller: freemitbbs.cardgamesauth.controller.server:player_stats }
     methods: [POST]
 
+freemitbbs_cardgamesauth_server_player_settings_read:
+    path: /card-games/server/player-settings/{game_type}/{user_id}
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:player_settings_read }
+    requirements:
+        game_type: '[A-Za-z0-9_-]+'
+        user_id: \d+
+    methods: [GET]
+
+freemitbbs_cardgamesauth_server_player_settings_write:
+    path: /card-games/server/player-settings
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:player_settings_write }
+    methods: [POST]
+
 freemitbbs_cardgamesauth_server_cleanup:
     path: /card-games/server/cleanup
     defaults: { _controller: freemitbbs.cardgamesauth.controller.server:cleanup }

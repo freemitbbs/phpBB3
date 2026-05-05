@@ -720,6 +720,65 @@ class server
 		]);
 	}
 
+	public function player_settings_read(string $game_type, int $user_id): JsonResponse
+	{
+		if (($error = $this->require_server_auth('')) !== null)
+		{
+			return $error;
+		}
+
+		$game_type = substr(trim($game_type), 0, 32);
+		$user_id = max(0, (int) $user_id);
+		if ($game_type === '' || $user_id <= 0)
+		{
+			return $this->json_error('invalid_player_settings_selector', 'Player settings selector is invalid.', 400);
+		}
+
+		return $this->json($this->player_settings_payload($game_type, $user_id));
+	}
+
+	public function player_settings_write(): JsonResponse
+	{
+		$body = $this->raw_body();
+		if (($error = $this->require_server_auth($body)) !== null)
+		{
+			return $error;
+		}
+
+		$data = $this->require_json_object($body);
+		if (!is_array($data))
+		{
+			return $this->json_error('invalid_json', 'Request body must be a JSON object.', 400);
+		}
+
+		try
+		{
+			$game_type = $this->required_string($data, 'gameType', 'game_type', 32);
+			$user_id = $this->required_int($data, 'userId', 'user_id');
+			$settings = $this->json_value($data, 'settings', 'settings_json', new \stdClass());
+			$updated_at = $this->time_value($data, 'updatedAt', 'updated_at', time());
+			$updated = $this->upsert_row($this->player_settings_table, ['game_type' => $game_type, 'user_id' => $user_id], [
+				'game_type' => $game_type,
+				'user_id' => $user_id,
+				'settings_json' => $settings,
+				'updated_at' => $updated_at,
+			]);
+		}
+		catch (\InvalidArgumentException $e)
+		{
+			return $this->json_error((string) $e->getMessage(), 'Player settings payload is invalid.', 400);
+		}
+		catch (\RuntimeException $e)
+		{
+			return $this->json_error('player_settings_store_failed', 'Player settings could not be stored.', 500);
+		}
+
+		return $this->json([
+			'success' => true,
+			'updated' => $updated,
+		]);
+	}
+
 	public function cleanup(): JsonResponse
 	{
 		$body = $this->raw_body();
@@ -863,6 +922,7 @@ class server
 			'displayName' => $display_name,
 			'nickname' => $nickname,
 			'avatarUrl' => $this->avatar_url($user),
+			'selectedSkinId' => $this->selected_skin_id($user_id),
 			'groups' => $this->user_groups($user_id),
 			'permissions' => $permissions,
 			'isBanned' => $is_banned,
@@ -1090,6 +1150,7 @@ class server
 			'displayName' => $display_name,
 			'nickname' => $nickname,
 			'avatarUrl' => $this->avatar_url($user),
+			'selectedSkinId' => $this->selected_skin_id($user_id),
 		];
 	}
 
@@ -1274,6 +1335,23 @@ class server
 		$this->db->sql_freeresult($result);
 
 		return trim(html_entity_decode(strip_tags($nickname), ENT_QUOTES, 'UTF-8'));
+	}
+
+	protected function selected_skin_id(int $user_id): string
+	{
+		if ($user_id <= ANONYMOUS)
+		{
+			return '';
+		}
+
+		$settings = $this->player_settings_payload('tractor', $user_id)['settings'] ?? null;
+		if (!is_array($settings))
+		{
+			return '';
+		}
+
+		$skin_id = trim((string) ($settings['selectedSkinId'] ?? $settings['selected_skin_id'] ?? $settings['skinId'] ?? $settings['skin_id'] ?? ''));
+		return preg_match('/^[A-Za-z0-9_-]{1,64}$/', $skin_id) ? $skin_id : '';
 	}
 
 	protected function nickname_profile_field_exists(): bool
@@ -1749,6 +1827,31 @@ class server
 		$this->db->sql_freeresult($result);
 
 		return $settings_json !== '' ? $settings_json : '{}';
+	}
+
+	protected function player_settings_payload(string $game_type, int $user_id): array
+	{
+		$sql = 'SELECT settings_json, updated_at
+			FROM ' . $this->player_settings_table . "
+			WHERE game_type = '" . $this->db->sql_escape($game_type) . "'
+				AND user_id = " . $user_id;
+		$result = $this->db->sql_query_limit($sql, 1);
+		$row = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+		$settings = is_array($row) ? $this->json_field_payload((string) ($row['settings_json'] ?? '')) : new \stdClass();
+		$updated_at = is_array($row) ? $this->iso_time((int) ($row['updated_at'] ?? 0)) : null;
+
+		return [
+			'success' => true,
+			'gameType' => $game_type,
+			'game_type' => $game_type,
+			'userId' => $user_id,
+			'user_id' => $user_id,
+			'settings' => $settings,
+			'settings_json' => $settings,
+			'updatedAt' => $updated_at,
+			'updated_at' => $updated_at,
+		];
 	}
 
 	protected function find_event_seq_by_request_id(int $session_id, string $request_id): int
