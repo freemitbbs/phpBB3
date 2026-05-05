@@ -3,6 +3,16 @@ freemitbbs_cardgamesauth_launch:
     defaults: { _controller: freemitbbs.cardgamesauth.controller.auth:launch }
     methods: [GET]
 
+freemitbbs_cardgamesauth_client:
+    path: /card-games/client
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.auth:client }
+    methods: [GET]
+
+freemitbbs_cardgamesauth_client_slash:
+    path: /card-games/client/
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.auth:client }
+    methods: [GET]
+
 freemitbbs_cardgamesauth_token:
     path: /card-games/token
     defaults: { _controller: freemitbbs.cardgamesauth.controller.auth:token }
@@ -13,6 +23,16 @@ freemitbbs_cardgamesauth_config:
     defaults: { _controller: freemitbbs.cardgamesauth.controller.auth:config }
     methods: [GET]
 
+freemitbbs_cardgamesauth_admin:
+    path: /card-games/admin
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.moderation:admin }
+    methods: [GET, POST]
+
+freemitbbs_cardgamesauth_replay_export:
+    path: /card-games/replay/export
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:replay_export_user }
+    methods: [GET]
+
 freemitbbs_cardgamesauth_server_ready:
     path: /card-games/server/ready
     defaults: { _controller: freemitbbs.cardgamesauth.controller.server:ready }
@@ -21,6 +41,13 @@ freemitbbs_cardgamesauth_server_ready:
 freemitbbs_cardgamesauth_server_verify:
     path: /card-games/server/auth/verify
     defaults: { _controller: freemitbbs.cardgamesauth.controller.server:verify_auth }
+    methods: [POST]
+
+freemitbbs_cardgamesauth_server_user_status:
+    path: /card-games/server/users/{id}/status
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:user_status }
+    requirements:
+        id: \d+
     methods: [POST]
 
 freemitbbs_cardgamesauth_server_room_configs:

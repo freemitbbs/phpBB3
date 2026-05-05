@@ -24,6 +24,7 @@ services:
             - '@cache.driver'
             - '@config'
             - '@controller.helper'
+            - '@dbal.conn'
             - '@language'
             - '@request'
             - '@template'
@@ -34,8 +35,10 @@ services:
         class: freemitbbs\cardgamesauth\controller\server
         arguments:
             - '@config'
+            - '@auth'
             - '@dbal.conn'
             - '@request'
+            - '@user'
             - '@freemitbbs.cardgamesauth.token_issuer'
             - '%tables.freemitbbs.cardgamesauth.room_configs%'
             - '%tables.freemitbbs.cardgamesauth.sessions%'
@@ -48,12 +51,28 @@ services:
             - '%tables.freemitbbs.cardgamesauth.moderation_audit%'
             - '%tables.freemitbbs.cardgamesauth.proxy_nonces%'
 
+    freemitbbs.cardgamesauth.controller.moderation:
+        class: freemitbbs\cardgamesauth\controller\moderation
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@controller.helper'
+            - '@dbal.conn'
+            - '@language'
+            - '@request'
+            - '@template'
+            - '@user'
+            - '%tables.freemitbbs.cardgamesauth.room_configs%'
+            - '%tables.freemitbbs.cardgamesauth.sessions%'
+            - '%tables.freemitbbs.cardgamesauth.moderation_audit%'
+
     freemitbbs.cardgamesauth.listener:
         class: freemitbbs\cardgamesauth\event\listener
         arguments:
             - '@auth'
             - '@config'
             - '@controller.helper'
+            - '@dbal.conn'
             - '@language'
             - '@template'
             - '@user'

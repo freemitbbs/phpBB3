@@ -28,6 +28,17 @@
 				<label><input type="radio" class="radio" name="cardgamesauth_nav_enabled" value="0"{% if not CARDGAMESAUTH_NAV_ENABLED %} checked="checked"{% endif %} /> {{ lang('NO') }}</label>
 			</dd>
 		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_testing_mode">{{ lang('CARDGAMESAUTH_TESTING_MODE') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_TESTING_MODE_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<label><input type="radio" class="radio" id="cardgamesauth_testing_mode" name="cardgamesauth_testing_mode" value="1"{% if CARDGAMESAUTH_TESTING_MODE %} checked="checked"{% endif %} /> {{ lang('YES') }}</label>
+				<label><input type="radio" class="radio" name="cardgamesauth_testing_mode" value="0"{% if not CARDGAMESAUTH_TESTING_MODE %} checked="checked"{% endif %} /> {{ lang('NO') }}</label>
+			</dd>
+		</dl>
 	</fieldset>
 
 	<fieldset>
@@ -106,6 +117,34 @@
 	</fieldset>
 
 	<fieldset>
+		<legend>{{ lang('CARDGAMESAUTH_FIELDSET_TESTERS') }}</legend>
+
+		<dl>
+			<dt>
+				<label>{{ lang('CARDGAMESAUTH_TESTER_GROUP') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_TESTER_GROUP_EXPLAIN') }}</span>
+			</dt>
+			<dd><strong>{CARDGAMESAUTH_TESTER_GROUP_NAME}</strong></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_add_tester_usernames">{{ lang('CARDGAMESAUTH_ADD_TESTERS') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_ADD_TESTERS_EXPLAIN') }}</span>
+			</dt>
+			<dd><textarea id="cardgamesauth_add_tester_usernames" name="cardgamesauth_add_tester_usernames" rows="3" cols="60" class="inputbox"></textarea></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label>{{ lang('CARDGAMESAUTH_CURRENT_TESTERS') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_CURRENT_TESTERS_EXPLAIN') }}</span>
+			</dt>
+			<dd><!-- IF CARDGAMESAUTH_TESTER_MEMBERS -->{CARDGAMESAUTH_TESTER_MEMBERS}<!-- ELSE -->{{ lang('CARDGAMESAUTH_NO_TESTERS') }}<!-- ENDIF --></dd>
+		</dl>
+	</fieldset>
+
+	<fieldset>
 		<legend>{{ lang('CARDGAMESAUTH_FIELDSET_PROXY') }}</legend>
 
 		<dl>
@@ -149,6 +188,53 @@
 				<span>{{ lang('CARDGAMESAUTH_PROXY_MAX_BODY_BYTES_EXPLAIN') }}</span>
 			</dt>
 			<dd><input type="number" min="1024" max="1048576" id="cardgamesauth_proxy_max_body_bytes" name="cardgamesauth_proxy_max_body_bytes" value="{CARDGAMESAUTH_PROXY_MAX_BODY_BYTES}" /></dd>
+		</dl>
+	</fieldset>
+
+	<fieldset>
+		<legend>{{ lang('CARDGAMESAUTH_FIELDSET_RUNTIME_HOOKS') }}</legend>
+
+		<dl>
+			<dt>
+				<label for="cardgames_node_runtime_enabled">{{ lang('CARDGAMESAUTH_NODE_RUNTIME_ENABLED') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_NODE_RUNTIME_ENABLED_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<label><input type="radio" class="radio" id="cardgames_node_runtime_enabled" name="cardgames_node_runtime_enabled" value="1"{% if CARDGAMES_NODE_RUNTIME_ENABLED %} checked="checked"{% endif %} /> {{ lang('YES') }}</label>
+				<label><input type="radio" class="radio" name="cardgames_node_runtime_enabled" value="0"{% if not CARDGAMES_NODE_RUNTIME_ENABLED %} checked="checked"{% endif %} /> {{ lang('NO') }}</label>
+			</dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgames_node_runtime_base_url">{{ lang('CARDGAMESAUTH_NODE_RUNTIME_BASE_URL') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_NODE_RUNTIME_BASE_URL_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="cardgames_node_runtime_base_url" name="cardgames_node_runtime_base_url" value="{CARDGAMES_NODE_RUNTIME_BASE_URL}" class="inputbox" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgames_node_runtime_service_id">{{ lang('CARDGAMESAUTH_NODE_RUNTIME_SERVICE_ID') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_NODE_RUNTIME_SERVICE_ID_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="cardgames_node_runtime_service_id" name="cardgames_node_runtime_service_id" value="{CARDGAMES_NODE_RUNTIME_SERVICE_ID}" class="inputbox" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgames_node_runtime_service_secret">{{ lang('CARDGAMESAUTH_NODE_RUNTIME_SERVICE_SECRET') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_NODE_RUNTIME_SERVICE_SECRET_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="cardgames_node_runtime_service_secret" name="cardgames_node_runtime_service_secret" value="{CARDGAMES_NODE_RUNTIME_SERVICE_SECRET}" class="inputbox" autocomplete="off" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgames_node_runtime_timeout_ms">{{ lang('CARDGAMESAUTH_NODE_RUNTIME_TIMEOUT_MS') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_NODE_RUNTIME_TIMEOUT_MS_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="number" min="1000" max="30000" id="cardgames_node_runtime_timeout_ms" name="cardgames_node_runtime_timeout_ms" value="{CARDGAMES_NODE_RUNTIME_TIMEOUT_MS}" /></dd>
 		</dl>
 	</fieldset>
 

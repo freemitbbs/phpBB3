@@ -5,6 +5,8 @@ namespace freemitbbs\cardgamesauth\acp;
 class acp_cardgamesauth_module
 {
 	private const FORM_KEY = 'freemitbbs/cardgamesauth';
+	private const TESTER_GROUP_NAME = 'CARD_GAME_TESTERS';
+	private const TESTER_GROUP_DESC = 'Users allowed to access card games while testing mode is enabled.';
 
 	public string $tpl_name;
 	public string $page_title;
@@ -16,6 +18,8 @@ class acp_cardgamesauth_module
 
 		/** @var \phpbb\config\config $config */
 		$config = $phpbb_container->get('config');
+		/** @var \phpbb\db\driver\driver_interface $db */
+		$db = $phpbb_container->get('dbal.conn');
 		/** @var \phpbb\template\template $template */
 		$template = $phpbb_container->get('template');
 		/** @var \phpbb\request\request $request */
@@ -29,6 +33,7 @@ class acp_cardgamesauth_module
 		$this->page_title = 'ACP_CARDGAMESAUTH_SETTINGS';
 
 		add_form_key(self::FORM_KEY);
+		$tester_group_id = $this->ensure_tester_group($db, $config);
 
 		if ($request->is_set_post('submit'))
 		{
@@ -39,6 +44,7 @@ class acp_cardgamesauth_module
 
 			$config->set('cardgamesauth_enabled', (string) ((int) $request->variable('cardgamesauth_enabled', 0) ? 1 : 0));
 			$config->set('cardgamesauth_nav_enabled', (string) ((int) $request->variable('cardgamesauth_nav_enabled', 0) ? 1 : 0));
+			$config->set('cardgamesauth_testing_mode', (string) ((int) $request->variable('cardgamesauth_testing_mode', 0) ? 1 : 0));
 			$config->set('cardgamesauth_launch_redirect', (string) ((int) $request->variable('cardgamesauth_launch_redirect', 0) ? 1 : 0));
 			$config->set('cardgamesauth_client_url', trim((string) $request->variable('cardgamesauth_client_url', '', true)));
 			$config->set('cardgamesauth_ws_url', trim((string) $request->variable('cardgamesauth_ws_url', '', true)));
@@ -60,6 +66,26 @@ class acp_cardgamesauth_module
 			$config->set('cardgamesauth_proxy_clock_skew', (string) $this->bounded_int($request->variable('cardgamesauth_proxy_clock_skew', 300), 30, 3600));
 			$config->set('cardgamesauth_proxy_nonce_ttl', (string) $this->bounded_int($request->variable('cardgamesauth_proxy_nonce_ttl', 300), 30, 3600));
 			$config->set('cardgamesauth_proxy_max_body_bytes', (string) $this->bounded_int($request->variable('cardgamesauth_proxy_max_body_bytes', 262144), 1024, 1048576));
+			$config->set('cardgames_node_runtime_enabled', (string) ((int) $request->variable('cardgames_node_runtime_enabled', 0) ? 1 : 0));
+			$config->set('cardgames_node_runtime_base_url', trim((string) $request->variable('cardgames_node_runtime_base_url', '', true)));
+			$runtime_service_id = trim((string) $request->variable('cardgames_node_runtime_service_id', 'phpbb-cardgamesauth', true));
+			$config->set('cardgames_node_runtime_service_id', $runtime_service_id !== '' ? $runtime_service_id : 'phpbb-cardgamesauth');
+			$runtime_service_secret = trim((string) $request->variable('cardgames_node_runtime_service_secret', '', true));
+			if ($runtime_service_secret !== '')
+			{
+				$config->set('cardgames_node_runtime_service_secret', $runtime_service_secret);
+			}
+			$config->set('cardgames_node_runtime_timeout_ms', (string) $this->bounded_int($request->variable('cardgames_node_runtime_timeout_ms', 3000), 1000, 30000));
+			$tester_error = $this->add_tester_usernames(
+				$db,
+				$tester_group_id,
+				$request->variable('cardgamesauth_add_tester_usernames', '', true),
+				$language
+			);
+			if ($tester_error !== '')
+			{
+				trigger_error($tester_error . adm_back_link($this->u_action), E_USER_WARNING);
+			}
 
 			trigger_error($language->lang('CONFIG_UPDATED') . adm_back_link($this->u_action));
 		}
@@ -68,6 +94,7 @@ class acp_cardgamesauth_module
 			'U_ACTION' => $this->u_action,
 			'CARDGAMESAUTH_ENABLED' => (int) ($config['cardgamesauth_enabled'] ?? 1),
 			'CARDGAMESAUTH_NAV_ENABLED' => (int) ($config['cardgamesauth_nav_enabled'] ?? 1),
+			'CARDGAMESAUTH_TESTING_MODE' => (int) ($config['cardgamesauth_testing_mode'] ?? 0),
 			'CARDGAMESAUTH_LAUNCH_REDIRECT' => (int) ($config['cardgamesauth_launch_redirect'] ?? 0),
 			'CARDGAMESAUTH_CLIENT_URL' => (string) ($config['cardgamesauth_client_url'] ?? ''),
 			'CARDGAMESAUTH_WS_URL' => (string) ($config['cardgamesauth_ws_url'] ?? ''),
@@ -81,6 +108,13 @@ class acp_cardgamesauth_module
 			'CARDGAMESAUTH_PROXY_CLOCK_SKEW' => (int) ($config['cardgamesauth_proxy_clock_skew'] ?? 300),
 			'CARDGAMESAUTH_PROXY_NONCE_TTL' => (int) ($config['cardgamesauth_proxy_nonce_ttl'] ?? 300),
 			'CARDGAMESAUTH_PROXY_MAX_BODY_BYTES' => (int) ($config['cardgamesauth_proxy_max_body_bytes'] ?? 262144),
+			'CARDGAMES_NODE_RUNTIME_ENABLED' => (int) ($config['cardgames_node_runtime_enabled'] ?? 0),
+			'CARDGAMES_NODE_RUNTIME_BASE_URL' => (string) ($config['cardgames_node_runtime_base_url'] ?? ''),
+			'CARDGAMES_NODE_RUNTIME_SERVICE_ID' => (string) ($config['cardgames_node_runtime_service_id'] ?? 'phpbb-cardgamesauth'),
+			'CARDGAMES_NODE_RUNTIME_SERVICE_SECRET' => $this->ensure_secret_config($config, 'cardgames_node_runtime_service_secret'),
+			'CARDGAMES_NODE_RUNTIME_TIMEOUT_MS' => (int) ($config['cardgames_node_runtime_timeout_ms'] ?? 3000),
+			'CARDGAMESAUTH_TESTER_GROUP_NAME' => self::TESTER_GROUP_NAME,
+			'CARDGAMESAUTH_TESTER_MEMBERS' => $this->tester_members_text($db, $tester_group_id),
 		]);
 	}
 
@@ -112,6 +146,152 @@ class acp_cardgamesauth_module
 		catch (\Exception $e)
 		{
 			return sha1(uniqid((string) mt_rand(), true) . microtime(true));
+		}
+	}
+
+	protected function ensure_tester_group(\phpbb\db\driver\driver_interface $db, \phpbb\config\config $config): int
+	{
+		$group_id = (int) ($config['cardgamesauth_tester_group_id'] ?? 0);
+		if ($group_id > 0 && $this->group_exists($db, $group_id))
+		{
+			return $group_id;
+		}
+
+		$sql = 'SELECT group_id
+			FROM ' . GROUPS_TABLE . "
+			WHERE group_name = '" . $db->sql_escape(self::TESTER_GROUP_NAME) . "'";
+		$result = $db->sql_query_limit($sql, 1);
+		$group_id = (int) $db->sql_fetchfield('group_id');
+		$db->sql_freeresult($result);
+
+		if ($group_id <= 0)
+		{
+			$sql = 'INSERT INTO ' . GROUPS_TABLE . ' ' . $db->sql_build_array('INSERT', [
+				'group_name' => self::TESTER_GROUP_NAME,
+				'group_desc' => self::TESTER_GROUP_DESC,
+				'group_desc_uid' => '',
+				'group_desc_bitfield' => '',
+				'group_type' => GROUP_HIDDEN,
+				'group_colour' => '',
+				'group_legend' => 0,
+				'group_founder_manage' => 0,
+				'group_skip_auth' => 0,
+			]);
+			$db->sql_query($sql);
+			$group_id = (int) $db->sql_nextid();
+		}
+
+		if ($group_id > 0)
+		{
+			$config->set('cardgamesauth_tester_group_id', (string) $group_id);
+		}
+
+		return $group_id;
+	}
+
+	protected function group_exists(\phpbb\db\driver\driver_interface $db, int $group_id): bool
+	{
+		$sql = 'SELECT group_id
+			FROM ' . GROUPS_TABLE . '
+			WHERE group_id = ' . $group_id;
+		$result = $db->sql_query_limit($sql, 1);
+		$exists = (bool) $db->sql_fetchfield('group_id');
+		$db->sql_freeresult($result);
+
+		return $exists;
+	}
+
+	protected function add_tester_usernames(\phpbb\db\driver\driver_interface $db, int $group_id, string $usernames, \phpbb\language\language $language): string
+	{
+		if ($group_id <= 0 || trim($usernames) === '')
+		{
+			return '';
+		}
+
+		$name_ary = array_values(array_filter(array_map('trim', preg_split('/[\r\n,;]+/', $usernames) ?: []), static function ($name) {
+			return $name !== '';
+		}));
+		if (empty($name_ary))
+		{
+			return '';
+		}
+
+		$requested_by_clean = [];
+		foreach ($name_ary as $username)
+		{
+			$clean = utf8_clean_string($username);
+			if ($clean !== '' && !isset($requested_by_clean[$clean]))
+			{
+				$requested_by_clean[$clean] = $username;
+			}
+		}
+		if (empty($requested_by_clean))
+		{
+			return '';
+		}
+
+		$sql = 'SELECT user_id, username_clean
+			FROM ' . USERS_TABLE . '
+			WHERE ' . $db->sql_in_set('username_clean', array_keys($requested_by_clean)) . '
+				AND ' . $db->sql_in_set('user_type', [USER_NORMAL, USER_FOUNDER]);
+		$result = $db->sql_query($sql);
+		$user_ids = [];
+		$found_by_clean = [];
+		while ($row = $db->sql_fetchrow($result))
+		{
+			$found_by_clean[(string) $row['username_clean']] = true;
+			$user_ids[] = (int) $row['user_id'];
+		}
+		$db->sql_freeresult($result);
+
+		$missing = array_diff_key($requested_by_clean, $found_by_clean);
+		if (!empty($missing))
+		{
+			return $language->lang('CARDGAMESAUTH_TESTER_USERS_INVALID', implode(', ', array_values($missing)));
+		}
+
+		$this->ensure_user_functions_loaded();
+		$error = group_user_add($group_id, $user_ids, false, self::TESTER_GROUP_NAME);
+		if ($error !== false && $error !== 'GROUP_USERS_EXIST')
+		{
+			return $language->lang('CARDGAMESAUTH_TESTER_ADD_FAILED', $language->lang((string) $error));
+		}
+
+		return '';
+	}
+
+	protected function tester_members_text(\phpbb\db\driver\driver_interface $db, int $group_id): string
+	{
+		if ($group_id <= 0)
+		{
+			return '';
+		}
+
+		$sql = 'SELECT u.user_id, u.username, u.user_colour
+			FROM ' . USER_GROUP_TABLE . ' ug
+			INNER JOIN ' . USERS_TABLE . ' u
+				ON u.user_id = ug.user_id
+			WHERE ug.group_id = ' . $group_id . '
+				AND ug.user_pending = 0
+			ORDER BY u.username_clean ASC';
+		$result = $db->sql_query($sql);
+		$usernames = [];
+		while ($row = $db->sql_fetchrow($result))
+		{
+			$usernames[] = get_username_string('no_profile', (int) $row['user_id'], (string) $row['username'], (string) $row['user_colour']);
+		}
+		$db->sql_freeresult($result);
+
+		return implode(', ', $usernames);
+	}
+
+	protected function ensure_user_functions_loaded(): void
+	{
+		global $phpbb_root_path, $phpEx;
+
+		if (!function_exists('group_user_add'))
+		{
+			include_once($phpbb_root_path . 'includes/functions_user.' . $phpEx);
 		}
 	}
 }

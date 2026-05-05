@@ -1,0 +1,106 @@
+<!-- INCLUDE overall_header.html -->
+
+<h2>{L_CARDGAMES_ADMIN_TITLE}</h2>
+
+<div class="panel">
+	<div class="inner">
+		<!-- IF not S_CARDGAMES_RUNTIME_CONFIGURED -->
+			<p class="error">{L_CARDGAMES_ADMIN_RUNTIME_NOT_CONFIGURED}</p>
+		<!-- ENDIF -->
+
+		<h3>{L_CARDGAMES_ADMIN_CONTROL}</h3>
+		<form id="cardgames-admin-control" method="post" action="{U_ACTION}">
+			<fieldset>
+				<dl>
+					<dt><label for="cardgames-action">{L_CARDGAMES_CONTROL_ACTION}</label></dt>
+					<dd>
+						<select id="cardgames-action" name="action">
+							<!-- BEGIN actions -->
+								<option value="{actions.VALUE}">{actions.LABEL}</option>
+							<!-- END actions -->
+						</select>
+					</dd>
+				</dl>
+				<dl>
+					<dt><label for="cardgames-room-key">{L_CARDGAMES_CONTROL_ROOM_KEY}</label></dt>
+					<dd><input type="text" id="cardgames-room-key" name="room_key" class="inputbox" /></dd>
+				</dl>
+				<dl>
+					<dt><label for="cardgames-session-id">{L_CARDGAMES_CONTROL_SESSION_ID}</label></dt>
+					<dd><input type="number" min="0" id="cardgames-session-id" name="session_id" /></dd>
+				</dl>
+				<dl>
+					<dt><label for="cardgames-target-user-id">{L_CARDGAMES_CONTROL_TARGET_USER_ID}</label></dt>
+					<dd><input type="number" min="0" id="cardgames-target-user-id" name="target_user_id" /></dd>
+				</dl>
+				<dl>
+					<dt><label for="cardgames-target-username">{L_CARDGAMES_CONTROL_TARGET_USERNAME}</label></dt>
+					<dd><input type="text" id="cardgames-target-username" name="target_username" class="inputbox" /></dd>
+				</dl>
+				<dl>
+					<dt><label for="cardgames-reason">{L_CARDGAMES_CONTROL_REASON}</label></dt>
+					<dd><input type="text" id="cardgames-reason" name="reason" maxlength="255" class="inputbox" /></dd>
+				</dl>
+				<p class="submit-buttons">
+					{S_FORM_TOKEN}
+					<input type="submit" name="submit" value="{L_SUBMIT}" class="button1" />
+				</p>
+			</fieldset>
+		</form>
+
+		<!-- IF S_CARDGAMES_CAN_EXPORT_REPLAY -->
+			<h3>{L_CARDGAMES_ADMIN_REPLAY_EXPORT}</h3>
+			<form id="cardgames-replay-export" method="get" action="{U_REPLAY_EXPORT}">
+				<fieldset>
+					<dl>
+						<dt><label for="cardgames-replay-session-id">{L_CARDGAMES_CONTROL_SESSION_ID}</label></dt>
+						<dd><input type="number" min="0" id="cardgames-replay-session-id" name="sessionId" /></dd>
+					</dl>
+					<dl>
+						<dt><label for="cardgames-replay-room-key">{L_CARDGAMES_CONTROL_ROOM_KEY}</label></dt>
+						<dd><input type="text" id="cardgames-replay-room-key" name="roomKey" class="inputbox" /></dd>
+					</dl>
+					<dl>
+						<dt><label for="cardgames-replay-limit">{L_CARDGAMES_ADMIN_REPLAY_LIMIT}</label></dt>
+						<dd><input type="number" min="1" max="5000" id="cardgames-replay-limit" name="limit" value="1000" /></dd>
+					</dl>
+					<p class="submit-buttons">
+						<input type="hidden" name="includeSnapshots" value="1" />
+						<input type="hidden" name="includeFinishedSummary" value="1" />
+						<input type="submit" value="{L_CARDGAMES_ADMIN_OPEN_REPLAY_EXPORT}" class="button1" />
+					</p>
+				</fieldset>
+			</form>
+		<!-- ENDIF -->
+
+		<h3>{L_CARDGAMES_ADMIN_ACTIVE_ROOMS}</h3>
+		<!-- IF .active_rooms -->
+			<table class="table1 responsive">
+				<thead>
+					<tr>
+						<th>{L_CARDGAMES_ADMIN_SESSION}</th>
+						<th>{L_CARDGAMES_ADMIN_ROOM}</th>
+						<th>{L_CARDGAMES_ADMIN_STATUS}</th>
+						<th>{L_CARDGAMES_ADMIN_OWNER}</th>
+						<th>{L_CARDGAMES_ADMIN_UPDATED}</th>
+					</tr>
+				</thead>
+				<tbody>
+					<!-- BEGIN active_rooms -->
+						<tr>
+							<td>{active_rooms.SESSION_ID}</td>
+							<td>{active_rooms.ROOM_NAME} ({active_rooms.ROOM_KEY})</td>
+							<td>{active_rooms.STATUS}</td>
+							<td>{active_rooms.OWNER}</td>
+							<td>{active_rooms.UPDATED_AT}</td>
+						</tr>
+					<!-- END active_rooms -->
+				</tbody>
+			</table>
+		<!-- ELSE -->
+			<p>{L_CARDGAMES_ADMIN_NO_ACTIVE_ROOMS}</p>
+		<!-- ENDIF -->
+	</div>
+</div>
+
+<!-- INCLUDE overall_footer.html -->

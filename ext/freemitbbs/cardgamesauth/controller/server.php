@@ -13,11 +13,14 @@ class server
 	private const DEFAULT_PROXY_MAX_BODY_BYTES = 262144;
 	private const DEFAULT_EVENT_EXPORT_LIMIT = 1000;
 	private const MAX_EVENT_EXPORT_LIMIT = 5000;
+	private const TESTER_GROUP_NAME = 'CARD_GAME_TESTERS';
 	private const NICKNAME_PROFILE_FIELD_IDENT = 'nick_name';
 
 	protected \phpbb\config\config $config;
+	protected \phpbb\auth\auth $auth;
 	protected \phpbb\db\driver\driver_interface $db;
 	protected \phpbb\request\request_interface $request;
+	protected \phpbb\user $user;
 	protected \freemitbbs\cardgamesauth\service\token_issuer $token_issuer;
 	protected string $room_configs_table;
 	protected string $sessions_table;
@@ -33,8 +36,10 @@ class server
 
 	public function __construct(
 		\phpbb\config\config $config,
+		\phpbb\auth\auth $auth,
 		\phpbb\db\driver\driver_interface $db,
 		\phpbb\request\request_interface $request,
+		\phpbb\user $user,
 		\freemitbbs\cardgamesauth\service\token_issuer $token_issuer,
 		string $room_configs_table,
 		string $sessions_table,
@@ -49,8 +54,10 @@ class server
 	)
 	{
 		$this->config = $config;
+		$this->auth = $auth;
 		$this->db = $db;
 		$this->request = $request;
+		$this->user = $user;
 		$this->token_issuer = $token_issuer;
 		$this->room_configs_table = $room_configs_table;
 		$this->sessions_table = $sessions_table;
@@ -85,6 +92,10 @@ class server
 		if (($error = $this->require_server_auth($body)) !== null)
 		{
 			return $error;
+		}
+		if (!$this->is_enabled())
+		{
+			return $this->json_error('cardgames_disabled', 'Card games are currently disabled by phpBB configuration.', 403);
 		}
 
 		$data = $this->decode_body($body);
@@ -137,6 +148,10 @@ class server
 		{
 			return $this->json_error('permission_denied', 'phpBB user no longer has card-game access.', 403);
 		}
+		if ($this->is_testing_mode() && !$this->is_tester_user((int) $user['user_id']))
+		{
+			return $this->json_error('testing_mode_restricted', 'Card games are currently available to testers only.', 403);
+		}
 
 		return $this->json([
 			'success' => true,
@@ -145,6 +160,65 @@ class server
 				'jti' => (string) ($claims['jti'] ?? ''),
 				'expiresAt' => $this->iso_time((int) ($claims['exp'] ?? 0)),
 			],
+		]);
+	}
+
+	public function user_status(int $id): JsonResponse
+	{
+		$body = $this->raw_body();
+		if (($error = $this->require_server_auth($body)) !== null)
+		{
+			return $error;
+		}
+		if (!$this->is_enabled())
+		{
+			return $this->json_error('cardgames_disabled', 'Card games are currently disabled by phpBB configuration.', 403);
+		}
+
+		$data = $this->decode_body($body);
+		if (!is_array($data))
+		{
+			return $this->json_error('invalid_json', 'Request body must be JSON.', 400);
+		}
+
+		$user_id = max(0, (int) $id);
+		$body_user_id = $this->int_value($data, 'userId', 'user_id', 0);
+		if ($body_user_id > 0 && $body_user_id !== $user_id)
+		{
+			return $this->json_error('user_mismatch', 'Request body user ID does not match route user ID.', 400);
+		}
+
+		$user = $this->load_user($user_id);
+		if (empty($user) || (int) $user['user_id'] <= ANONYMOUS)
+		{
+			return $this->json_error('user_not_found', 'phpBB user could not be loaded.', 404);
+		}
+
+		$user_type = (int) ($user['user_type'] ?? USER_IGNORE);
+		if ($user_type === USER_IGNORE || $user_type === USER_INACTIVE)
+		{
+			return $this->json_error('user_not_active', 'phpBB user is not active.', 403);
+		}
+
+		$is_banned = $this->is_user_banned((int) $user['user_id']);
+		if ($is_banned)
+		{
+			return $this->json_error('user_banned', 'phpBB user is banned.', 403);
+		}
+
+		$permissions = $this->current_user_permissions($user);
+		if (!in_array('u_cardgames_play', $permissions, true))
+		{
+			return $this->json_error('permission_denied', 'phpBB user no longer has card-game access.', 403);
+		}
+		if ($this->is_testing_mode() && !$this->is_tester_user((int) $user['user_id']))
+		{
+			return $this->json_error('testing_mode_restricted', 'Card games are currently available to testers only.', 403);
+		}
+
+		return $this->json([
+			'success' => true,
+			'user' => $this->user_payload($user, [], $permissions, $is_banned),
 		]);
 	}
 
@@ -481,6 +555,18 @@ class server
 	public function replay_export(): JsonResponse
 	{
 		return $this->event_export_response(true);
+	}
+
+	public function replay_export_user(): JsonResponse
+	{
+		if (!$this->can_export_replay())
+		{
+			return $this->json_error('permission_denied', 'You are not allowed to export card-game replays.', 403);
+		}
+
+		$this->record_replay_export_audit();
+
+		return $this->event_export_response(true, false);
 	}
 
 	public function snapshots(): JsonResponse
@@ -1059,6 +1145,63 @@ class server
 		return $banned;
 	}
 
+	protected function is_testing_mode(): bool
+	{
+		return (bool) ((int) ($this->config['cardgamesauth_testing_mode'] ?? 0));
+	}
+
+	protected function is_enabled(): bool
+	{
+		return (bool) ((int) ($this->config['cardgamesauth_enabled'] ?? 1));
+	}
+
+	protected function is_tester_user(int $user_id): bool
+	{
+		if ($user_id <= ANONYMOUS)
+		{
+			return false;
+		}
+
+		$group_id = $this->tester_group_id();
+		if ($group_id <= 0)
+		{
+			return false;
+		}
+
+		$sql = 'SELECT 1 AS is_tester
+			FROM ' . USER_GROUP_TABLE . '
+			WHERE group_id = ' . $group_id . '
+				AND user_id = ' . $user_id . '
+				AND user_pending = 0';
+		$result = $this->db->sql_query_limit($sql, 1);
+		$is_tester = (bool) $this->db->sql_fetchfield('is_tester');
+		$this->db->sql_freeresult($result);
+
+		return $is_tester;
+	}
+
+	protected function tester_group_id(): int
+	{
+		$group_id = (int) ($this->config['cardgamesauth_tester_group_id'] ?? 0);
+		if ($group_id > 0)
+		{
+			return $group_id;
+		}
+
+		$sql = 'SELECT group_id
+			FROM ' . GROUPS_TABLE . "
+			WHERE group_name = '" . $this->db->sql_escape(self::TESTER_GROUP_NAME) . "'";
+		$result = $this->db->sql_query_limit($sql, 1);
+		$group_id = (int) $this->db->sql_fetchfield('group_id');
+		$this->db->sql_freeresult($result);
+		if ($group_id > 0)
+		{
+			$this->config->set('cardgamesauth_tester_group_id', (string) $group_id);
+		}
+
+		return $group_id;
+	}
+
 	protected function current_user_permissions(array $user): array
 	{
 		$acl_user = $user;
@@ -1082,6 +1225,38 @@ class server
 		}
 
 		return $permissions;
+	}
+
+	protected function can_export_replay(): bool
+	{
+		return $this->auth->acl_get('m_cardgames_replay_export')
+			|| $this->auth->acl_get('m_cardgames_manage')
+			|| $this->auth->acl_get('a_board')
+			|| $this->auth->acl_get('a_');
+	}
+
+	protected function record_replay_export_audit(): void
+	{
+		$session_id = max(0, $this->query_int('sessionId', 'session_id', 0));
+		$room_key = substr(trim((string) $this->query_string('roomKey', 'room_key', '')), 0, 64);
+
+		$this->db->sql_query('INSERT INTO ' . $this->moderation_audit_table . ' ' . $this->db->sql_build_array('INSERT', [
+			'room_key' => $room_key,
+			'session_id' => $session_id,
+			'moderator_user_id' => (int) ($this->user->data['user_id'] ?? 0),
+			'target_user_id' => 0,
+			'action' => 'replay_export',
+			'reason' => '',
+			'payload_json' => $this->encode_json_value([
+				'sessionId' => $session_id,
+				'roomKey' => $room_key,
+				'limit' => max(1, min(self::MAX_EVENT_EXPORT_LIMIT, $this->query_int('limit', 'limit', self::DEFAULT_EVENT_EXPORT_LIMIT))),
+				'includeSnapshots' => $this->query_bool('includeSnapshots', 'include_snapshots', true),
+				'includeFinishedSummary' => $this->query_bool('includeFinishedSummary', 'include_finished_summary', true),
+				'exportedAt' => gmdate('c'),
+			]),
+			'created_at' => time(),
+		]));
 	}
 
 	protected function profile_nickname(int $user_id): string
@@ -1214,9 +1389,9 @@ class server
 		}
 	}
 
-	protected function event_export_response(bool $replay_export): JsonResponse
+	protected function event_export_response(bool $replay_export, bool $require_server_auth = true): JsonResponse
 	{
-		if (($error = $this->require_server_auth('')) !== null)
+		if ($require_server_auth && ($error = $this->require_server_auth('')) !== null)
 		{
 			return $error;
 		}

@@ -11,11 +11,18 @@
 			<!-- ELSE -->
 				<p>{L_CARDGAMES_CLIENT_NOT_CONFIGURED}</p>
 			<!-- ENDIF -->
+			<!-- IF S_CARDGAMES_MANAGE -->
+				<p><a class="button" href="{U_CARDGAMES_ADMIN}">{L_CARDGAMES_ADMIN_OPEN}</a></p>
+			<!-- ENDIF -->
 			<script>
 				window.freemitbbsCardGames = {CARDGAMES_BOOTSTRAP_JSON};
 			</script>
 		<!-- ELSE -->
-			<p>{L_CARDGAMES_NOT_ALLOWED}</p>
+			<!-- IF S_CARDGAMES_TESTING_MODE -->
+				<p>{L_CARDGAMES_TESTING_ONLY}</p>
+			<!-- ELSE -->
+				<p>{L_CARDGAMES_NOT_ALLOWED}</p>
+			<!-- ENDIF -->
 		<!-- ENDIF -->
 	</div>
 </div>

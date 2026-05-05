@@ -1,0 +1,43 @@
+{% INCLUDECSS '@freemitbbs_cardgamesauth/cardgames_client.css' %}
+
+<!-- INCLUDE overall_header.html -->
+
+<script>
+	window.freemitbbsCardGames = {CARDGAMES_BOOTSTRAP_JSON};
+</script>
+
+<main class="app-shell">
+	<section class="topbar">
+		<div>
+			<h1>{{ lang('CARDGAMES_TITLE') }}</h1>
+			<p id="connection-status">Disconnected</p>
+		</div>
+		<div class="userbar">
+			<span id="user-label"></span>
+			<button id="connect-button" type="button">Connect</button>
+		</div>
+	</section>
+
+	<section class="workspace">
+		<aside class="rooms-panel">
+			<div class="panel-header">
+				<h2>Rooms</h2>
+				<button id="refresh-rooms-button" type="button">Refresh</button>
+			</div>
+			<div id="rooms-list" class="rooms-list"></div>
+		</aside>
+
+		<section class="table-panel">
+			<div class="panel-header">
+				<h2 id="table-title">Lobby</h2>
+				<button id="leave-room-button" type="button" hidden>Leave</button>
+			</div>
+			<div id="table-view" class="table-view"></div>
+			<div id="event-log" class="event-log" aria-live="polite"></div>
+		</section>
+	</section>
+</main>
+
+{% INCLUDEJS '@freemitbbs_cardgamesauth/js/cardgames_client.js' %}
+
+<!-- INCLUDE overall_footer.html -->

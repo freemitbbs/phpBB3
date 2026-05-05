@@ -9,11 +9,13 @@ class auth
 {
 	private const TOKEN_HASH_NAME = 'freemitbbs_cardgamesauth_token';
 	private const JSON_FLAGS = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT;
+	private const TESTER_GROUP_NAME = 'CARD_GAME_TESTERS';
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\cache\driver\driver_interface $cache;
 	protected \phpbb\config\config $config;
 	protected \phpbb\controller\helper $helper;
+	protected \phpbb\db\driver\driver_interface $db;
 	protected \phpbb\language\language $language;
 	protected \phpbb\request\request_interface $request;
 	protected \phpbb\template\template $template;
@@ -25,6 +27,7 @@ class auth
 		\phpbb\cache\driver\driver_interface $cache,
 		\phpbb\config\config $config,
 		\phpbb\controller\helper $helper,
+		\phpbb\db\driver\driver_interface $db,
 		\phpbb\language\language $language,
 		\phpbb\request\request_interface $request,
 		\phpbb\template\template $template,
@@ -36,6 +39,7 @@ class auth
 		$this->cache = $cache;
 		$this->config = $config;
 		$this->helper = $helper;
+		$this->db = $db;
 		$this->language = $language;
 		$this->request = $request;
 		$this->template = $template;
@@ -57,7 +61,10 @@ class auth
 
 		$this->template->assign_vars([
 			'S_CARDGAMES_CAN_PLAY' => $can_play,
+			'S_CARDGAMES_TESTING_MODE' => $this->is_testing_mode(),
+			'S_CARDGAMES_MANAGE' => $this->can_manage(),
 			'U_CARDGAMES_CLIENT' => $client_url,
+			'U_CARDGAMES_ADMIN' => $this->helper->route('freemitbbs_cardgamesauth_admin'),
 			'CARDGAMES_BOOTSTRAP_JSON' => $this->encode_json([
 				'tokenUrl' => $this->helper->route('freemitbbs_cardgamesauth_token', [], false),
 				'configUrl' => $this->helper->route('freemitbbs_cardgamesauth_config', [], false),
@@ -74,6 +81,33 @@ class auth
 		return $this->helper->render('@freemitbbs_cardgamesauth/cardgames_launch.html', $this->language->lang('CARDGAMES_TITLE'));
 	}
 
+	public function client(): Response
+	{
+		$this->boot_language();
+
+		if ($this->is_guest())
+		{
+			login_box($this->helper->route('freemitbbs_cardgamesauth_client'), $this->language->lang('CARDGAMES_LOGIN_REQUIRED'));
+		}
+
+		if (!$this->can_play())
+		{
+			return $this->launch();
+		}
+
+		$this->template->assign_vars([
+			'CARDGAMES_BOOTSTRAP_JSON' => $this->encode_json([
+				'tokenUrl' => $this->helper->route('freemitbbs_cardgamesauth_token', [], false),
+				'configUrl' => $this->helper->route('freemitbbs_cardgamesauth_config', [], false),
+				'tokenHash' => generate_link_hash(self::TOKEN_HASH_NAME),
+				'wsUrl' => $this->ws_url(),
+				'user' => $this->client_user_data(),
+			]),
+		]);
+
+		return $this->helper->render('@freemitbbs_cardgamesauth/cardgames_client.html', $this->language->lang('CARDGAMES_TITLE'));
+	}
+
 	public function config(): JsonResponse
 	{
 		$this->boot_language();
@@ -82,6 +116,8 @@ class auth
 		$data = [
 			'success' => true,
 			'enabled' => $this->is_enabled(),
+			'testingMode' => $this->is_testing_mode(),
+			'isTester' => $this->is_tester(),
 			'canPlay' => $can_play,
 			'launchUrl' => $this->helper->route('freemitbbs_cardgamesauth_launch', [], false),
 			'tokenUrl' => $this->helper->route('freemitbbs_cardgamesauth_token', [], false),
@@ -153,12 +189,71 @@ class auth
 			return false;
 		}
 
-		return $this->auth->acl_get('u_cardgames_play');
+		return $this->auth->acl_get('u_cardgames_play')
+			&& (!$this->is_testing_mode() || $this->is_tester());
 	}
 
 	protected function is_enabled(): bool
 	{
 		return (bool) ((int) ($this->config['cardgamesauth_enabled'] ?? 1));
+	}
+
+	protected function can_manage(): bool
+	{
+		return $this->auth->acl_get('m_cardgames_manage') || $this->auth->acl_get('a_board') || $this->auth->acl_get('a_');
+	}
+
+	protected function is_testing_mode(): bool
+	{
+		return (bool) ((int) ($this->config['cardgamesauth_testing_mode'] ?? 0));
+	}
+
+	protected function is_tester(): bool
+	{
+		$user_id = (int) ($this->user->data['user_id'] ?? ANONYMOUS);
+		if ($user_id === ANONYMOUS)
+		{
+			return false;
+		}
+
+		$group_id = $this->tester_group_id();
+		if ($group_id <= 0)
+		{
+			return false;
+		}
+
+		$sql = 'SELECT 1 AS is_tester
+			FROM ' . USER_GROUP_TABLE . '
+			WHERE group_id = ' . $group_id . '
+				AND user_id = ' . $user_id . '
+				AND user_pending = 0';
+		$result = $this->db->sql_query_limit($sql, 1);
+		$is_tester = (bool) $this->db->sql_fetchfield('is_tester');
+		$this->db->sql_freeresult($result);
+
+		return $is_tester;
+	}
+
+	protected function tester_group_id(): int
+	{
+		$group_id = (int) ($this->config['cardgamesauth_tester_group_id'] ?? 0);
+		if ($group_id > 0)
+		{
+			return $group_id;
+		}
+
+		$sql = 'SELECT group_id
+			FROM ' . GROUPS_TABLE . "
+			WHERE group_name = '" . $this->db->sql_escape(self::TESTER_GROUP_NAME) . "'";
+		$result = $this->db->sql_query_limit($sql, 1);
+		$group_id = (int) $this->db->sql_fetchfield('group_id');
+		$this->db->sql_freeresult($result);
+		if ($group_id > 0)
+		{
+			$this->config->set('cardgamesauth_tester_group_id', (string) $group_id);
+		}
+
+		return $group_id;
 	}
 
 	protected function is_guest(): bool
@@ -188,12 +283,24 @@ class auth
 
 	protected function user_groups(): array
 	{
-		$groups = [];
-		$group_id = (int) ($this->user->data['group_id'] ?? 0);
-		if ($group_id > 0)
+		$user_id = (int) ($this->user->data['user_id'] ?? 0);
+		if ($user_id <= ANONYMOUS)
 		{
-			$groups[] = (string) $group_id;
+			return [];
 		}
+
+		$sql = 'SELECT group_id
+			FROM ' . USER_GROUP_TABLE . '
+			WHERE user_id = ' . $user_id . '
+				AND user_pending = 0
+			ORDER BY group_id ASC';
+		$result = $this->db->sql_query($sql);
+		$groups = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$groups[] = (string) ((int) $row['group_id']);
+		}
+		$this->db->sql_freeresult($result);
 
 		return $groups;
 	}
@@ -275,7 +382,8 @@ class auth
 
 	protected function client_url(): string
 	{
-		return trim((string) ($this->config['cardgamesauth_client_url'] ?? ''));
+		$configured = trim((string) ($this->config['cardgamesauth_client_url'] ?? ''));
+		return $configured !== '' ? $configured : $this->helper->route('freemitbbs_cardgamesauth_client', [], false);
 	}
 
 	protected function ws_url(): string
