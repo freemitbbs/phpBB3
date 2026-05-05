@@ -13,6 +13,11 @@ freemitbbs_cardgamesauth_config:
     defaults: { _controller: freemitbbs.cardgamesauth.controller.auth:config }
     methods: [GET]
 
+freemitbbs_cardgamesauth_server_ready:
+    path: /card-games/server/ready
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:ready }
+    methods: [GET]
+
 freemitbbs_cardgamesauth_server_verify:
     path: /card-games/server/auth/verify
     defaults: { _controller: freemitbbs.cardgamesauth.controller.server:verify_auth }

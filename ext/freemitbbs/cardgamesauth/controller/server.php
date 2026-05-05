@@ -62,6 +62,21 @@ class server
 		$this->proxy_nonces_table = $proxy_nonces_table;
 	}
 
+	public function ready(): JsonResponse
+	{
+		if (($error = $this->require_server_auth('')) !== null)
+		{
+			return $error;
+		}
+
+		return $this->json([
+			'ok' => true,
+			'success' => true,
+			'schemaVersion' => 1,
+			'schema_version' => 1,
+		]);
+	}
+
 	public function verify_auth(): JsonResponse
 	{
 		$body = $this->raw_body();
@@ -281,11 +296,23 @@ class server
 			$events = $this->batch_rows($data, 'events', 'event');
 			$inserted = 0;
 			$skipped = 0;
+			$recorded = [];
 			foreach ($events as $event)
 			{
+				if (isset($event['roomKey']) || isset($event['room_key']))
+				{
+					$result = $this->record_lobby_event($event);
+					$inserted += (int) $result['inserted'];
+					$skipped += (int) $result['skipped'];
+					$recorded[] = [
+						'sessionId' => (int) $result['sessionId'],
+						'seq' => (int) $result['seq'],
+					];
+					continue;
+				}
+
 				$session_id = $this->required_int($event, 'sessionId', 'session_id');
 				$seq = $this->required_int($event, 'seq', 'seq');
-
 				$insert = $this->try_insert_row($this->events_table, [
 					'session_id' => $session_id,
 					'seq' => $seq,
@@ -315,11 +342,17 @@ class server
 		{
 			return $this->json_error((string) $e->getMessage(), 'Event payload is invalid.', 400);
 		}
+		catch (\RuntimeException $e)
+		{
+			return $this->json_error('event_store_failed', 'Event could not be stored.', 500);
+		}
 
 		return $this->json([
+			'ok' => true,
 			'success' => true,
 			'inserted' => $inserted,
 			'skipped' => $skipped,
+			'events' => $recorded,
 		]);
 	}
 
@@ -546,9 +579,24 @@ class server
 
 		$method = strtoupper((string) $this->request->server('REQUEST_METHOD', 'GET'));
 		$body_hash = hash('sha256', $body);
-		$canonical = $method . "\n" . $timestamp . "\n" . $nonce . "\n" . $body_hash;
-		$expected = hash_hmac('sha256', $canonical, $secret);
-		if (!hash_equals($expected, strtolower($signature)))
+		$header_body_hash = strtolower(trim((string) $this->request->server('HTTP_X_CARDGAMES_CONTENT_SHA256', '')));
+		if ($header_body_hash !== '' && !hash_equals($body_hash, $header_body_hash))
+		{
+			return $this->json_error('invalid_body_hash', 'Server proxy request body hash is invalid.', 401);
+		}
+
+		$valid_signature = false;
+		foreach ($this->proxy_request_paths() as $path)
+		{
+			$canonical = $method . "\n" . $path . "\n" . $timestamp . "\n" . $nonce . "\n" . $body_hash;
+			$expected = hash_hmac('sha256', $canonical, $secret);
+			if (hash_equals($expected, strtolower($signature)))
+			{
+				$valid_signature = true;
+				break;
+			}
+		}
+		if (!$valid_signature)
 		{
 			return $this->json_error('invalid_signature', 'Server proxy signature is invalid.', 401);
 		}
@@ -726,6 +774,263 @@ class server
 		return '';
 	}
 
+	protected function record_lobby_event(array $event): array
+	{
+		$room_key = $this->required_string($event, 'roomKey', 'room_key', 64);
+		$game_type = $this->required_string($event, 'gameType', 'game_type', 32);
+		$event_type = $this->required_string($event, 'eventType', 'event_type', 64);
+		$request_id = $this->nullable_string_value($event, 'requestId', 'request_id', 64);
+		$now = time();
+
+		$this->db->sql_transaction('begin');
+		try
+		{
+			$session = $this->ensure_lobby_session($room_key, $game_type, $now);
+			$session_id = (int) $session['id'];
+			$existing_seq = $this->find_event_seq_by_request_id($session_id, $request_id);
+			if ($existing_seq > 0)
+			{
+				$this->db->sql_transaction('commit');
+				return [
+					'inserted' => 0,
+					'skipped' => 1,
+					'sessionId' => $session_id,
+					'seq' => $existing_seq,
+				];
+			}
+
+			$room_state_version = max(0, $this->int_value($event, 'roomStateVersion', 'room_state_version', 0));
+			$seq = max(((int) $session['state_version']) + 1, $room_state_version);
+			$owner_user_id = $this->nullable_int_value($event, 'roomOwnerUserId', 'room_owner_user_id');
+			$this->apply_lobby_membership($session_id, $room_key, $event['membership'] ?? null, $now);
+
+			$this->db->sql_query('UPDATE ' . $this->sessions_table . '
+				SET ' . $this->db->sql_build_array('UPDATE', [
+					'state_version' => $seq,
+					'owner_user_id' => $owner_user_id,
+					'updated_at' => $now,
+				]) . '
+				WHERE id = ' . $session_id);
+
+			$insert = $this->try_insert_row($this->events_table, [
+				'session_id' => $session_id,
+				'seq' => $seq,
+				'game_type' => $game_type,
+				'actor_user_id' => $this->nullable_int_value($event, 'actorUserId', 'actor_user_id'),
+				'request_id' => $request_id,
+				'event_type' => $event_type,
+				'payload_schema_version' => $this->int_value($event, 'payloadSchemaVersion', 'payload_schema_version', 1),
+				'payload_json' => $this->json_value($event, 'payload', 'payload_json', new \stdClass()),
+				'created_at' => $this->time_value($event, 'createdAt', 'created_at', $now),
+			]);
+			if (!$insert['inserted'] && !$this->is_duplicate_insert($insert))
+			{
+				throw new \RuntimeException('event_insert_failed');
+			}
+
+			$this->db->sql_transaction('commit');
+			return [
+				'inserted' => $insert['inserted'] ? 1 : 0,
+				'skipped' => $insert['inserted'] ? 0 : 1,
+				'sessionId' => $session_id,
+				'seq' => $seq,
+			];
+		}
+		catch (\Throwable $e)
+		{
+			$this->db->sql_transaction('rollback');
+			throw $e;
+		}
+	}
+
+	protected function ensure_lobby_session(string $room_key, string $game_type, int $now): array
+	{
+		$sql = 'SELECT id, state_version
+			FROM ' . $this->sessions_table . "
+			WHERE room_key = '" . $this->db->sql_escape($room_key) . "'
+				AND status = 'waiting'
+			ORDER BY id DESC
+			LIMIT 1
+			FOR UPDATE";
+		$result = $this->db->sql_query($sql);
+		$row = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+		if (is_array($row))
+		{
+			return [
+				'id' => (int) $row['id'],
+				'state_version' => (int) $row['state_version'],
+			];
+		}
+
+		$id = $this->insert_row($this->sessions_table, [
+			'room_key' => $room_key,
+			'game_type' => $game_type,
+			'status' => 'waiting',
+			'owner_user_id' => 0,
+			'settings_json' => $this->room_default_settings_json($room_key),
+			'state_schema_version' => 1,
+			'state_version' => 0,
+			'random_audit_json' => '',
+			'created_at' => $now,
+			'started_at' => 0,
+			'updated_at' => $now,
+			'finished_at' => 0,
+		]);
+
+		return [
+			'id' => $id,
+			'state_version' => 0,
+		];
+	}
+
+	protected function room_default_settings_json(string $room_key): string
+	{
+		$sql = 'SELECT default_settings_json
+			FROM ' . $this->room_configs_table . "
+			WHERE room_key = '" . $this->db->sql_escape($room_key) . "'";
+		$result = $this->db->sql_query_limit($sql, 1);
+		$settings_json = (string) $this->db->sql_fetchfield('default_settings_json');
+		$this->db->sql_freeresult($result);
+
+		return $settings_json !== '' ? $settings_json : '{}';
+	}
+
+	protected function find_event_seq_by_request_id(int $session_id, string $request_id): int
+	{
+		if ($request_id === '')
+		{
+			return 0;
+		}
+
+		$sql = 'SELECT seq
+			FROM ' . $this->events_table . "
+			WHERE session_id = " . $session_id . "
+				AND request_id = '" . $this->db->sql_escape($request_id) . "'
+			ORDER BY id DESC
+			LIMIT 1
+			FOR UPDATE";
+		$result = $this->db->sql_query($sql);
+		$seq = (int) $this->db->sql_fetchfield('seq');
+		$this->db->sql_freeresult($result);
+
+		return $seq;
+	}
+
+	protected function apply_lobby_membership(int $session_id, string $room_key, $membership, int $now): void
+	{
+		if (!is_array($membership))
+		{
+			return;
+		}
+
+		$action = $this->string_value($membership, 'action', 'action', 32, '');
+		if ($action === '')
+		{
+			return;
+		}
+
+		$user_id = $this->required_int($membership, 'userId', 'user_id');
+		$member_id = $this->find_current_member_id($session_id, $room_key, $user_id);
+
+		switch ($action)
+		{
+			case 'upsert':
+				$row = [
+					'role' => $this->string_value($membership, 'role', 'role', 32, 'observer'),
+					'seat_index' => $this->nullable_int_value($membership, 'seatIndex', 'seat_index'),
+					'watched_seat_index' => $this->nullable_int_value($membership, 'watchedSeatIndex', 'watched_seat_index'),
+					'connected' => (int) ((bool) ($membership['connected'] ?? 1)),
+					'last_seen_at' => $now,
+				];
+				if ($member_id > 0)
+				{
+					$this->db->sql_query('UPDATE ' . $this->room_members_table . '
+						SET ' . $this->db->sql_build_array('UPDATE', $row) . '
+						WHERE id = ' . $member_id);
+				}
+				else
+				{
+					$row = array_merge([
+						'session_id' => $session_id,
+						'room_key' => $room_key,
+						'user_id' => $user_id,
+						'joined_at' => $now,
+						'left_at' => 0,
+					], $row);
+					$this->insert_row($this->room_members_table, $row);
+				}
+			break;
+
+			case 'close':
+				if ($member_id > 0)
+				{
+					$this->db->sql_query('UPDATE ' . $this->room_members_table . '
+						SET ' . $this->db->sql_build_array('UPDATE', [
+							'connected' => 0,
+							'last_seen_at' => $now,
+							'left_at' => $now,
+						]) . '
+						WHERE id = ' . $member_id);
+				}
+			break;
+
+			case 'touch':
+				if ($member_id > 0)
+				{
+					$this->db->sql_query('UPDATE ' . $this->room_members_table . '
+						SET last_seen_at = ' . $now . '
+						WHERE id = ' . $member_id);
+				}
+			break;
+
+			case 'watch':
+				if ($member_id > 0)
+				{
+					$this->db->sql_query('UPDATE ' . $this->room_members_table . '
+						SET ' . $this->db->sql_build_array('UPDATE', [
+							'watched_seat_index' => $this->nullable_int_value($membership, 'watchedSeatIndex', 'watched_seat_index'),
+							'last_seen_at' => $now,
+						]) . '
+						WHERE id = ' . $member_id);
+				}
+			break;
+
+			case 'disconnect':
+				if ($member_id > 0)
+				{
+					$this->db->sql_query('UPDATE ' . $this->room_members_table . '
+						SET ' . $this->db->sql_build_array('UPDATE', [
+							'connected' => 0,
+							'last_seen_at' => $now,
+						]) . '
+						WHERE id = ' . $member_id);
+				}
+			break;
+
+			default:
+				throw new \InvalidArgumentException('invalid_membership_action');
+		}
+	}
+
+	protected function find_current_member_id(int $session_id, string $room_key, int $user_id): int
+	{
+		$sql = 'SELECT id
+			FROM ' . $this->room_members_table . "
+			WHERE session_id = " . $session_id . "
+				AND room_key = '" . $this->db->sql_escape($room_key) . "'
+				AND user_id = " . $user_id . '
+				AND left_at = 0
+			ORDER BY id DESC
+			LIMIT 1
+			FOR UPDATE';
+		$result = $this->db->sql_query($sql);
+		$id = (int) $this->db->sql_fetchfield('id');
+		$this->db->sql_freeresult($result);
+
+		return $id;
+	}
+
 	protected function update_snapshot(int $session_id, int $seq, array $row): void
 	{
 		$sql = 'UPDATE ' . $this->snapshots_table . '
@@ -817,6 +1122,31 @@ class server
 	{
 		$body = file_get_contents('php://input');
 		return is_string($body) ? $body : '';
+	}
+
+	protected function proxy_request_paths(): array
+	{
+		$request_uri = (string) $this->request->server('REQUEST_URI', '/');
+		$path = (string) (parse_url($request_uri, PHP_URL_PATH) ?: '/');
+		$query = parse_url($request_uri, PHP_URL_QUERY);
+		$query_suffix = is_string($query) && $query !== '' ? '?' . $query : '';
+		$paths = [$path . $query_suffix];
+
+		$script_name = (string) $this->request->server('SCRIPT_NAME', '');
+		if ($script_name !== '' && str_starts_with($path, $script_name))
+		{
+			$paths[] = $this->normalize_proxy_path(substr($path, strlen($script_name)) ?: '/') . $query_suffix;
+		}
+
+		$paths[] = $this->normalize_proxy_path(preg_replace('#^/app\.php(?=/|$)#', '', $path) ?? $path) . $query_suffix;
+
+		return array_values(array_unique($paths));
+	}
+
+	protected function normalize_proxy_path(string $path): string
+	{
+		$path = $path === '' ? '/' : $path;
+		return str_starts_with($path, '/') ? $path : '/' . $path;
 	}
 
 	protected function require_json_object(string $body): ?array
@@ -1071,10 +1401,15 @@ class server
 	protected function json_error(string $code, string $message, int $status = 400): JsonResponse
 	{
 		return $this->json([
+			'ok' => false,
 			'success' => false,
+			'code' => $code,
+			'message' => $message,
+			'retryable' => $status >= 500,
 			'error' => [
 				'code' => $code,
 				'message' => $message,
+				'retryable' => $status >= 500,
 			],
 		], $status);
 	}
