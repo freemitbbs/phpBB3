@@ -40,6 +40,7 @@ class listener implements EventSubscriberInterface
 
 	protected array $post_dislike_counts = [];
 	protected array $post_net_dislike_scores = [];
+	protected array $post_dislikers = [];
 	protected array $user_disliked_posts = [];
 	protected array $user_reputation_scores = [];
 	protected ?int $current_user_reputation = null;
@@ -263,19 +264,27 @@ class listener implements EventSubscriberInterface
 		{
 			$this->post_dislike_counts[$post_id] = 0;
 			$this->post_net_dislike_scores[$post_id] = 0;
+			$this->post_dislikers[$post_id] = [];
 		}
 
-		$sql = 'SELECT post_id, COUNT(user_id) AS dislike_count
-			FROM ' . $this->dislikes_table . '
-			WHERE ' . $this->db->sql_in_set('post_id', $post_list) . '
-			GROUP BY post_id';
+		$sql = 'SELECT pd.post_id, pd.user_id, u.username
+			FROM ' . $this->dislikes_table . ' pd
+			LEFT JOIN ' . USERS_TABLE . ' u
+				ON u.user_id = pd.user_id
+			WHERE ' . $this->db->sql_in_set('pd.post_id', $post_list) . '
+			ORDER BY pd.disliketime ASC, pd.user_id ASC';
 		$result = $this->db->sql_query($sql);
 		while ($row = $this->db->sql_fetchrow($result))
 		{
 			$post_id = (int) $row['post_id'];
-			$dislike_count = (int) $row['dislike_count'];
-			$this->post_dislike_counts[$post_id] = $dislike_count;
-			$this->post_net_dislike_scores[$post_id] = $dislike_count;
+			$user_id = (int) $row['user_id'];
+			$username = (string) ($row['username'] ?? '');
+			$this->post_dislike_counts[$post_id]++;
+			$this->post_net_dislike_scores[$post_id]++;
+			if ($username !== '')
+			{
+				$this->post_dislikers[$post_id][$user_id] = $username;
+			}
 		}
 		$this->db->sql_freeresult($result);
 
@@ -370,7 +379,7 @@ class listener implements EventSubscriberInterface
 		$post_row = $event['post_row'];
 		$post_row['POST_DISLIKE_CLASS'] = $current_user_disliked ? 'toptopics-disliked' : 'toptopics-dislike';
 		$post_row['POST_DISLIKE_COUNT'] = $dislike_count;
-		$post_row['POST_DISLIKERS'] = $this->language->lang('TOPTOPICS_DISLIKES_COUNT', $dislike_count);
+		$post_row['POST_DISLIKERS'] = $this->get_post_dislikers_title($post_id, $dislike_count);
 		$post_row['POST_DISLIKE_ACTION'] = $action;
 		$post_row['POST_DISLIKE_URL'] = $this->build_dislike_url($post_id, $current_user_disliked);
 		$post_row['POST_DISLIKE_DISABLED'] = $disabled;
@@ -404,6 +413,17 @@ class listener implements EventSubscriberInterface
 		}
 
 		$event['post_row'] = $post_row;
+	}
+
+	protected function get_post_dislikers_title(int $post_id, int $dislike_count): string
+	{
+		$dislikers = $this->post_dislikers[$post_id] ?? [];
+		if (!empty($dislikers))
+		{
+			return $this->escape_attr($this->language->lang('TOPTOPICS_DISLIKED_BY') . implode(', ', $dislikers));
+		}
+
+		return $this->escape_attr($this->language->lang('TOPTOPICS_DISLIKES_COUNT', $dislike_count));
 	}
 
 	public function report_post_auth($event): void

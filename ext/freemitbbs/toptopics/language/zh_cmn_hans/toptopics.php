@@ -69,6 +69,7 @@ $lang = array_merge($lang, [
 	'TOPTOPICS_RATE_LIMIT_DAY' => '你今天的踩已达到上限',
 	'TOPTOPICS_REMOVE_LIKE_FIRST' => '请先取消赞',
 	'TOPTOPICS_REMOVE_DISLIKE_FIRST' => '请先取消踩',
+	'TOPTOPICS_DISLIKED_BY' => '踩这篇帖子的人：',
 	'TOPTOPICS_DISLIKES_COUNT' => [
 		0 => '%d 次踩',
 		1 => '%d 次踩',

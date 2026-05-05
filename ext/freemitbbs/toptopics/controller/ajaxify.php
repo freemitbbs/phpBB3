@@ -316,7 +316,7 @@ class ajaxify
 			'toggle_post' => $post_id,
 			'toggle_title' => $this->language->lang($is_disliked ? 'CLICK_TO_UNDISLIKE' : 'CLICK_TO_DISLIKE'),
 			'toggle_count' => $dislike_count,
-			'toggle_count_title' => $this->language->lang('TOPTOPICS_DISLIKES_COUNT', $dislike_count),
+			'toggle_count_title' => $this->get_post_dislikers_title($post_id, $dislike_count),
 			'toggle_net_dislike_score' => $net_dislike_score,
 			'toggle_fade_class' => $this->get_post_dislike_fade_class($net_dislike_score),
 			'toggle_collapse' => $should_collapse,
@@ -324,6 +324,30 @@ class ajaxify
 			'toggle_collapse_display_title' => $this->language->lang('POST_DISPLAY'),
 			'next_action' => $is_disliked ? 'remove' : 'add',
 		]);
+	}
+
+	protected function get_post_dislikers_title(int $post_id, int $dislike_count): string
+	{
+		$sql = 'SELECT u.username
+			FROM ' . $this->dislikes_table . ' pd
+			JOIN ' . USERS_TABLE . ' u
+				ON u.user_id = pd.user_id
+			WHERE pd.post_id = ' . $post_id . '
+			ORDER BY pd.disliketime ASC, pd.user_id ASC';
+		$result = $this->db->sql_query($sql);
+		$dislikers = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$dislikers[] = (string) $row['username'];
+		}
+		$this->db->sql_freeresult($result);
+
+		if (!empty($dislikers))
+		{
+			return $this->language->lang('TOPTOPICS_DISLIKED_BY') . implode(', ', $dislikers);
+		}
+
+		return $this->language->lang('TOPTOPICS_DISLIKES_COUNT', $dislike_count);
 	}
 
 	protected function get_post_collapse_dislike_threshold(): int

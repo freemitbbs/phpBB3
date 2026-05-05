@@ -69,6 +69,7 @@ $lang = array_merge($lang, [
 	'TOPTOPICS_RATE_LIMIT_DAY' => 'you have reached the downvote rate limit for today',
 	'TOPTOPICS_REMOVE_LIKE_FIRST' => 'remove your like first',
 	'TOPTOPICS_REMOVE_DISLIKE_FIRST' => 'remove your dislike first',
+	'TOPTOPICS_DISLIKED_BY' => 'post disliked by: ',
 	'TOPTOPICS_DISLIKES_COUNT' => [
 		0 => '%d dislikes',
 		1 => '%d dislike',
