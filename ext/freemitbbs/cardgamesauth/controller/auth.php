@@ -70,6 +70,9 @@ class auth
 				'configUrl' => $this->helper->route('freemitbbs_cardgamesauth_config', [], false),
 				'tokenHash' => generate_link_hash(self::TOKEN_HASH_NAME),
 				'wsUrl' => $this->ws_url(),
+				'assetBaseUrl' => $this->asset_base_url(),
+				'audioBaseUrl' => $this->audio_base_url(),
+				'cardStyle' => 'cardsclassic',
 			]),
 		]);
 
@@ -101,6 +104,9 @@ class auth
 				'configUrl' => $this->helper->route('freemitbbs_cardgamesauth_config', [], false),
 				'tokenHash' => generate_link_hash(self::TOKEN_HASH_NAME),
 				'wsUrl' => $this->ws_url(),
+				'assetBaseUrl' => $this->asset_base_url(),
+				'audioBaseUrl' => $this->audio_base_url(),
+				'cardStyle' => 'cardsclassic',
 				'user' => $this->client_user_data(),
 			]),
 		]);
@@ -123,6 +129,9 @@ class auth
 			'tokenUrl' => $this->helper->route('freemitbbs_cardgamesauth_token', [], false),
 			'clientUrl' => $this->client_url(),
 			'wsUrl' => $this->ws_url(),
+			'assetBaseUrl' => $this->asset_base_url(),
+			'audioBaseUrl' => $this->audio_base_url(),
+			'cardStyle' => 'cardsclassic',
 			'tokenHash' => $can_play ? generate_link_hash(self::TOKEN_HASH_NAME) : '',
 			'user' => $can_play ? $this->client_user_data() : null,
 		];
@@ -399,6 +408,16 @@ class auth
 		$host_path = preg_replace('#^https?://#', '', rtrim($board_url, '/'));
 
 		return $scheme . $host_path . '/card-games/ws';
+	}
+
+	protected function asset_base_url(): string
+	{
+		return rtrim(generate_board_url(), '/') . '/ext/freemitbbs/cardgamesauth/styles/all/theme/images';
+	}
+
+	protected function audio_base_url(): string
+	{
+		return rtrim(generate_board_url(), '/') . '/ext/freemitbbs/cardgamesauth/styles/all/theme/audio';
 	}
 
 	protected function request_hash(): string

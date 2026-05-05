@@ -9,6 +9,8 @@
   --accent-2: #1f6f5f;
   --dark: #23343a;
   --empty: #e6ddca;
+  --felt: #17624f;
+  --felt-dark: #0e433b;
 }
 
 * {
@@ -133,17 +135,27 @@ button:disabled {
   color: var(--muted);
 }
 
+.room-button .room-status {
+  justify-self: end;
+  color: var(--accent-2);
+  font-weight: 700;
+}
+
 .room-button[aria-current="true"] {
   border-color: var(--accent);
   box-shadow: inset 4px 0 0 var(--accent);
 }
 
 .table-view {
+  position: relative;
   min-height: 560px;
   border: 1px solid var(--line);
-  background: radial-gradient(circle at center, #faf4e8 0%, #eee2cd 58%, #ded1bc 100%);
+  background:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.12) 0%, transparent 46%),
+    linear-gradient(135deg, var(--felt) 0%, var(--felt-dark) 100%);
   border-radius: 8px;
   padding: clamp(12px, 2vw, 22px);
+  color: #fff9ec;
 }
 
 .empty-state {
@@ -162,14 +174,24 @@ button:disabled {
 }
 
 .seat {
+  position: relative;
   display: grid;
+  grid-template-columns: 52px 1fr;
   align-content: center;
+  align-items: center;
   gap: 8px;
   min-height: 118px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255, 249, 236, 0.3);
   border-radius: 8px;
-  background: rgba(255, 250, 240, 0.9);
+  background:
+    linear-gradient(90deg, rgba(255, 250, 240, 0.88), rgba(255, 250, 240, 0.72)),
+    url("./images/tractor/btn/poker_chair.png") center / cover no-repeat;
+  color: var(--ink);
   padding: 12px;
+}
+
+.seat-offline {
+  opacity: 0.72;
 }
 
 .seat-0 {
@@ -193,18 +215,57 @@ button:disabled {
 }
 
 .seat-name {
+  min-width: 0;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .seat-meta {
+  grid-column: 2;
   color: var(--muted);
   min-height: 22px;
 }
 
 .seat-actions {
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.seat-skin,
+.seat-avatar-stack {
+  grid-row: span 2;
+  width: 52px;
+  height: 76px;
+}
+
+.seat-skin {
+  object-fit: contain;
+  object-position: center bottom;
+  filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.22));
+}
+
+.seat-avatar-stack {
+  position: relative;
+  display: block;
+}
+
+.seat-avatar-stack .seat-skin {
+  width: 100%;
+  height: 100%;
+}
+
+.seat-profile-avatar {
+  position: absolute;
+  right: -4px;
+  bottom: 0;
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid #fffaf0;
+  background: #fffaf0;
 }
 
 .table-center {
@@ -212,9 +273,11 @@ button:disabled {
   grid-row: 2;
   display: grid;
   place-items: center;
-  border: 1px solid #bca884;
+  border: 1px solid rgba(255, 249, 236, 0.32);
   border-radius: 8px;
-  background: rgba(35, 52, 58, 0.92);
+  background:
+    linear-gradient(rgba(20, 35, 33, 0.78), rgba(20, 35, 33, 0.86)),
+    url("./images/tractor/btn/poker_table.png") center / cover no-repeat;
   color: #fff9ec;
   padding: 20px;
   text-align: center;
@@ -229,7 +292,7 @@ button:disabled {
   margin-top: 12px;
 }
 
-.card-mark {
+.table-emblem {
   width: min(150px, 48vw);
   aspect-ratio: 5 / 7;
   display: grid;
@@ -237,12 +300,19 @@ button:disabled {
   margin: 0 auto 14px;
   border-radius: 8px;
   background:
-    linear-gradient(135deg, transparent 13%, rgba(165, 38, 45, 0.18) 13% 17%, transparent 17% 83%, rgba(31, 111, 95, 0.18) 83% 87%, transparent 87%),
+    url("./images/tractor/cardsclassic/tile054.png") center / contain no-repeat,
     #fffaf0;
   border: 2px solid #d2c2a8;
-  color: var(--accent);
-  font-size: 56px;
-  font-weight: 800;
+}
+
+.table-facts {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  color: #d7e8df;
+  font-size: 13px;
 }
 
 .observer-list {
@@ -255,10 +325,11 @@ button:disabled {
 .trick-panel,
 .hand-panel {
   margin-top: 14px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255, 249, 236, 0.28);
   background: rgba(255, 250, 240, 0.88);
   border-radius: 8px;
   padding: 10px;
+  color: var(--ink);
 }
 
 .trick-panel {
@@ -268,32 +339,79 @@ button:disabled {
 
 .trick-play {
   display: grid;
-  grid-template-columns: 70px 1fr;
+  grid-template-columns: 70px minmax(0, 1fr);
   gap: 10px;
   color: var(--muted);
+  align-items: center;
 }
 
 .hand-panel {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  display: flex;
+  align-items: end;
   gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 14px;
 }
 
 .hand-card {
-  min-height: 62px;
+  flex: 0 0 clamp(58px, 7vw, 82px);
+  min-height: 116px;
   display: grid;
-  align-content: center;
-  gap: 2px;
+  align-content: start;
+  gap: 4px;
   background: #fffdfa;
+  padding: 5px;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
 
 .hand-card[aria-pressed="true"] {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 2px rgba(165, 38, 45, 0.25);
+  transform: translateY(-12px);
 }
 
 .hand-card small {
   color: var(--accent);
+}
+
+.card-face {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+.hand-card-face {
+  aspect-ratio: 5 / 7;
+  object-fit: contain;
+}
+
+.hand-card-label {
+  display: none;
+}
+
+.played-cards {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.played-card {
+  width: 38px;
+  aspect-ratio: 5 / 7;
+  object-fit: contain;
+}
+
+.card-face-fallback {
+  min-height: 60px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fffdfa;
+  color: var(--ink);
+  font-size: 12px;
+  text-align: center;
 }
 
 .observer-pill {
@@ -302,6 +420,152 @@ button:disabled {
   border-radius: 999px;
   padding: 5px 10px;
   color: var(--muted);
+}
+
+.emoji-panel {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.emoji-target-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.emoji-target-label select {
+  min-height: 34px;
+  border: 1px solid #9d8f79;
+  border-radius: 6px;
+  background: #fffdfa;
+  color: var(--ink);
+  font: inherit;
+  padding: 0 8px;
+}
+
+.emoji-dock {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.emoji-button {
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  padding: 3px;
+  display: grid;
+  place-items: center;
+}
+
+.emoji-button img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+
+.emoji-pop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: emoji-pop 2200ms ease forwards;
+}
+
+.emoji-pop img {
+  width: min(180px, 42vw);
+  height: min(180px, 42vw);
+  object-fit: contain;
+}
+
+.emoji-pop-seat {
+  z-index: 4;
+  inset: -10px;
+}
+
+.emoji-pop-seat img {
+  width: min(76px, 72%);
+  height: min(76px, 72%);
+}
+
+@keyframes emoji-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.82);
+  }
+  14%,
+  78% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-22px) scale(0.96);
+  }
+}
+
+.chat-panel {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 250, 240, 0.92);
+  overflow: hidden;
+}
+
+.chat-messages {
+  max-height: 150px;
+  overflow-y: auto;
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+}
+
+.chat-message {
+  display: grid;
+  grid-template-columns: minmax(110px, 160px) 1fr;
+  gap: 8px;
+  color: var(--ink);
+}
+
+.chat-meta {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.chat-body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chat-emoji .chat-body {
+  color: var(--accent-2);
+  font-weight: 700;
+}
+
+.chat-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.chat-form input {
+  min-width: 0;
+  min-height: 34px;
+  border: 1px solid #9d8f79;
+  border-radius: 6px;
+  background: #fffdfa;
+  color: var(--ink);
+  font: inherit;
+  padding: 0 10px;
 }
 
 .event-log {
@@ -325,6 +589,11 @@ button:disabled {
     margin-bottom: 18px;
   }
 
+  .chat-message {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
   .table-grid {
     grid-template-columns: 1fr;
     grid-template-rows: none;
@@ -335,5 +604,10 @@ button:disabled {
   .table-center {
     grid-column: auto;
     grid-row: auto;
+  }
+
+  .hand-card {
+    flex-basis: 56px;
+    min-height: 104px;
   }
 }

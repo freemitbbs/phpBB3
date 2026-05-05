@@ -14,6 +14,7 @@
 		</div>
 		<div class="userbar">
 			<span id="user-label"></span>
+			<button id="sound-button" type="button" aria-pressed="false">Sound</button>
 			<button id="connect-button" type="button">Connect</button>
 		</div>
 	</section>
@@ -33,6 +34,20 @@
 				<button id="leave-room-button" type="button" hidden>Leave</button>
 			</div>
 			<div id="table-view" class="table-view"></div>
+			<div id="emoji-panel" class="emoji-panel" hidden>
+				<label class="emoji-target-label">
+					<span>To</span>
+					<select id="emoji-target-select" aria-label="Emoji target"></select>
+				</label>
+				<div id="emoji-dock" class="emoji-dock"></div>
+			</div>
+			<div id="chat-panel" class="chat-panel" hidden>
+				<div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+				<form id="chat-form" class="chat-form">
+					<input id="chat-input" type="text" maxlength="280" autocomplete="off" placeholder="Table chat" />
+					<button type="submit">Send</button>
+				</form>
+			</div>
 			<div id="event-log" class="event-log" aria-live="polite"></div>
 		</section>
 	</section>
