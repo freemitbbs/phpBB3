@@ -28,6 +28,11 @@ freemitbbs_cardgamesauth_server_room_configs:
     defaults: { _controller: freemitbbs.cardgamesauth.controller.server:room_configs }
     methods: [GET]
 
+freemitbbs_cardgamesauth_server_recovery_active:
+    path: /card-games/server/recovery/active
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:active_recoveries }
+    methods: [GET]
+
 freemitbbs_cardgamesauth_server_session_create:
     path: /card-games/server/session
     defaults: { _controller: freemitbbs.cardgamesauth.controller.server:create_session }
@@ -44,6 +49,16 @@ freemitbbs_cardgamesauth_server_events:
     path: /card-games/server/events
     defaults: { _controller: freemitbbs.cardgamesauth.controller.server:events }
     methods: [POST]
+
+freemitbbs_cardgamesauth_server_events_read:
+    path: /card-games/server/events
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:events_read }
+    methods: [GET]
+
+freemitbbs_cardgamesauth_server_replay_export:
+    path: /card-games/server/replay/export
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:replay_export }
+    methods: [GET]
 
 freemitbbs_cardgamesauth_server_snapshots:
     path: /card-games/server/snapshots

@@ -11,6 +11,8 @@ class server
 	private const DEFAULT_PROXY_CLOCK_SKEW_SECONDS = 300;
 	private const DEFAULT_PROXY_NONCE_TTL_SECONDS = 300;
 	private const DEFAULT_PROXY_MAX_BODY_BYTES = 262144;
+	private const DEFAULT_EVENT_EXPORT_LIMIT = 1000;
+	private const MAX_EVENT_EXPORT_LIMIT = 5000;
 	private const NICKNAME_PROFILE_FIELD_IDENT = 'nick_name';
 
 	protected \phpbb\config\config $config;
@@ -177,6 +179,121 @@ class server
 		return $this->json([
 			'success' => true,
 			'rooms' => $rooms,
+		]);
+	}
+
+	public function active_recoveries(): JsonResponse
+	{
+		if (($error = $this->require_server_auth('')) !== null)
+		{
+			return $error;
+		}
+
+		$sql = 'SELECT s.id AS session_id, s.room_key, s.game_type, s.status, s.owner_user_id,
+					s.settings_json, s.state_version, s.updated_at, s.finished_at,
+					rc.display_name, rc.sort_order, rc.enabled, rc.default_settings_json,
+					gs.seq AS snapshot_seq, gs.state_schema_version, gs.state_json,
+					gs.created_at AS snapshot_created_at,
+					ge.event_seq
+				FROM ' . $this->sessions_table . ' s
+			INNER JOIN (
+				SELECT session_id, MAX(seq) AS seq
+				FROM ' . $this->snapshots_table . '
+				GROUP BY session_id
+			) latest_snapshot
+				ON latest_snapshot.session_id = s.id
+			INNER JOIN ' . $this->snapshots_table . ' gs
+				ON gs.session_id = latest_snapshot.session_id
+				AND gs.seq = latest_snapshot.seq
+			LEFT JOIN (
+				SELECT session_id, MAX(seq) AS event_seq
+				FROM ' . $this->events_table . '
+				GROUP BY session_id
+			) ge
+				ON ge.session_id = s.id
+			LEFT JOIN ' . $this->room_configs_table . ' rc
+				ON rc.room_key = s.room_key
+			WHERE ' . $this->db->sql_in_set('s.status', ['starting', 'playing']) . '
+				AND s.finished_at = 0
+			ORDER BY s.updated_at ASC, s.id ASC';
+		$result = $this->db->sql_query($sql);
+
+		$rows = [];
+		$session_ids = [];
+		$user_ids = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$snapshot = $this->decode_json_field((string) ($row['state_json'] ?? ''), []);
+			if (!$this->is_recovery_snapshot($snapshot))
+			{
+				continue;
+			}
+
+			$rows[] = [
+				'session' => $row,
+				'snapshot' => $snapshot,
+			];
+			$session_id = (int) $row['session_id'];
+			$session_ids[] = $session_id;
+			$owner_user_id = (int) ($row['owner_user_id'] ?? 0);
+			if ($owner_user_id > 0)
+			{
+				$user_ids[] = $owner_user_id;
+			}
+
+			foreach (($snapshot['players'] ?? []) as $player)
+			{
+				if (is_array($player))
+				{
+					$user_id = (int) ($player['userId'] ?? $player['user_id'] ?? 0);
+					if ($user_id > 0)
+					{
+						$user_ids[] = $user_id;
+					}
+				}
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		$observers_by_session = $this->load_recovery_observers($session_ids);
+		foreach ($observers_by_session as $observers)
+		{
+			foreach ($observers as $observer)
+			{
+				$user_id = (int) ($observer['user_id'] ?? 0);
+				if ($user_id > 0)
+				{
+					$user_ids[] = $user_id;
+				}
+			}
+		}
+
+		$users = $this->load_users($user_ids);
+		$recoveries = [];
+		foreach ($rows as $recovery)
+		{
+			$session = $recovery['session'];
+			$snapshot = $recovery['snapshot'];
+			$session_id = (int) $session['session_id'];
+			$recoveries[] = [
+				'sessionId' => $session_id,
+				'session_id' => $session_id,
+				'seq' => max(
+					(int) ($session['snapshot_seq'] ?? 0),
+					(int) ($session['state_version'] ?? 0),
+					(int) ($session['event_seq'] ?? 0)
+				),
+				'room' => $this->recovery_room_payload($session, $snapshot, $observers_by_session[$session_id] ?? [], $users),
+				'snapshot' => $snapshot,
+				'state' => $snapshot,
+				'stateJson' => $snapshot,
+				'state_json' => $snapshot,
+			];
+		}
+
+		return $this->json([
+			'success' => true,
+			'recoveries' => $recoveries,
 		]);
 	}
 
@@ -354,6 +471,16 @@ class server
 			'skipped' => $skipped,
 			'events' => $recorded,
 		]);
+	}
+
+	public function events_read(): JsonResponse
+	{
+		return $this->event_export_response(false);
+	}
+
+	public function replay_export(): JsonResponse
+	{
+		return $this->event_export_response(true);
 	}
 
 	public function snapshots(): JsonResponse
@@ -656,6 +783,250 @@ class server
 		];
 	}
 
+	protected function load_users(array $user_ids): array
+	{
+		$user_ids = array_values(array_unique(array_filter(array_map('intval', $user_ids), static function ($user_id) {
+			return $user_id > 0;
+		})));
+		if (empty($user_ids))
+		{
+			return [];
+		}
+
+		$sql = 'SELECT user_id, username, username_clean, user_type, user_permissions, user_colour,
+				user_avatar, user_avatar_type, user_avatar_width, user_avatar_height
+			FROM ' . USERS_TABLE . '
+			WHERE ' . $this->db->sql_in_set('user_id', $user_ids);
+		$result = $this->db->sql_query($sql);
+		$users = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$users[(int) $row['user_id']] = $row;
+		}
+		$this->db->sql_freeresult($result);
+
+		return $users;
+	}
+
+	protected function is_recovery_snapshot($snapshot): bool
+	{
+		if (!is_array($snapshot))
+		{
+			return false;
+		}
+
+		return (int) ($snapshot['schemaVersion'] ?? 0) === 1
+			&& (string) ($snapshot['gameType'] ?? '') === 'tractor'
+			&& (string) ($snapshot['roomKey'] ?? '') !== ''
+			&& (string) ($snapshot['handId'] ?? '') !== '';
+	}
+
+	protected function load_recovery_observers(array $session_ids): array
+	{
+		$session_ids = array_values(array_unique(array_filter(array_map('intval', $session_ids), static function ($session_id) {
+			return $session_id > 0;
+		})));
+		if (empty($session_ids))
+		{
+			return [];
+		}
+
+		$sql = 'SELECT session_id, user_id, watched_seat_index, connected
+			FROM ' . $this->room_members_table . "
+			WHERE role = 'observer'
+				AND left_at = 0
+				AND " . $this->db->sql_in_set('session_id', $session_ids) . '
+			ORDER BY session_id ASC, joined_at ASC, id ASC';
+		$result = $this->db->sql_query($sql);
+		$observers = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$observers[(int) $row['session_id']][] = $row;
+		}
+		$this->db->sql_freeresult($result);
+
+		return $observers;
+	}
+
+	protected function recovery_room_payload(array $session, array $snapshot, array $observer_rows, array $users): array
+	{
+		$settings = $this->decode_json_field((string) ($session['settings_json'] ?? ''), []);
+		if (!is_array($settings) || $this->is_list_array($settings))
+		{
+			$settings = [];
+		}
+		if (empty($settings))
+		{
+			$default_settings = $this->decode_json_field((string) ($session['default_settings_json'] ?? ''), []);
+			$settings = (is_array($default_settings) && !$this->is_list_array($default_settings)) ? $default_settings : [];
+		}
+
+		$players = $this->snapshot_players($snapshot);
+		$max_seat_index = -1;
+		foreach ($players as $player)
+		{
+			$max_seat_index = max($max_seat_index, (int) ($player['seatIndex'] ?? 0));
+		}
+		$seat_count = max($this->seat_count_from_settings($settings), $max_seat_index + 1, 1);
+		$seats = [];
+		for ($seat_index = 0; $seat_index < $seat_count; $seat_index++)
+		{
+			$seats[$seat_index] = [
+				'seatIndex' => $seat_index,
+				'user' => null,
+				'ready' => false,
+				'connected' => false,
+			];
+		}
+
+		foreach ($players as $player)
+		{
+			$seat_index = (int) ($player['seatIndex'] ?? 0);
+			$user_id = (int) ($player['userId'] ?? 0);
+			if ($seat_index < 0 || $seat_index >= $seat_count || empty($users[$user_id]))
+			{
+				continue;
+			}
+
+			$seats[$seat_index]['user'] = $this->room_user_payload($users[$user_id]);
+		}
+
+		$observers = [];
+		foreach ($observer_rows as $observer_row)
+		{
+			$user_id = (int) ($observer_row['user_id'] ?? 0);
+			if (empty($users[$user_id]))
+			{
+				continue;
+			}
+
+			$observer = [
+				'user' => $this->room_user_payload($users[$user_id]),
+				'connected' => (bool) ((int) ($observer_row['connected'] ?? 0)),
+			];
+			$watched_seat_index = (int) ($observer_row['watched_seat_index'] ?? -1);
+			if ($watched_seat_index >= 0)
+			{
+				$observer['watchedSeatIndex'] = $watched_seat_index;
+			}
+			$observers[] = $observer;
+		}
+
+		$owner_user_id = (int) ($session['owner_user_id'] ?? 0);
+		$member_count = count(array_filter($seats, static function ($seat) {
+			return !empty($seat['user']);
+		})) + count($observers);
+		$updated_at = max((int) ($session['updated_at'] ?? 0), (int) ($session['snapshot_created_at'] ?? 0));
+		$updated_at_text = $updated_at > 0 ? $this->iso_time($updated_at) : (string) ($snapshot['updatedAt'] ?? '');
+		$status = (string) ($session['status'] ?? 'playing');
+		if (!in_array($status, ['starting', 'playing'], true))
+		{
+			$status = 'playing';
+		}
+
+		$room = [
+			'roomKey' => (string) ($session['room_key'] ?: ($snapshot['roomKey'] ?? '')),
+			'gameType' => (string) ($session['game_type'] ?: ($snapshot['gameType'] ?? '')),
+			'displayName' => (string) ($session['display_name'] ?: ($session['room_key'] ?: ($snapshot['roomKey'] ?? ''))),
+			'sortOrder' => (int) ($session['sort_order'] ?? 0),
+			'enabled' => !isset($session['enabled']) || (bool) ((int) $session['enabled']),
+			'status' => $status,
+			'stateVersion' => max(
+				(int) ($session['state_version'] ?? 0),
+				(int) ($session['snapshot_seq'] ?? 0),
+				(int) ($session['event_seq'] ?? 0)
+			),
+			'seatCount' => $seat_count,
+			'memberCount' => $member_count,
+			'seats' => array_values($seats),
+			'observers' => $observers,
+			'settings' => $this->json_object_payload($settings),
+			'updatedAt' => $updated_at_text,
+		];
+
+		if ($owner_user_id > 0 && !empty($users[$owner_user_id]))
+		{
+			$room['owner'] = $this->room_user_payload($users[$owner_user_id]);
+		}
+
+		return $room;
+	}
+
+	protected function snapshot_players(array $snapshot): array
+	{
+		$players = $snapshot['players'] ?? [];
+		if (!is_array($players))
+		{
+			return [];
+		}
+
+		$result = [];
+		foreach ($players as $player)
+		{
+			if (!is_array($player))
+			{
+				continue;
+			}
+
+			$seat_index = (int) ($player['seatIndex'] ?? $player['seat_index'] ?? -1);
+			$user_id = (int) ($player['userId'] ?? $player['user_id'] ?? 0);
+			if ($seat_index < 0 || $user_id <= 0)
+			{
+				continue;
+			}
+
+			$result[] = [
+				'seatIndex' => $seat_index,
+				'userId' => $user_id,
+			];
+		}
+
+		return $result;
+	}
+
+	protected function seat_count_from_settings(array $settings): int
+	{
+		$seat_count = (int) ($settings['seatCount'] ?? $settings['seat_count'] ?? 4);
+		return max(1, $seat_count);
+	}
+
+	protected function room_user_payload(array $user): array
+	{
+		$user_id = (int) ($user['user_id'] ?? 0);
+		$username = (string) ($user['username'] ?? '');
+		$nickname = $user_id > 0 ? $this->profile_nickname($user_id) : '';
+		$display_name = $nickname !== '' ? $username . '（' . $nickname . '）' : $username;
+
+		return [
+			'userId' => $user_id,
+			'username' => $username,
+			'usernameClean' => (string) ($user['username_clean'] ?? $username),
+			'displayName' => $display_name,
+			'nickname' => $nickname,
+			'avatarUrl' => $this->avatar_url($user),
+		];
+	}
+
+	protected function json_object_payload(array $value)
+	{
+		if (empty($value) || $this->is_list_array($value))
+		{
+			return new \stdClass();
+		}
+
+		return $value;
+	}
+
+	protected function is_list_array(array $value): bool
+	{
+		if (empty($value))
+		{
+			return false;
+		}
+
+		return array_keys($value) === range(0, count($value) - 1);
+	}
+
 	protected function user_groups(int $user_id): array
 	{
 		$sql = 'SELECT group_id
@@ -841,6 +1212,315 @@ class server
 			$this->db->sql_transaction('rollback');
 			throw $e;
 		}
+	}
+
+	protected function event_export_response(bool $replay_export): JsonResponse
+	{
+		if (($error = $this->require_server_auth('')) !== null)
+		{
+			return $error;
+		}
+
+		$session_id = max(0, $this->query_int('sessionId', 'session_id', 0));
+		$room_key = trim((string) $this->query_string('roomKey', 'room_key', ''));
+		$limit = $this->query_int('limit', 'limit', self::DEFAULT_EVENT_EXPORT_LIMIT);
+		$limit = max(1, min(self::MAX_EVENT_EXPORT_LIMIT, $limit));
+		$after_seq = $this->query_optional_int('afterSeq', 'after_seq');
+		$from_seq = $this->query_optional_int('fromSeq', 'from_seq');
+		$to_seq = $this->query_optional_int('toSeq', 'to_seq');
+		$include_snapshots = $this->query_bool('includeSnapshots', 'include_snapshots', $replay_export);
+		$include_finished_summary = $this->query_bool('includeFinishedSummary', 'include_finished_summary', $replay_export);
+
+		if ($session_id <= 0 && $room_key === '')
+		{
+			return $this->json_error('missing_event_selector', 'Event export requires sessionId or roomKey.', 400);
+		}
+
+		$event_rows = $this->load_event_export_rows($session_id, $room_key, $after_seq, $from_seq, $to_seq, $limit + 1);
+		$has_more = count($event_rows) > $limit;
+		if ($has_more)
+		{
+			array_pop($event_rows);
+		}
+
+		$events = [];
+		$sessions = [];
+		$session_ids = [];
+		foreach ($event_rows as $row)
+		{
+			$row_session_id = (int) $row['session_id'];
+			$session_ids[$row_session_id] = $row_session_id;
+			if (!isset($sessions[$row_session_id]))
+			{
+				$sessions[$row_session_id] = $this->event_export_session_payload($row);
+			}
+			$events[] = $this->event_export_event_payload($row);
+		}
+
+		if (empty($sessions) && $session_id > 0)
+		{
+			$session = $this->load_event_export_session($session_id);
+			if (!empty($session))
+			{
+				$sessions[$session_id] = $this->event_export_session_payload($session);
+				$session_ids[$session_id] = $session_id;
+			}
+		}
+
+		$response = [
+			'ok' => true,
+			'success' => true,
+			'events' => $events,
+			'sessions' => array_values($sessions),
+			'pagination' => [
+				'limit' => $limit,
+				'count' => count($events),
+				'hasMore' => $has_more,
+				'has_more' => $has_more,
+				'nextAfterSeq' => !empty($events) ? (int) $events[count($events) - 1]['seq'] : ($after_seq ?? 0),
+				'next_after_seq' => !empty($events) ? (int) $events[count($events) - 1]['seq'] : ($after_seq ?? 0),
+			],
+			'exportedAt' => $this->iso_time(time()),
+			'exported_at' => $this->iso_time(time()),
+		];
+
+		if (count($sessions) === 1)
+		{
+			$response['session'] = array_values($sessions)[0];
+		}
+
+		if ($include_snapshots)
+		{
+			$response['snapshots'] = $this->load_event_export_snapshots(array_values($session_ids), $after_seq, $from_seq, $to_seq);
+		}
+
+		if ($include_finished_summary)
+		{
+			$response['finishedSummaries'] = $this->load_event_export_finished_summaries(array_values($session_ids));
+			$response['finished_summaries'] = $response['finishedSummaries'];
+		}
+
+		return $this->json($response);
+	}
+
+	protected function load_event_export_rows(int $session_id, string $room_key, ?int $after_seq, ?int $from_seq, ?int $to_seq, int $limit): array
+	{
+		$where = $this->event_export_where($session_id, $room_key, $after_seq, $from_seq, $to_seq, 'e', 's');
+		$sql = 'SELECT e.id, e.session_id, e.seq, e.game_type, e.actor_user_id, e.request_id,
+					e.event_type, e.payload_schema_version, e.payload_json, e.created_at,
+					s.room_key, s.status, s.owner_user_id, s.settings_json, s.state_schema_version,
+					s.state_version, s.random_audit_json, s.started_at, s.updated_at, s.finished_at
+				FROM ' . $this->events_table . ' e
+			INNER JOIN ' . $this->sessions_table . ' s
+				ON s.id = e.session_id
+			WHERE ' . implode(' AND ', $where) . '
+			ORDER BY e.session_id ASC, e.seq ASC';
+		$result = $this->db->sql_query_limit($sql, $limit);
+		$rows = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$rows[] = $row;
+		}
+		$this->db->sql_freeresult($result);
+
+		return $rows;
+	}
+
+	protected function event_export_where(int $session_id, string $room_key, ?int $after_seq, ?int $from_seq, ?int $to_seq, string $event_alias, string $session_alias): array
+	{
+		$where = [];
+		if ($session_id > 0)
+		{
+			$where[] = $event_alias . '.session_id = ' . $session_id;
+		}
+		if ($room_key !== '')
+		{
+			$where[] = $session_alias . ".room_key = '" . $this->db->sql_escape(substr($room_key, 0, 64)) . "'";
+		}
+		if ($after_seq !== null)
+		{
+			$where[] = $event_alias . '.seq > ' . max(0, $after_seq);
+		}
+		else if ($from_seq !== null)
+		{
+			$where[] = $event_alias . '.seq >= ' . max(0, $from_seq);
+		}
+		if ($to_seq !== null)
+		{
+			$where[] = $event_alias . '.seq <= ' . max(0, $to_seq);
+		}
+
+		return $where;
+	}
+
+	protected function load_event_export_session(int $session_id): array
+	{
+		$sql = 'SELECT id AS session_id, room_key, game_type, status, owner_user_id, settings_json,
+				state_schema_version, state_version, random_audit_json, started_at, updated_at, finished_at
+			FROM ' . $this->sessions_table . '
+			WHERE id = ' . $session_id;
+		$result = $this->db->sql_query_limit($sql, 1);
+		$row = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+
+		return is_array($row) ? $row : [];
+	}
+
+	protected function event_export_session_payload(array $row): array
+	{
+		$session_id = (int) ($row['session_id'] ?? $row['id'] ?? 0);
+		$settings = $this->json_field_payload((string) ($row['settings_json'] ?? ''));
+		$random_audit = $this->json_field_payload((string) ($row['random_audit_json'] ?? ''));
+
+		return [
+			'sessionId' => $session_id,
+			'session_id' => $session_id,
+			'roomKey' => (string) ($row['room_key'] ?? ''),
+			'room_key' => (string) ($row['room_key'] ?? ''),
+			'gameType' => (string) ($row['game_type'] ?? ''),
+			'game_type' => (string) ($row['game_type'] ?? ''),
+			'status' => (string) ($row['status'] ?? ''),
+			'ownerUserId' => (int) ($row['owner_user_id'] ?? 0),
+			'owner_user_id' => (int) ($row['owner_user_id'] ?? 0),
+			'settings' => $settings,
+			'settings_json' => $settings,
+			'stateSchemaVersion' => (int) ($row['state_schema_version'] ?? 1),
+			'state_schema_version' => (int) ($row['state_schema_version'] ?? 1),
+			'stateVersion' => (int) ($row['state_version'] ?? 0),
+			'state_version' => (int) ($row['state_version'] ?? 0),
+			'randomAudit' => $random_audit,
+			'random_audit_json' => $random_audit,
+			'startedAt' => $this->iso_time((int) ($row['started_at'] ?? 0)),
+			'started_at' => $this->iso_time((int) ($row['started_at'] ?? 0)),
+			'updatedAt' => $this->iso_time((int) ($row['updated_at'] ?? 0)),
+			'updated_at' => $this->iso_time((int) ($row['updated_at'] ?? 0)),
+			'finishedAt' => $this->iso_time((int) ($row['finished_at'] ?? 0)),
+			'finished_at' => $this->iso_time((int) ($row['finished_at'] ?? 0)),
+		];
+	}
+
+	protected function event_export_event_payload(array $row): array
+	{
+		$actor_user_id = (int) ($row['actor_user_id'] ?? 0);
+		$request_id = (string) ($row['request_id'] ?? '');
+		$payload = $this->json_field_payload((string) ($row['payload_json'] ?? ''));
+
+		return [
+			'id' => (int) ($row['id'] ?? 0),
+			'sessionId' => (int) ($row['session_id'] ?? 0),
+			'session_id' => (int) ($row['session_id'] ?? 0),
+			'seq' => (int) ($row['seq'] ?? 0),
+			'gameType' => (string) ($row['game_type'] ?? ''),
+			'game_type' => (string) ($row['game_type'] ?? ''),
+			'actorUserId' => $actor_user_id > 0 ? $actor_user_id : null,
+			'actor_user_id' => $actor_user_id > 0 ? $actor_user_id : null,
+			'requestId' => $request_id !== '' ? $request_id : null,
+			'request_id' => $request_id !== '' ? $request_id : null,
+			'eventType' => (string) ($row['event_type'] ?? ''),
+			'event_type' => (string) ($row['event_type'] ?? ''),
+			'payloadSchemaVersion' => (int) ($row['payload_schema_version'] ?? 1),
+			'payload_schema_version' => (int) ($row['payload_schema_version'] ?? 1),
+			'payload' => $payload,
+			'payloadJson' => $payload,
+			'payload_json' => $payload,
+			'createdAt' => $this->iso_time((int) ($row['created_at'] ?? 0)),
+			'created_at' => $this->iso_time((int) ($row['created_at'] ?? 0)),
+		];
+	}
+
+	protected function load_event_export_snapshots(array $session_ids, ?int $after_seq, ?int $from_seq, ?int $to_seq): array
+	{
+		$session_ids = array_values(array_unique(array_filter(array_map('intval', $session_ids), static function ($session_id) {
+			return $session_id > 0;
+		})));
+		if (empty($session_ids))
+		{
+			return [];
+		}
+
+		$where = [$this->db->sql_in_set('session_id', $session_ids)];
+		if ($after_seq !== null)
+		{
+			$where[] = 'seq > ' . max(0, $after_seq);
+		}
+		else if ($from_seq !== null)
+		{
+			$where[] = 'seq >= ' . max(0, $from_seq);
+		}
+		if ($to_seq !== null)
+		{
+			$where[] = 'seq <= ' . max(0, $to_seq);
+		}
+
+		$sql = 'SELECT id, session_id, seq, game_type, state_schema_version, state_json, created_at
+			FROM ' . $this->snapshots_table . '
+			WHERE ' . implode(' AND ', $where) . '
+			ORDER BY session_id ASC, seq ASC';
+		$result = $this->db->sql_query($sql);
+		$snapshots = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$state = $this->json_field_payload((string) ($row['state_json'] ?? ''));
+			$snapshots[] = [
+				'id' => (int) ($row['id'] ?? 0),
+				'sessionId' => (int) ($row['session_id'] ?? 0),
+				'session_id' => (int) ($row['session_id'] ?? 0),
+				'seq' => (int) ($row['seq'] ?? 0),
+				'gameType' => (string) ($row['game_type'] ?? ''),
+				'game_type' => (string) ($row['game_type'] ?? ''),
+				'stateSchemaVersion' => (int) ($row['state_schema_version'] ?? 1),
+				'state_schema_version' => (int) ($row['state_schema_version'] ?? 1),
+				'state' => $state,
+				'stateJson' => $state,
+				'state_json' => $state,
+				'createdAt' => $this->iso_time((int) ($row['created_at'] ?? 0)),
+				'created_at' => $this->iso_time((int) ($row['created_at'] ?? 0)),
+			];
+		}
+		$this->db->sql_freeresult($result);
+
+		return $snapshots;
+	}
+
+	protected function load_event_export_finished_summaries(array $session_ids): array
+	{
+		$session_ids = array_values(array_unique(array_filter(array_map('intval', $session_ids), static function ($session_id) {
+			return $session_id > 0;
+		})));
+		if (empty($session_ids))
+		{
+			return [];
+		}
+
+		$sql = 'SELECT id, session_id, game_type, room_key, winner_json, score_json, summary_json, finished_at
+			FROM ' . $this->finished_summaries_table . '
+			WHERE ' . $this->db->sql_in_set('session_id', $session_ids) . '
+			ORDER BY session_id ASC';
+		$result = $this->db->sql_query($sql);
+		$summaries = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$summaries[] = [
+				'id' => (int) ($row['id'] ?? 0),
+				'sessionId' => (int) ($row['session_id'] ?? 0),
+				'session_id' => (int) ($row['session_id'] ?? 0),
+				'gameType' => (string) ($row['game_type'] ?? ''),
+				'game_type' => (string) ($row['game_type'] ?? ''),
+				'roomKey' => (string) ($row['room_key'] ?? ''),
+				'room_key' => (string) ($row['room_key'] ?? ''),
+				'winner' => $this->json_field_payload((string) ($row['winner_json'] ?? '')),
+				'winner_json' => $this->json_field_payload((string) ($row['winner_json'] ?? '')),
+				'score' => $this->json_field_payload((string) ($row['score_json'] ?? '')),
+				'score_json' => $this->json_field_payload((string) ($row['score_json'] ?? '')),
+				'summary' => $this->json_field_payload((string) ($row['summary_json'] ?? '')),
+				'summary_json' => $this->json_field_payload((string) ($row['summary_json'] ?? '')),
+				'finishedAt' => $this->iso_time((int) ($row['finished_at'] ?? 0)),
+				'finished_at' => $this->iso_time((int) ($row['finished_at'] ?? 0)),
+			];
+		}
+		$this->db->sql_freeresult($result);
+
+		return $summaries;
 	}
 
 	protected function ensure_lobby_session(string $room_key, string $game_type, int $now): array
@@ -1362,10 +2042,58 @@ class server
 		return json_last_error() === JSON_ERROR_NONE ? $decoded : $default;
 	}
 
+	protected function json_field_payload(string $value)
+	{
+		if (trim($value) === '')
+		{
+			return new \stdClass();
+		}
+
+		$decoded = json_decode($value, true);
+		if (json_last_error() !== JSON_ERROR_NONE)
+		{
+			return new \stdClass();
+		}
+
+		return (is_array($decoded) && empty($decoded)) ? new \stdClass() : $decoded;
+	}
+
 	protected function is_valid_json(string $value): bool
 	{
 		json_decode($value, true);
 		return json_last_error() === JSON_ERROR_NONE;
+	}
+
+	protected function query_int(string $camel_key, string $snake_key, int $default): int
+	{
+		return (int) $this->request->variable($camel_key, $this->request->variable($snake_key, $default));
+	}
+
+	protected function query_optional_int(string $camel_key, string $snake_key): ?int
+	{
+		$raw = $this->request->variable($camel_key, $this->request->variable($snake_key, ''));
+		if ((string) $raw === '')
+		{
+			return null;
+		}
+
+		return (int) $raw;
+	}
+
+	protected function query_string(string $camel_key, string $snake_key, string $default): string
+	{
+		return (string) $this->request->variable($camel_key, $this->request->variable($snake_key, $default));
+	}
+
+	protected function query_bool(string $camel_key, string $snake_key, bool $default): bool
+	{
+		$raw = $this->request->variable($camel_key, $this->request->variable($snake_key, $default ? '1' : '0'));
+		if (is_bool($raw))
+		{
+			return $raw;
+		}
+
+		return in_array(strtolower((string) $raw), ['1', 'true', 'yes', 'on'], true);
 	}
 
 	protected function string_list($value): array

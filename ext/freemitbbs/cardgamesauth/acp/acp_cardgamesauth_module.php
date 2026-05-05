@@ -46,6 +46,11 @@ class acp_cardgamesauth_module
 			$config->set('cardgamesauth_token_rate_limit', (string) $this->bounded_int($request->variable('cardgamesauth_token_rate_limit', 20), 1, 120));
 			$config->set('cardgamesauth_token_rate_window', (string) $this->bounded_int($request->variable('cardgamesauth_token_rate_window', 60), 10, 3600));
 			$config->set('cardgamesauth_token_clock_tolerance', (string) $this->bounded_int($request->variable('cardgamesauth_token_clock_tolerance', 10), 0, 300));
+			$token_secret = trim((string) $request->variable('cardgamesauth_token_secret', '', true));
+			if ($token_secret !== '')
+			{
+				$config->set('cardgamesauth_token_secret', $token_secret);
+			}
 			$config->set('cardgamesauth_proxy_enabled', (string) ((int) $request->variable('cardgamesauth_proxy_enabled', 0) ? 1 : 0));
 			$proxy_secret = trim((string) $request->variable('cardgamesauth_proxy_secret', '', true));
 			if ($proxy_secret !== '')
@@ -70,6 +75,7 @@ class acp_cardgamesauth_module
 			'CARDGAMESAUTH_TOKEN_RATE_LIMIT' => (int) ($config['cardgamesauth_token_rate_limit'] ?? 20),
 			'CARDGAMESAUTH_TOKEN_RATE_WINDOW' => (int) ($config['cardgamesauth_token_rate_window'] ?? 60),
 			'CARDGAMESAUTH_TOKEN_CLOCK_TOLERANCE' => (int) ($config['cardgamesauth_token_clock_tolerance'] ?? 10),
+			'CARDGAMESAUTH_TOKEN_SECRET' => $this->ensure_secret_config($config, 'cardgamesauth_token_secret'),
 			'CARDGAMESAUTH_PROXY_ENABLED' => (int) ($config['cardgamesauth_proxy_enabled'] ?? 1),
 			'CARDGAMESAUTH_PROXY_SECRET' => (string) ($config['cardgamesauth_proxy_secret'] ?? ''),
 			'CARDGAMESAUTH_PROXY_CLOCK_SKEW' => (int) ($config['cardgamesauth_proxy_clock_skew'] ?? 300),
@@ -81,5 +87,31 @@ class acp_cardgamesauth_module
 	protected function bounded_int($value, int $min, int $max): int
 	{
 		return max($min, min($max, (int) $value));
+	}
+
+	protected function ensure_secret_config(\phpbb\config\config $config, string $name): string
+	{
+		$secret = trim((string) ($config[$name] ?? ''));
+		if ($secret !== '')
+		{
+			return $secret;
+		}
+
+		$secret = $this->generate_secret();
+		$config->set($name, $secret);
+
+		return $secret;
+	}
+
+	protected function generate_secret(): string
+	{
+		try
+		{
+			return bin2hex(random_bytes(32));
+		}
+		catch (\Exception $e)
+		{
+			return sha1(uniqid((string) mt_rand(), true) . microtime(true));
+		}
 	}
 }
