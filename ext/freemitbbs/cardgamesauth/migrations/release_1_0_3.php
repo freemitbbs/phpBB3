@@ -18,7 +18,7 @@ class release_1_0_3 extends \phpbb\db\migration\migration
 	{
 		return [
 			['config.update', ['cardgamesauth_version', '1.0.3']],
-			['config.add', ['cardgamesauth_testing_mode', 0]],
+			['config.add', ['cardgamesauth_testing_mode', 1]],
 			['config.add', ['cardgamesauth_tester_group_id', 0]],
 			['custom', [[$this, 'ensure_tester_group']]],
 		];

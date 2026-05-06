@@ -46,7 +46,7 @@ class acp_cardgamesauth_module
 
 			$config->set('cardgamesauth_enabled', (string) ((int) $request->variable('cardgamesauth_enabled', 0) ? 1 : 0));
 			$config->set('cardgamesauth_nav_enabled', (string) ((int) $request->variable('cardgamesauth_nav_enabled', 0) ? 1 : 0));
-			$config->set('cardgamesauth_testing_mode', (string) ((int) $request->variable('cardgamesauth_testing_mode', 0) ? 1 : 0));
+			$config->set('cardgamesauth_testing_mode', (string) ((int) $request->variable('cardgamesauth_testing_mode', 1) ? 1 : 0));
 			$config->set('cardgamesauth_launch_redirect', (string) ((int) $request->variable('cardgamesauth_launch_redirect', 0) ? 1 : 0));
 			$config->set('cardgamesauth_client_url', trim((string) $request->variable('cardgamesauth_client_url', '', true)));
 			$config->set('cardgamesauth_ws_url', trim((string) $request->variable('cardgamesauth_ws_url', '', true)));
@@ -97,7 +97,7 @@ class acp_cardgamesauth_module
 			'U_CARDGAMES_ADMIN' => $helper->route('freemitbbs_cardgamesauth_admin'),
 			'CARDGAMESAUTH_ENABLED' => (int) ($config['cardgamesauth_enabled'] ?? 1),
 			'CARDGAMESAUTH_NAV_ENABLED' => (int) ($config['cardgamesauth_nav_enabled'] ?? 1),
-			'CARDGAMESAUTH_TESTING_MODE' => (int) ($config['cardgamesauth_testing_mode'] ?? 0),
+			'CARDGAMESAUTH_TESTING_MODE' => (int) ($config['cardgamesauth_testing_mode'] ?? 1),
 			'CARDGAMESAUTH_LAUNCH_REDIRECT' => (int) ($config['cardgamesauth_launch_redirect'] ?? 0),
 			'CARDGAMESAUTH_CLIENT_URL' => (string) ($config['cardgamesauth_client_url'] ?? ''),
 			'CARDGAMESAUTH_WS_URL' => (string) ($config['cardgamesauth_ws_url'] ?? ''),

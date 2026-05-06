@@ -214,7 +214,7 @@ class auth
 
 	protected function is_testing_mode(): bool
 	{
-		return (bool) ((int) ($this->config['cardgamesauth_testing_mode'] ?? 0));
+		return (bool) ((int) ($this->config['cardgamesauth_testing_mode'] ?? 1));
 	}
 
 	protected function is_tester(): bool

@@ -141,7 +141,7 @@ class ajaxify
 		{
 			$this->insert_dislike_history($post_id);
 			$this->invalidate_rank_cache_for_forums([$forum_id]);
-			$this->reputation->refresh_user($poster_id);
+			$this->reputation->refresh_post_context($post_id);
 		}
 
 		return $this->build_success_response($post_id, 'add', $this->get_post_reaction_counts($post_id));
@@ -158,7 +158,7 @@ class ajaxify
 			if ((int) $this->db->sql_affectedrows() > 0)
 			{
 				$this->invalidate_rank_cache_for_forums([$forum_id]);
-				$this->reputation->refresh_user($poster_id);
+				$this->reputation->refresh_post_context($post_id);
 			}
 		}
 

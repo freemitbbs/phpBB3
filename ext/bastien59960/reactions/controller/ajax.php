@@ -89,6 +89,7 @@ class ajax
 
     /** @var \bastien59960\reactions\controller\helper Service d'aide pour générer le HTML */
     protected $reactions_helper;
+    protected $toptopics_reputation;
 
     /**
      * Liste des 10 emojis courantes utilisées par défaut
@@ -139,7 +140,8 @@ class ajax
         $php_ext,
         \phpbb\config\config $config,
         \phpbb\notification\manager $notification_manager,
-        \bastien59960\reactions\controller\helper $reactions_helper
+        \bastien59960\reactions\controller\helper $reactions_helper,
+        $toptopics_reputation = null
     ) {
         // Initialisation des propriétés
         $this->db = $db;
@@ -156,6 +158,7 @@ class ajax
         $this->config = $config;
         $this->notification_manager = $notification_manager;
         $this->reactions_helper = $reactions_helper;
+        $this->toptopics_reputation = $toptopics_reputation;
         
         // Charger les fichiers de langue de l'extension
         $this->language->add_lang('common', 'bastien59960/reactions');
@@ -607,6 +610,7 @@ class ajax
 
             try {
                 $this->db->sql_query($insertSql);
+                $this->refresh_toptopics_reputation($post_id);
             } catch (\Throwable $dbEx) {
                 $err = $this->db->sql_error();
                 error_log("[Reactions RID=$rid] sql_query error: " . $dbEx->getMessage() . " db=" . json_encode($err));
@@ -678,6 +682,10 @@ class ajax
             error_log("[Reactions RID=$rid] delete SQL: $sql");
         }
         $this->db->sql_query($sql);
+        $deleted = (int) $this->db->sql_affectedrows() > 0;
+        if ($deleted) {
+            $this->refresh_toptopics_reputation($post_id);
+        }
 
         // Récupérer les réactions mises à jour
         $reactions = $this->get_reactions_array($post_id);
@@ -698,6 +706,15 @@ class ajax
             'html'         => $new_reactions_html,
             'rid'          => $rid,
         ]);
+    }
+
+    private function refresh_toptopics_reputation($post_id)
+    {
+        if (!is_object($this->toptopics_reputation) || !method_exists($this->toptopics_reputation, 'refresh_post_context')) {
+            return;
+        }
+
+        $this->toptopics_reputation->refresh_post_context((int) $post_id);
     }
 
     /**

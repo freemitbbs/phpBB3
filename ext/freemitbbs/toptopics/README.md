@@ -29,38 +29,44 @@ User reputation is computed separately from topic ranking, but it intentionally 
 
 For a given user across all approved posts:
 
-- likes received across all of the user's approved posts
-- dislikes received across all of the user's approved posts
-- open phpBB reports across all of the user's approved posts
-- quality length across all of the user's approved posts
+- quality length across all of the user's approved posts as a lifetime baseline
+- direct feedback on the user's own posts: likes minus dislikes plus general reactions
+- open phpBB reports on the user's own posts as a direct penalty
 
-This is intentionally post-centric and lifetime-based. The reputation model does not distinguish between topic starters and replies, and it does not apply age decay. Topic-level reply/view dynamics stay in the Top Topics ranker, while user reputation looks only at the quality and reception of the posts a user actually wrote.
+This is lifetime-based and intentionally does not use final Top Topics rank directly. Replies, likes, dislikes, and reactions belong to the authors of the posts that receive them. Topic starters are credited through feedback on their own first post, not through feedback on replies written by other users.
 
 Quality length is not raw database text length. For reputation, the extension removes quote blocks, image/attachment/url BBCode, raw URLs, remaining BBCode tags, HTML tags, whitespace, and punctuation, then counts Unicode letters and numbers. This prevents copied quotes, markup, and link spam from inflating reputation.
 
 ### Reputation formula
 
 ```text
-content_signal = ln(1 + min(total_authored_quality_length, 40000) / 500)
-content_score = content_signal * toptopics_content_weight * 24
-like_score = ln(1 + likes_received) * 6
-dislike_penalty = ln(1 + dislikes_received) * 6
+base_content_score =
+    ln(1 + min(total_authored_quality_length, 40000) / 500)
+  * toptopics_content_weight
+  * 12
+
+direct_feedback_signal =
+    likes_received
+  - dislikes_received
+  + ln(1 + reactions_received) * toptopics_reaction_weight
+
+direct_feedback_score =
+    signed_ln(1 + abs(direct_feedback_signal)) * 16
+
 flag_penalty = ln(1 + open_flags_received) * 12
 
 reputation =
-    content_score
-  + like_score
-  - dislike_penalty
+    base_content_score
+  + direct_feedback_score
   - flag_penalty
 ```
 
-The main signal is authored quality length, capped per post and overall so long-running authors can build reputation without making extremely long posts dominate. Likes and dislikes are logarithmic modifiers: early feedback matters, but repeated likes/dislikes do not scale linearly. Open reports remain a stronger logarithmic penalty.
+The signed logarithm preserves direction: positive direct feedback raises reputation and negative direct feedback lowers it, while repeated feedback has diminishing returns. Open reports remain a stronger direct penalty.
 
-The only ranking weight reused here is:
+The ranking weights reused here are:
 
 - `toptopics_content_weight`
-
-The reply/view weights remain topic-ranking controls only.
+- `toptopics_reaction_weight`
 
 ### Sidebar reputation badges
 
@@ -68,12 +74,14 @@ Post sidebars show reputation as a simple game-like badge without exposing numer
 
 ```text
 迷雾写手  score < 0
-初来执笔  0-49
-稳定输出  50-149
-好文常客  150-399
-镇版作者  400-999
-传说写手  1000+
+初来执笔  0-99
+稳定输出  100-499
+好文常客  500-1999
+镇版作者  2000-4999
+传说写手  5000+
 ```
+
+These ranges are intentionally aspirational for a young board. Early score distribution should not make the top badges easy to reach; the upper tiers are meant to remain meaningful as the site grows.
 
 The English language pack uses equivalent short titles: `Foggy Pen`, `Fresh Ink`, `Steady Voice`, `Signal Maker`, `Forum Pillar`, and `Legendary Pen`.
 
@@ -101,11 +109,12 @@ Per-post quality length is stored in `toptopics_post_quality`. Runtime updates a
 
 - post submit/edit recalculates only that post's quality length and applies the author delta
 - post approval, restore, soft-delete, and deletion add or subtract the affected stored post lengths
-- like, dislike, and report changes refresh only the reaction/report counters and keep the stored content total
+- like, dislike, reaction, and report changes refresh the affected post author while keeping the stored content total
 
 The extension refreshes affected authors when reputation inputs change:
 
 - like and dislike add/remove
+- general reaction add/remove
 - post submit or edit
 - post deletion
 - post visibility changes
@@ -113,7 +122,7 @@ The extension refreshes affected authors when reputation inputs change:
 
 Page reads only fetch the stored score. If a user has no row yet, the extension initializes it once on demand.
 
-`release_1_1_11` changes the reputation formula and clears `toptopics_user_reputation` so old materialized scores are not reused. `release_1_1_12` changes the interpretation of `content_length_total` from raw length to quality length and clears the same materialized table again. `release_1_1_13` creates `toptopics_post_quality`, backfills existing posts in batches, and clears materialized reputation so future scores are rebuilt from the incremental per-post aggregate.
+`release_1_1_11` changes the reputation formula and clears `toptopics_user_reputation` so old materialized scores are not reused. `release_1_1_12` changes the interpretation of `content_length_total` from raw length to quality length and clears the same materialized table again. `release_1_1_13` creates `toptopics_post_quality`, backfills existing posts in batches, and clears materialized reputation so future scores are rebuilt from the incremental per-post aggregate. `release_1_1_24` switches reputation to the topic/reply contribution model and clears materialized reputation again. `release_1_1_25` switches reputation to direct post feedback and clears materialized reputation again.
 
 ## Core formula
 

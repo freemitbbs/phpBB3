@@ -142,7 +142,7 @@ class ajaxify
 								{
 									$this->cache->destroy('sql', $this->likes_table);
 									$this->invalidate_summary_cache();
-									$this->invalidate_toptopics_state((int) $row['forum_id'], (int) $row['poster_id']);
+									$this->invalidate_toptopics_state((int) $row['forum_id'], (int) $row['poster_id'], (int) $post);
 									$this->notifyhelper->notify('add', $row['topic_id'], (int) $post, $row['post_subject'], $row['poster_id'] , $this->user->data['user_id']);
 								}
 
@@ -166,7 +166,7 @@ class ajaxify
 								{
 									$this->cache->destroy('sql', $this->likes_table);
 									$this->invalidate_summary_cache();
-									$this->invalidate_toptopics_state((int) $row['forum_id'], (int) $row['poster_id']);
+									$this->invalidate_toptopics_state((int) $row['forum_id'], (int) $row['poster_id'], (int) $post);
 									$this->notifyhelper->notify('remove', $row['topic_id'], (int) $post, $row['post_subject'], $row['poster_id'], $this->user->data['user_id']);
 								}
 								$likers = $this->get_likers_data((int) $post);
@@ -266,23 +266,31 @@ class ajaxify
 		return (bool) $row;
 	}
 
-	protected function invalidate_toptopics_state(int $forum_id, int $poster_id): void
+	protected function invalidate_toptopics_state(int $forum_id, int $poster_id, int $post_id = 0): void
 	{
 		if ($forum_id > 0 && is_object($this->toptopics_cache_invalidator) && method_exists($this->toptopics_cache_invalidator, 'invalidate_forums'))
 		{
 			$this->toptopics_cache_invalidator->invalidate_forums([$forum_id]);
 		}
 
-		if ($poster_id > 0 && $poster_id !== ANONYMOUS && is_object($this->toptopics_reputation))
+		if (!is_object($this->toptopics_reputation))
 		{
-			if (method_exists($this->toptopics_reputation, 'refresh_user'))
-			{
-				$this->toptopics_reputation->refresh_user($poster_id);
-			}
-			else if (method_exists($this->toptopics_reputation, 'invalidate_user'))
-			{
-				$this->toptopics_reputation->invalidate_user($poster_id);
-			}
+			return;
+		}
+
+		if ($post_id > 0 && method_exists($this->toptopics_reputation, 'refresh_post_context'))
+		{
+			$this->toptopics_reputation->refresh_post_context($post_id);
+			return;
+		}
+
+		if ($poster_id > 0 && $poster_id !== ANONYMOUS && method_exists($this->toptopics_reputation, 'refresh_user'))
+		{
+			$this->toptopics_reputation->refresh_user($poster_id);
+		}
+		else if ($poster_id > 0 && $poster_id !== ANONYMOUS && method_exists($this->toptopics_reputation, 'invalidate_user'))
+		{
+			$this->toptopics_reputation->invalidate_user($poster_id);
 		}
 	}
 }

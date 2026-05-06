@@ -79,6 +79,7 @@ services:
             - '@config'
             - '@notification_manager'
             - '@bastien59960.reactions.helper'
+            - '@?freemitbbs.toptopics.reputation'
 
     # =========================================================================
     # TÂCHE CRON PRINCIPALE (DIGEST E-MAIL)

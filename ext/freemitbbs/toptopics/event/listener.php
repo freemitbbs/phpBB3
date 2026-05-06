@@ -13,6 +13,10 @@ class listener implements EventSubscriberInterface
 	private const INDEX_CATEGORY_FORUM_CANDIDATE_MULTIPLIER = 2;
 	private const DEFAULT_CANDIDATE_POOL_LIMIT = 2000;
 	private const DEFAULT_POST_COLLAPSE_DISLIKE_THRESHOLD = 5;
+	private const REPUTATION_TIER_STEADY = 100;
+	private const REPUTATION_TIER_TRUSTED = 500;
+	private const REPUTATION_TIER_ELITE = 2000;
+	private const REPUTATION_TIER_LEGEND = 5000;
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
@@ -1897,24 +1901,7 @@ class listener implements EventSubscriberInterface
 
 	protected function refresh_reputation_for_post_ids(array $post_ids): void
 	{
-		$post_ids = array_values(array_unique(array_filter(array_map('intval', $post_ids))));
-		if (empty($post_ids))
-		{
-			return;
-		}
-
-		$sql = 'SELECT DISTINCT poster_id
-			FROM ' . POSTS_TABLE . '
-			WHERE ' . $this->db->sql_in_set('post_id', $post_ids);
-		$result = $this->db->sql_query($sql);
-		$user_ids = [];
-		while ($row = $this->db->sql_fetchrow($result))
-		{
-			$user_ids[] = (int) $row['poster_id'];
-		}
-		$this->db->sql_freeresult($result);
-
-		$this->reputation->refresh_users($user_ids);
+		$this->reputation->refresh_post_contexts($post_ids);
 	}
 
 	protected function sync_reputation_for_visibility_event($event): void
@@ -1993,22 +1980,22 @@ class listener implements EventSubscriberInterface
 			return ['class' => 'disputed', 'lang' => 'TOPTOPICS_REPUTATION_TIER_NEGATIVE'];
 		}
 
-		if ($score < 50)
+		if ($score < self::REPUTATION_TIER_STEADY)
 		{
 			return ['class' => 'fresh', 'lang' => 'TOPTOPICS_REPUTATION_TIER_NEUTRAL'];
 		}
 
-		if ($score < 150)
+		if ($score < self::REPUTATION_TIER_TRUSTED)
 		{
 			return ['class' => 'steady', 'lang' => 'TOPTOPICS_REPUTATION_TIER_POSITIVE'];
 		}
 
-		if ($score < 400)
+		if ($score < self::REPUTATION_TIER_ELITE)
 		{
 			return ['class' => 'regular', 'lang' => 'TOPTOPICS_REPUTATION_TIER_TRUSTED'];
 		}
 
-		if ($score < 1000)
+		if ($score < self::REPUTATION_TIER_LEGEND)
 		{
 			return ['class' => 'pillar', 'lang' => 'TOPTOPICS_REPUTATION_TIER_ELITE'];
 		}
@@ -2023,24 +2010,24 @@ class listener implements EventSubscriberInterface
 			return 100;
 		}
 
-		if ($score < 50)
+		if ($score < self::REPUTATION_TIER_STEADY)
 		{
-			return max(8, (int) round(($score / 50) * 100));
+			return max(8, (int) round(($score / self::REPUTATION_TIER_STEADY) * 100));
 		}
 
-		if ($score < 150)
+		if ($score < self::REPUTATION_TIER_TRUSTED)
 		{
-			return (int) round((($score - 50) / 100) * 100);
+			return (int) round((($score - self::REPUTATION_TIER_STEADY) / (self::REPUTATION_TIER_TRUSTED - self::REPUTATION_TIER_STEADY)) * 100);
 		}
 
-		if ($score < 400)
+		if ($score < self::REPUTATION_TIER_ELITE)
 		{
-			return (int) round((($score - 150) / 250) * 100);
+			return (int) round((($score - self::REPUTATION_TIER_TRUSTED) / (self::REPUTATION_TIER_ELITE - self::REPUTATION_TIER_TRUSTED)) * 100);
 		}
 
-		if ($score < 1000)
+		if ($score < self::REPUTATION_TIER_LEGEND)
 		{
-			return (int) round((($score - 400) / 600) * 100);
+			return (int) round((($score - self::REPUTATION_TIER_ELITE) / (self::REPUTATION_TIER_LEGEND - self::REPUTATION_TIER_ELITE)) * 100);
 		}
 
 		return 100;

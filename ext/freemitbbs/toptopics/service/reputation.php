@@ -6,10 +6,10 @@ class reputation
 {
 	private const DEFAULT_MIN_REPUTATION_DISLIKE = 10;
 	private const DEFAULT_MIN_REPUTATION_REPORT = 50;
-	private const DEFAULT_LIKE_WEIGHT = 6.0;
-	private const DEFAULT_DISLIKE_WEIGHT = 6.0;
+	private const DEFAULT_REACTION_WEIGHT = 0.3;
 	private const DEFAULT_FLAG_WEIGHT = 12.0;
-	private const CONTENT_WEIGHT_SCALE = 24.0;
+	private const BASE_CONTENT_WEIGHT_SCALE = 12.0;
+	private const DIRECT_FEEDBACK_WEIGHT_SCALE = 16.0;
 	private const CONTENT_LENGTH_CAP = 40000;
 	private const CONTENT_LENGTH_SCALE = 500.0;
 	private const PER_POST_CONTENT_CAP = 4000;
@@ -19,6 +19,8 @@ class reputation
 	protected \phpbb\db\driver\driver_interface $db;
 	protected string $likes_table;
 	protected string $dislikes_table;
+	protected string $post_reactions_table;
+	protected ?bool $has_post_reactions_table = null;
 	protected string $post_quality_table;
 	protected string $reputation_table;
 
@@ -35,6 +37,7 @@ class reputation
 		$this->db = $db;
 		$this->likes_table = $likes_table;
 		$this->dislikes_table = $dislikes_table;
+		$this->post_reactions_table = $this->derive_post_reactions_table($likes_table);
 		$this->post_quality_table = $post_quality_table;
 		$this->reputation_table = $reputation_table;
 	}
@@ -93,6 +96,33 @@ class reputation
 	public function refresh_user(int $user_id): void
 	{
 		$this->refresh_users([$user_id]);
+	}
+
+	public function refresh_post_context(int $post_id): void
+	{
+		$this->refresh_post_contexts([$post_id]);
+	}
+
+	public function refresh_post_contexts(array $post_ids): void
+	{
+		$post_ids = $this->normalize_post_ids($post_ids);
+		if (empty($post_ids))
+		{
+			return;
+		}
+
+		$sql = 'SELECT DISTINCT p.poster_id
+			FROM ' . POSTS_TABLE . ' p
+			WHERE ' . $this->db->sql_in_set('p.post_id', $post_ids);
+		$result = $this->db->sql_query($sql);
+		$user_ids = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$user_ids[] = (int) $row['poster_id'];
+		}
+		$this->db->sql_freeresult($result);
+
+		$this->refresh_users($user_ids);
 	}
 
 	public function refresh_users(array $user_ids): void
@@ -306,20 +336,22 @@ class reputation
 			$metrics[$user_id]['open_flags_received'] = $count;
 		}
 
-		$content_weight = $this->get_float_config('toptopics_content_weight', 0.35, 0.0, 10.0);
+		$options = $this->get_reputation_options();
+		$reaction_counts = $this->has_post_reactions_table() ? $this->collect_post_reaction_counts($user_ids) : [];
 		$computed_time = time();
 		$rows = [];
 
 		foreach ($metrics as $user_id => $user_metrics)
 		{
 			$content_signal = log(1.0 + (min(self::CONTENT_LENGTH_CAP, $user_metrics['content_length_total']) / self::CONTENT_LENGTH_SCALE));
-			$content_score = $content_signal * $content_weight * self::CONTENT_WEIGHT_SCALE;
-			$like_score = log(1.0 + $user_metrics['likes_received']) * self::DEFAULT_LIKE_WEIGHT;
-			$dislike_penalty = log(1.0 + $user_metrics['dislikes_received']) * self::DEFAULT_DISLIKE_WEIGHT;
+			$content_score = $content_signal * $options['content_weight'] * self::BASE_CONTENT_WEIGHT_SCALE;
+			$direct_feedback_signal = ($user_metrics['likes_received'] - $user_metrics['dislikes_received'])
+				+ (log(1.0 + (int) ($reaction_counts[$user_id] ?? 0)) * $options['reaction_weight']);
+			$direct_feedback_score = $this->signed_log_score($direct_feedback_signal, self::DIRECT_FEEDBACK_WEIGHT_SCALE);
 			$flag_penalty = log(1.0 + $user_metrics['open_flags_received']) * self::DEFAULT_FLAG_WEIGHT;
 			$rows[$user_id] = [
 				'user_id' => (int) $user_id,
-				'reputation_score' => (int) round($content_score + $like_score - $dislike_penalty - $flag_penalty),
+				'reputation_score' => (int) round($content_score + $direct_feedback_score - $flag_penalty),
 				'computed_time' => $computed_time,
 				'likes_received' => (int) $user_metrics['likes_received'],
 				'dislikes_received' => (int) $user_metrics['dislikes_received'],
@@ -433,7 +465,7 @@ class reputation
 
 	protected function get_post_quality_rows(array $post_ids): array
 	{
-		$sql = 'SELECT post_id, poster_id, quality_length, is_counted
+		$sql = 'SELECT post_id, poster_id, topic_id, quality_length, is_counted
 			FROM ' . $this->post_quality_table . '
 			WHERE ' . $this->db->sql_in_set('post_id', $post_ids);
 		$result = $this->db->sql_query($sql);
@@ -515,14 +547,41 @@ class reputation
 		})));
 	}
 
+	protected function get_reputation_options(): array
+	{
+		return [
+			'content_weight' => $this->get_float_config('toptopics_content_weight', 0.35, 0.0, 10.0),
+			'reaction_weight' => $this->get_float_config('toptopics_reaction_weight', self::DEFAULT_REACTION_WEIGHT, 0.0, 10.0),
+		];
+	}
+
+	protected function signed_log_score(float $signal, float $scale): float
+	{
+		if ($signal > 0.0)
+		{
+			return log(1.0 + $signal) * $scale;
+		}
+
+		if ($signal < 0.0)
+		{
+			return -1.0 * log(1.0 + abs($signal)) * $scale;
+		}
+
+		return 0.0;
+	}
+
 	protected function collect_post_event_counts(string $event_table, string $alias, array $user_ids): array
 	{
 		$sql = 'SELECT p.poster_id, COUNT(*) AS event_count
 			FROM ' . $event_table . ' ' . $alias . '
 			INNER JOIN ' . POSTS_TABLE . ' p
 				ON p.post_id = ' . $alias . '.post_id
+			INNER JOIN ' . TOPICS_TABLE . ' t
+				ON t.topic_id = p.topic_id
 			WHERE ' . $this->db->sql_in_set('p.poster_id', $user_ids) . '
 				AND p.post_visibility = ' . ITEM_APPROVED . '
+				AND t.topic_visibility = ' . ITEM_APPROVED . '
+				AND t.topic_type <> ' . ITEM_MOVED . '
 			GROUP BY p.poster_id';
 		$result = $this->db->sql_query($sql);
 		$counts = [];
@@ -535,14 +594,42 @@ class reputation
 		return $counts;
 	}
 
+	protected function collect_post_reaction_counts(array $user_ids): array
+	{
+		$sql = 'SELECT p.poster_id, COUNT(pr.reaction_id) AS reaction_count
+			FROM ' . $this->post_reactions_table . ' pr
+			INNER JOIN ' . POSTS_TABLE . ' p
+				ON p.post_id = pr.post_id
+			INNER JOIN ' . TOPICS_TABLE . ' t
+				ON t.topic_id = p.topic_id
+			WHERE ' . $this->db->sql_in_set('p.poster_id', $user_ids) . '
+				AND p.post_visibility = ' . ITEM_APPROVED . '
+				AND t.topic_visibility = ' . ITEM_APPROVED . '
+				AND t.topic_type <> ' . ITEM_MOVED . '
+			GROUP BY p.poster_id';
+		$result = $this->db->sql_query($sql);
+		$counts = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$counts[(int) $row['poster_id']] = (int) $row['reaction_count'];
+		}
+		$this->db->sql_freeresult($result);
+
+		return $counts;
+	}
+
 	protected function collect_report_counts(array $user_ids): array
 	{
 		$sql = 'SELECT p.poster_id, COUNT(*) AS event_count
 			FROM ' . REPORTS_TABLE . ' r
 			INNER JOIN ' . POSTS_TABLE . ' p
 				ON p.post_id = r.post_id
+			INNER JOIN ' . TOPICS_TABLE . ' t
+				ON t.topic_id = p.topic_id
 			WHERE ' . $this->db->sql_in_set('p.poster_id', $user_ids) . '
 				AND p.post_visibility = ' . ITEM_APPROVED . '
+				AND t.topic_visibility = ' . ITEM_APPROVED . '
+				AND t.topic_type <> ' . ITEM_MOVED . '
 				AND r.report_closed = 0
 			GROUP BY p.poster_id';
 		$result = $this->db->sql_query($sql);
@@ -566,6 +653,42 @@ class reputation
 	protected function is_countable_user(int $user_id): bool
 	{
 		return $user_id > 0 && $user_id !== ANONYMOUS;
+	}
+
+	protected function derive_post_reactions_table(string $likes_table): string
+	{
+		$likes_suffix = 'posts_likes';
+		if (substr($likes_table, -strlen($likes_suffix)) !== $likes_suffix)
+		{
+			return '';
+		}
+
+		return substr($likes_table, 0, -strlen($likes_suffix)) . 'post_reactions';
+	}
+
+	protected function has_post_reactions_table(): bool
+	{
+		if ($this->has_post_reactions_table !== null)
+		{
+			return $this->has_post_reactions_table;
+		}
+
+		if ($this->post_reactions_table === '')
+		{
+			$this->has_post_reactions_table = false;
+			return false;
+		}
+
+		$this->db->sql_return_on_error(true);
+		$result = $this->db->sql_query_limit('SELECT reaction_id FROM ' . $this->post_reactions_table, 1);
+		$this->has_post_reactions_table = ($result !== false);
+		if ($result !== false)
+		{
+			$this->db->sql_freeresult($result);
+		}
+		$this->db->sql_return_on_error(false);
+
+		return $this->has_post_reactions_table;
 	}
 
 	protected function get_int_config(string $key, int $default, ?int $min = null, ?int $max = null): int
