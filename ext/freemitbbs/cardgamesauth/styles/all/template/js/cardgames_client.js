@@ -327,7 +327,7 @@ async function authenticate() {
     const response = await sendCommand("auth.token", { payload: { token: state.token } });
     state.user = response.payload.user;
     state.authenticated = true;
-    await requestSkinProfile();
+    void requestSkinProfile().catch(() => undefined);
     await requestRooms();
     setStatus("已连接");
   } catch (error) {
@@ -376,10 +376,11 @@ async function selectSkin(skinId) {
 
 async function refreshTable(roomKey) {
   const response = await sendCommand("tractor.table", { roomKey });
-  state.table = response.payload.table;
-  state.currentRoomKey = roomKey;
-  syncSelectedHandIndexes();
-  render();
+  if (!response.payload?.table || (state.currentRoomKey && state.currentRoomKey !== roomKey)) {
+    return;
+  }
+
+  applyTable(response.payload.table);
 }
 
 function sendCommand(type, options) {
@@ -454,9 +455,7 @@ function applyServerMessage(message, commandType = "") {
         setChatEvents(message.payload.chat);
       }
       if (message.payload.table) {
-        state.table = message.payload.table;
-        state.currentRoomKey = state.table.room.roomKey;
-        syncSelectedHandIndexes();
+        applyTable(message.payload.table, false);
       } else if (message.payload.room) {
         state.currentRoomKey = message.payload.room.roomKey;
       }
@@ -479,15 +478,10 @@ function applyServerMessage(message, commandType = "") {
       void requestRooms();
       render();
       break;
-    case "room.recovered":
-      state.currentRoomKey = message.payload.room.roomKey;
-      void requestChatHistory(state.currentRoomKey);
-      void refreshTable(state.currentRoomKey);
-      break;
     case "room.updated":
       mergeRoom(message.payload.room);
-      if (message.payload.room.roomKey === state.currentRoomKey) {
-        void refreshTable(state.currentRoomKey);
+      if (state.table?.room?.roomKey === message.payload.room.roomKey) {
+        state.table.room = message.payload.room;
       }
       playCommandSound(commandType);
       render();
@@ -505,10 +499,7 @@ function applyServerMessage(message, commandType = "") {
     case "tractor.table":
     case "tractor.table.updated":
       playTableSound(message.payload.table, commandType);
-      state.table = message.payload.table;
-      state.currentRoomKey = state.table.room.roomKey;
-      syncSelectedHandIndexes();
-      render();
+      applyTable(message.payload.table);
       break;
     case "chat.history":
       if (!message.payload.roomKey || message.payload.roomKey === state.currentRoomKey) {
@@ -534,6 +525,19 @@ function applyServerMessage(message, commandType = "") {
       break;
     default:
       break;
+  }
+}
+
+function applyTable(table, shouldRender = true) {
+  if (!table?.room?.roomKey) {
+    return;
+  }
+
+  state.table = table;
+  state.currentRoomKey = table.room.roomKey;
+  syncSelectedHandIndexes();
+  if (shouldRender) {
+    render();
   }
 }
 
@@ -793,7 +797,11 @@ function handleTableAction(type, seatValue) {
   } else if (type === "tractor.start") {
     setStatus("正在开始...");
     void sendCommand("tractor.start", { roomKey, payload: {} })
-      .then(() => refreshTable(roomKey))
+      .then((response) => {
+        if (response.payload?.table) {
+          setStatus(engineCommandStatus(type, response.payload.table));
+        }
+      })
       .catch(reportError);
   } else if (type === "tractor.makeTrump") {
     const payload = inferTrumpPayload(selectedHandCards(), state.table);
@@ -832,6 +840,10 @@ function engineCommandStatus(commandType, table) {
   const nextSeatIndex = table?.engine?.public?.currentTrick?.nextSeatIndex;
   const isViewerTurn = nextSeatIndex !== undefined && table?.viewer?.seatIndex === nextSeatIndex;
 
+  if (commandType === "tractor.start" && table?.phase === "making_trump") {
+    const makeTrumpAction = action(table, "tractor.makeTrump");
+    return makeTrumpAction.enabled ? "开始成功，请选择级牌亮主" : "开始成功，等待亮主";
+  }
   if (commandType === "tractor.makeTrump" && table?.phase === "burying_bottom") {
     const discardAction = action(table, "tractor.discardBottom");
     return discardAction.enabled ? "亮主成功，请选择 8 张牌埋牌" : "亮主成功，等待埋牌";
@@ -942,10 +954,6 @@ function joinRoom(roomKey) {
     state.emojiTarget = "";
   }
   void sendCommand("room.join", { roomKey })
-    .then(() => Promise.all([
-      refreshTable(roomKey),
-      requestChatHistory(roomKey)
-    ]))
     .catch(reportError);
 }
 
@@ -955,6 +963,10 @@ async function requestChatHistory(roomKey) {
   }
 
   const response = await sendCommand("chat.history", { roomKey });
+  if (roomKey !== state.currentRoomKey) {
+    return;
+  }
+
   setChatEvents(response.payload.events || []);
   render();
 }
