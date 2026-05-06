@@ -497,7 +497,7 @@ function renderRooms() {
     button.setAttribute("aria-current", room.roomKey === state.currentRoomKey ? "true" : "false");
     button.disabled = !room.enabled;
     button.innerHTML = `
-      <span><strong>${escapeHtml(room.displayName)}</strong><span>${room.memberCount || 0} 人在线</span></span>
+      <span><strong>${escapeHtml(room.displayName)}</strong><span>${room.memberCount || 0}人</span></span>
       <span class="room-status">${escapeHtml(statusTextForRoom(room.status))}${room.enabled ? "" : " 已关闭"}</span>
     `;
     button.addEventListener("click", () => joinRoom(room.roomKey));
@@ -684,7 +684,8 @@ function handHtml(table) {
     </button>
   `).join("");
 
-  return `<div class="hand-panel" style="--hand-count: ${Math.max(cards.length, 1)}">${nodes}</div>`;
+  const columns = Math.max(1, Math.ceil(cards.length / 2));
+  return `<div class="hand-panel" style="--hand-count: ${Math.max(cards.length, 1)}; --hand-columns: ${columns}">${nodes}</div>`;
 }
 
 function handleTableAction(type, seatValue) {

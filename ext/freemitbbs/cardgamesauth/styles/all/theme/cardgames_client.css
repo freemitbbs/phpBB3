@@ -98,11 +98,11 @@
 
 .app-shell .workspace {
   display: grid;
-  grid-template-columns: minmax(230px, 300px) 1fr;
-  gap: 18px;
-  width: min(1180px, 100%);
+  grid-template-columns: 1fr;
+  gap: 12px;
+  width: min(1260px, 100%);
   margin: 0 auto;
-  padding: 18px;
+  padding: 12px clamp(10px, 2vw, 18px) 18px;
 }
 
 .app-shell .rooms-panel,
@@ -122,39 +122,60 @@
   font-size: 18px;
 }
 
+.app-shell .rooms-panel .panel-header {
+  margin-bottom: 6px;
+}
+
+.app-shell .rooms-panel .panel-header h2 {
+  font-size: 14px;
+}
+
+.app-shell .rooms-panel .panel-header button {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
 .app-shell .rooms-list {
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .app-shell .room-button {
   width: 100%;
-  min-height: 74px;
+  min-height: 42px;
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
   text-align: left;
   background: var(--panel);
+  padding: 4px 9px;
 }
 
 .app-shell .room-button strong {
   display: block;
-  font-size: 17px;
+  font-size: 14px;
+  line-height: 1.1;
 }
 
 .app-shell .room-button span {
   color: var(--muted);
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .app-shell .room-button .room-status {
   justify-self: end;
   color: var(--accent-2);
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .app-shell .room-button[aria-current="true"] {
   border-color: var(--accent);
-  box-shadow: inset 4px 0 0 var(--accent);
+  box-shadow: inset 0 -3px 0 var(--accent);
 }
 
 .app-shell .table-view {
@@ -357,21 +378,28 @@
 }
 
 .app-shell .hand-panel {
-  display: flex;
-  align-items: end;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 14px;
+  --hand-gap: 6px;
+  --hand-columns: 13;
+  --hand-card-width: min(74px, calc((100vw - 54px - (var(--hand-columns) - 1) * var(--hand-gap)) / var(--hand-columns)));
+  display: grid;
+  grid-template-columns: repeat(var(--hand-columns), minmax(0, var(--hand-card-width)));
+  grid-auto-rows: auto;
+  justify-content: center;
+  align-items: start;
+  gap: var(--hand-gap);
+  overflow: visible;
+  padding-bottom: 22px;
 }
 
 .app-shell .hand-card {
-  flex: 0 0 clamp(58px, 7vw, 82px);
-  min-height: 116px;
+  width: var(--hand-card-width);
+  min-width: 0;
+  min-height: calc(var(--hand-card-width) * 1.42 + 16px);
   display: grid;
   align-content: start;
-  gap: 4px;
+  gap: 3px;
   background: #fffdfa;
-  padding: 5px;
+  padding: 4px;
   transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
 
@@ -597,7 +625,11 @@
   }
 
   .app-shell .rooms-panel {
-    margin-bottom: 18px;
+    margin-bottom: 12px;
+  }
+
+  .app-shell .rooms-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .app-shell .chat-message {
@@ -618,7 +650,6 @@
   }
 
   .app-shell .hand-card {
-    flex-basis: 56px;
-    min-height: 104px;
+    min-height: calc(var(--hand-card-width) * 1.42 + 14px);
   }
 }
