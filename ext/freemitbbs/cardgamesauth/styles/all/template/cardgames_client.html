@@ -10,43 +10,43 @@
 	<section class="topbar">
 		<div>
 			<h1>{{ lang('CARDGAMES_TITLE') }}</h1>
-			<p id="connection-status">Disconnected</p>
+			<p id="connection-status">未连接</p>
 		</div>
 		<div class="userbar">
 			<span id="user-label"></span>
-			<select id="skin-select" aria-label="Skin" hidden></select>
-			<button id="sound-button" type="button" aria-pressed="false">Sound</button>
-			<button id="connect-button" type="button">Connect</button>
+			<select id="skin-select" aria-label="皮肤" hidden></select>
+			<button id="sound-button" type="button" aria-pressed="false">声音关</button>
+			<button id="connect-button" type="button">连接</button>
 		</div>
 	</section>
 
 	<section class="workspace">
 		<aside class="rooms-panel">
 			<div class="panel-header">
-				<h2>Rooms</h2>
-				<button id="refresh-rooms-button" type="button">Refresh</button>
+				<h2>房间</h2>
+				<button id="refresh-rooms-button" type="button">刷新</button>
 			</div>
 			<div id="rooms-list" class="rooms-list"></div>
 		</aside>
 
 		<section class="table-panel">
 			<div class="panel-header">
-				<h2 id="table-title">Lobby</h2>
-				<button id="leave-room-button" type="button" hidden>Leave</button>
+				<h2 id="table-title">大厅</h2>
+				<button id="leave-room-button" type="button" hidden>离开</button>
 			</div>
 			<div id="table-view" class="table-view"></div>
 			<div id="emoji-panel" class="emoji-panel" hidden>
 				<label class="emoji-target-label">
-					<span>To</span>
-					<select id="emoji-target-select" aria-label="Emoji target"></select>
+					<span>发送给</span>
+					<select id="emoji-target-select" aria-label="表情目标"></select>
 				</label>
 				<div id="emoji-dock" class="emoji-dock"></div>
 			</div>
 			<div id="chat-panel" class="chat-panel" hidden>
 				<div id="chat-messages" class="chat-messages" aria-live="polite"></div>
 				<form id="chat-form" class="chat-form">
-					<input id="chat-input" type="text" maxlength="280" autocomplete="off" placeholder="Table chat" />
-					<button type="submit">Send</button>
+					<input id="chat-input" type="text" maxlength="280" autocomplete="off" placeholder="桌内聊天" />
+					<button type="submit">发送</button>
 				</form>
 			</div>
 			<div id="event-log" class="event-log" aria-live="polite"></div>

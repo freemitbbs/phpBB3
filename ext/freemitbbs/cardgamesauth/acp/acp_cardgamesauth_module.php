@@ -26,6 +26,8 @@ class acp_cardgamesauth_module
 		$request = $phpbb_container->get('request');
 		/** @var \phpbb\language\language $language */
 		$language = $phpbb_container->get('language');
+		/** @var \phpbb\controller\helper $helper */
+		$helper = $phpbb_container->get('controller.helper');
 
 		$language->add_lang('info_acp_cardgamesauth', 'freemitbbs/cardgamesauth');
 
@@ -92,6 +94,7 @@ class acp_cardgamesauth_module
 
 		$template->assign_vars([
 			'U_ACTION' => $this->u_action,
+			'U_CARDGAMES_ADMIN' => $helper->route('freemitbbs_cardgamesauth_admin'),
 			'CARDGAMESAUTH_ENABLED' => (int) ($config['cardgamesauth_enabled'] ?? 1),
 			'CARDGAMESAUTH_NAV_ENABLED' => (int) ($config['cardgamesauth_nav_enabled'] ?? 1),
 			'CARDGAMESAUTH_TESTING_MODE' => (int) ($config['cardgamesauth_testing_mode'] ?? 0),

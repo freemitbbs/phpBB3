@@ -33,18 +33,57 @@ const defaultSkins = [
   "skin_girl_3.webp"
 ];
 const emojiCatalog = [
-  { id: "smile", asset: "goodjob", label: "Smile" },
-  { id: "laugh", asset: "lol", label: "Laugh" },
-  { id: "thumbs_up", asset: "youareright", label: "Thumbs up" },
-  { id: "clap", asset: "goodjob", label: "Clap" },
-  { id: "fire", asset: "fireworks", label: "Fire" },
-  { id: "thinking", asset: "hurryup", label: "Thinking" },
-  { id: "surprise", asset: "sorry", label: "Surprise" },
-  { id: "sad", asset: "sorry", label: "Sad" },
-  { id: "angry", asset: "hurryup", label: "Angry" },
-  { id: "good_luck", asset: "noproblem", label: "Good luck" }
+  { id: "smile", asset: "goodjob", label: "微笑" },
+  { id: "laugh", asset: "lol", label: "大笑" },
+  { id: "thumbs_up", asset: "youareright", label: "点赞" },
+  { id: "clap", asset: "goodjob", label: "鼓掌" },
+  { id: "fire", asset: "fireworks", label: "烟花" },
+  { id: "thinking", asset: "hurryup", label: "思考" },
+  { id: "surprise", asset: "sorry", label: "惊讶" },
+  { id: "sad", asset: "sorry", label: "难过" },
+  { id: "angry", asset: "hurryup", label: "着急" },
+  { id: "good_luck", asset: "noproblem", label: "好运" }
 ];
 const emojiTypes = ["goodjob", "hurryup", "sorry", "lol", "noproblem", "fireworks", "youareright"];
+const skinLabels = {
+  "skin_basicmale": "基础男角色",
+  "skin_basicfemale": "基础女角色",
+  "skin_boy_1": "少年侠客",
+  "skin_girl_1": "少女侠客",
+  "skin_boy_2": "书生",
+  "skin_girl_2": "仕女",
+  "skin_boy_3": "游侠",
+  "skin_girl_3": "女游侠"
+};
+const statusLabels = {
+  waiting: "等待中",
+  starting: "准备开始",
+  playing: "游戏中",
+  finished: "已结束",
+  cancelled: "已取消",
+  abandoned: "已放弃",
+  archived: "已归档"
+};
+const phaseLabels = {
+  waiting_for_players: "等待玩家",
+  waiting_for_four_ready_players: "等待四名玩家准备",
+  making_trump: "亮主",
+  burying_bottom: "埋牌",
+  playing: "出牌中",
+  finished: "已结束",
+  trump_not_open: "现在还不能亮主",
+  bottom_holder_only: "只有底牌持有者可以埋牌",
+  bottom_not_open: "现在还不能埋牌",
+  waiting_for_turn: "还没轮到您出牌",
+  play_not_open: "现在还不能出牌"
+};
+const cardSuitLabels = {
+  heart: "红桃",
+  spade: "黑桃",
+  diamond: "方块",
+  club: "梅花"
+};
+const cardRankLabels = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
 
 const els = {
   status: document.querySelector("#connection-status"),
@@ -151,7 +190,7 @@ async function loadBootstrap() {
 
 async function connect() {
   disconnect();
-  setStatus("Connecting");
+  setStatus("正在连接");
 
   try {
     if (!state.token) {
@@ -172,15 +211,15 @@ async function connect() {
     ws.addEventListener("close", () => {
       state.connected = false;
       state.authenticated = false;
-      state.pending.forEach((pending) => pending.reject(new Error("WebSocket closed")));
+      state.pending.forEach((pending) => pending.reject(new Error("连接已断开")));
       state.pending.clear();
       render();
     });
     ws.addEventListener("error", () => {
-      setStatus("Connection error");
+      setStatus("连接出错");
     });
   } catch (error) {
-    setStatus(error.message || "Connection failed");
+    setStatus(error.message || "连接失败");
   }
 }
 
@@ -198,7 +237,7 @@ async function fetchToken() {
   const tokenUrl = state.bootstrap.tokenUrl;
   const tokenHash = state.bootstrap.tokenHash;
   if (!tokenUrl || !tokenHash) {
-    throw new Error("Open this client from phpBB /card-games, or pass ?token= and ?ws= for local testing.");
+    throw new Error("请从论坛的卡牌游戏入口打开游戏。");
   }
 
   const body = new URLSearchParams({ hash: tokenHash });
@@ -213,7 +252,7 @@ async function fetchToken() {
   });
   const payload = await response.json();
   if (!response.ok || !payload.success) {
-    throw new Error(payload.error || "Token request failed");
+    throw new Error(payload.error || "获取游戏令牌失败");
   }
 
   state.bootstrap.wsUrl = payload.wsUrl || state.bootstrap.wsUrl;
@@ -228,9 +267,9 @@ async function authenticate() {
     state.authenticated = true;
     await requestSkinProfile();
     await requestRooms();
-    setStatus("Connected");
+    setStatus("已连接");
   } catch (error) {
-    setStatus(error.message || "Authentication failed");
+    setStatus(error.message || "认证失败");
   }
 }
 
@@ -283,7 +322,7 @@ async function refreshTable(roomKey) {
 
 function sendCommand(type, options) {
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
-    return Promise.reject(new Error("WebSocket is not open"));
+    return Promise.reject(new Error("连接尚未打开"));
   }
 
   const requestId = `web-${Date.now()}-${++state.requestSeq}`;
@@ -307,7 +346,7 @@ function handleMessage(raw) {
   try {
     message = JSON.parse(raw);
   } catch {
-    setStatus("Received invalid JSON");
+    setStatus("收到无效的服务器消息");
     return;
   }
 
@@ -329,7 +368,7 @@ function handleMessage(raw) {
 function applyServerMessage(message, commandType = "") {
   switch (message.type) {
     case "system.hello":
-      setStatus("Server ready");
+      setStatus("服务器已就绪");
       break;
     case "auth.accepted":
       state.user = message.payload.user || state.user;
@@ -435,8 +474,8 @@ function applyServerMessage(message, commandType = "") {
 function render() {
   els.status.textContent = statusText();
   els.user.textContent = state.user ? state.user.displayName || state.user.username : "";
-  els.connect.textContent = state.connected ? "Reconnect" : "Connect";
-  els.sound.textContent = state.soundEnabled ? "Sound on" : "Sound off";
+  els.connect.textContent = state.connected ? "重新连接" : "连接";
+  els.sound.textContent = state.soundEnabled ? "声音开" : "声音关";
   els.sound.setAttribute("aria-pressed", state.soundEnabled ? "true" : "false");
   renderSkinSelect();
   renderRooms();
@@ -447,7 +486,7 @@ function render() {
 
 function renderRooms() {
   if (!state.rooms.length) {
-    els.rooms.innerHTML = '<div class="empty-state">No rooms loaded.</div>';
+    els.rooms.innerHTML = '<div class="empty-state">尚未加载房间。</div>';
     return;
   }
 
@@ -458,8 +497,8 @@ function renderRooms() {
     button.setAttribute("aria-current", room.roomKey === state.currentRoomKey ? "true" : "false");
     button.disabled = !room.enabled;
     button.innerHTML = `
-      <span><strong>${escapeHtml(room.displayName)}</strong><span>${room.memberCount || 0} online</span></span>
-      <span class="room-status">${escapeHtml(room.status)}${room.enabled ? "" : " closed"}</span>
+      <span><strong>${escapeHtml(room.displayName)}</strong><span>${room.memberCount || 0} 人在线</span></span>
+      <span class="room-status">${escapeHtml(statusTextForRoom(room.status))}${room.enabled ? "" : " 已关闭"}</span>
     `;
     button.addEventListener("click", () => joinRoom(room.roomKey));
     return button;
@@ -478,7 +517,7 @@ function renderSkinSelect() {
   els.skin.replaceChildren(...(profile.skins || []).map((skin) => {
     const option = document.createElement("option");
     option.value = skin.skinId;
-    option.textContent = skin.displayName || skin.skinId;
+    option.textContent = skinDisplayName(skin);
     option.disabled = !owned.has(skin.skinId);
     return option;
   }));
@@ -489,22 +528,22 @@ function renderTable() {
   const table = state.table;
   els.leave.hidden = !state.currentRoomKey;
   if (!table) {
-    els.title.textContent = "Lobby";
-    els.table.innerHTML = '<div class="empty-state">Choose a room to enter the table.</div>';
+    els.title.textContent = "大厅";
+    els.table.innerHTML = '<div class="empty-state">请选择房间进入牌桌。</div>';
     return;
   }
 
   els.title.textContent = table.room.displayName;
   const seatNodes = table.room.seats.map((seat) => seatHtml(table, seat)).join("");
   const observers = table.room.observers.map((observer) => {
-    const watched = observer.watchedSeatIndex === undefined ? "" : ` watching seat ${observer.watchedSeatIndex + 1}`;
+    const watched = observer.watchedSeatIndex === undefined ? "" : ` 正在观看${seatLabel(observer.watchedSeatIndex)}`;
     return `<span class="observer-pill">${escapeHtml(observer.user.displayName)}${watched}</span>`;
   }).join("");
   const score = table.engine?.public?.score ?? 0;
   const currentTrick = table.engine?.public?.currentTrick;
   const trickLabel = currentTrick
-    ? `Trick ${currentTrick.trickNumber}, seat ${(currentTrick.nextSeatIndex ?? currentTrick.winnerSeatIndex) + 1}`
-    : table.engineReady ? `Score ${score}` : "Waiting";
+    ? `第 ${currentTrick.trickNumber} 墩，轮到${seatLabel(currentTrick.nextSeatIndex ?? currentTrick.winnerSeatIndex)}`
+    : table.engineReady ? `得分 ${score}` : "等待中";
   const leaveAction = action(table, "room.leave");
 
   els.table.innerHTML = `
@@ -516,7 +555,7 @@ function renderTable() {
           <strong>${escapeHtml(phaseText(table.phase))}</strong>
           <p>${escapeHtml(trickLabel)}</p>
           <div class="table-facts">
-            <span>Rank ${escapeHtml(rankLabel(table.engine?.public?.rank))}</span>
+            <span>级牌 ${escapeHtml(rankLabel(table.engine?.public?.rank))}</span>
             <span>${escapeHtml(trumpLabel(table.engine?.public?.trump))}</span>
           </div>
           <div class="table-actions">${tableActionsHtml(table)}</div>
@@ -535,7 +574,7 @@ function renderTable() {
     button.addEventListener("click", () => toggleCardSelection(Number(button.dataset.cardIndex)));
   });
   els.leave.disabled = !leaveAction.enabled;
-  els.leave.title = leaveAction.reason || "";
+  els.leave.title = leaveAction.reason ? actionReasonText(leaveAction.reason) : "";
 }
 
 function seatHtml(table, seat) {
@@ -544,8 +583,8 @@ function seatHtml(table, seat) {
   const isViewerSeat = table.viewer.seatIndex === seat.seatIndex;
   const isOwner = table.room.owner?.userId && user?.userId === table.room.owner.userId;
   const meta = occupied
-    ? `${seat.connected ? "online" : "offline"} · ${seat.ready ? "ready" : "not ready"}${isOwner ? " · owner" : ""}`
-    : "open";
+    ? `${seat.connected ? "在线" : "离线"} · ${seat.ready ? "已准备" : "未准备"}${isOwner ? " · 房主" : ""}`
+    : "空位";
   const actions = seatActionsHtml(table, seat, isViewerSeat);
   const avatar = user?.avatarUrl
     ? `<span class="seat-avatar-stack"><img class="seat-skin" src="${escapeAttribute(skinUrlForSeat(user, seat.seatIndex))}" alt="" loading="lazy" /><img class="seat-profile-avatar" src="${escapeAttribute(user.avatarUrl)}" alt="" loading="lazy" /></span>`
@@ -554,7 +593,7 @@ function seatHtml(table, seat) {
   return `
     <div class="seat seat-${seat.seatIndex} ${seat.connected ? "" : "seat-offline"}" data-seat-index="${seat.seatIndex}">
       ${avatar}
-      <div class="seat-name">${occupied ? escapeHtml(user.displayName) : `Seat ${seat.seatIndex + 1}`}</div>
+      <div class="seat-name">${occupied ? escapeHtml(user.displayName) : seatLabel(seat.seatIndex)}</div>
       <div class="seat-meta">${escapeHtml(meta)}</div>
       <div class="seat-actions">${actions}</div>
     </div>
@@ -563,20 +602,20 @@ function seatHtml(table, seat) {
 
 function seatActionsHtml(table, seat, isViewerSeat) {
   if (!seat.user && action(table, "seat.claim").enabled) {
-    return `<button data-action="seat.claim" data-seat="${seat.seatIndex}" type="button">Sit</button>`;
+    return `<button data-action="seat.claim" data-seat="${seat.seatIndex}" type="button">坐下</button>`;
   }
   if (isViewerSeat) {
     const readyAction = action(table, "player.ready");
     const releaseAction = action(table, "seat.release");
     return `
       <button data-action="player.ready" data-seat="${seat.seatIndex}" type="button" ${readyAction.enabled ? "" : "disabled"}>
-        ${seat.ready ? "Unready" : "Ready"}
+        ${seat.ready ? "取消准备" : "准备"}
       </button>
-      <button data-action="seat.release" data-seat="${seat.seatIndex}" type="button" ${releaseAction.enabled ? "" : "disabled"}>Stand</button>
+      <button data-action="seat.release" data-seat="${seat.seatIndex}" type="button" ${releaseAction.enabled ? "" : "disabled"}>离座</button>
     `;
   }
   if (seat.user && action(table, "observer.watch").enabled && table.viewer.role === "observer") {
-    return `<button data-action="observer.watch" data-seat="${seat.seatIndex}" type="button">Watch</button>`;
+    return `<button data-action="observer.watch" data-seat="${seat.seatIndex}" type="button">观看</button>`;
   }
   return "";
 }
@@ -600,16 +639,16 @@ function tableActionsHtml(table) {
   const parts = [];
 
   if (startAction.enabled) {
-    parts.push('<button data-action="tractor.start" type="button">Start</button>');
+    parts.push('<button data-action="tractor.start" type="button">开始</button>');
   }
   if (makeTrumpAction.enabled) {
-    parts.push(`<button data-action="tractor.makeTrump" type="button" ${inferTrumpPayload(selectedCards, table) ? "" : "disabled"} title="Select one rank card or a valid pair">Trump</button>`);
+    parts.push(`<button data-action="tractor.makeTrump" type="button" ${inferTrumpPayload(selectedCards, table) ? "" : "disabled"} title="请选择一张级牌或一对有效的牌">亮主</button>`);
   }
   if (discardAction.enabled) {
-    parts.push(`<button data-action="tractor.discardBottom" type="button" ${selectedCards.length === discardAction.count ? "" : "disabled"} title="Select ${discardAction.count} cards">Bury</button>`);
+    parts.push(`<button data-action="tractor.discardBottom" type="button" ${selectedCards.length === discardAction.count ? "" : "disabled"} title="请选择 ${discardAction.count} 张牌">埋牌</button>`);
   }
   if (playAction.enabled) {
-    parts.push(`<button data-action="tractor.playCards" type="button" ${selectedCards.length > 0 ? "" : "disabled"}>Play</button>`);
+    parts.push(`<button data-action="tractor.playCards" type="button" ${selectedCards.length > 0 ? "" : "disabled"}>出牌</button>`);
   }
 
   return parts.join("");
@@ -623,7 +662,7 @@ function trickHtml(table) {
 
   const plays = trick.plays.map((play) => `
     <div class="trick-play">
-      <span>Seat ${play.seatIndex + 1}</span>
+      <span>${seatLabel(play.seatIndex)}</span>
       <span class="played-cards">${play.cards.map((card) => cardFaceHtml(card, "played-card")).join("")}</span>
     </div>
   `).join("");
@@ -640,7 +679,7 @@ function handHtml(table) {
   const nodes = cards.map((card, index) => `
     <button class="hand-card" data-card-index="${index}" aria-pressed="${selected.has(index) ? "true" : "false"}" type="button">
       ${cardFaceHtml(card, "hand-card-face")}
-      <span class="hand-card-label">${escapeHtml(card.label)}</span>
+      <span class="hand-card-label">${escapeHtml(cardLabelText(card))}</span>
       ${card.points ? `<small>${card.points}</small>` : ""}
     </button>
   `).join("");
@@ -711,11 +750,12 @@ function selectedHandCards() {
 
 function cardFaceHtml(card, className) {
   const image = cardImageUrl(card);
+  const label = cardLabelText(card);
   if (!image) {
-    return `<span class="${className} card-face-fallback">${escapeHtml(card?.label || "")}</span>`;
+    return `<span class="${className} card-face-fallback">${escapeHtml(label)}</span>`;
   }
 
-  return `<img class="${className} card-face" src="${escapeAttribute(image)}" alt="${escapeAttribute(card.label || "")}" loading="lazy" draggable="false" />`;
+  return `<img class="${className} card-face" src="${escapeAttribute(image)}" alt="${escapeAttribute(label)}" loading="lazy" draggable="false" />`;
 }
 
 function cardImageUrl(card) {
@@ -873,13 +913,13 @@ function chatEventNode(event) {
 
   const meta = document.createElement("span");
   meta.className = "chat-meta";
-  meta.textContent = `${event.user?.displayName || event.user?.username || "Player"} ${timeLabel(event.createdAt)}`;
+  meta.textContent = `${event.user?.displayName || event.user?.username || "玩家"} ${timeLabel(event.createdAt)}`;
 
   const body = document.createElement("span");
   body.className = "chat-body";
   if (event.kind === "emoji") {
     const target = emojiTargetLabel(event);
-    body.textContent = target ? `sent ${emojiLabel(event.emojiId)} to ${target}` : `sent ${emojiLabel(event.emojiId)}`;
+    body.textContent = target ? `向${target}发送了${emojiLabel(event.emojiId)}` : `发送了${emojiLabel(event.emojiId)}`;
   } else {
     body.textContent = event.text || "";
   }
@@ -889,19 +929,19 @@ function chatEventNode(event) {
 }
 
 function emojiLabel(emojiId) {
-  return emojiCatalog.find((item) => item.id === emojiId)?.label || String(emojiId || "emoji");
+  return emojiCatalog.find((item) => item.id === emojiId)?.label || "表情";
 }
 
 function emojiTargetLabel(event) {
   if (Number.isInteger(event.targetSeatIndex)) {
     const seat = state.table?.room?.seats?.find((candidate) => candidate.seatIndex === event.targetSeatIndex);
-    return seat?.user?.displayName || `Seat ${event.targetSeatIndex + 1}`;
+    return seat?.user?.displayName || seatLabel(event.targetSeatIndex);
   }
 
   if (Number.isInteger(event.targetUserId)) {
     const seat = state.table?.room?.seats?.find((candidate) => candidate.user?.userId === event.targetUserId);
     const observer = state.table?.room?.observers?.find((candidate) => candidate.user?.userId === event.targetUserId);
-    return seat?.user?.displayName || observer?.user?.displayName || `User ${event.targetUserId}`;
+    return seat?.user?.displayName || observer?.user?.displayName || `用户 ${event.targetUserId}`;
   }
 
   return "";
@@ -946,14 +986,14 @@ function renderEmojiDock() {
 }
 
 function renderEmojiTargetOptions() {
-  const options = [{ value: "", label: "Table" }];
+  const options = [{ value: "", label: "牌桌" }];
   for (const seat of state.table?.room?.seats || []) {
     if (!seat.user) {
       continue;
     }
     options.push({
       value: `seat:${seat.seatIndex}`,
-      label: `Seat ${seat.seatIndex + 1}: ${seat.user.displayName || seat.user.username}`
+      label: `${seatLabel(seat.seatIndex)}：${seat.user.displayName || seat.user.username}`
     });
   }
 
@@ -986,7 +1026,7 @@ function showEmoji(payload = {}) {
   const target = emojiAnimationTarget(payload);
   const stage = document.createElement("div");
   stage.className = target === els.table ? "emoji-pop" : "emoji-pop emoji-pop-seat";
-  stage.innerHTML = `<img src="${escapeAttribute(emojiUrl(type, index))}" alt="${escapeAttribute(type)}" />`;
+  stage.innerHTML = `<img src="${escapeAttribute(emojiUrl(type, index))}" alt="${escapeAttribute(emoji?.label || "表情")}" />`;
   target.appendChild(stage);
   window.setTimeout(() => stage.remove(), 2200);
 }
@@ -1075,7 +1115,13 @@ function mergeRoom(room) {
 }
 
 function phaseText(phase) {
-  return String(phase || "waiting_for_players").replaceAll("_", " ");
+  const key = String(phase || "waiting_for_players");
+  return phaseLabels[key] || "等待中";
+}
+
+function actionReasonText(reason) {
+  const key = String(reason || "");
+  return phaseLabels[key] || serverErrorText(key, "");
 }
 
 function rankLabel(rank) {
@@ -1083,23 +1129,57 @@ function rankLabel(rank) {
     return "-";
   }
 
-  const labels = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
-  return labels[rank] || String(rank);
+  return cardRankLabels[rank] || String(rank);
+}
+
+function cardLabelText(card) {
+  const id = Number(card?.id);
+  if (id === 52) {
+    return "小王";
+  }
+  if (id === 53) {
+    return "大王";
+  }
+
+  const suit = cardSuitLabels[card?.suit] ? card.suit : cardSuitFromId(id);
+  const rank = Number.isInteger(Number(card?.rank)) ? Number(card.rank) : cardRankFromId(id);
+  const label = `${cardSuitLabels[suit] || ""}${cardRankLabels[rank] || ""}`;
+  return label || card?.label || "";
+}
+
+function cardSuitFromId(id) {
+  if (!Number.isInteger(id) || id < 0 || id > 51) {
+    return "";
+  }
+  if (id < 13) {
+    return "heart";
+  }
+  if (id < 26) {
+    return "spade";
+  }
+  if (id < 39) {
+    return "diamond";
+  }
+  return "club";
+}
+
+function cardRankFromId(id) {
+  return Number.isInteger(id) && id >= 0 && id <= 51 ? id % 13 : -1;
 }
 
 function trumpLabel(trump) {
   if (!trump || trump.suit === "none") {
-    return "No trump";
+    return "无主";
   }
 
   const suits = {
-    heart: "Heart trump",
-    spade: "Spade trump",
-    diamond: "Diamond trump",
-    club: "Club trump",
-    joker: "Joker trump"
+    heart: "红桃主",
+    spade: "黑桃主",
+    diamond: "方块主",
+    club: "梅花主",
+    joker: "王主"
   };
-  return suits[trump.suit] || "No trump";
+  return suits[trump.suit] || "无主";
 }
 
 function setStatus(message) {
@@ -1108,22 +1188,134 @@ function setStatus(message) {
 }
 
 function reportError(error) {
-  setStatus(error.message || "Command failed");
+  setStatus(error.message || "操作失败");
 }
 
 function errorMessage(message) {
   const payload = message?.payload || {};
-  return payload.message || payload.code || "Server error";
+  return serverErrorText(payload.code, payload.message);
 }
 
 function statusText() {
   if (state.authenticated) {
-    return "Authenticated";
+    return "已认证";
   }
   if (state.connected) {
-    return "Connected";
+    return "已连接";
   }
-  return "Disconnected";
+  return "未连接";
+}
+
+function statusTextForRoom(status) {
+  const key = String(status || "waiting");
+  return statusLabels[key] || "未知状态";
+}
+
+function seatLabel(seatIndex) {
+  return `${Number(seatIndex) + 1}号座位`;
+}
+
+function skinDisplayName(skin) {
+  return skinLabels[skin.skinId] || skin.displayName || skin.skinId;
+}
+
+function serverErrorText(code, message) {
+  const labels = {
+    already_authenticated: "连接已经认证",
+    auth_failed: "认证失败",
+    auth_unavailable: "认证服务暂时不可用",
+    bottom_holder_only: "只有底牌持有者可以埋牌",
+    bottom_not_open: "现在还不能埋牌",
+    chat_message_too_long: "聊天内容过长",
+    not_authenticated: "请先连接并认证",
+    not_in_room: "请先进入房间",
+    not_implemented: "该操作暂未开放",
+    not_room_owner: "只有房主可以开始",
+    not_tractor_room: "该房间不是拖拉机房间",
+    room_not_found: "房间不存在",
+    room_closed: "房间已关闭",
+    room_not_waiting: "房间不在等待状态",
+    room_active: "房间正在游戏中",
+    room_disabled: "房间已停用",
+    room_has_active_game: "房间有进行中的游戏，无法重置",
+    room_required: "请选择房间",
+    seat_taken: "座位已被占用",
+    seat_not_found: "座位不存在",
+    already_seated: "您已经入座",
+    not_seated: "您尚未入座",
+    seated_observer_forbidden: "已入座玩家不能观看其他手牌",
+    observer_target_locked: "游戏中不能切换观看座位",
+    watched_seat_empty: "只能观看已有玩家的座位",
+    skin_not_found: "皮肤不存在",
+    skin_not_owned: "您尚未拥有该皮肤",
+    token_expired: "登录令牌已过期，请重新进入游戏",
+    token_issued_in_future: "登录令牌时间无效，请稍后重试",
+    token_not_active: "登录令牌尚未生效，请稍后重试",
+    token_replayed: "登录令牌已使用，请重新进入游戏",
+    token_too_large: "登录令牌过大",
+    invalid_audience: "登录令牌目标无效",
+    waiting_for_turn: "还没轮到您出牌",
+    play_not_open: "现在还不能出牌",
+    trump_not_open: "现在还不能亮主",
+    empty_chat_message: "聊天内容不能为空",
+    game_persistence_failed: "游戏保存失败",
+    game_persistence_unavailable: "游戏保存服务暂时不可用",
+    internal_error: "服务器内部错误",
+    invalid_action: "无效操作",
+    invalid_auth_payload: "认证请求无效",
+    invalid_chat_payload: "聊天内容无效",
+    invalid_emoji_payload: "表情内容无效",
+    invalid_emoji_target: "表情目标无效",
+    invalid_issuer: "登录令牌来源无效",
+    invalid_json: "消息格式无效",
+    invalid_message: "消息格式无效",
+    invalid_payload: "请求内容无效",
+    invalid_schema: "消息内容无效",
+    invalid_seat: "座位无效",
+    invalid_skin_payload: "皮肤设置无效",
+    invalid_suit: "花色无效",
+    invalid_token: "登录令牌无效",
+    invalid_token_claims: "登录令牌内容无效",
+    invalid_token_header: "登录令牌头无效",
+    invalid_trump_exposure: "亮主组合无效",
+    message_too_large: "消息太大",
+    rate_limited: "操作太频繁，请稍后再试",
+    refresh_unavailable: "用户状态暂时无法刷新",
+    session_not_active: "游戏会话未激活",
+    session_not_found: "游戏会话不存在",
+    tractor_bottom_cards_not_held: "埋牌必须从您的手牌中选择",
+    tractor_card_count_mismatch: "出牌张数必须与首家一致",
+    tractor_cards_not_held: "出牌必须从您的手牌中选择",
+    tractor_dump_not_supported: "暂不支持甩牌",
+    tractor_follow_pair_required: "有对子时必须尽量跟对子",
+    tractor_follow_suit_required: "有同花色时必须跟同花色",
+    tractor_follow_tractor_required: "有拖拉机时必须跟拖拉机",
+    tractor_hand_active: "本房间已有进行中的牌局",
+    tractor_invalid_lead: "首出必须为同一花色",
+    tractor_invalid_recovery_snapshot: "恢复快照无效",
+    tractor_invalid_turn_order: "出牌顺序无效",
+    tractor_missing_player: "四个座位坐满后才能开始",
+    tractor_next_starter_not_found: "无法确定下一墩先手",
+    tractor_no_active_hand: "本房间没有进行中的牌局",
+    tractor_no_active_trick: "当前没有进行中的一墩牌",
+    tractor_not_bottom_holder: "只有底牌持有者可以埋牌",
+    tractor_not_burying_bottom: "当前不能埋牌",
+    tractor_not_player: "只有入座玩家可以操作",
+    tractor_not_playing: "当前不能出牌",
+    tractor_not_your_turn: "还没轮到您出牌",
+    tractor_player_not_found: "找不到牌局玩家",
+    tractor_players_not_ready: "四名玩家都在线并准备后才能开始",
+    tractor_requires_four_seats: "拖拉机需要四个座位",
+    tractor_snapshot_unavailable: "拖拉机恢复快照不可用",
+    tractor_trick_incomplete: "本墩牌尚未完成",
+    tractor_trump_cards_not_held: "亮主必须使用您的手牌",
+    tractor_trump_closed: "底牌发出后不能亮主",
+    tractor_trump_too_weak: "亮主级别不够",
+    unsupported_message: "不支持的消息类型",
+    chat_rate_limited: "聊天太频繁，请稍后再试",
+    emoji_rate_limited: "表情发送太频繁，请稍后再试"
+  };
+  return labels[code] || (/[\u4e00-\u9fff]/.test(message || "") ? message : "服务器出错");
 }
 
 function defaultWsUrl() {

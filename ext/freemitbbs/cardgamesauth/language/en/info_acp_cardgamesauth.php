@@ -16,6 +16,8 @@ $lang = array_merge($lang, [
 	'ACP_CARDGAMESAUTH_SETTINGS' => 'Card games settings',
 
 	'CARDGAMESAUTH_EXPLAIN' => 'Settings for the phpBB session bridge used by the local card-game client and game server.',
+	'CARDGAMESAUTH_OPEN_CONTROL' => 'Open live control page',
+	'CARDGAMESAUTH_OPEN_CONTROL_EXPLAIN' => 'Use this for room resets, user disconnects, game cancellation, and replay export.',
 	'CARDGAMESAUTH_FIELDSET_GENERAL' => 'General',
 	'CARDGAMESAUTH_FIELDSET_CLIENT' => 'Client and game server',
 	'CARDGAMESAUTH_FIELDSET_TOKEN' => 'Token issuance',

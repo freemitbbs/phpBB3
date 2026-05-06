@@ -16,6 +16,8 @@ $lang = array_merge($lang, [
 	'ACP_CARDGAMESAUTH_SETTINGS' => '卡牌游戏设置',
 
 	'CARDGAMESAUTH_EXPLAIN' => '本地卡牌游戏静态客户端与游戏服务器使用的 phpBB 会话桥设置。',
+	'CARDGAMESAUTH_OPEN_CONTROL' => '打开实时控制页',
+	'CARDGAMESAUTH_OPEN_CONTROL_EXPLAIN' => '用于重置房间、断开用户、取消游戏和导出回放。',
 	'CARDGAMESAUTH_FIELDSET_GENERAL' => '通用设置',
 	'CARDGAMESAUTH_FIELDSET_CLIENT' => '客户端与游戏服务器',
 	'CARDGAMESAUTH_FIELDSET_TOKEN' => '令牌签发',

@@ -68,7 +68,7 @@ class listener implements EventSubscriberInterface
 		$this->template->assign_vars([
 			'S_CARDGAMES_NAV' => $enabled && $show_nav && (!$testing_mode || $is_tester),
 			'S_CARDGAMES_CAN_PLAY' => $can_play,
-			'U_CARDGAMES_LAUNCH' => $this->helper->route('freemitbbs_cardgamesauth_launch'),
+			'U_CARDGAMES_LAUNCH' => $this->helper->route($can_play ? 'freemitbbs_cardgamesauth_client' : 'freemitbbs_cardgamesauth_launch'),
 		]);
 	}
 

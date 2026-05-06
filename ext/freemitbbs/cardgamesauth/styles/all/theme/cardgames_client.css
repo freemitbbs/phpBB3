@@ -1,4 +1,4 @@
-:root {
+.app-shell {
   color-scheme: light;
   --ink: #1f2a2e;
   --muted: #5d6970;
@@ -13,19 +13,19 @@
   --felt-dark: #0e433b;
 }
 
-* {
+.app-shell,
+.app-shell * {
   box-sizing: border-box;
 }
 
-body {
-  margin: 0;
+.app-shell {
   min-height: 100vh;
   background: linear-gradient(180deg, #f8f4eb 0%, #e9dfcd 100%);
   color: var(--ink);
   font: 15px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-button {
+.app-shell button {
   min-height: 34px;
   border: 1px solid #9d8f79;
   background: #fff7e8;
@@ -36,11 +36,11 @@ button {
   padding: 0 12px;
 }
 
-button:hover {
+.app-shell button:hover {
   border-color: var(--accent);
 }
 
-button:disabled {
+.app-shell button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -51,7 +51,7 @@ button:disabled {
   grid-template-rows: auto 1fr;
 }
 
-.topbar {
+.app-shell .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -62,22 +62,22 @@ button:disabled {
   border-bottom: 4px solid var(--accent);
 }
 
-.topbar h1,
-.topbar p,
-.panel-header h2 {
+.app-shell .topbar h1,
+.app-shell .topbar p,
+.app-shell .panel-header h2 {
   margin: 0;
 }
 
-.topbar h1 {
+.app-shell .topbar h1 {
   font-size: 22px;
   font-weight: 700;
 }
 
-.topbar p {
+.app-shell .topbar p {
   color: #d7cdbd;
 }
 
-.userbar {
+.app-shell .userbar {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -85,7 +85,7 @@ button:disabled {
   min-width: 220px;
 }
 
-.userbar select {
+.app-shell .userbar select {
   min-height: 34px;
   max-width: 150px;
   border: 1px solid #9d8f79;
@@ -96,7 +96,7 @@ button:disabled {
   padding: 0 8px;
 }
 
-.workspace {
+.app-shell .workspace {
   display: grid;
   grid-template-columns: minmax(230px, 300px) 1fr;
   gap: 18px;
@@ -105,12 +105,12 @@ button:disabled {
   padding: 18px;
 }
 
-.rooms-panel,
-.table-panel {
+.app-shell .rooms-panel,
+.app-shell .table-panel {
   min-width: 0;
 }
 
-.panel-header {
+.app-shell .panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -118,16 +118,16 @@ button:disabled {
   margin-bottom: 10px;
 }
 
-.panel-header h2 {
+.app-shell .panel-header h2 {
   font-size: 18px;
 }
 
-.rooms-list {
+.app-shell .rooms-list {
   display: grid;
   gap: 10px;
 }
 
-.room-button {
+.app-shell .room-button {
   width: 100%;
   min-height: 74px;
   display: grid;
@@ -137,27 +137,27 @@ button:disabled {
   background: var(--panel);
 }
 
-.room-button strong {
+.app-shell .room-button strong {
   display: block;
   font-size: 17px;
 }
 
-.room-button span {
+.app-shell .room-button span {
   color: var(--muted);
 }
 
-.room-button .room-status {
+.app-shell .room-button .room-status {
   justify-self: end;
   color: var(--accent-2);
   font-weight: 700;
 }
 
-.room-button[aria-current="true"] {
+.app-shell .room-button[aria-current="true"] {
   border-color: var(--accent);
   box-shadow: inset 4px 0 0 var(--accent);
 }
 
-.table-view {
+.app-shell .table-view {
   position: relative;
   min-height: 560px;
   border: 1px solid var(--line);
@@ -169,14 +169,14 @@ button:disabled {
   color: #fff9ec;
 }
 
-.empty-state {
+.app-shell .empty-state {
   display: grid;
   min-height: 360px;
   place-items: center;
   color: var(--muted);
 }
 
-.table-grid {
+.app-shell .table-grid {
   display: grid;
   grid-template-columns: 1fr minmax(220px, 360px) 1fr;
   grid-template-rows: minmax(120px, auto) minmax(220px, 1fr) minmax(120px, auto);
@@ -184,7 +184,7 @@ button:disabled {
   min-height: 500px;
 }
 
-.seat {
+.app-shell .seat {
   position: relative;
   display: grid;
   grid-template-columns: 52px 1fr;
@@ -201,73 +201,73 @@ button:disabled {
   padding: 12px;
 }
 
-.seat-offline {
+.app-shell .seat-offline {
   opacity: 0.72;
 }
 
-.seat-0 {
+.app-shell .seat-0 {
   grid-column: 2;
   grid-row: 3;
 }
 
-.seat-1 {
+.app-shell .seat-1 {
   grid-column: 3;
   grid-row: 2;
 }
 
-.seat-2 {
+.app-shell .seat-2 {
   grid-column: 2;
   grid-row: 1;
 }
 
-.seat-3 {
+.app-shell .seat-3 {
   grid-column: 1;
   grid-row: 2;
 }
 
-.seat-name {
+.app-shell .seat-name {
   min-width: 0;
   font-weight: 700;
   overflow-wrap: anywhere;
 }
 
-.seat-meta {
+.app-shell .seat-meta {
   grid-column: 2;
   color: var(--muted);
   min-height: 22px;
 }
 
-.seat-actions {
+.app-shell .seat-actions {
   grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.seat-skin,
-.seat-avatar-stack {
+.app-shell .seat-skin,
+.app-shell .seat-avatar-stack {
   grid-row: span 2;
   width: 52px;
   height: 76px;
 }
 
-.seat-skin {
+.app-shell .seat-skin {
   object-fit: contain;
   object-position: center bottom;
   filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.22));
 }
 
-.seat-avatar-stack {
+.app-shell .seat-avatar-stack {
   position: relative;
   display: block;
 }
 
-.seat-avatar-stack .seat-skin {
+.app-shell .seat-avatar-stack .seat-skin {
   width: 100%;
   height: 100%;
 }
 
-.seat-profile-avatar {
+.app-shell .seat-profile-avatar {
   position: absolute;
   right: -4px;
   bottom: 0;
@@ -279,7 +279,7 @@ button:disabled {
   background: #fffaf0;
 }
 
-.table-center {
+.app-shell .table-center {
   grid-column: 2;
   grid-row: 2;
   display: grid;
@@ -294,7 +294,7 @@ button:disabled {
   text-align: center;
 }
 
-.table-actions {
+.app-shell .table-actions {
   min-height: 34px;
   display: flex;
   justify-content: center;
@@ -303,7 +303,7 @@ button:disabled {
   margin-top: 12px;
 }
 
-.table-emblem {
+.app-shell .table-emblem {
   width: min(150px, 48vw);
   aspect-ratio: 5 / 7;
   display: grid;
@@ -316,7 +316,7 @@ button:disabled {
   border: 2px solid #d2c2a8;
 }
 
-.table-facts {
+.app-shell .table-facts {
   display: flex;
   justify-content: center;
   gap: 8px;
@@ -326,15 +326,15 @@ button:disabled {
   font-size: 13px;
 }
 
-.observer-list {
+.app-shell .observer-list {
   margin-top: 14px;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.trick-panel,
-.hand-panel {
+.app-shell .trick-panel,
+.app-shell .hand-panel {
   margin-top: 14px;
   border: 1px solid rgba(255, 249, 236, 0.28);
   background: rgba(255, 250, 240, 0.88);
@@ -343,12 +343,12 @@ button:disabled {
   color: var(--ink);
 }
 
-.trick-panel {
+.app-shell .trick-panel {
   display: grid;
   gap: 8px;
 }
 
-.trick-play {
+.app-shell .trick-play {
   display: grid;
   grid-template-columns: 70px minmax(0, 1fr);
   gap: 10px;
@@ -356,7 +356,7 @@ button:disabled {
   align-items: center;
 }
 
-.hand-panel {
+.app-shell .hand-panel {
   display: flex;
   align-items: end;
   gap: 8px;
@@ -364,7 +364,7 @@ button:disabled {
   padding-bottom: 14px;
 }
 
-.hand-card {
+.app-shell .hand-card {
   flex: 0 0 clamp(58px, 7vw, 82px);
   min-height: 116px;
   display: grid;
@@ -375,45 +375,45 @@ button:disabled {
   transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
 
-.hand-card[aria-pressed="true"] {
+.app-shell .hand-card[aria-pressed="true"] {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 2px rgba(165, 38, 45, 0.25);
   transform: translateY(-12px);
 }
 
-.hand-card small {
+.app-shell .hand-card small {
   color: var(--accent);
 }
 
-.card-face {
+.app-shell .card-face {
   display: block;
   width: 100%;
   height: auto;
   user-select: none;
 }
 
-.hand-card-face {
+.app-shell .hand-card-face {
   aspect-ratio: 5 / 7;
   object-fit: contain;
 }
 
-.hand-card-label {
+.app-shell .hand-card-label {
   display: none;
 }
 
-.played-cards {
+.app-shell .played-cards {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
 }
 
-.played-card {
+.app-shell .played-card {
   width: 38px;
   aspect-ratio: 5 / 7;
   object-fit: contain;
 }
 
-.card-face-fallback {
+.app-shell .card-face-fallback {
   min-height: 60px;
   display: grid;
   place-items: center;
@@ -425,7 +425,7 @@ button:disabled {
   text-align: center;
 }
 
-.observer-pill {
+.app-shell .observer-pill {
   border: 1px solid var(--line);
   background: #fffaf0;
   border-radius: 999px;
@@ -433,7 +433,7 @@ button:disabled {
   color: var(--muted);
 }
 
-.emoji-panel {
+.app-shell .emoji-panel {
   margin-top: 10px;
   display: flex;
   gap: 8px;
@@ -441,14 +441,14 @@ button:disabled {
   align-items: center;
 }
 
-.emoji-target-label {
+.app-shell .emoji-target-label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   color: var(--muted);
 }
 
-.emoji-target-label select {
+.app-shell .emoji-target-label select {
   min-height: 34px;
   border: 1px solid #9d8f79;
   border-radius: 6px;
@@ -458,14 +458,14 @@ button:disabled {
   padding: 0 8px;
 }
 
-.emoji-dock {
+.app-shell .emoji-dock {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
 }
 
-.emoji-button {
+.app-shell .emoji-button {
   width: 42px;
   height: 42px;
   min-height: 42px;
@@ -474,13 +474,13 @@ button:disabled {
   place-items: center;
 }
 
-.emoji-button img {
+.app-shell .emoji-button img {
   width: 34px;
   height: 34px;
   object-fit: contain;
 }
 
-.emoji-pop {
+.app-shell .emoji-pop {
   position: absolute;
   inset: 0;
   display: grid;
@@ -489,18 +489,18 @@ button:disabled {
   animation: emoji-pop 2200ms ease forwards;
 }
 
-.emoji-pop img {
+.app-shell .emoji-pop img {
   width: min(180px, 42vw);
   height: min(180px, 42vw);
   object-fit: contain;
 }
 
-.emoji-pop-seat {
+.app-shell .emoji-pop-seat {
   z-index: 4;
   inset: -10px;
 }
 
-.emoji-pop-seat img {
+.app-shell .emoji-pop-seat img {
   width: min(76px, 72%);
   height: min(76px, 72%);
 }
@@ -521,7 +521,7 @@ button:disabled {
   }
 }
 
-.chat-panel {
+.app-shell .chat-panel {
   margin-top: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -529,7 +529,7 @@ button:disabled {
   overflow: hidden;
 }
 
-.chat-messages {
+.app-shell .chat-messages {
   max-height: 150px;
   overflow-y: auto;
   display: grid;
@@ -537,30 +537,30 @@ button:disabled {
   padding: 10px;
 }
 
-.chat-message {
+.app-shell .chat-message {
   display: grid;
   grid-template-columns: minmax(110px, 160px) 1fr;
   gap: 8px;
   color: var(--ink);
 }
 
-.chat-meta {
+.app-shell .chat-meta {
   color: var(--muted);
   font-size: 12px;
   overflow-wrap: anywhere;
 }
 
-.chat-body {
+.app-shell .chat-body {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.chat-emoji .chat-body {
+.app-shell .chat-emoji .chat-body {
   color: var(--accent-2);
   font-weight: 700;
 }
 
-.chat-form {
+.app-shell .chat-form {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
@@ -568,7 +568,7 @@ button:disabled {
   border-top: 1px solid var(--line);
 }
 
-.chat-form input {
+.app-shell .chat-form input {
   min-width: 0;
   min-height: 34px;
   border: 1px solid #9d8f79;
@@ -579,45 +579,45 @@ button:disabled {
   padding: 0 10px;
 }
 
-.event-log {
+.app-shell .event-log {
   margin-top: 10px;
   color: var(--muted);
   min-height: 22px;
 }
 
 @media (max-width: 780px) {
-  .topbar,
-  .workspace {
+  .app-shell .topbar,
+  .app-shell .workspace {
     display: block;
   }
 
-  .userbar {
+  .app-shell .userbar {
     margin-top: 12px;
     justify-content: space-between;
   }
 
-  .rooms-panel {
+  .app-shell .rooms-panel {
     margin-bottom: 18px;
   }
 
-  .chat-message {
+  .app-shell .chat-message {
     grid-template-columns: 1fr;
     gap: 2px;
   }
 
-  .table-grid {
+  .app-shell .table-grid {
     grid-template-columns: 1fr;
     grid-template-rows: none;
     min-height: 0;
   }
 
-  .seat,
-  .table-center {
+  .app-shell .seat,
+  .app-shell .table-center {
     grid-column: auto;
     grid-row: auto;
   }
 
-  .hand-card {
+  .app-shell .hand-card {
     flex-basis: 56px;
     min-height: 104px;
   }
