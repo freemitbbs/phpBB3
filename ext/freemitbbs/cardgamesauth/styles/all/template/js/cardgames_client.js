@@ -7,16 +7,23 @@ const state = {
   connected: false,
   authenticated: false,
   connecting: false,
+  turnTimerId: 0,
   requestSeq: 0,
   pending: new Map(),
+  timedOutPending: new Map(),
+  pendingActions: new Set(),
   rooms: [],
   table: null,
   currentRoomKey: "",
+  transitionRoomKey: "",
+  roomEpoch: 0,
+  lastSeenSeq: 0,
   skinProfile: null,
   chatEvents: [],
   chatDraft: "",
   emojiTarget: "",
   selectedHandIndexes: [],
+  handSignature: "",
   assetBaseUrl: "",
   audioBaseUrl: "",
   cardStyle: "cardsclassic",
@@ -47,6 +54,8 @@ const emojiCatalog = [
   { id: "good_luck", asset: "noproblem", label: "好运" }
 ];
 const emojiTypes = ["goodjob", "hurryup", "sorry", "lol", "noproblem", "fireworks", "youareright"];
+const commandTimeoutMs = 15000;
+const lateResponseRetentionMs = 60000;
 const skinLabels = {
   "skin_basicmale": "基础男角色",
   "skin_basicfemale": "基础女角色",
@@ -125,17 +134,29 @@ els.skin.addEventListener("change", () => {
   void selectSkin(els.skin.value);
 });
 els.leave.addEventListener("click", () => {
-  if (state.currentRoomKey) {
-    void sendCommand("room.leave", { roomKey: state.currentRoomKey })
+  const roomKey = state.currentRoomKey;
+  if (roomKey && !isActionPending("room.leave", roomKey)) {
+    const roomEpoch = beginRoomTransition("");
+    setStatus("正在离开房间");
+    void sendCommand("room.leave", { roomKey, roomEpoch })
       .then(() => {
-        state.currentRoomKey = "";
-        state.table = null;
-        state.chatEvents = [];
-        state.emojiTarget = "";
+        if (state.roomEpoch !== roomEpoch) {
+          return undefined;
+        }
+        if (!state.currentRoomKey) {
+          return undefined;
+        }
+        clearRoomState();
         render();
         return requestRooms();
       })
-      .catch(reportError);
+      .catch((error) => {
+        if (state.roomEpoch === roomEpoch) {
+          state.transitionRoomKey = "";
+          void requestCatchup().catch(() => requestRooms());
+        }
+        reportError(error);
+      });
   }
 });
 els.chatForm.addEventListener("submit", (event) => {
@@ -184,16 +205,19 @@ async function loadBootstrap() {
     token: params.get("token") || "",
     wsUrl: params.get("ws") || "",
     tokenUrl: params.get("tokenUrl") || "",
-    tokenHash: params.get("hash") || "",
-    autoConnect: params.get("connect") !== "0"
+    configUrl: params.get("configUrl") || "",
+    tokenHash: params.get("hash") || ""
   };
+  if (params.has("connect")) {
+    fromQuery.autoConnect = params.get("connect") !== "0";
+  }
 
   if (inline.tokenUrl || inline.wsUrl || fromQuery.token || fromQuery.wsUrl) {
     return { ...inline, ...withoutEmptyValues(fromQuery) };
   }
 
   try {
-    const response = await fetch("/card-games/config", { credentials: "same-origin" });
+    const response = await fetch(inline.configUrl || fromQuery.configUrl || defaultConfigUrl(), { credentials: "same-origin" });
     if (!response.ok) {
       return fromQuery;
     }
@@ -210,6 +234,7 @@ async function connect() {
   }
 
   disconnect();
+  state.lastSeenSeq = 0;
   state.connecting = true;
   setStatus("正在连接");
 
@@ -254,6 +279,9 @@ async function connect() {
         return;
       }
       state.connecting = false;
+      state.connected = false;
+      state.authenticated = false;
+      rejectPending("连接出错");
       setStatus("连接出错");
     });
   } catch (error) {
@@ -267,14 +295,19 @@ function disconnect() {
   if (state.ws && state.ws.readyState < WebSocket.CLOSING) {
     state.ws.close();
   }
+  clearTurnTimer();
   state.ws = null;
   state.connected = false;
   state.authenticated = false;
   state.connecting = false;
+  state.transitionRoomKey = "";
   if (ws) {
     rejectPending("连接已断开");
   } else {
+    state.pending.forEach(clearPending);
     state.pending.clear();
+    clearTimedOutPending();
+    state.pendingActions.clear();
   }
 }
 
@@ -291,8 +324,101 @@ function isSocketOpen() {
 }
 
 function rejectPending(message) {
-  state.pending.forEach((pending) => pending.reject(new Error(message)));
+  state.pending.forEach((pending) => {
+    clearPending(pending);
+    pending.reject(new Error(message));
+  });
   state.pending.clear();
+  clearTimedOutPending();
+}
+
+function clearPending(pending) {
+  if (pending.timeoutId) {
+    window.clearTimeout(pending.timeoutId);
+  }
+  if (pending.pendingKey) {
+    state.pendingActions.delete(pending.pendingKey);
+  }
+}
+
+function rememberTimedOutPending(requestId, pending) {
+  if (!shouldApplyLateResponse(pending)) {
+    return;
+  }
+
+  clearTimedOutPending(requestId);
+  const expiresId = window.setTimeout(() => {
+    state.timedOutPending.delete(requestId);
+  }, lateResponseRetentionMs);
+  state.timedOutPending.set(requestId, {
+    type: pending.type,
+    roomKey: pending.roomKey,
+    roomEpoch: pending.roomEpoch,
+    applyResponse: pending.applyResponse,
+    expiresId
+  });
+}
+
+function shouldApplyLateResponse(pending) {
+  return pending.roomKey
+    || pending.type === "auth.token"
+    || pending.type === "system.catchup"
+    || pending.type === "lobby.rooms";
+}
+
+function clearTimedOutPending(requestId = "") {
+  if (requestId) {
+    const pending = state.timedOutPending.get(requestId);
+    if (pending?.expiresId) {
+      window.clearTimeout(pending.expiresId);
+    }
+    state.timedOutPending.delete(requestId);
+    return;
+  }
+
+  state.timedOutPending.forEach((pending) => {
+    if (pending.expiresId) {
+      window.clearTimeout(pending.expiresId);
+    }
+  });
+  state.timedOutPending.clear();
+}
+
+function commandKey(type, roomKey = "") {
+  return `${type}:${roomKey || ""}`;
+}
+
+function isActionPending(type, roomKey = "") {
+  return state.pendingActions.has(commandKey(type, roomKey));
+}
+
+function hasRoomTransitionPending() {
+  for (const key of state.pendingActions) {
+    if (key.startsWith("room.join:") || key.startsWith("room.leave:")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function beginRoomTransition(roomKey) {
+  state.roomEpoch += 1;
+  state.transitionRoomKey = roomKey || "";
+  return state.roomEpoch;
+}
+
+function clearRoomState(advanceEpoch = true) {
+  if (advanceEpoch) {
+    state.roomEpoch += 1;
+  }
+  state.currentRoomKey = "";
+  state.transitionRoomKey = "";
+  state.table = null;
+  state.chatEvents = [];
+  state.chatDraft = "";
+  state.emojiTarget = "";
+  state.selectedHandIndexes = [];
+  state.handSignature = "";
 }
 
 async function fetchToken() {
@@ -324,15 +450,27 @@ async function fetchToken() {
 
 async function authenticate() {
   try {
-    const response = await sendCommand("auth.token", { payload: { token: state.token } });
+    const response = await sendCommand("auth.token", { payload: { token: state.token, lastSeenSeq: state.lastSeenSeq } });
     state.user = response.payload.user;
     state.authenticated = true;
     void requestSkinProfile().catch(() => undefined);
-    await requestRooms();
+    try {
+      await requestCatchup();
+    } catch {
+      await requestRooms();
+    }
     setStatus("已连接");
   } catch (error) {
     setStatus(error.message || "认证失败");
   }
+}
+
+async function requestCatchup() {
+  if (!state.authenticated) {
+    return;
+  }
+
+  await sendCommand("system.catchup", { payload: { lastSeenSeq: state.lastSeenSeq } });
 }
 
 async function requestRooms() {
@@ -375,15 +513,16 @@ async function selectSkin(skinId) {
 }
 
 async function refreshTable(roomKey) {
-  const response = await sendCommand("tractor.table", { roomKey });
-  if (!response.payload?.table || (state.currentRoomKey && state.currentRoomKey !== roomKey)) {
+  const roomEpoch = state.roomEpoch;
+  const response = await sendCommand("tractor.table", { roomKey, roomEpoch, applyResponse: false });
+  if (!response.payload?.table || state.roomEpoch !== roomEpoch || state.currentRoomKey !== roomKey) {
     return;
   }
 
   applyTable(response.payload.table);
 }
 
-function sendCommand(type, options) {
+function sendCommand(type, options = {}) {
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
     state.connected = false;
     state.authenticated = false;
@@ -400,11 +539,43 @@ function sendCommand(type, options) {
     roomKey: options.roomKey,
     payload: options.payload || {}
   };
+  const pendingKey = commandKey(type, options.roomKey);
+  state.pendingActions.add(pendingKey);
 
   const promise = new Promise((resolve, reject) => {
-    state.pending.set(requestId, { resolve, reject, type });
+    const timeoutId = window.setTimeout(() => {
+      const pending = state.pending.get(requestId);
+      if (!pending) {
+        return;
+      }
+      state.pending.delete(requestId);
+      clearPending(pending);
+      rememberTimedOutPending(requestId, pending);
+      pending.reject(new Error("请求超时，请重试"));
+      render();
+    }, options.timeoutMs || commandTimeoutMs);
+    state.pending.set(requestId, {
+      resolve,
+      reject,
+      type,
+      roomKey: options.roomKey || "",
+      roomEpoch: options.roomEpoch ?? state.roomEpoch,
+      applyResponse: options.applyResponse !== false,
+      pendingKey,
+      timeoutId
+    });
   });
-  state.ws.send(JSON.stringify(envelope));
+  try {
+    state.ws.send(JSON.stringify(envelope));
+  } catch (error) {
+    const pending = state.pending.get(requestId);
+    if (pending) {
+      state.pending.delete(requestId);
+      clearPending(pending);
+    }
+    return Promise.reject(error);
+  }
+  render();
   return promise;
 }
 
@@ -416,29 +587,121 @@ function handleMessage(raw) {
     setStatus("收到无效的服务器消息");
     return;
   }
+  if (Number.isInteger(message.seq)) {
+    state.lastSeenSeq = Math.max(state.lastSeenSeq, message.seq);
+  }
 
   if (message.requestId && state.pending.has(message.requestId)) {
     const pending = state.pending.get(message.requestId);
     state.pending.delete(message.requestId);
+    clearPending(pending);
     if (message.type === "error") {
       pending.reject(new Error(errorMessage(message)));
       return;
     }
-    applyServerMessage(message, pending.type);
+    if (pending.applyResponse && isCurrentPendingMessage(message, pending)) {
+      applyServerMessage(message, pending.type, pending);
+    }
     pending.resolve(message);
+    return;
+  }
+  if (message.requestId && state.timedOutPending.has(message.requestId)) {
+    handleTimedOutMessage(message);
+    return;
+  }
+  if (message.requestId) {
     return;
   }
 
   applyServerMessage(message);
 }
 
-function applyServerMessage(message, commandType = "") {
+function handleTimedOutMessage(message) {
+  const pending = state.timedOutPending.get(message.requestId);
+  clearTimedOutPending(message.requestId);
+  if (!pending || message.type === "error") {
+    return;
+  }
+  if (pending.applyResponse && isCurrentPendingMessage(message, pending)) {
+    applyServerMessage(message, pending.type, pending);
+    recoverTimedOutStatus(message, pending);
+  }
+}
+
+function recoverTimedOutStatus(message, pending) {
+  if (pending.type === "auth.token") {
+    void requestCatchup()
+      .catch(() => requestRooms())
+      .then(() => setStatus("已连接"))
+      .catch(reportError);
+    return;
+  }
+
+  if (pending.type === "room.join") {
+    setStatus("已进入房间");
+    return;
+  }
+  if (pending.type === "room.leave") {
+    setStatus("已离开房间");
+    return;
+  }
+  if (pending.type.startsWith("tractor.") && message.payload?.table) {
+    setStatus(engineCommandStatus(pending.type, message.payload.table));
+    return;
+  }
+  setStatus("已同步");
+}
+
+function isCurrentPendingMessage(message, pending) {
+  const roomKey = roomKeyFromMessage(message) || pending.roomKey;
+  if (!roomKey) {
+    return true;
+  }
+  if (pending.roomEpoch !== state.roomEpoch) {
+    return false;
+  }
+  if (pending.type === "room.join") {
+    return pending.roomKey === roomKey;
+  }
+  return isCurrentRoomMessage(roomKey, pending);
+}
+
+function isCurrentRoomMessage(roomKey, context = null) {
+  if (!roomKey) {
+    return true;
+  }
+  if (context?.roomEpoch !== undefined && context.roomEpoch !== state.roomEpoch) {
+    return false;
+  }
+  if (context?.type === "room.join") {
+    return context.roomKey === roomKey;
+  }
+  if (context?.type === "room.leave") {
+    return state.currentRoomKey === roomKey;
+  }
+  if (state.currentRoomKey) {
+    return state.currentRoomKey === roomKey;
+  }
+  return !state.transitionRoomKey || state.transitionRoomKey === roomKey;
+}
+
+function roomKeyFromMessage(message) {
+  return message?.payload?.table?.room?.roomKey
+    || message?.payload?.room?.roomKey
+    || message?.payload?.roomKey
+    || message?.payload?.event?.roomKey
+    || message?.roomKey
+    || "";
+}
+
+function applyServerMessage(message, commandType = "", context = null) {
   switch (message.type) {
     case "system.hello":
       setStatus("服务器已就绪");
       break;
     case "auth.accepted":
       state.user = message.payload.user || state.user;
+      state.authenticated = true;
       playSound("effect/enter_hall_click.mp3");
       break;
     case "profile.skins":
@@ -450,16 +713,38 @@ function applyServerMessage(message, commandType = "") {
       render();
       break;
     case "system.catchup":
-      state.rooms = message.payload.rooms || state.rooms;
-      if (Array.isArray(message.payload.chat)) {
-        setChatEvents(message.payload.chat);
+      {
+        const payload = message.payload || {};
+        const nextRoomKey = payload.table?.room?.roomKey || payload.room?.roomKey || "";
+        const changedRoom = Boolean(nextRoomKey && state.currentRoomKey && state.currentRoomKey !== nextRoomKey);
+        if (changedRoom) {
+          state.chatEvents = [];
+          state.chatDraft = "";
+          state.emojiTarget = "";
+          state.selectedHandIndexes = [];
+          state.handSignature = "";
+        }
+
+        state.rooms = payload.rooms || state.rooms;
+        if (Array.isArray(payload.chat)) {
+          setChatEvents(payload.chat);
+        }
+        if (payload.table) {
+          applyTable(payload.table, false);
+        } else if (payload.room) {
+          const roomKey = payload.room.roomKey;
+          state.currentRoomKey = roomKey;
+          state.transitionRoomKey = "";
+          state.table = null;
+          state.emojiTarget = "";
+          state.selectedHandIndexes = [];
+          state.handSignature = "";
+          void refreshTable(roomKey).catch(() => undefined);
+        } else {
+          clearRoomState(Boolean(state.currentRoomKey || state.table));
+        }
+        render();
       }
-      if (message.payload.table) {
-        applyTable(message.payload.table, false);
-      } else if (message.payload.room) {
-        state.currentRoomKey = message.payload.room.roomKey;
-      }
-      render();
       break;
     case "lobby.rooms":
       state.rooms = message.payload.rooms || [];
@@ -470,15 +755,18 @@ function applyServerMessage(message, commandType = "") {
       render();
       break;
     case "room.left":
-      state.currentRoomKey = "";
-      state.table = null;
-      state.chatEvents = [];
-      state.emojiTarget = "";
+      if (!isCurrentRoomMessage(message.payload.roomKey, context)) {
+        return;
+      }
+      clearRoomState();
       playSound("effect/draw.mp3");
       void requestRooms();
       render();
       break;
     case "room.updated":
+      if (!isCurrentRoomMessage(message.payload.room?.roomKey, context)) {
+        return;
+      }
       mergeRoom(message.payload.room);
       if (state.table?.room?.roomKey === message.payload.room.roomKey) {
         state.table.room = message.payload.room;
@@ -489,15 +777,22 @@ function applyServerMessage(message, commandType = "") {
     case "room.reset":
     case "room.cancelled":
       if (message.payload.roomKey === state.currentRoomKey) {
+        state.roomEpoch += 1;
         state.table = null;
         state.chatEvents = [];
+        state.chatDraft = "";
         state.emojiTarget = "";
+        state.selectedHandIndexes = [];
+        state.handSignature = "";
       }
       void requestRooms();
       render();
       break;
     case "tractor.table":
     case "tractor.table.updated":
+      if (!isCurrentRoomMessage(message.payload.table?.room?.roomKey || message.roomKey, context)) {
+        return;
+      }
       playTableSound(message.payload.table, commandType);
       applyTable(message.payload.table);
       break;
@@ -535,6 +830,7 @@ function applyTable(table, shouldRender = true) {
 
   state.table = table;
   state.currentRoomKey = table.room.roomKey;
+  state.transitionRoomKey = "";
   syncSelectedHandIndexes();
   if (shouldRender) {
     render();
@@ -560,12 +856,17 @@ function renderRooms() {
     return;
   }
 
+  const roomTransitionPending = hasRoomTransitionPending();
   els.rooms.replaceChildren(...state.rooms.map((room) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "room-button";
     button.setAttribute("aria-current", room.roomKey === state.currentRoomKey ? "true" : "false");
-    button.disabled = !room.enabled;
+    button.disabled = !state.authenticated
+      || !room.enabled
+      || isActionPending("room.join", room.roomKey)
+      || roomTransitionPending
+      || Boolean(state.transitionRoomKey && state.transitionRoomKey !== room.roomKey);
     button.innerHTML = `
       <span><strong>${escapeHtml(room.displayName)}</strong><span>${room.memberCount || 0}人</span></span>
       <span class="room-status">${escapeHtml(statusTextForRoom(room.status))}${room.enabled ? "" : " 已关闭"}</span>
@@ -598,6 +899,7 @@ function renderTable() {
   const table = state.table;
   els.leave.hidden = !state.currentRoomKey;
   if (!table) {
+    clearTurnTimer();
     els.title.textContent = "大厅";
     els.table.innerHTML = '<div class="empty-state">请选择房间进入牌桌。</div>';
     return;
@@ -615,6 +917,7 @@ function renderTable() {
     ? `第 ${currentTrick.trickNumber} 墩，轮到${seatLabel(currentTrick.nextSeatIndex ?? currentTrick.winnerSeatIndex)}`
     : table.engineReady ? `得分 ${score}` : "等待中";
   const leaveAction = action(table, "room.leave");
+  const roomTransitionPending = hasRoomTransitionPending();
 
   els.table.innerHTML = `
     <div class="table-grid">
@@ -628,6 +931,7 @@ function renderTable() {
             <span>级牌 ${escapeHtml(rankLabel(table.engine?.public?.rank))}</span>
             <span>${escapeHtml(trumpLabel(table.engine?.public?.trump))}</span>
           </div>
+          ${turnTimerHtml(table)}
           <div class="table-actions">${tableActionsHtml(table)}</div>
         </div>
       </div>
@@ -643,8 +947,13 @@ function renderTable() {
   els.table.querySelectorAll("[data-card-index]").forEach((button) => {
     button.addEventListener("click", () => toggleCardSelection(Number(button.dataset.cardIndex)));
   });
-  els.leave.disabled = !leaveAction.enabled;
+  els.leave.disabled = !state.authenticated
+    || !leaveAction.enabled
+    || isActionPending("room.leave", state.currentRoomKey)
+    || roomTransitionPending
+    || Boolean(state.transitionRoomKey);
   els.leave.title = leaveAction.reason ? actionReasonText(leaveAction.reason) : "";
+  syncTurnTimer();
 }
 
 function seatHtml(table, seat) {
@@ -692,21 +1001,23 @@ function modulo(value, divisor) {
 }
 
 function seatActionsHtml(table, seat, isViewerSeat) {
+  const roomKey = table.room.roomKey;
+  const disabled = !state.authenticated || Boolean(state.transitionRoomKey) || hasRoomTransitionPending();
   if (!seat.user && action(table, "seat.claim").enabled) {
-    return `<button data-action="seat.claim" data-seat="${seat.seatIndex}" type="button">坐下</button>`;
+    return `<button data-action="seat.claim" data-seat="${seat.seatIndex}" type="button" ${disabled || isActionPending("seat.claim", roomKey) ? "disabled" : ""}>坐下</button>`;
   }
   if (isViewerSeat) {
     const readyAction = action(table, "player.ready");
     const releaseAction = action(table, "seat.release");
     return `
-      <button data-action="player.ready" data-seat="${seat.seatIndex}" type="button" ${readyAction.enabled ? "" : "disabled"}>
+      <button data-action="player.ready" data-seat="${seat.seatIndex}" type="button" ${readyAction.enabled && !disabled && !isActionPending("player.ready", roomKey) ? "" : "disabled"}>
         ${seat.ready ? "取消准备" : "准备"}
       </button>
-      <button data-action="seat.release" data-seat="${seat.seatIndex}" type="button" ${releaseAction.enabled ? "" : "disabled"}>离座</button>
+      <button data-action="seat.release" data-seat="${seat.seatIndex}" type="button" ${releaseAction.enabled && !disabled && !isActionPending("seat.release", roomKey) ? "" : "disabled"}>离座</button>
     `;
   }
   if (seat.user && action(table, "observer.watch").enabled && table.viewer.role === "observer") {
-    return `<button data-action="observer.watch" data-seat="${seat.seatIndex}" type="button">观看</button>`;
+    return `<button data-action="observer.watch" data-seat="${seat.seatIndex}" type="button" ${disabled || isActionPending("observer.watch", roomKey) ? "disabled" : ""}>观看</button>`;
   }
   return "";
 }
@@ -727,19 +1038,21 @@ function tableActionsHtml(table) {
   const discardAction = action(table, "tractor.discardBottom");
   const playAction = action(table, "tractor.playCards");
   const selectedCards = selectedHandCards();
+  const roomKey = table.room.roomKey;
+  const disabled = !state.authenticated || Boolean(state.transitionRoomKey) || hasRoomTransitionPending();
   const parts = [];
 
   if (startAction.enabled) {
-    parts.push('<button data-action="tractor.start" type="button">开始</button>');
+    parts.push(`<button data-action="tractor.start" type="button" ${disabled || isActionPending("tractor.start", roomKey) ? "disabled" : ""}>开始</button>`);
   }
   if (makeTrumpAction.enabled) {
-    parts.push(`<button data-action="tractor.makeTrump" type="button" ${inferTrumpPayload(selectedCards, table) ? "" : "disabled"} title="请选择一张级牌或一对有效的牌">亮主</button>`);
+    parts.push(`<button data-action="tractor.makeTrump" type="button" ${!disabled && !isActionPending("tractor.makeTrump", roomKey) && inferTrumpPayload(selectedCards, table) ? "" : "disabled"} title="请选择一张级牌或一对有效的牌">亮主</button>`);
   }
   if (discardAction.enabled) {
-    parts.push(`<button data-action="tractor.discardBottom" type="button" ${selectedCards.length === discardAction.count ? "" : "disabled"} title="请选择 ${discardAction.count} 张牌">埋牌</button>`);
+    parts.push(`<button data-action="tractor.discardBottom" type="button" ${!disabled && !isActionPending("tractor.discardBottom", roomKey) && selectedCards.length === discardAction.count ? "" : "disabled"} title="请选择 ${discardAction.count} 张牌">埋牌</button>`);
   }
   if (playAction.enabled) {
-    parts.push(`<button data-action="tractor.playCards" type="button" ${selectedCards.length > 0 ? "" : "disabled"}>出牌</button>`);
+    parts.push(`<button data-action="tractor.playCards" type="button" ${!disabled && !isActionPending("tractor.playCards", roomKey) && selectedCards.length > 0 ? "" : "disabled"}>出牌</button>`);
   }
 
   return parts.join("");
@@ -758,6 +1071,74 @@ function trickHtml(table) {
     </div>
   `).join("");
   return `<div class="trick-panel">${plays}</div>`;
+}
+
+function turnTimerHtml(table) {
+  const turn = table.turn;
+  if (!turn?.deadlineAt || !Number.isInteger(turn.seatIndex)) {
+    return "";
+  }
+
+  const viewerTurn = table.viewer?.seatIndex === turn.seatIndex;
+  const actionLabel = table.phase === "burying_bottom" ? "埋牌" : "出牌";
+  const label = viewerTurn ? `轮到你${actionLabel}` : `${seatLabel(turn.seatIndex)}${actionLabel}`;
+  return `
+    <div class="turn-timer" data-viewer-turn="${viewerTurn ? "true" : "false"}" data-turn-deadline="${escapeAttribute(turn.deadlineAt)}" data-turn-started="${escapeAttribute(turn.startedAt || "")}" data-turn-countdown="${escapeAttribute(turn.countdownSeconds || "")}">
+      <span class="turn-timer-label">${escapeHtml(label)}</span>
+      <span class="turn-timer-time">--:--</span>
+      <span class="turn-timer-bar" aria-hidden="true"><span></span></span>
+    </div>
+  `;
+}
+
+function syncTurnTimer() {
+  clearTurnTimer();
+  const timer = els.table.querySelector(".turn-timer[data-turn-deadline]");
+  if (!timer) {
+    return;
+  }
+
+  updateTurnTimer(timer);
+  state.turnTimerId = window.setInterval(() => updateTurnTimer(timer), 1000);
+}
+
+function clearTurnTimer() {
+  if (state.turnTimerId) {
+    window.clearInterval(state.turnTimerId);
+    state.turnTimerId = 0;
+  }
+}
+
+function updateTurnTimer(timer) {
+  if (!timer.isConnected) {
+    clearTurnTimer();
+    return;
+  }
+
+  const deadlineMs = Date.parse(timer.dataset.turnDeadline || "");
+  if (!Number.isFinite(deadlineMs)) {
+    clearTurnTimer();
+    return;
+  }
+
+  const countdownSeconds = Number(timer.dataset.turnCountdown || 0);
+  const remainingMs = Math.max(0, deadlineMs - Date.now());
+  const totalMs = countdownSeconds > 0 ? countdownSeconds * 1000 : remainingMs;
+  const progress = totalMs > 0 ? Math.max(0, Math.min(1, remainingMs / totalMs)) : 0;
+  const time = timer.querySelector(".turn-timer-time");
+  if (time) {
+    time.textContent = durationLabel(remainingMs);
+  }
+  timer.style.setProperty("--turn-progress", `${Math.round(progress * 1000) / 10}%`);
+  timer.classList.toggle("turn-timer-urgent", remainingMs > 0 && remainingMs <= 10000);
+  timer.classList.toggle("turn-timer-due", remainingMs <= 0);
+}
+
+function durationLabel(milliseconds) {
+  const totalSeconds = Math.ceil(Math.max(0, milliseconds) / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function handHtml(table) {
@@ -781,7 +1162,7 @@ function handHtml(table) {
 function handleTableAction(type, seatValue) {
   const seatIndex = Number(seatValue);
   const roomKey = state.currentRoomKey;
-  if (!roomKey) {
+  if (!roomKey || !state.authenticated || state.transitionRoomKey || hasRoomTransitionPending() || isActionPending(type, roomKey)) {
     return;
   }
 
@@ -791,14 +1172,18 @@ function handleTableAction(type, seatValue) {
     void sendCommand("seat.release", { roomKey }).catch(reportError);
   } else if (type === "player.ready") {
     const seat = state.table.room.seats.find((candidate) => candidate.seatIndex === seatIndex);
+    if (!seat) {
+      return;
+    }
     void sendCommand("player.ready", { roomKey, payload: { ready: !seat.ready } }).catch(reportError);
   } else if (type === "observer.watch") {
     void sendCommand("observer.watch", { roomKey, payload: { seatIndex } }).catch(reportError);
   } else if (type === "tractor.start") {
+    const roomEpoch = state.roomEpoch;
     setStatus("正在开始...");
-    void sendCommand("tractor.start", { roomKey, payload: {} })
+    void sendCommand("tractor.start", { roomKey, payload: {}, roomEpoch })
       .then((response) => {
-        if (response.payload?.table) {
+        if (state.roomEpoch === roomEpoch && state.currentRoomKey === roomKey && response.payload?.table) {
           setStatus(engineCommandStatus(type, response.payload.table));
         }
       })
@@ -819,13 +1204,15 @@ function handleTableAction(type, seatValue) {
 }
 
 async function sendEngineCommand(type, roomKey, payload) {
+  const roomEpoch = state.roomEpoch;
   try {
-    const response = await sendCommand(type, { roomKey, payload });
+    const response = await sendCommand(type, { roomKey, payload, roomEpoch });
+    if (state.roomEpoch !== roomEpoch || state.currentRoomKey !== roomKey) {
+      return;
+    }
     state.selectedHandIndexes = [];
     if (response.payload?.table) {
-      state.table = response.payload.table;
-      syncSelectedHandIndexes();
-      render();
+      applyTable(response.payload.table);
       setStatus(engineCommandStatus(type, state.table));
     } else {
       await refreshTable(roomKey);
@@ -922,7 +1309,13 @@ function serverToUiCardNumber(cardId) {
 
 function syncSelectedHandIndexes() {
   const cards = state.table?.engine?.private?.cards || [];
-  state.selectedHandIndexes = state.selectedHandIndexes.filter((index) => index >= 0 && index < cards.length);
+  const signature = cards.map((card) => card?.id ?? "").join(",");
+  if (state.handSignature && signature !== state.handSignature) {
+    state.selectedHandIndexes = [];
+  } else {
+    state.selectedHandIndexes = state.selectedHandIndexes.filter((index) => index >= 0 && index < cards.length);
+  }
+  state.handSignature = signature;
 }
 
 function inferTrumpPayload(cards, table) {
@@ -949,12 +1342,35 @@ function inferTrumpPayload(cards, table) {
 }
 
 function joinRoom(roomKey) {
-  if (roomKey !== state.currentRoomKey) {
-    state.chatEvents = [];
-    state.emojiTarget = "";
+  if (!roomKey || !state.authenticated || hasRoomTransitionPending() || isActionPending("room.join", roomKey)) {
+    return;
   }
-  void sendCommand("room.join", { roomKey })
-    .catch(reportError);
+
+  const switchingRooms = roomKey !== state.currentRoomKey;
+  const roomEpoch = switchingRooms ? beginRoomTransition(roomKey) : state.roomEpoch;
+  if (switchingRooms) {
+    state.chatEvents = [];
+    state.chatDraft = "";
+    state.emojiTarget = "";
+    state.selectedHandIndexes = [];
+    state.handSignature = "";
+    state.table = null;
+    state.currentRoomKey = "";
+  }
+  setStatus("正在进入房间");
+  void sendCommand("room.join", { roomKey, roomEpoch })
+    .then(() => {
+      if (state.roomEpoch === roomEpoch && state.currentRoomKey === roomKey) {
+        setStatus("已进入房间");
+      }
+    })
+    .catch((error) => {
+      if (state.roomEpoch === roomEpoch) {
+        state.transitionRoomKey = "";
+        void requestCatchup().catch(() => requestRooms());
+      }
+      reportError(error);
+    });
 }
 
 async function requestChatHistory(roomKey) {
@@ -984,18 +1400,22 @@ function applySkinProfile(profile) {
 }
 
 async function sendChatMessage() {
-  const text = state.chatDraft.trim();
-  if (!text || !state.currentRoomKey) {
+  const roomKey = state.currentRoomKey;
+  const draft = state.chatDraft;
+  const text = draft.trim();
+  if (!text || !roomKey || isActionPending("chat.send", roomKey)) {
     return;
   }
 
   try {
     await sendCommand("chat.send", {
-      roomKey: state.currentRoomKey,
+      roomKey,
       payload: { text }
     });
-    state.chatDraft = "";
-    els.chatInput.value = "";
+    if (state.currentRoomKey === roomKey && state.chatDraft === draft) {
+      state.chatDraft = "";
+      els.chatInput.value = "";
+    }
   } catch (error) {
     reportError(error);
   }
@@ -1454,6 +1874,10 @@ function serverErrorText(code, message) {
 function defaultWsUrl() {
   const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${scheme}//${window.location.host}/card-games/ws`;
+}
+
+function defaultConfigUrl() {
+  return new URL("../config", window.location.href).toString();
 }
 
 function queryParam(name) {

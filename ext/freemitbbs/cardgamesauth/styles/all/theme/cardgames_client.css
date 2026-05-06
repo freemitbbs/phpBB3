@@ -355,6 +355,58 @@
   font-size: 13px;
 }
 
+.app-shell .turn-timer {
+  --turn-progress: 100%;
+  width: min(220px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 12px auto 0;
+  color: #d7e8df;
+  font-size: 13px;
+  text-align: left;
+}
+
+.app-shell .turn-timer[data-viewer-turn="true"] {
+  color: #ffe38f;
+}
+
+.app-shell .turn-timer-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.app-shell .turn-timer-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.app-shell .turn-timer-bar {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 249, 236, 0.18);
+  overflow: hidden;
+}
+
+.app-shell .turn-timer-bar span {
+  display: block;
+  width: var(--turn-progress);
+  height: 100%;
+  border-radius: inherit;
+  background: #65c7a3;
+  transition: width 200ms linear, background-color 200ms ease;
+}
+
+.app-shell .turn-timer-urgent .turn-timer-bar span {
+  background: #e6b447;
+}
+
+.app-shell .turn-timer-due .turn-timer-bar span {
+  background: #c94c4c;
+}
+
 .app-shell .observer-list {
   margin-top: 14px;
   display: flex;
