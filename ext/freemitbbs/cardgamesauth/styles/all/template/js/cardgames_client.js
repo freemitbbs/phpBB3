@@ -94,6 +94,12 @@ const cardSuitLabels = {
   diamond: "方块",
   club: "梅花"
 };
+const cardSuitSymbols = {
+  heart: "♥",
+  spade: "♠",
+  diamond: "♦",
+  club: "♣"
+};
 const cardRankLabels = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
 
 const els = {
@@ -169,6 +175,14 @@ els.chatInput.addEventListener("input", () => {
 els.emojiTarget.addEventListener("change", () => {
   state.emojiTarget = els.emojiTarget.value;
 });
+els.table.addEventListener("error", (event) => {
+  const image = event.target;
+  if (!(image instanceof HTMLImageElement) || !image.classList.contains("card-face-image")) {
+    return;
+  }
+  image.hidden = true;
+  image.closest(".card-face")?.classList.add("card-face-image-missing");
+}, true);
 window.addEventListener("pagehide", () => {
   disconnect();
 });
@@ -1268,11 +1282,17 @@ function selectedHandCards() {
 function cardFaceHtml(card, className) {
   const image = cardImageUrl(card);
   const label = cardLabelText(card);
-  if (!image) {
-    return `<span class="${className} card-face-fallback">${escapeHtml(label)}</span>`;
-  }
+  const imageClass = image ? "" : " card-face-no-image";
+  const imageHtml = image
+    ? `<img class="card-face-image" src="${escapeAttribute(image)}" alt="${escapeAttribute(label)}" loading="lazy" draggable="false" />`
+    : "";
 
-  return `<img class="${className} card-face" src="${escapeAttribute(image)}" alt="${escapeAttribute(label)}" loading="lazy" draggable="false" />`;
+  return `
+    <span class="${className} card-face ${cardFaceToneClass(card)}${imageClass}" aria-label="${escapeAttribute(label)}">
+      ${imageHtml}
+      ${cardSymbolHtml(card)}
+    </span>
+  `;
 }
 
 function cardImageUrl(card) {
@@ -1283,6 +1303,54 @@ function cardImageUrl(card) {
 
   const uiCardNumber = serverToUiCardNumber(cardId);
   return `${state.assetBaseUrl}/tractor/${encodeURIComponent(state.cardStyle)}/tile${String(uiCardNumber).padStart(3, "0")}.png`;
+}
+
+function cardSymbolHtml(card) {
+  const id = Number(card?.id);
+  if (id === 52 || id === 53) {
+    const joker = id === 52 ? "小王" : "大王";
+    return `
+      <span class="card-face-symbol" aria-hidden="true">
+        <span class="card-symbol-rank">${joker}</span>
+        <span class="card-symbol-main">JOKER</span>
+        <span class="card-symbol-corner">${joker}</span>
+      </span>
+    `;
+  }
+
+  const suit = cardSuitFromCard(card);
+  const rank = cardRankFromCard(card);
+  const symbol = cardSuitSymbols[suit] || "";
+  const rankText = cardRankLabels[rank] || "";
+  const fallback = cardLabelText(card);
+  return `
+    <span class="card-face-symbol" aria-hidden="true">
+      <span class="card-symbol-rank">${escapeHtml(rankText || fallback)}</span>
+      <span class="card-symbol-main">${escapeHtml(symbol || fallback)}</span>
+      <span class="card-symbol-corner">${escapeHtml(rankText && symbol ? `${rankText}${symbol}` : fallback)}</span>
+    </span>
+  `;
+}
+
+function cardFaceToneClass(card) {
+  const id = Number(card?.id);
+  if (id === 52 || id === 53) {
+    return id === 53 ? "card-face-red card-face-joker" : "card-face-black card-face-joker";
+  }
+
+  const suit = cardSuitFromCard(card);
+  return suit === "heart" || suit === "diamond" ? "card-face-red" : "card-face-black";
+}
+
+function cardSuitFromCard(card) {
+  const id = Number(card?.id);
+  return cardSuitLabels[card?.suit] ? card.suit : cardSuitFromId(id);
+}
+
+function cardRankFromCard(card) {
+  const id = Number(card?.id);
+  const rank = Number(card?.rank);
+  return Number.isInteger(rank) ? rank : cardRankFromId(id);
 }
 
 function serverToUiCardNumber(cardId) {

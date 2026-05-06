@@ -475,15 +475,84 @@
 }
 
 .app-shell .card-face {
+  position: relative;
   display: block;
   width: 100%;
-  height: auto;
+  aspect-ratio: 5 / 7;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #fffdfa;
+  color: var(--ink);
   user-select: none;
+}
+
+.app-shell .card-face-image {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.app-shell .card-face-symbol {
+  position: absolute;
+  inset: 0;
+  display: none;
+  grid-template-rows: auto 1fr auto;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #fffdfa;
+  color: currentColor;
+  font-weight: 800;
+  line-height: 1;
+  padding: 4px;
+}
+
+.app-shell .card-face-red {
+  color: #b7202a;
+}
+
+.app-shell .card-face-black {
+  color: #1f2a2e;
+}
+
+.app-shell .card-symbol-rank {
+  justify-self: start;
+  font-size: 14px;
+}
+
+.app-shell .card-symbol-main {
+  justify-self: center;
+  font-size: 24px;
+}
+
+.app-shell .card-symbol-corner {
+  justify-self: end;
+  font-size: 10px;
+}
+
+.app-shell .played-card .card-symbol-rank,
+.app-shell .played-card .card-symbol-corner {
+  font-size: 9px;
+}
+
+.app-shell .played-card .card-symbol-main {
+  font-size: 18px;
+}
+
+.app-shell .card-face-no-image .card-face-symbol,
+.app-shell .card-face-image-missing .card-face-symbol {
+  display: grid;
+}
+
+.app-shell .card-face-image-missing .card-face-image {
+  display: none;
 }
 
 .app-shell .hand-card-face {
   aspect-ratio: 5 / 7;
-  object-fit: contain;
   transform: translateY(var(--hand-lift));
   transition: transform 120ms ease;
 }
@@ -732,5 +801,18 @@
 
   .app-shell .hand-panel {
     --hand-lift: 10px;
+    --hand-card-width: 46px;
+    justify-content: start;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding-bottom: 8px;
+  }
+
+  .app-shell .card-face-image {
+    display: none;
+  }
+
+  .app-shell .card-face-symbol {
+    display: grid;
   }
 }
