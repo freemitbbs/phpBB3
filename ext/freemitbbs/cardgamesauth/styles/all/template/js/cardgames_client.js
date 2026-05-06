@@ -704,7 +704,10 @@ function handleTableAction(type, seatValue) {
   } else if (type === "observer.watch") {
     void sendCommand("observer.watch", { roomKey, payload: { seatIndex } }).catch(reportError);
   } else if (type === "tractor.start") {
-    void sendCommand("tractor.start", { roomKey }).catch(reportError);
+    setStatus("正在开始...");
+    void sendCommand("tractor.start", { roomKey, payload: {} })
+      .then(() => refreshTable(roomKey))
+      .catch(reportError);
   } else if (type === "tractor.makeTrump") {
     const payload = inferTrumpPayload(selectedHandCards(), state.table);
     if (payload) {
@@ -1068,6 +1071,9 @@ function playCommandSound(commandType) {
     case "player.ready":
     case "observer.watch":
       playSound("effect/draw.mp3");
+      break;
+    case "tractor.start":
+      playSound("effect/game_start.mp3");
       break;
     default:
       break;
