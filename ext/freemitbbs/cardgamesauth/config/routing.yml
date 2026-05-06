@@ -92,6 +92,16 @@ freemitbbs_cardgamesauth_server_snapshots:
     defaults: { _controller: freemitbbs.cardgamesauth.controller.server:snapshots }
     methods: [POST]
 
+freemitbbs_cardgamesauth_server_transition:
+    path: /card-games/server/transition
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:transition }
+    methods: [POST]
+
+freemitbbs_cardgamesauth_server_game_transitions:
+    path: /card-games/server/game-transitions
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:transition }
+    methods: [POST]
+
 freemitbbs_cardgamesauth_server_finished_summary:
     path: /card-games/server/finished-summary
     defaults: { _controller: freemitbbs.cardgamesauth.controller.server:finished_summary }

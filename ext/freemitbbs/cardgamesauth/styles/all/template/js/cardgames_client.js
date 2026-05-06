@@ -7,7 +7,11 @@ const state = {
   connected: false,
   authenticated: false,
   connecting: false,
+  recovering: false,
+  connectionEpoch: 0,
   turnTimerId: 0,
+  heartbeatId: 0,
+  heartbeatMisses: 0,
   requestSeq: 0,
   pending: new Map(),
   timedOutPending: new Map(),
@@ -56,6 +60,9 @@ const emojiCatalog = [
 const emojiTypes = ["goodjob", "hurryup", "sorry", "lol", "noproblem", "fireworks", "youareright"];
 const commandTimeoutMs = 15000;
 const lateResponseRetentionMs = 60000;
+const heartbeatIntervalMs = 25000;
+const heartbeatTimeoutMs = 10000;
+const heartbeatMaxMisses = 2;
 const skinLabels = {
   "skin_basicmale": "基础男角色",
   "skin_basicfemale": "基础女角色",
@@ -248,72 +255,103 @@ async function connect() {
   }
 
   disconnect();
-  state.lastSeenSeq = 0;
+  const connectionEpoch = beginConnectionAttempt();
   state.connecting = true;
+  state.recovering = true;
   setStatus("正在连接");
 
   try {
+    let tokenPayload = null;
     if (state.bootstrap.tokenUrl && state.bootstrap.tokenHash) {
-      state.token = await fetchToken();
+      tokenPayload = await fetchToken();
     } else if (!state.token) {
-      state.token = await fetchToken();
+      tokenPayload = await fetchToken();
+    }
+    if (!isCurrentConnectionAttempt(connectionEpoch)) {
+      return;
+    }
+    if (tokenPayload) {
+      applyTokenPayload(tokenPayload);
     }
     const wsUrl = state.bootstrap.wsUrl || defaultWsUrl();
     const ws = new WebSocket(wsUrl);
+    if (!isCurrentConnectionAttempt(connectionEpoch)) {
+      ws.close();
+      return;
+    }
     state.ws = ws;
 
     ws.addEventListener("open", () => {
-      if (state.ws !== ws) {
+      if (!isCurrentSocket(ws, connectionEpoch)) {
         return;
       }
       state.connected = true;
       state.connecting = false;
+      startHeartbeat();
       render();
-      void authenticate();
+      void authenticate(connectionEpoch);
     });
     ws.addEventListener("message", (event) => {
-      if (state.ws !== ws) {
+      if (!isCurrentSocket(ws, connectionEpoch)) {
         return;
       }
       handleMessage(event.data);
     });
     ws.addEventListener("close", () => {
-      if (state.ws !== ws) {
+      if (!isCurrentSocket(ws, connectionEpoch)) {
         return;
       }
+      state.connectionEpoch += 1;
       state.ws = null;
       state.connected = false;
       state.authenticated = false;
       state.connecting = false;
+      state.recovering = false;
+      stopHeartbeat();
       rejectPending("连接已断开");
       render();
     });
     ws.addEventListener("error", () => {
-      if (state.ws !== ws) {
+      if (!isCurrentSocket(ws, connectionEpoch)) {
         return;
       }
+      state.connectionEpoch += 1;
+      state.ws = null;
       state.connecting = false;
       state.connected = false;
       state.authenticated = false;
+      state.recovering = false;
+      stopHeartbeat();
+      if (ws.readyState < WebSocket.CLOSING) {
+        ws.close();
+      }
       rejectPending("连接出错");
       setStatus("连接出错");
     });
   } catch (error) {
+    if (!isCurrentConnectionAttempt(connectionEpoch)) {
+      return;
+    }
     state.connecting = false;
+    state.recovering = false;
+    stopHeartbeat();
     setStatus(error.message || "连接失败");
   }
 }
 
 function disconnect() {
   const ws = state.ws;
+  state.connectionEpoch += 1;
   if (state.ws && state.ws.readyState < WebSocket.CLOSING) {
     state.ws.close();
   }
+  stopHeartbeat();
   clearTurnTimer();
   state.ws = null;
   state.connected = false;
   state.authenticated = false;
   state.connecting = false;
+  state.recovering = false;
   state.transitionRoomKey = "";
   if (ws) {
     rejectPending("连接已断开");
@@ -335,6 +373,68 @@ async function reconnectAfterRestore() {
 
 function isSocketOpen() {
   return state.ws?.readyState === WebSocket.OPEN;
+}
+
+function beginConnectionAttempt() {
+  state.connectionEpoch += 1;
+  return state.connectionEpoch;
+}
+
+function isCurrentConnectionAttempt(connectionEpoch) {
+  return state.connectionEpoch === connectionEpoch;
+}
+
+function isCurrentSocket(ws, connectionEpoch = state.connectionEpoch) {
+  return state.connectionEpoch === connectionEpoch && state.ws === ws;
+}
+
+function startHeartbeat() {
+  stopHeartbeat();
+  state.heartbeatMisses = 0;
+  state.heartbeatId = window.setInterval(() => {
+    void sendHeartbeat();
+  }, heartbeatIntervalMs);
+}
+
+function stopHeartbeat() {
+  if (state.heartbeatId) {
+    window.clearInterval(state.heartbeatId);
+    state.heartbeatId = 0;
+  }
+  state.heartbeatMisses = 0;
+}
+
+async function sendHeartbeat() {
+  if (!isSocketOpen()) {
+    return;
+  }
+
+  try {
+    const response = await sendCommand("system.ping", {
+      payload: { clientTime: new Date().toISOString() },
+      timeoutMs: heartbeatTimeoutMs,
+      applyResponse: false
+    });
+    if (response.type === "system.pong") {
+      state.heartbeatMisses = 0;
+    }
+  } catch {
+    if (!state.ws && !state.connected) {
+      return;
+    }
+    state.heartbeatMisses += 1;
+    if (state.heartbeatMisses >= heartbeatMaxMisses) {
+      forceReconnect("连接无响应，正在重连");
+    }
+  }
+}
+
+function forceReconnect(message) {
+  disconnect();
+  if (message) {
+    setStatus(message);
+  }
+  void reconnectAfterRestore();
 }
 
 function rejectPending(message) {
@@ -415,6 +515,10 @@ function hasRoomTransitionPending() {
   return false;
 }
 
+function isGameInteractionLocked() {
+  return !state.authenticated || state.connecting || state.recovering;
+}
+
 function beginRoomTransition(roomKey) {
   state.roomEpoch += 1;
   state.transitionRoomKey = roomKey || "";
@@ -456,25 +560,44 @@ async function fetchToken() {
   if (!response.ok || !payload.success) {
     throw new Error(payload.error || "获取游戏令牌失败");
   }
+  if (!payload.token) {
+    throw new Error("获取游戏令牌失败");
+  }
 
-  state.bootstrap.wsUrl = payload.wsUrl || state.bootstrap.wsUrl;
-  state.user = payload.user || state.user;
-  return payload.token;
+  return payload;
 }
 
-async function authenticate() {
+function applyTokenPayload(payload) {
+  state.bootstrap.wsUrl = payload.wsUrl || state.bootstrap.wsUrl;
+  state.user = payload.user || state.user;
+  state.token = payload.token;
+}
+
+async function authenticate(connectionEpoch = state.connectionEpoch) {
   try {
     const response = await sendCommand("auth.token", { payload: { token: state.token, lastSeenSeq: state.lastSeenSeq } });
+    if (!isCurrentConnectionAttempt(connectionEpoch)) {
+      return;
+    }
     state.user = response.payload.user;
     state.authenticated = true;
+    state.recovering = true;
     void requestSkinProfile().catch(() => undefined);
     try {
       await requestCatchup();
     } catch {
       await requestRooms();
     }
+    if (!isCurrentConnectionAttempt(connectionEpoch)) {
+      return;
+    }
+    state.recovering = false;
     setStatus("已连接");
   } catch (error) {
+    if (!isCurrentConnectionAttempt(connectionEpoch)) {
+      return;
+    }
+    state.recovering = false;
     setStatus(error.message || "认证失败");
   }
 }
@@ -644,10 +767,25 @@ function handleTimedOutMessage(message) {
 
 function recoverTimedOutStatus(message, pending) {
   if (pending.type === "auth.token") {
+    const connectionEpoch = state.connectionEpoch;
+    state.recovering = true;
+    render();
     void requestCatchup()
       .catch(() => requestRooms())
-      .then(() => setStatus("已连接"))
-      .catch(reportError);
+      .then(() => {
+        if (!isCurrentConnectionAttempt(connectionEpoch)) {
+          return;
+        }
+        state.recovering = false;
+        setStatus("已连接");
+      })
+      .catch((error) => {
+        if (!isCurrentConnectionAttempt(connectionEpoch)) {
+          return;
+        }
+        state.recovering = false;
+        reportError(error);
+      });
     return;
   }
 
@@ -871,12 +1009,13 @@ function renderRooms() {
   }
 
   const roomTransitionPending = hasRoomTransitionPending();
+  const interactionLocked = isGameInteractionLocked();
   els.rooms.replaceChildren(...state.rooms.map((room) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "room-button";
     button.setAttribute("aria-current", room.roomKey === state.currentRoomKey ? "true" : "false");
-    button.disabled = !state.authenticated
+    button.disabled = interactionLocked
       || !room.enabled
       || isActionPending("room.join", room.roomKey)
       || roomTransitionPending
@@ -898,6 +1037,7 @@ function renderSkinSelect() {
     return;
   }
 
+  els.skin.disabled = isGameInteractionLocked();
   const owned = new Set(profile.ownedSkinIds || []);
   els.skin.replaceChildren(...(profile.skins || []).map((skin) => {
     const option = document.createElement("option");
@@ -961,7 +1101,7 @@ function renderTable() {
   els.table.querySelectorAll("[data-card-index]").forEach((button) => {
     button.addEventListener("click", () => toggleCardSelection(Number(button.dataset.cardIndex)));
   });
-  els.leave.disabled = !state.authenticated
+  els.leave.disabled = isGameInteractionLocked()
     || !leaveAction.enabled
     || isActionPending("room.leave", state.currentRoomKey)
     || roomTransitionPending
@@ -1016,7 +1156,7 @@ function modulo(value, divisor) {
 
 function seatActionsHtml(table, seat, isViewerSeat) {
   const roomKey = table.room.roomKey;
-  const disabled = !state.authenticated || Boolean(state.transitionRoomKey) || hasRoomTransitionPending();
+  const disabled = isGameInteractionLocked() || Boolean(state.transitionRoomKey) || hasRoomTransitionPending();
   if (!seat.user && action(table, "seat.claim").enabled) {
     return `<button data-action="seat.claim" data-seat="${seat.seatIndex}" type="button" ${disabled || isActionPending("seat.claim", roomKey) ? "disabled" : ""}>坐下</button>`;
   }
@@ -1053,7 +1193,7 @@ function tableActionsHtml(table) {
   const playAction = action(table, "tractor.playCards");
   const selectedCards = selectedHandCards();
   const roomKey = table.room.roomKey;
-  const disabled = !state.authenticated || Boolean(state.transitionRoomKey) || hasRoomTransitionPending();
+  const disabled = isGameInteractionLocked() || Boolean(state.transitionRoomKey) || hasRoomTransitionPending();
   const parts = [];
 
   if (startAction.enabled) {
@@ -1176,7 +1316,7 @@ function handHtml(table) {
 function handleTableAction(type, seatValue) {
   const seatIndex = Number(seatValue);
   const roomKey = state.currentRoomKey;
-  if (!roomKey || !state.authenticated || state.transitionRoomKey || hasRoomTransitionPending() || isActionPending(type, roomKey)) {
+  if (!roomKey || isGameInteractionLocked() || state.transitionRoomKey || hasRoomTransitionPending() || isActionPending(type, roomKey)) {
     return;
   }
 
@@ -1408,7 +1548,7 @@ function inferTrumpPayload(cards, table) {
 }
 
 function joinRoom(roomKey) {
-  if (!roomKey || !state.authenticated || hasRoomTransitionPending() || isActionPending("room.join", roomKey)) {
+  if (!roomKey || isGameInteractionLocked() || hasRoomTransitionPending() || isActionPending("room.join", roomKey)) {
     return;
   }
 
@@ -1469,7 +1609,7 @@ async function sendChatMessage() {
   const roomKey = state.currentRoomKey;
   const draft = state.chatDraft;
   const text = draft.trim();
-  if (!text || !roomKey || isActionPending("chat.send", roomKey)) {
+  if (!text || !roomKey || isGameInteractionLocked() || isActionPending("chat.send", roomKey)) {
     return;
   }
 
@@ -1496,7 +1636,7 @@ function renderChatPanel() {
     return;
   }
 
-  els.chatInput.disabled = !state.authenticated;
+  els.chatInput.disabled = isGameInteractionLocked();
   els.chatInput.value = state.chatDraft;
   els.chatMessages.replaceChildren(...state.chatEvents.map(chatEventNode));
   els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
@@ -1586,7 +1726,7 @@ function renderEmojiDock() {
     button.type = "button";
     button.className = "emoji-button";
     button.title = emoji.label;
-    button.disabled = !state.authenticated;
+    button.disabled = isGameInteractionLocked();
     button.innerHTML = `<img src="${escapeAttribute(emojiUrl(emoji.asset, 0))}" alt="${escapeAttribute(emoji.label)}" loading="lazy" />`;
     button.addEventListener("click", () => {
       void sendCommand("emoji.send", {
@@ -1816,6 +1956,12 @@ function errorMessage(message) {
 }
 
 function statusText() {
+  if (state.connecting) {
+    return "正在连接";
+  }
+  if (state.recovering) {
+    return "正在同步";
+  }
   if (state.authenticated) {
     return "已认证";
   }

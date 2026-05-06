@@ -388,22 +388,7 @@ class server
 		try
 		{
 			$now = time();
-			$row = [
-				'room_key' => $this->required_string($data, 'roomKey', 'room_key', 64),
-				'game_type' => $this->required_string($data, 'gameType', 'game_type', 32),
-				'status' => $this->string_value($data, 'status', 'status', 32, 'waiting'),
-				'owner_user_id' => $this->nullable_int_value($data, 'ownerUserId', 'owner_user_id'),
-				'settings_json' => $this->json_value($data, 'settings', 'settings_json', new \stdClass()),
-				'state_schema_version' => $this->int_value($data, 'stateSchemaVersion', 'state_schema_version', 1),
-				'state_version' => $this->int_value($data, 'stateVersion', 'state_version', 0),
-				'random_audit_json' => $this->nullable_json_value($data, 'randomAudit', 'random_audit_json'),
-				'created_at' => $this->time_value($data, 'createdAt', 'created_at', $now),
-				'started_at' => $this->nullable_time_value($data, 'startedAt', 'started_at'),
-				'updated_at' => $this->time_value($data, 'updatedAt', 'updated_at', $now),
-				'finished_at' => $this->nullable_time_value($data, 'finishedAt', 'finished_at'),
-			];
-
-			$id = $this->insert_row($this->sessions_table, $row);
+			$id = $this->insert_row($this->sessions_table, $this->session_insert_row($data, $now));
 		}
 		catch (\InvalidArgumentException $e)
 		{
@@ -418,6 +403,114 @@ class server
 			'success' => true,
 			'sessionId' => $id,
 		], 201);
+	}
+
+	public function transition(): JsonResponse
+	{
+		$body = $this->raw_body();
+		if (($error = $this->require_server_auth($body)) !== null)
+		{
+			return $error;
+		}
+
+		$data = $this->require_json_object($body);
+		if (!is_array($data))
+		{
+			return $this->json_error('invalid_json', 'Request body must be a JSON object.', 400);
+		}
+
+		try
+		{
+			$session_payload = $this->optional_object($data, 'session', 'session');
+			$event_payload = $this->required_object($data, 'event', 'event');
+			$snapshot_payload = $this->required_object($data, 'snapshot', 'snapshot');
+			$session_update_payload = $this->required_object($data, 'sessionUpdate', 'session_update');
+			$summary_payload = $this->optional_object($data, 'finishedSummary', 'finished_summary');
+			$now = time();
+
+			$this->db->sql_transaction('begin');
+			try
+			{
+				if ($session_payload !== null)
+				{
+					$session = $this->ensure_game_session_for_transition($session_payload, $snapshot_payload, $now);
+				}
+				else
+				{
+					$session_id = $this->transition_session_id_from_payloads($event_payload, $snapshot_payload, $session_update_payload, $summary_payload ?? []);
+					$session = $this->load_transition_session($session_id);
+				}
+				$session_id = (int) $session['id'];
+
+				if ($session_payload !== null)
+				{
+					$this->replace_transition_session_id($session_payload, $session_id);
+				}
+				$this->replace_transition_session_id($event_payload, $session_id);
+				$this->replace_transition_session_id($snapshot_payload, $session_id);
+				$this->replace_transition_session_id($session_update_payload, $session_id);
+				if ($summary_payload !== null)
+				{
+					$this->replace_transition_session_id($summary_payload, $session_id);
+				}
+
+				$game_type = $this->transition_game_type(['game_type' => (string) ($session['game_type'] ?? '')], $session_payload ?? [], $session_update_payload, $event_payload, $snapshot_payload, $summary_payload ?? []);
+				$seq = $this->transition_seq($session, $event_payload, $snapshot_payload);
+				$request_id = $this->nullable_string_value($event_payload, 'requestId', 'request_id', 64);
+				$existing_seq = $this->find_event_seq_by_request_id($session_id, $request_id);
+
+				if ($existing_seq > 0)
+				{
+					$seq = $existing_seq;
+				}
+				else
+				{
+					$insert = $this->try_insert_row($this->events_table, $this->game_event_row($event_payload, $session_id, $seq, $game_type));
+					if (!$insert['inserted'] && !$this->is_duplicate_insert($insert))
+					{
+						throw new \RuntimeException('event_store_failed');
+					}
+				}
+
+				$snapshot_row = $this->game_snapshot_row($snapshot_payload, $session_id, $seq, $game_type);
+				$snapshot_insert = $this->try_insert_row($this->snapshots_table, $snapshot_row);
+				if (!$snapshot_insert['inserted'])
+				{
+					if (!$this->is_duplicate_insert($snapshot_insert))
+					{
+						throw new \RuntimeException('snapshot_store_failed');
+					}
+					$this->update_snapshot($session_id, $seq, $snapshot_row);
+				}
+
+				$this->update_transition_session($session_id, $session_update_payload, $snapshot_payload, $seq, (int) $session['state_version'], $now);
+				if ($summary_payload !== null)
+				{
+					$this->upsert_finished_summary($summary_payload, $session_id, $game_type, $now);
+				}
+
+				$this->db->sql_transaction('commit');
+			}
+			catch (\Throwable $e)
+			{
+				$this->db->sql_transaction('rollback');
+				throw $e;
+			}
+		}
+		catch (\InvalidArgumentException $e)
+		{
+			return $this->json_error((string) $e->getMessage(), 'Transition payload is invalid.', 400);
+		}
+		catch (\RuntimeException $e)
+		{
+			return $this->json_error('transition_store_failed', 'Transition could not be stored.', 500);
+		}
+
+		return $this->json([
+			'ok' => true,
+			'sessionId' => $session_id,
+			'seq' => $seq,
+		]);
 	}
 
 	public function update_session(int $id): JsonResponse
@@ -1829,6 +1922,317 @@ class server
 		return $settings_json !== '' ? $settings_json : '{}';
 	}
 
+	protected function session_insert_row(array $data, int $now): array
+	{
+		return [
+			'room_key' => $this->required_string($data, 'roomKey', 'room_key', 64),
+			'game_type' => $this->required_string($data, 'gameType', 'game_type', 32),
+			'status' => $this->string_value($data, 'status', 'status', 32, 'waiting'),
+			'owner_user_id' => $this->nullable_int_value($data, 'ownerUserId', 'owner_user_id'),
+			'settings_json' => $this->json_value($data, 'settings', 'settings_json', new \stdClass()),
+			'state_schema_version' => $this->int_value($data, 'stateSchemaVersion', 'state_schema_version', 1),
+			'state_version' => $this->int_value($data, 'stateVersion', 'state_version', 0),
+			'random_audit_json' => $this->nullable_json_value($data, 'randomAudit', 'random_audit_json'),
+			'created_at' => $this->time_value($data, 'createdAt', 'created_at', $now),
+			'started_at' => $this->nullable_time_value($data, 'startedAt', 'started_at'),
+			'updated_at' => $this->time_value($data, 'updatedAt', 'updated_at', $now),
+			'finished_at' => $this->nullable_time_value($data, 'finishedAt', 'finished_at'),
+		];
+	}
+
+	protected function ensure_game_session_for_transition(array $session, array $snapshot, int $now): array
+	{
+		$session_id = $this->nullable_int_value($session, 'sessionId', 'session_id');
+		if ($session_id > 0)
+		{
+			return $this->load_transition_session($session_id);
+		}
+
+		$room_key = $this->required_string($session, 'roomKey', 'room_key', 64);
+		$game_type = $this->required_string($session, 'gameType', 'game_type', 32);
+		$hand_id = $this->transition_hand_id($session, $snapshot);
+		if ($hand_id !== '')
+		{
+			$existing = $this->find_transition_session_by_hand_id($room_key, $game_type, $hand_id);
+			if (!empty($existing))
+			{
+				return $existing;
+			}
+		}
+
+		$row = $this->session_insert_row($session, $now);
+		$id = $this->insert_row($this->sessions_table, $row);
+		return [
+			'id' => $id,
+			'game_type' => (string) $row['game_type'],
+			'state_version' => (int) $row['state_version'],
+		];
+	}
+
+	protected function load_transition_session(int $session_id): array
+	{
+		$sql = 'SELECT id, game_type, state_version
+			FROM ' . $this->sessions_table . '
+			WHERE id = ' . $session_id . '
+			LIMIT 1
+			FOR UPDATE';
+		$result = $this->db->sql_query($sql);
+		$row = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+		if (!is_array($row))
+		{
+			throw new \InvalidArgumentException('invalid_session_id');
+		}
+
+		return [
+			'id' => (int) $row['id'],
+			'game_type' => (string) $row['game_type'],
+			'state_version' => (int) $row['state_version'],
+		];
+	}
+
+	protected function find_transition_session_by_hand_id(string $room_key, string $game_type, string $hand_id): array
+	{
+		$hand_id = substr($hand_id, 0, 64);
+		$hand_id_like = $this->sql_like_escape($hand_id);
+		$sql = 'SELECT id, game_type, state_version
+			FROM ' . $this->sessions_table . "
+			WHERE room_key = '" . $this->db->sql_escape($room_key) . "'
+				AND game_type = '" . $this->db->sql_escape($game_type) . "'
+				AND (
+					random_audit_json LIKE '%\"handId\":\"" . $this->db->sql_escape($hand_id_like) . "\"%' ESCAPE '\\\\'
+					OR random_audit_json LIKE '%\"hand_id\":\"" . $this->db->sql_escape($hand_id_like) . "\"%' ESCAPE '\\\\'
+				)
+			ORDER BY id DESC
+			LIMIT 1
+			FOR UPDATE";
+		$result = $this->db->sql_query($sql);
+		$row = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+		if (!is_array($row))
+		{
+			return [];
+		}
+
+		return [
+			'id' => (int) $row['id'],
+			'game_type' => (string) $row['game_type'],
+			'state_version' => (int) $row['state_version'],
+		];
+	}
+
+	protected function transition_session_id_from_payloads(array ...$payloads): int
+	{
+		$session_id = 0;
+		foreach ($payloads as $payload)
+		{
+			$payload_session_id = $this->transition_payload_session_id($payload);
+			if ($payload_session_id <= 0)
+			{
+				continue;
+			}
+			if ($session_id > 0 && $payload_session_id !== $session_id)
+			{
+				throw new \InvalidArgumentException('session_id_mismatch');
+			}
+			$session_id = $payload_session_id;
+		}
+		if ($session_id <= 0)
+		{
+			throw new \InvalidArgumentException('missing_session_id');
+		}
+
+		return $session_id;
+	}
+
+	protected function transition_payload_session_id(array $payload): int
+	{
+		$session_id = 0;
+		foreach (['sessionId', 'session_id'] as $key)
+		{
+			if (!array_key_exists($key, $payload))
+			{
+				continue;
+			}
+			$value = (int) $payload[$key];
+			if ($value <= 0)
+			{
+				continue;
+			}
+			if ($session_id > 0 && $value !== $session_id)
+			{
+				throw new \InvalidArgumentException('session_id_mismatch');
+			}
+			$session_id = $value;
+		}
+
+		return $session_id;
+	}
+
+	protected function replace_transition_session_id(array &$payload, int $session_id): void
+	{
+		$payload_session_id = $this->transition_payload_session_id($payload);
+		if ($payload_session_id > 0 && $payload_session_id !== $session_id)
+		{
+			throw new \InvalidArgumentException('session_id_mismatch');
+		}
+
+		$payload['sessionId'] = $session_id;
+		$payload['session_id'] = $session_id;
+	}
+
+	protected function transition_game_type(array ...$payloads): string
+	{
+		$game_type = '';
+		foreach ($payloads as $payload)
+		{
+			$value = $this->transition_payload_game_type($payload);
+			if ($value === '')
+			{
+				continue;
+			}
+			if ($game_type !== '' && $value !== $game_type)
+			{
+				throw new \InvalidArgumentException('game_type_mismatch');
+			}
+			$game_type = $value;
+		}
+		if ($game_type === '')
+		{
+			throw new \InvalidArgumentException('missing_game_type');
+		}
+
+		return $game_type;
+	}
+
+	protected function transition_payload_game_type(array $payload): string
+	{
+		$game_type = '';
+		foreach (['gameType', 'game_type'] as $key)
+		{
+			if (!array_key_exists($key, $payload))
+			{
+				continue;
+			}
+			$value = substr(trim((string) $payload[$key]), 0, 32);
+			if ($value === '')
+			{
+				continue;
+			}
+			if ($game_type !== '' && $value !== $game_type)
+			{
+				throw new \InvalidArgumentException('game_type_mismatch');
+			}
+			$game_type = $value;
+		}
+
+		return $game_type;
+	}
+
+	protected function transition_hand_id(array $session, array $snapshot): string
+	{
+		$random_audit = $session['randomAudit'] ?? $session['random_audit_json'] ?? null;
+		if (is_string($random_audit))
+		{
+			$random_audit = $this->decode_json_field($random_audit, []);
+		}
+		if (is_array($random_audit))
+		{
+			$hand_id = trim((string) ($random_audit['handId'] ?? $random_audit['hand_id'] ?? ''));
+			if ($hand_id !== '')
+			{
+				return substr($hand_id, 0, 64);
+			}
+		}
+
+		return substr(trim((string) ($snapshot['handId'] ?? $snapshot['hand_id'] ?? '')), 0, 64);
+	}
+
+	protected function transition_seq(array $session, array $event, array $snapshot): int
+	{
+		$event_seq = $this->nullable_int_value($event, 'seq', 'seq');
+		$snapshot_seq = $this->nullable_int_value($snapshot, 'seq', 'seq');
+		if ($event_seq > 0 && $snapshot_seq > 0 && $event_seq !== $snapshot_seq)
+		{
+			throw new \InvalidArgumentException('seq_mismatch');
+		}
+
+		$seq = max($event_seq, $snapshot_seq);
+		return $seq > 0 ? $seq : max(1, ((int) ($session['state_version'] ?? 0)) + 1);
+	}
+
+	protected function game_event_row(array $event, int $session_id, int $seq, string $game_type): array
+	{
+		return [
+			'session_id' => $session_id,
+			'seq' => $seq,
+			'game_type' => $game_type,
+			'actor_user_id' => $this->nullable_int_value($event, 'actorUserId', 'actor_user_id'),
+			'request_id' => $this->nullable_string_value($event, 'requestId', 'request_id', 64),
+			'event_type' => $this->required_string($event, 'eventType', 'event_type', 64),
+			'payload_schema_version' => $this->int_value($event, 'payloadSchemaVersion', 'payload_schema_version', 1),
+			'payload_json' => $this->json_value($event, 'payload', 'payload_json', new \stdClass()),
+			'created_at' => $this->time_value($event, 'createdAt', 'created_at', time()),
+		];
+	}
+
+	protected function game_snapshot_row(array $snapshot, int $session_id, int $seq, string $game_type): array
+	{
+		return [
+			'session_id' => $session_id,
+			'seq' => $seq,
+			'game_type' => $game_type,
+			'state_schema_version' => $this->int_value($snapshot, 'stateSchemaVersion', 'state_schema_version', 1),
+			'state_json' => $this->json_value($snapshot, 'state', 'state_json', new \stdClass()),
+			'created_at' => $this->time_value($snapshot, 'createdAt', 'created_at', time()),
+		];
+	}
+
+	protected function update_transition_session(int $session_id, array $session, array $snapshot, int $seq, int $current_state_version, int $now): void
+	{
+		$updates = [];
+		$this->copy_string_update($updates, $session, 'roomKey', 'room_key', 64);
+		$this->copy_string_update($updates, $session, 'gameType', 'game_type', 32);
+		$this->copy_string_update($updates, $session, 'status', 'status', 32);
+		$this->copy_nullable_int_update($updates, $session, 'ownerUserId', 'owner_user_id');
+		$this->copy_json_update($updates, $session, 'settings', 'settings_json');
+		$this->copy_int_update($updates, $session, 'stateSchemaVersion', 'state_schema_version');
+		$this->copy_nullable_json_update($updates, $session, 'randomAudit', 'random_audit_json');
+		$this->copy_nullable_time_update($updates, $session, 'startedAt', 'started_at');
+		$this->copy_nullable_time_update($updates, $session, 'finishedAt', 'finished_at');
+
+		if (!isset($updates['state_schema_version']))
+		{
+			$updates['state_schema_version'] = $this->int_value($snapshot, 'stateSchemaVersion', 'state_schema_version', 1);
+		}
+		$updates['state_version'] = max($current_state_version, $seq, $this->int_value($session, 'stateVersion', 'state_version', $seq));
+		$updates['updated_at'] = $this->time_value($session, 'updatedAt', 'updated_at', $now);
+
+		$this->db->sql_query('UPDATE ' . $this->sessions_table . '
+			SET ' . $this->db->sql_build_array('UPDATE', $updates) . '
+			WHERE id = ' . $session_id);
+	}
+
+	protected function upsert_finished_summary(array $summary, int $session_id, string $game_type, int $now): int
+	{
+		$row = [
+			'session_id' => $session_id,
+			'game_type' => $game_type,
+			'room_key' => $this->required_string($summary, 'roomKey', 'room_key', 64),
+			'winner_json' => $this->json_value($summary, 'winner', 'winner_json', new \stdClass()),
+			'score_json' => $this->json_value($summary, 'score', 'score_json', new \stdClass()),
+			'summary_json' => $this->json_value($summary, 'summary', 'summary_json', new \stdClass()),
+			'finished_at' => $this->time_value($summary, 'finishedAt', 'finished_at', $now),
+		];
+
+		return $this->upsert_row($this->finished_summaries_table, ['session_id' => $session_id], $row);
+	}
+
+	protected function sql_like_escape(string $value): string
+	{
+		return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+	}
+
 	protected function player_settings_payload(string $game_type, int $user_id): array
 	{
 		$sql = 'SELECT settings_json, updated_at
@@ -2116,6 +2520,32 @@ class server
 		}
 
 		return empty($data) || array_keys($data) !== range(0, count($data) - 1) ? $data : null;
+	}
+
+	protected function required_object(array $data, string $camel_key, string $snake_key): array
+	{
+		$value = $data[$camel_key] ?? $data[$snake_key] ?? null;
+		if (!is_array($value) || (!empty($value) && array_keys($value) === range(0, count($value) - 1)))
+		{
+			throw new \InvalidArgumentException('missing_' . $snake_key);
+		}
+
+		return $value;
+	}
+
+	protected function optional_object(array $data, string $camel_key, string $snake_key): ?array
+	{
+		$value = $data[$camel_key] ?? $data[$snake_key] ?? null;
+		if ($value === null)
+		{
+			return null;
+		}
+		if (!is_array($value) || (!empty($value) && array_keys($value) === range(0, count($value) - 1)))
+		{
+			throw new \InvalidArgumentException('invalid_' . $snake_key);
+		}
+
+		return $value;
 	}
 
 	protected function decode_body(string $body)
