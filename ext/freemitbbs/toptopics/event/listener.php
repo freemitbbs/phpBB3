@@ -13,6 +13,8 @@ class listener implements EventSubscriberInterface
 	private const INDEX_CATEGORY_FORUM_CANDIDATE_MULTIPLIER = 2;
 	private const DEFAULT_CANDIDATE_POOL_LIMIT = 2000;
 	private const DEFAULT_POST_COLLAPSE_DISLIKE_THRESHOLD = 5;
+	private const DUPLICATE_POST_WINDOW_SECONDS = 5;
+	private const DUPLICATE_POST_LOCK_TIMEOUT_SECONDS = 10;
 	private const REPUTATION_TIER_STEADY = 100;
 	private const REPUTATION_TIER_TRUSTED = 500;
 	private const REPUTATION_TIER_ELITE = 2000;
@@ -59,6 +61,7 @@ class listener implements EventSubscriberInterface
 	protected ?array $index_recenttopics_topic_id_map = null;
 	protected ?array $index_forum_viewership_order = null;
 	protected ?array $foe_user_id_map = null;
+	protected ?string $duplicate_post_lock_name = null;
 
 	public function __construct(
 		\phpbb\auth\auth $auth,
@@ -144,6 +147,7 @@ class listener implements EventSubscriberInterface
 			'core.report_post_auth' => 'report_post_auth',
 			'core.index_modify_page_title' => 'index_page_summary',
 			'core.viewforum_modify_page_title' => 'forum_page_summary',
+			'core.posting_modify_submit_post_before' => 'guard_duplicate_post_before',
 			'core.submit_post_end' => 'submit_post_end',
 			'core.set_post_visibility_after' => 'post_visibility_after',
 			'core.set_topic_visibility_after' => 'topic_visibility_after',
@@ -865,12 +869,175 @@ class listener implements EventSubscriberInterface
 
 	public function submit_post_end($event): void
 	{
+		$this->release_duplicate_post_lock();
+
 		$data = $event['data'] ?? [];
 		$post_id = (int) ($data['post_id'] ?? 0);
 		if ($post_id > 0)
 		{
 			$this->reputation->sync_post($post_id);
 		}
+	}
+
+	public function guard_duplicate_post_before($event): void
+	{
+		$mode = (string) ($event['mode'] ?? '');
+		if (!in_array($mode, ['post', 'reply', 'quote'], true))
+		{
+			return;
+		}
+
+		$data = $event['data'] ?? [];
+		$message_md5 = (string) ($data['message_md5'] ?? '');
+		$forum_id = (int) ($data['forum_id'] ?? 0);
+		if ($message_md5 === '' || $forum_id <= 0)
+		{
+			return;
+		}
+
+		$topic_id = (int) ($data['topic_id'] ?? 0);
+		if ($mode !== 'post' && $topic_id <= 0)
+		{
+			return;
+		}
+
+		$post_data = $event['post_data'] ?? [];
+		$subject = (string) ($post_data['post_subject'] ?? $data['topic_title'] ?? '');
+		$post_author_name = (string) ($event['post_author_name'] ?? '');
+		$duplicate_since = time() - self::DUPLICATE_POST_WINDOW_SECONDS;
+
+		$this->acquire_duplicate_post_lock($this->duplicate_post_fingerprint($mode, $forum_id, $topic_id, $message_md5, $subject, $post_author_name));
+
+		$duplicate = $this->find_recent_duplicate_post($mode, $forum_id, $topic_id, $message_md5, $subject, $post_author_name, $duplicate_since);
+		if (empty($duplicate))
+		{
+			return;
+		}
+
+		$this->release_duplicate_post_lock();
+		redirect($this->duplicate_post_url((int) $duplicate['post_id'], (int) $duplicate['topic_id']));
+	}
+
+	protected function find_recent_duplicate_post(string $mode, int $forum_id, int $topic_id, string $message_md5, string $subject, string $post_author_name, int $duplicate_since): array
+	{
+		$poster_id = (int) $this->user->data['user_id'];
+		$where = [
+			'p.poster_id = ' . $poster_id,
+			'p.forum_id = ' . $forum_id,
+			"p.post_checksum = '" . $this->db->sql_escape($message_md5) . "'",
+			'p.post_time >= ' . $duplicate_since,
+			'p.post_visibility <> ' . ITEM_DELETED,
+		];
+
+		if ($poster_id === ANONYMOUS)
+		{
+			$where[] = "p.poster_ip = '" . $this->db->sql_escape((string) $this->user->ip) . "'";
+			if ($post_author_name !== '')
+			{
+				$where[] = "p.post_username = '" . $this->db->sql_escape($post_author_name) . "'";
+			}
+		}
+
+		if ($mode === 'post')
+		{
+			$from_sql = POSTS_TABLE . ' p
+				INNER JOIN ' . TOPICS_TABLE . ' t
+					ON t.topic_id = p.topic_id
+						AND t.topic_first_post_id = p.post_id
+						AND t.topic_moved_id = 0';
+			$where[] = "p.post_subject = '" . $this->db->sql_escape($subject) . "'";
+		}
+		else
+		{
+			$from_sql = POSTS_TABLE . ' p';
+			$where[] = 'p.topic_id = ' . $topic_id;
+		}
+
+		$sql = 'SELECT p.post_id, p.topic_id
+			FROM ' . $from_sql . '
+			WHERE ' . implode('
+				AND ', $where) . '
+			ORDER BY p.post_time DESC, p.post_id DESC';
+		$result = $this->db->sql_query_limit($sql, 1);
+		$row = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+
+		return is_array($row) ? $row : [];
+	}
+
+	protected function acquire_duplicate_post_lock(string $fingerprint): void
+	{
+		if (!$this->supports_duplicate_post_lock())
+		{
+			return;
+		}
+
+		$lock_name = 'freemitbbs_post_' . substr(hash('sha256', $fingerprint), 0, 48);
+		$sql = "SELECT GET_LOCK('" . $this->db->sql_escape($lock_name) . "', " . self::DUPLICATE_POST_LOCK_TIMEOUT_SECONDS . ') AS lock_acquired';
+		$result = $this->db->sql_query($sql);
+		$acquired = (int) $this->db->sql_fetchfield('lock_acquired');
+		$this->db->sql_freeresult($result);
+
+		if ($acquired === 1)
+		{
+			$this->duplicate_post_lock_name = $lock_name;
+		}
+	}
+
+	protected function release_duplicate_post_lock(): void
+	{
+		if ($this->duplicate_post_lock_name === null || !$this->supports_duplicate_post_lock())
+		{
+			$this->duplicate_post_lock_name = null;
+			return;
+		}
+
+		$lock_name = $this->duplicate_post_lock_name;
+		$this->duplicate_post_lock_name = null;
+
+		$sql = "SELECT RELEASE_LOCK('" . $this->db->sql_escape($lock_name) . "')";
+		$result = $this->db->sql_query($sql);
+		$this->db->sql_freeresult($result);
+	}
+
+	protected function supports_duplicate_post_lock(): bool
+	{
+		$sql_layer = $this->db->get_sql_layer();
+
+		return $sql_layer === 'mysqli' || strpos($sql_layer, 'mysql') === 0;
+	}
+
+	protected function duplicate_post_fingerprint(string $mode, int $forum_id, int $topic_id, string $message_md5, string $subject, string $post_author_name): string
+	{
+		$actor = (int) $this->user->data['user_id'];
+		if ($actor === ANONYMOUS)
+		{
+			$actor = 'guest:' . (string) $this->user->ip . ':' . $post_author_name;
+		}
+
+		return implode('|', [
+			$mode,
+			$forum_id,
+			$topic_id,
+			$message_md5,
+			$subject,
+			$actor,
+		]);
+	}
+
+	protected function duplicate_post_url(int $post_id, int $topic_id): string
+	{
+		if ($post_id > 0)
+		{
+			return append_sid($this->root_path . 'viewtopic.' . $this->php_ext, 'p=' . $post_id) . '#p' . $post_id;
+		}
+
+		if ($topic_id > 0)
+		{
+			return append_sid($this->root_path . 'viewtopic.' . $this->php_ext, 't=' . $topic_id);
+		}
+
+		return append_sid($this->root_path . 'index.' . $this->php_ext);
 	}
 
 	public function clean_posts_after($event)

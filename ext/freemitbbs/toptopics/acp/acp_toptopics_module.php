@@ -25,6 +25,13 @@ class acp_toptopics_module
 	private const REPUTATION_SETTINGS = [
 		['key' => 'toptopics_min_reputation_dislike', 'type' => 'int', 'default' => 10, 'min' => 0, 'max' => 1000000],
 		['key' => 'toptopics_min_reputation_report', 'type' => 'int', 'default' => 50, 'min' => 0, 'max' => 1000000],
+		['key' => 'toptopics_reputation_dislike_weight', 'type' => 'float', 'default' => 0.35, 'min' => 0.0, 'max' => 1.0],
+	];
+
+	private const REPUTATION_MATERIALIZED_SETTINGS = [
+		'toptopics_content_weight',
+		'toptopics_reaction_weight',
+		'toptopics_reputation_dislike_weight',
 	];
 
 	private const RANKING_SETTINGS = [
@@ -85,10 +92,15 @@ class acp_toptopics_module
 			}
 
 			$submitted = $request->variable('toptopics', ['' => ''], true);
+			$old_values = [];
+			$new_values = [];
 			foreach ($this->get_all_settings() as $setting)
 			{
-				$value = $submitted[$setting['key']] ?? (isset($config[$setting['key']]) ? (string) $config[$setting['key']] : (string) $setting['default']);
-				$config->set($setting['key'], $this->normalize_value((string) $value, $setting));
+				$key = $setting['key'];
+				$old_values[$key] = isset($config[$key]) ? (string) $config[$key] : null;
+				$value = $submitted[$key] ?? (isset($config[$key]) ? (string) $config[$key] : (string) $setting['default']);
+				$new_values[$key] = $this->normalize_value((string) $value, $setting);
+				$config->set($key, $new_values[$key]);
 			}
 
 			$min_dislike = isset($config['toptopics_min_reputation_dislike']) ? (int) $config['toptopics_min_reputation_dislike'] : 0;
@@ -103,6 +115,13 @@ class acp_toptopics_module
 				/** @var \freemitbbs\toptopics\service\ranker $ranker */
 				$ranker = $phpbb_container->get('freemitbbs.toptopics.ranker');
 				$ranker->invalidate_all();
+			}
+
+			if ($this->reputation_materialization_settings_changed($old_values, $new_values) && $phpbb_container->has('freemitbbs.toptopics.reputation'))
+			{
+				/** @var \freemitbbs\toptopics\service\reputation $reputation */
+				$reputation = $phpbb_container->get('freemitbbs.toptopics.reputation');
+				$reputation->invalidate_all();
 			}
 
 			trigger_error($language->lang('CONFIG_UPDATED') . adm_back_link($this->u_action));
@@ -176,6 +195,24 @@ class acp_toptopics_module
 		}
 
 		return $this->format_float($normalized);
+	}
+
+	protected function reputation_materialization_settings_changed(array $old_values, array $new_values): bool
+	{
+		foreach (self::REPUTATION_MATERIALIZED_SETTINGS as $key)
+		{
+			if (!array_key_exists($key, $new_values))
+			{
+				continue;
+			}
+
+			if (($old_values[$key] ?? null) !== $new_values[$key])
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	protected function normalize_forum_id_list(string $value): string

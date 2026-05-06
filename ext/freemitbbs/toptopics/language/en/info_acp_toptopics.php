@@ -49,6 +49,8 @@ $lang = array_merge($lang, [
 	'TOPTOPICS_MIN_REPUTATION_DISLIKE_EXPLAIN' => 'Users need at least this reputation score before the dislike action is allowed. Use 0 to disable reputation gating for dislikes.',
 	'TOPTOPICS_MIN_REPUTATION_REPORT' => 'Minimum reputation to report',
 	'TOPTOPICS_MIN_REPUTATION_REPORT_EXPLAIN' => 'Users need at least this reputation score before the report action is allowed. Keep this greater than or equal to the dislike threshold. Use 0 to disable reputation gating for reports.',
+	'TOPTOPICS_REPUTATION_DISLIKE_WEIGHT' => 'Dislike reputation penalty weight',
+	'TOPTOPICS_REPUTATION_DISLIKE_WEIGHT_EXPLAIN' => 'How much one dislike subtracts from reputation feedback compared with one like. Lower values keep controversial but active contributors from losing reputation too quickly; reports still use the stronger report penalty.',
 
 	'TOPTOPICS_LOOKBACK_DAYS' => 'Candidate lookback window',
 	'TOPTOPICS_LOOKBACK_DAYS_EXPLAIN' => 'Only topics newer than this many days are considered for ranking.',

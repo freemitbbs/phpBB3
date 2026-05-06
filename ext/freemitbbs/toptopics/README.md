@@ -47,7 +47,7 @@ base_content_score =
 
 direct_feedback_signal =
     likes_received
-  - dislikes_received
+  - dislikes_received * toptopics_reputation_dislike_weight
   + ln(1 + reactions_received) * toptopics_reaction_weight
 
 direct_feedback_score =
@@ -61,12 +61,13 @@ reputation =
   - flag_penalty
 ```
 
-The signed logarithm preserves direction: positive direct feedback raises reputation and negative direct feedback lowers it, while repeated feedback has diminishing returns. Open reports remain a stronger direct penalty.
+The signed logarithm preserves direction: positive direct feedback raises reputation and negative direct feedback lowers it, while repeated feedback has diminishing returns. Dislikes are weighted below likes by default so controversy does not erase active contribution too quickly. Open reports remain a stronger direct penalty.
 
-The ranking weights reused here are:
+The configuration weights used here are:
 
 - `toptopics_content_weight`
 - `toptopics_reaction_weight`
+- `toptopics_reputation_dislike_weight`
 
 ### Sidebar reputation badges
 
@@ -122,7 +123,7 @@ The extension refreshes affected authors when reputation inputs change:
 
 Page reads only fetch the stored score. If a user has no row yet, the extension initializes it once on demand.
 
-`release_1_1_11` changes the reputation formula and clears `toptopics_user_reputation` so old materialized scores are not reused. `release_1_1_12` changes the interpretation of `content_length_total` from raw length to quality length and clears the same materialized table again. `release_1_1_13` creates `toptopics_post_quality`, backfills existing posts in batches, and clears materialized reputation so future scores are rebuilt from the incremental per-post aggregate. `release_1_1_24` switches reputation to the topic/reply contribution model and clears materialized reputation again. `release_1_1_25` switches reputation to direct post feedback and clears materialized reputation again.
+`release_1_1_11` changes the reputation formula and clears `toptopics_user_reputation` so old materialized scores are not reused. `release_1_1_12` changes the interpretation of `content_length_total` from raw length to quality length and clears the same materialized table again. `release_1_1_13` creates `toptopics_post_quality`, backfills existing posts in batches, and clears materialized reputation so future scores are rebuilt from the incremental per-post aggregate. `release_1_1_24` switches reputation to the topic/reply contribution model and clears materialized reputation again. `release_1_1_25` switches reputation to direct post feedback and clears materialized reputation again. `release_1_1_26` adds the fractional dislike reputation penalty and clears materialized reputation again.
 
 ## Core formula
 
@@ -247,9 +248,9 @@ views == 0
 
 In practice, normal phpBB topics usually have at least some views, so the main filters that matter operationally are the lookback window, visibility rules, and hide thresholds.
 
-## Ranking settings that matter most
+## Ranking and gating settings that matter most
 
-These settings have the largest effect on ranking behavior:
+These settings have the largest effect on ranking, visibility, and negative-action behavior:
 
 - `toptopics_content_weight`: how strongly opening-post quality helps before decay
 - `toptopics_reply_weight`: how strongly replies help before decay
@@ -257,6 +258,7 @@ These settings have the largest effect on ranking behavior:
 - `toptopics_reaction_weight`: how strongly general post reactions help before decay. The ranker uses a default of `0.3` if this config value is absent.
 - `toptopics_min_reputation_dislike`: minimum user reputation required to cast a dislike
 - `toptopics_min_reputation_report`: minimum user reputation required to report a post
+- `toptopics_reputation_dislike_weight`: how much one dislike subtracts from reputation feedback compared with one like. The default `0.35` treats dislikes as weaker controversy signals.
 - `toptopics_manual_boost_multiplier`: how strongly an admin boost lifts a topic
 - `toptopics_manual_demote_multiplier`: how strongly an admin demotion pushes a topic down
 - `toptopics_age_offset_hours`: how much recency is softened

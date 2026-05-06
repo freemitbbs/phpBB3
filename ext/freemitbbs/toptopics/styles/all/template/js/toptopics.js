@@ -259,6 +259,86 @@
 		}
 	}
 
+	function isPostingForm(form) {
+		return form && (form.id === 'postform' || form.id === 'qr_postform');
+	}
+
+	function isPostSubmitter(submitter, form) {
+		if (!submitter) {
+			return $(form).find('input[type="submit"][name="post"], button[type="submit"][name="post"]').length > 0;
+		}
+
+		return submitter.name === 'post';
+	}
+
+	function preserveSubmitter(form, submitter) {
+		var hidden;
+		var value;
+
+		if (form.querySelector('input[data-freemitbbs-post-submit="1"]')) {
+			return;
+		}
+
+		value = submitter && typeof submitter.value !== 'undefined' ? submitter.value : '1';
+		hidden = document.createElement('input');
+		hidden.type = 'hidden';
+		hidden.name = 'post';
+		hidden.value = value;
+		hidden.setAttribute('data-freemitbbs-post-submit', '1');
+		form.appendChild(hidden);
+	}
+
+	function disablePostSubmitters(form) {
+		$(form)
+			.find('input[type="submit"][name="post"], button[type="submit"][name="post"], .default-submit-action')
+			.prop('disabled', true)
+			.attr('aria-disabled', 'true');
+	}
+
+	function installPostSubmitGuard() {
+		document.addEventListener('click', function(event) {
+			var submitter = event.target.closest('input[type="submit"], button[type="submit"]');
+			var form;
+
+			if (!submitter) {
+				return;
+			}
+
+			form = submitter.form;
+			if (isPostingForm(form)) {
+				form.freemitbbsPostSubmitter = submitter;
+			}
+		}, true);
+
+		document.addEventListener('submit', function(event) {
+			var form = event.target;
+			var submitter;
+
+			if (event.defaultPrevented) {
+				return;
+			}
+
+			if (!isPostingForm(form)) {
+				return;
+			}
+
+			submitter = event.submitter || form.freemitbbsPostSubmitter || null;
+			if (!isPostSubmitter(submitter, form)) {
+				return;
+			}
+
+			if (form.getAttribute('data-freemitbbs-post-submitting') === '1') {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				return;
+			}
+
+			form.setAttribute('data-freemitbbs-post-submitting', '1');
+			preserveSubmitter(form, submitter);
+			disablePostSubmitters(form);
+		});
+	}
+
 	phpbb.addAjaxCallback('toggle_toptopics_dislike', function(data) {
 		if (!data || data.error) {
 			if (data && data.message && !data.MESSAGE_TITLE && typeof phpbb.alert === 'function') {
@@ -308,6 +388,7 @@
 
 		syncAllReactionButtons();
 		syncCategoryForumMenus();
+		installPostSubmitGuard();
 		$(window).on('resize', syncCategoryForumMenus);
 	});
 })(jQuery);

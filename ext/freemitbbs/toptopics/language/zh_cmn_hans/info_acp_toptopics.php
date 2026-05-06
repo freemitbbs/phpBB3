@@ -49,6 +49,8 @@ $lang = array_merge($lang, [
 	'TOPTOPICS_MIN_REPUTATION_DISLIKE_EXPLAIN' => '用户至少需要达到这个声望分数后才允许使用踩。填 0 表示关闭踩的声望门槛。',
 	'TOPTOPICS_MIN_REPUTATION_REPORT' => '允许举报的最低声望',
 	'TOPTOPICS_MIN_REPUTATION_REPORT_EXPLAIN' => '用户至少需要达到这个声望分数后才允许举报。建议保持高于或等于踩的门槛。填 0 表示关闭举报的声望门槛。',
+	'TOPTOPICS_REPUTATION_DISLIKE_WEIGHT' => '踩对声望的惩罚权重',
+	'TOPTOPICS_REPUTATION_DISLIKE_WEIGHT_EXPLAIN' => '一次踩在声望反馈中相当于多少个负向赞。较低的值可以避免有争议但活跃的贡献者过快失去声望；举报仍使用更强的惩罚。',
 
 	'TOPTOPICS_LOOKBACK_DAYS' => '候选话题回溯天数',
 	'TOPTOPICS_LOOKBACK_DAYS_EXPLAIN' => '只对最近这几天内创建的话题进行排名。',
