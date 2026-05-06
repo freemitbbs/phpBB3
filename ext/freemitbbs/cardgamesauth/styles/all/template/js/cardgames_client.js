@@ -1,10 +1,12 @@
 const state = {
   bootstrap: {},
+  initialized: false,
   token: "",
   user: null,
   ws: null,
   connected: false,
   authenticated: false,
+  connecting: false,
   requestSeq: 0,
   pending: new Map(),
   rooms: [],
@@ -146,6 +148,19 @@ els.chatInput.addEventListener("input", () => {
 els.emojiTarget.addEventListener("change", () => {
   state.emojiTarget = els.emojiTarget.value;
 });
+window.addEventListener("pagehide", () => {
+  disconnect();
+});
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted || !isSocketOpen()) {
+    void reconnectAfterRestore();
+  }
+});
+window.addEventListener("online", () => {
+  if (!isSocketOpen()) {
+    void reconnectAfterRestore();
+  }
+});
 
 void init();
 
@@ -155,6 +170,7 @@ async function init() {
   state.assetBaseUrl = normalizeBaseUrl(state.bootstrap.assetBaseUrl || defaultAssetBaseUrl());
   state.audioBaseUrl = normalizeBaseUrl(state.bootstrap.audioBaseUrl || defaultAudioBaseUrl());
   state.cardStyle = state.bootstrap.cardStyle || "cardsclassic";
+  state.initialized = true;
   render();
   if (state.bootstrap.autoConnect !== false) {
     void connect();
@@ -189,11 +205,18 @@ async function loadBootstrap() {
 }
 
 async function connect() {
+  if (state.connecting) {
+    return;
+  }
+
   disconnect();
+  state.connecting = true;
   setStatus("正在连接");
 
   try {
-    if (!state.token) {
+    if (state.bootstrap.tokenUrl && state.bootstrap.tokenHash) {
+      state.token = await fetchToken();
+    } else if (!state.token) {
       state.token = await fetchToken();
     }
     const wsUrl = state.bootstrap.wsUrl || defaultWsUrl();
@@ -201,35 +224,74 @@ async function connect() {
     state.ws = ws;
 
     ws.addEventListener("open", () => {
+      if (state.ws !== ws) {
+        return;
+      }
       state.connected = true;
+      state.connecting = false;
       render();
       void authenticate();
     });
     ws.addEventListener("message", (event) => {
+      if (state.ws !== ws) {
+        return;
+      }
       handleMessage(event.data);
     });
     ws.addEventListener("close", () => {
+      if (state.ws !== ws) {
+        return;
+      }
+      state.ws = null;
       state.connected = false;
       state.authenticated = false;
-      state.pending.forEach((pending) => pending.reject(new Error("连接已断开")));
-      state.pending.clear();
+      state.connecting = false;
+      rejectPending("连接已断开");
       render();
     });
     ws.addEventListener("error", () => {
+      if (state.ws !== ws) {
+        return;
+      }
+      state.connecting = false;
       setStatus("连接出错");
     });
   } catch (error) {
+    state.connecting = false;
     setStatus(error.message || "连接失败");
   }
 }
 
 function disconnect() {
+  const ws = state.ws;
   if (state.ws && state.ws.readyState < WebSocket.CLOSING) {
     state.ws.close();
   }
   state.ws = null;
   state.connected = false;
   state.authenticated = false;
+  state.connecting = false;
+  if (ws) {
+    rejectPending("连接已断开");
+  } else {
+    state.pending.clear();
+  }
+}
+
+async function reconnectAfterRestore() {
+  if (!state.initialized || state.bootstrap.autoConnect === false || state.connecting || isSocketOpen()) {
+    return;
+  }
+
+  await connect();
+}
+
+function isSocketOpen() {
+  return state.ws?.readyState === WebSocket.OPEN;
+}
+
+function rejectPending(message) {
+  state.pending.forEach((pending) => pending.reject(new Error(message)));
   state.pending.clear();
 }
 
@@ -322,7 +384,11 @@ async function refreshTable(roomKey) {
 
 function sendCommand(type, options) {
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
-    return Promise.reject(new Error("连接尚未打开"));
+    state.connected = false;
+    state.authenticated = false;
+    render();
+    void reconnectAfterRestore();
+    return Promise.reject(new Error("连接已断开，正在重连"));
   }
 
   const requestId = `web-${Date.now()}-${++state.requestSeq}`;
@@ -582,6 +648,7 @@ function seatHtml(table, seat) {
   const occupied = Boolean(user);
   const isViewerSeat = table.viewer.seatIndex === seat.seatIndex;
   const isOwner = table.room.owner?.userId && user?.userId === table.room.owner.userId;
+  const visualSeatIndex = visualSeatIndexFor(table, seat.seatIndex);
   const meta = occupied
     ? `${seat.connected ? "在线" : "离线"} · ${seat.ready ? "已准备" : "未准备"}${isOwner ? " · 房主" : ""}`
     : "空位";
@@ -591,13 +658,33 @@ function seatHtml(table, seat) {
     : `<img class="seat-skin" src="${escapeAttribute(skinUrlForSeat(user, seat.seatIndex))}" alt="" loading="lazy" />`;
 
   return `
-    <div class="seat seat-${seat.seatIndex} ${seat.connected ? "" : "seat-offline"}" data-seat-index="${seat.seatIndex}">
+    <div class="seat seat-${visualSeatIndex} ${isViewerSeat ? "seat-viewer" : ""} ${seat.connected ? "" : "seat-offline"}" data-seat-index="${seat.seatIndex}">
       ${avatar}
       <div class="seat-name">${occupied ? escapeHtml(user.displayName) : seatLabel(seat.seatIndex)}</div>
       <div class="seat-meta">${escapeHtml(meta)}</div>
       <div class="seat-actions">${actions}</div>
     </div>
   `;
+}
+
+function visualSeatIndexFor(table, seatIndex) {
+  const perspectiveSeatIndex = tablePerspectiveSeatIndex(table);
+  const seatCount = Math.max(1, table.room.seats.length || table.room.seatCount || 4);
+  return modulo(Number(seatIndex) - perspectiveSeatIndex, seatCount);
+}
+
+function tablePerspectiveSeatIndex(table) {
+  if (Number.isInteger(table.viewer?.seatIndex)) {
+    return table.viewer.seatIndex;
+  }
+  if (Number.isInteger(table.viewer?.watchedSeatIndex)) {
+    return table.viewer.watchedSeatIndex;
+  }
+  return 0;
+}
+
+function modulo(value, divisor) {
+  return ((value % divisor) + divisor) % divisor;
 }
 
 function seatActionsHtml(table, seat, isViewerSeat) {
@@ -680,7 +767,6 @@ function handHtml(table) {
     <button class="hand-card" data-card-index="${index}" aria-pressed="${selected.has(index) ? "true" : "false"}" type="button">
       ${cardFaceHtml(card, "hand-card-face")}
       <span class="hand-card-label">${escapeHtml(cardLabelText(card))}</span>
-      ${card.points ? `<small>${card.points}</small>` : ""}
     </button>
   `).join("");
 

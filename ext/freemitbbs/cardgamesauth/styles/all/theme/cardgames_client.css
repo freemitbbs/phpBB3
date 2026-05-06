@@ -387,38 +387,36 @@
 
 .app-shell .hand-panel {
   --hand-gap: 6px;
+  --hand-lift: 12px;
   --hand-columns: 13;
   --hand-card-width: min(74px, calc((100vw - 54px - (var(--hand-columns) - 1) * var(--hand-gap)) / var(--hand-columns)));
   display: grid;
   grid-template-columns: repeat(var(--hand-columns), minmax(0, var(--hand-card-width)));
-  grid-auto-rows: auto;
+  grid-auto-rows: calc(var(--hand-card-width) * 1.42 + var(--hand-lift) + 8px);
   justify-content: center;
   align-items: start;
   gap: var(--hand-gap);
   overflow: visible;
-  padding-bottom: 22px;
+  padding-bottom: 0;
 }
 
 .app-shell .hand-card {
   width: var(--hand-card-width);
   min-width: 0;
-  min-height: calc(var(--hand-card-width) * 1.42 + 16px);
+  height: calc(var(--hand-card-width) * 1.42 + var(--hand-lift) + 8px);
+  min-height: 0;
   display: grid;
   align-content: start;
-  gap: 3px;
+  gap: 0;
   background: #fffdfa;
   padding: 4px;
-  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+  overflow: hidden;
+  transition: box-shadow 120ms ease, border-color 120ms ease;
 }
 
 .app-shell .hand-card[aria-pressed="true"] {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 2px rgba(165, 38, 45, 0.25);
-  transform: translateY(-12px);
-}
-
-.app-shell .hand-card small {
-  color: var(--accent);
 }
 
 .app-shell .card-face {
@@ -431,6 +429,12 @@
 .app-shell .hand-card-face {
   aspect-ratio: 5 / 7;
   object-fit: contain;
+  transform: translateY(var(--hand-lift));
+  transition: transform 120ms ease;
+}
+
+.app-shell .hand-card[aria-pressed="true"] .hand-card-face {
+  transform: translateY(0);
 }
 
 .app-shell .hand-card-label {
@@ -671,7 +675,7 @@
     grid-row: auto;
   }
 
-  .app-shell .hand-card {
-    min-height: calc(var(--hand-card-width) * 1.42 + 14px);
+  .app-shell .hand-panel {
+    --hand-lift: 10px;
   }
 }
