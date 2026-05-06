@@ -711,11 +711,14 @@ function handleTableAction(type, seatValue) {
   } else if (type === "tractor.makeTrump") {
     const payload = inferTrumpPayload(selectedHandCards(), state.table);
     if (payload) {
+      setStatus("正在亮主...");
       void sendEngineCommand("tractor.makeTrump", roomKey, payload);
     }
   } else if (type === "tractor.discardBottom") {
+    setStatus("正在埋牌...");
     void sendEngineCommand("tractor.discardBottom", roomKey, { cards: selectedHandCards().map((card) => card.id) });
   } else if (type === "tractor.playCards") {
+    setStatus("正在出牌...");
     void sendEngineCommand("tractor.playCards", roomKey, { cards: selectedHandCards().map((card) => card.id) });
   }
 }
@@ -728,10 +731,35 @@ async function sendEngineCommand(type, roomKey, payload) {
       state.table = response.payload.table;
       syncSelectedHandIndexes();
       render();
+      setStatus(engineCommandStatus(type, state.table));
+    } else {
+      await refreshTable(roomKey);
+      setStatus("牌桌已更新");
     }
   } catch (error) {
     reportError(error);
   }
+}
+
+function engineCommandStatus(commandType, table) {
+  const nextSeatIndex = table?.engine?.public?.currentTrick?.nextSeatIndex;
+  const isViewerTurn = nextSeatIndex !== undefined && table?.viewer?.seatIndex === nextSeatIndex;
+
+  if (commandType === "tractor.makeTrump" && table?.phase === "burying_bottom") {
+    const discardAction = action(table, "tractor.discardBottom");
+    return discardAction.enabled ? "亮主成功，请选择 8 张牌埋牌" : "亮主成功，等待埋牌";
+  }
+  if (commandType === "tractor.discardBottom" && table?.phase === "playing") {
+    return isViewerTurn ? "埋牌完成，请选择要出的牌" : `埋牌完成，等待${seatLabel(nextSeatIndex)}出牌`;
+  }
+  if (commandType === "tractor.playCards" && table?.phase === "playing") {
+    return isViewerTurn ? "请继续出牌" : `等待${seatLabel(nextSeatIndex)}出牌`;
+  }
+  if (table?.phase === "finished") {
+    return "本局结束";
+  }
+
+  return "牌桌已更新";
 }
 
 function toggleCardSelection(index) {
