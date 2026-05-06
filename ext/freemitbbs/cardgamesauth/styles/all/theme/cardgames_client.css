@@ -499,7 +499,7 @@
   position: absolute;
   inset: 0;
   display: none;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr;
   align-items: center;
   border: 1px solid var(--line);
   border-radius: 5px;
@@ -525,21 +525,19 @@
 
 .app-shell .card-symbol-main {
   justify-self: center;
-  font-size: 24px;
+  font-size: 18px;
 }
 
-.app-shell .card-symbol-corner {
-  justify-self: end;
-  font-size: 10px;
-}
-
-.app-shell .played-card .card-symbol-rank,
-.app-shell .played-card .card-symbol-corner {
+.app-shell .played-card .card-symbol-rank {
   font-size: 9px;
 }
 
 .app-shell .played-card .card-symbol-main {
-  font-size: 18px;
+  font-size: 14px;
+}
+
+.app-shell .card-face-joker .card-symbol-main {
+  font-size: 11px;
 }
 
 .app-shell .card-face-no-image .card-face-symbol,

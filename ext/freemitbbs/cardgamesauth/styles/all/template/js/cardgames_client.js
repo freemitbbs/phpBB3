@@ -1313,7 +1313,6 @@ function cardSymbolHtml(card) {
       <span class="card-face-symbol" aria-hidden="true">
         <span class="card-symbol-rank">${joker}</span>
         <span class="card-symbol-main">JOKER</span>
-        <span class="card-symbol-corner">${joker}</span>
       </span>
     `;
   }
@@ -1327,7 +1326,6 @@ function cardSymbolHtml(card) {
     <span class="card-face-symbol" aria-hidden="true">
       <span class="card-symbol-rank">${escapeHtml(rankText || fallback)}</span>
       <span class="card-symbol-main">${escapeHtml(symbol || fallback)}</span>
-      <span class="card-symbol-corner">${escapeHtml(rankText && symbol ? `${rankText}${symbol}` : fallback)}</span>
     </span>
   `;
 }
