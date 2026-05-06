@@ -110,6 +110,13 @@
   min-width: 0;
 }
 
+.app-shell .rooms-panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
 .app-shell .panel-header {
   display: flex;
   align-items: center;
@@ -123,11 +130,12 @@
 }
 
 .app-shell .rooms-panel .panel-header {
-  margin-bottom: 6px;
+  margin-bottom: 0;
 }
 
 .app-shell .rooms-panel .panel-header h2 {
   font-size: 14px;
+  line-height: 1;
 }
 
 .app-shell .rooms-panel .panel-header button {
@@ -139,19 +147,19 @@
 .app-shell .rooms-list {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .app-shell .room-button {
   width: 100%;
-  min-height: 42px;
+  min-height: 38px;
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   text-align: left;
   background: var(--panel);
-  padding: 4px 9px;
+  padding: 3px 8px;
 }
 
 .app-shell .room-button strong {
@@ -625,11 +633,25 @@
   }
 
   .app-shell .rooms-panel {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
     margin-bottom: 12px;
   }
 
   .app-shell .rooms-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .app-shell .room-button {
+    grid-template-columns: 1fr;
+    gap: 2px;
+    padding: 3px 5px;
+    text-align: center;
+  }
+
+  .app-shell .room-button .room-status {
+    justify-self: center;
   }
 
   .app-shell .chat-message {
