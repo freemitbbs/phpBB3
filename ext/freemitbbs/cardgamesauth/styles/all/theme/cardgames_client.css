@@ -234,6 +234,12 @@
   opacity: 0.72;
 }
 
+.app-shell .seat-replacement {
+  opacity: 1;
+  border-color: rgba(230, 180, 71, 0.72);
+  background: rgba(255, 243, 204, 0.92);
+}
+
 .app-shell .seat-0 {
   grid-column: 2;
   grid-row: 3;
@@ -353,6 +359,17 @@
   margin-top: 10px;
   color: #d7e8df;
   font-size: 13px;
+}
+
+.app-shell .table-paused {
+  width: min(260px, 100%);
+  margin: 12px auto 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 227, 143, 0.62);
+  border-radius: 8px;
+  background: rgba(68, 53, 17, 0.52);
+  color: #ffe38f;
+  font-weight: 700;
 }
 
 .app-shell .turn-timer {

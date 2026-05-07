@@ -15,6 +15,7 @@ const state = {
   requestSeq: 0,
   pending: new Map(),
   timedOutPending: new Map(),
+  retryRequests: new Map(),
   pendingActions: new Set(),
   rooms: [],
   table: null,
@@ -69,9 +70,24 @@ const emojiCatalog = [
 const emojiTypes = ["goodjob", "lol", "sorry", "noproblem", "hurryup", "fireworks", "youareright"];
 const commandTimeoutMs = 15000;
 const lateResponseRetentionMs = 60000;
+const retryRequestRetentionMs = 60000;
 const heartbeatIntervalMs = 25000;
 const heartbeatTimeoutMs = 10000;
 const heartbeatMaxMisses = 2;
+const retryableCommandTypes = new Set([
+  "room.join",
+  "room.leave",
+  "seat.claim",
+  "seat.release",
+  "player.ready",
+  "observer.watch",
+  "tractor.start",
+  "tractor.makeTrump",
+  "tractor.discardBottom",
+  "tractor.playCards",
+  "chat.send",
+  "emoji.send"
+]);
 const skinLabels = {
   "skin_basicmale": "基础男角色",
   "skin_basicfemale": "基础女角色",
@@ -102,7 +118,8 @@ const phaseLabels = {
   bottom_holder_only: "只有底牌持有者可以埋牌",
   bottom_not_open: "现在还不能埋牌",
   waiting_for_turn: "还没轮到您出牌",
-  play_not_open: "现在还不能出牌"
+  play_not_open: "现在还不能出牌",
+  game_paused: "游戏暂停，等待离线玩家重连或空位补位"
 };
 const cardSuitLabels = {
   heart: "红桃",
@@ -447,8 +464,9 @@ function forceReconnect(message) {
 }
 
 function rejectPending(message) {
-  state.pending.forEach((pending) => {
+  state.pending.forEach((pending, requestId) => {
     clearPending(pending);
+    rememberRetryRequest(requestId, pending);
     pending.reject(new Error(message));
   });
   state.pending.clear();
@@ -478,6 +496,7 @@ function rememberTimedOutPending(requestId, pending) {
     roomKey: pending.roomKey,
     roomEpoch: pending.roomEpoch,
     applyResponse: pending.applyResponse,
+    retryKey: pending.retryKey,
     expiresId
   });
 }
@@ -505,6 +524,44 @@ function clearTimedOutPending(requestId = "") {
     }
   });
   state.timedOutPending.clear();
+}
+
+function rememberRetryRequest(requestId, pending) {
+  if (!pending.retryKey) {
+    return;
+  }
+
+  trackRetryRequest(pending.retryKey, requestId);
+}
+
+function trackRetryRequest(retryKey, requestId) {
+  if (!retryKey || !requestId) {
+    return;
+  }
+
+  clearRetryRequest(retryKey);
+  const expiresId = window.setTimeout(() => {
+    const current = state.retryRequests.get(retryKey);
+    if (current?.requestId === requestId) {
+      state.retryRequests.delete(retryKey);
+    }
+  }, retryRequestRetentionMs);
+  state.retryRequests.set(retryKey, { requestId, expiresId });
+}
+
+function clearRetryRequest(retryKey, requestId = "") {
+  if (!retryKey) {
+    return;
+  }
+
+  const retry = state.retryRequests.get(retryKey);
+  if (!retry || (requestId && retry.requestId !== requestId)) {
+    return;
+  }
+  if (retry.expiresId) {
+    window.clearTimeout(retry.expiresId);
+  }
+  state.retryRequests.delete(retryKey);
 }
 
 function commandKey(type, roomKey = "") {
@@ -677,7 +734,12 @@ function sendCommand(type, options = {}) {
     return Promise.reject(new Error("连接已断开，正在重连"));
   }
 
-  const requestId = `web-${Date.now()}-${++state.requestSeq}`;
+  const retryKey = retryRequestKey(type, options);
+  const requestId = requestIdForCommand(retryKey);
+  if (state.pending.has(requestId)) {
+    return Promise.reject(new Error("上一个操作仍在处理中"));
+  }
+  clearTimedOutPending(requestId);
   const envelope = {
     v: 1,
     requestId,
@@ -696,6 +758,7 @@ function sendCommand(type, options = {}) {
       }
       state.pending.delete(requestId);
       clearPending(pending);
+      rememberRetryRequest(requestId, pending);
       rememberTimedOutPending(requestId, pending);
       pending.reject(new Error("请求超时，请重试"));
       render();
@@ -708,6 +771,7 @@ function sendCommand(type, options = {}) {
       roomEpoch: options.roomEpoch ?? state.roomEpoch,
       applyResponse: options.applyResponse !== false,
       pendingKey,
+      retryKey,
       timeoutId
     });
   });
@@ -718,11 +782,76 @@ function sendCommand(type, options = {}) {
     if (pending) {
       state.pending.delete(requestId);
       clearPending(pending);
+      rememberRetryRequest(requestId, pending);
     }
     return Promise.reject(error);
   }
   render();
   return promise;
+}
+
+function requestIdForCommand(retryKey) {
+  if (retryKey) {
+    const retry = state.retryRequests.get(retryKey);
+    if (retry?.requestId) {
+      trackRetryRequest(retryKey, retry.requestId);
+      return retry.requestId;
+    }
+  }
+
+  const requestId = `web-${Date.now()}-${++state.requestSeq}`;
+  if (retryKey) {
+    trackRetryRequest(retryKey, requestId);
+  }
+  return requestId;
+}
+
+function retryRequestKey(type, options) {
+  if (!retryableCommandTypes.has(type)) {
+    return "";
+  }
+
+  const roomKey = options.roomKey || "";
+  const roomEpoch = options.roomEpoch ?? state.roomEpoch;
+  const payload = stableStringify(options.payload || {});
+  const stateSignature = retryStateSignature(type, roomKey);
+  return [type, roomKey, roomEpoch, stateSignature, payload].join("|");
+}
+
+function retryStateSignature(type, roomKey) {
+  if (!type.startsWith("tractor.")) {
+    return "";
+  }
+  const table = state.table;
+  if (!table || table.room?.roomKey !== roomKey) {
+    return "";
+  }
+
+  const publicState = table.engine?.public || {};
+  const trick = publicState.currentTrick || {};
+  return stableStringify({
+    roomStateVersion: table.room?.stateVersion,
+    handId: publicState.handId || "",
+    phase: table.phase || publicState.phase || "",
+    completedTrickCount: publicState.completedTrickCount,
+    trickNumber: trick.trickNumber,
+    nextSeatIndex: trick.nextSeatIndex,
+    viewerSeatIndex: table.viewer?.seatIndex
+  });
+}
+
+function stableStringify(value) {
+  if (value === undefined) {
+    return "undefined";
+  }
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
 }
 
 function handleMessage(raw) {
@@ -742,9 +871,15 @@ function handleMessage(raw) {
     state.pending.delete(message.requestId);
     clearPending(pending);
     if (message.type === "error") {
+      if (isRetryableErrorMessage(message)) {
+        rememberRetryRequest(message.requestId, pending);
+      } else {
+        clearRetryRequest(pending.retryKey, message.requestId);
+      }
       pending.reject(new Error(errorMessage(message)));
       return;
     }
+    clearRetryRequest(pending.retryKey, message.requestId);
     if (pending.applyResponse && isCurrentPendingMessage(message, pending)) {
       applyServerMessage(message, pending.type, pending);
     }
@@ -765,9 +900,18 @@ function handleMessage(raw) {
 function handleTimedOutMessage(message) {
   const pending = state.timedOutPending.get(message.requestId);
   clearTimedOutPending(message.requestId);
-  if (!pending || message.type === "error") {
+  if (!pending) {
     return;
   }
+  if (message.type === "error") {
+    if (isRetryableErrorMessage(message)) {
+      rememberRetryRequest(message.requestId, pending);
+    } else {
+      clearRetryRequest(pending.retryKey, message.requestId);
+    }
+    return;
+  }
+  clearRetryRequest(pending.retryKey, message.requestId);
   if (pending.applyResponse && isCurrentPendingMessage(message, pending)) {
     applyServerMessage(message, pending.type, pending);
     recoverTimedOutStatus(message, pending);
@@ -815,16 +959,20 @@ function recoverTimedOutStatus(message, pending) {
 
 function isCurrentPendingMessage(message, pending) {
   const roomKey = roomKeyFromMessage(message) || pending.roomKey;
+  if (isRoomStatePending(pending) && pending.roomEpoch !== state.roomEpoch) {
+    return false;
+  }
   if (!roomKey) {
     return true;
-  }
-  if (pending.roomEpoch !== state.roomEpoch) {
-    return false;
   }
   if (pending.type === "room.join") {
     return pending.roomKey === roomKey;
   }
   return isCurrentRoomMessage(roomKey, pending);
+}
+
+function isRoomStatePending(pending) {
+  return Boolean(pending.roomKey) || pending.type === "system.catchup";
 }
 
 function isCurrentRoomMessage(roomKey, context = null) {
@@ -853,6 +1001,10 @@ function roomKeyFromMessage(message) {
     || message?.payload?.event?.roomKey
     || message?.roomKey
     || "";
+}
+
+function isRetryableErrorMessage(message) {
+  return message?.type === "error" && message.payload?.retryable === true;
 }
 
 function applyServerMessage(message, commandType = "", context = null) {
@@ -921,6 +1073,7 @@ function applyServerMessage(message, commandType = "", context = null) {
       }
       clearRoomState();
       playSound("effect/draw.mp3");
+      setStatus("已离开房间");
       void requestRooms();
       render();
       break;
@@ -936,15 +1089,19 @@ function applyServerMessage(message, commandType = "", context = null) {
       render();
       break;
     case "room.reset":
+      if ((message.payload.roomKey || message.payload.room?.roomKey) === state.currentRoomKey) {
+        clearRoomState();
+        setStatus("房间已重置");
+      }
+      void requestRooms();
+      render();
+      break;
     case "room.cancelled":
-      if (message.payload.roomKey === state.currentRoomKey) {
+      if ((message.payload.room?.roomKey || message.payload.roomKey) === state.currentRoomKey) {
         state.roomEpoch += 1;
-        state.table = null;
-        state.chatEvents = [];
-        state.chatDraft = "";
-        state.emojiTarget = "";
         state.selectedHandIndexes = [];
         state.handSignature = "";
+        setStatus("本局已取消");
       }
       void requestRooms();
       render();
@@ -1076,9 +1233,12 @@ function renderTable() {
   }).join("");
   const score = table.engine?.public?.score ?? 0;
   const currentTrick = table.engine?.public?.currentTrick;
-  const trickLabel = currentTrick
-    ? `第 ${currentTrick.trickNumber} 墩，轮到${seatLabel(currentTrick.nextSeatIndex ?? currentTrick.winnerSeatIndex)}`
-    : table.engineReady ? `得分 ${score}` : "等待中";
+  const paused = isTablePaused(table);
+  const trickLabel = paused
+    ? pauseText(table)
+    : currentTrick
+      ? `第 ${currentTrick.trickNumber} 墩，轮到${seatLabel(currentTrick.nextSeatIndex ?? currentTrick.winnerSeatIndex)}`
+      : table.engineReady ? `得分 ${score}` : "等待中";
   const leaveAction = action(table, "room.leave");
   const roomTransitionPending = hasRoomTransitionPending();
 
@@ -1094,6 +1254,7 @@ function renderTable() {
             <span>级牌 ${escapeHtml(rankLabel(table.engine?.public?.rank))}</span>
             <span>${escapeHtml(trumpLabel(table.engine?.public?.trump))}</span>
           </div>
+          ${paused ? `<p class="table-paused">${escapeHtml(pauseText(table))}</p>` : ""}
           ${turnTimerHtml(table)}
           <div class="table-actions">${tableActionsHtml(table)}</div>
         </div>
@@ -1115,7 +1276,11 @@ function renderTable() {
     || isActionPending("room.leave", state.currentRoomKey)
     || roomTransitionPending
     || Boolean(state.transitionRoomKey);
-  els.leave.title = leaveAction.reason ? actionReasonText(leaveAction.reason) : "";
+  els.leave.title = leaveAction.reason
+    ? actionReasonText(leaveAction.reason)
+    : isViewerInActiveHand(table)
+      ? "离开后本局会暂停，其他用户可补位继续。"
+      : "";
   syncTurnTimer();
 }
 
@@ -1125,7 +1290,10 @@ function seatHtml(table, seat) {
   const isViewerSeat = table.viewer.seatIndex === seat.seatIndex;
   const isOwner = table.room.owner?.userId && user?.userId === table.room.owner.userId;
   const visualSeatIndex = visualSeatIndexFor(table, seat.seatIndex);
-  const meta = occupied
+  const replacementSeat = isReplacementSeat(table, seat);
+  const meta = replacementSeat
+    ? "等待补位"
+    : occupied
     ? `${seat.connected ? "在线" : "离线"} · ${seat.ready ? "已准备" : "未准备"}${isOwner ? " · 房主" : ""}`
     : "空位";
   const actions = seatActionsHtml(table, seat, isViewerSeat);
@@ -1134,7 +1302,7 @@ function seatHtml(table, seat) {
     : `<img class="seat-skin" src="${escapeAttribute(skinUrlForSeat(user, seat.seatIndex))}" alt="" loading="lazy" />`;
 
   return `
-    <div class="seat seat-${visualSeatIndex} ${isViewerSeat ? "seat-viewer" : ""} ${seat.connected ? "" : "seat-offline"}" data-seat-index="${seat.seatIndex}">
+    <div class="seat seat-${visualSeatIndex} ${isViewerSeat ? "seat-viewer" : ""} ${seat.connected ? "" : "seat-offline"} ${replacementSeat ? "seat-replacement" : ""}" data-seat-index="${seat.seatIndex}">
       ${avatar}
       <div class="seat-name">${occupied ? escapeHtml(user.displayName) : seatLabel(seat.seatIndex)}</div>
       <div class="seat-meta">${escapeHtml(meta)}</div>
@@ -1166,8 +1334,9 @@ function modulo(value, divisor) {
 function seatActionsHtml(table, seat, isViewerSeat) {
   const roomKey = table.room.roomKey;
   const disabled = isGameInteractionLocked() || Boolean(state.transitionRoomKey) || hasRoomTransitionPending();
-  if (!seat.user && action(table, "seat.claim").enabled) {
-    return `<button data-action="seat.claim" data-seat="${seat.seatIndex}" type="button" ${disabled || isActionPending("seat.claim", roomKey) ? "disabled" : ""}>坐下</button>`;
+  if (!seat.user && isSeatClaimable(table, seat.seatIndex)) {
+    const replacementSeat = isReplacementSeat(table, seat);
+    return `<button data-action="seat.claim" data-seat="${seat.seatIndex}" type="button" ${disabled || isActionPending("seat.claim", roomKey) ? "disabled" : ""} title="${replacementSeat ? "接替该座位继续本手牌" : ""}">${replacementSeat ? "补位" : "坐下"}</button>`;
   }
   if (isViewerSeat) {
     const readyAction = action(table, "player.ready");
@@ -1193,6 +1362,56 @@ function skinUrlForSeat(user, seatIndex) {
 
 function action(table, type) {
   return table.actions.find((item) => item.type === type) || { enabled: false };
+}
+
+function isSeatClaimable(table, seatIndex) {
+  const claimAction = action(table, "seat.claim");
+  if (!claimAction.enabled) {
+    return false;
+  }
+  if (!Array.isArray(claimAction.seatIndexes)) {
+    return true;
+  }
+  return claimAction.seatIndexes.includes(seatIndex);
+}
+
+function isReplacementSeat(table, seat) {
+  return Boolean(!seat.user && table.engineReady && isActiveEngineSeat(table, seat.seatIndex));
+}
+
+function isActiveEngineSeat(table, seatIndex) {
+  return (table.engine?.public?.players || []).some((player) => player.seatIndex === seatIndex);
+}
+
+function isViewerInActiveHand(table) {
+  return Number.isInteger(table.viewer?.seatIndex) && isActiveEngineSeat(table, table.viewer.seatIndex);
+}
+
+function isTablePaused(table) {
+  if (table.pause?.paused) {
+    return true;
+  }
+
+  const players = table.engine?.public?.players || [];
+  if (!table.engineReady || !players.length) {
+    return false;
+  }
+
+  return players.some((player) => {
+    const seat = table.room?.seats?.find((candidate) => candidate.seatIndex === player.seatIndex);
+    return !seat?.user || !seat.connected;
+  });
+}
+
+function pauseText(table) {
+  if (table.pause?.reason === "empty_active_seat") {
+    return "游戏暂停，等待空位补位后继续。";
+  }
+  if (table.pause?.reason === "disconnected_active_seat") {
+    return "游戏暂停，等待离线玩家重连或离开。";
+  }
+
+  return "游戏暂停。";
 }
 
 function tableActionsHtml(table) {
@@ -1237,6 +1456,10 @@ function trickHtml(table) {
 }
 
 function turnTimerHtml(table) {
+  if (isTablePaused(table)) {
+    return "";
+  }
+
   const turn = table.turn;
   if (!turn?.deadlineAt || !Number.isInteger(turn.seatIndex)) {
     return "";
@@ -1786,7 +2009,7 @@ function renderEmojiDock() {
     button.type = "button";
     button.className = "emoji-button";
     button.title = emoji.label;
-    button.disabled = isGameInteractionLocked();
+    button.disabled = isGameInteractionLocked() || isActionPending("emoji.send", state.currentRoomKey);
     button.innerHTML = `<img src="${escapeAttribute(emojiUrl(emoji.asset, 0))}" alt="${escapeAttribute(emoji.label)}" loading="lazy" />`;
     button.addEventListener("click", () => {
       void sendCommand("emoji.send", {
@@ -2045,6 +2268,10 @@ function skinDisplayName(skin) {
 }
 
 function serverErrorText(code, message) {
+  if (code === "tractor_game_paused") {
+    return pausedErrorText();
+  }
+
   const labels = {
     already_authenticated: "连接已经认证",
     auth_failed: "认证失败",
@@ -2111,6 +2338,7 @@ function serverErrorText(code, message) {
     tractor_bottom_cards_not_held: "埋牌必须从您的手牌中选择",
     tractor_card_count_mismatch: "出牌张数必须与首家一致",
     tractor_cards_not_held: "出牌必须从您的手牌中选择",
+    tractor_duplicate_player: "您已经在本局其他座位中",
     tractor_dump_not_supported: "暂不支持甩牌",
     tractor_follow_pair_required: "有对子时必须尽量跟对子",
     tractor_follow_suit_required: "有同花色时必须跟同花色",
@@ -2141,6 +2369,14 @@ function serverErrorText(code, message) {
     emoji_rate_limited: "表情发送太频繁，请稍后再试"
   };
   return labels[code] || (/[\u4e00-\u9fff]/.test(message || "") ? message : "服务器出错");
+}
+
+function pausedErrorText() {
+  if (state.table && isTablePaused(state.table)) {
+    return pauseText(state.table);
+  }
+
+  return "游戏暂停，等待离线玩家重连或空位补位。";
 }
 
 function defaultWsUrl() {

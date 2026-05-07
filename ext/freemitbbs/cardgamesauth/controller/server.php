@@ -263,6 +263,9 @@ class server
 			return $error;
 		}
 
+		$active_statuses = ['starting', 'playing', 'finished'];
+		$active_status_sql = $this->db->sql_in_set('s.status', $active_statuses);
+		$newer_active_status_sql = $this->db->sql_in_set('newer.status', $active_statuses);
 		$sql = 'SELECT s.id AS session_id, s.room_key, s.game_type, s.status, s.owner_user_id,
 					s.settings_json, s.state_version, s.updated_at, s.finished_at,
 					rc.display_name, rc.sort_order, rc.enabled, rc.default_settings_json,
@@ -287,12 +290,22 @@ class server
 				ON ge.session_id = s.id
 			LEFT JOIN ' . $this->room_configs_table . ' rc
 				ON rc.room_key = s.room_key
-			WHERE ' . $this->db->sql_in_set('s.status', ['starting', 'playing']) . '
-				AND s.finished_at = 0
-			ORDER BY s.updated_at ASC, s.id ASC';
+			WHERE ' . $active_status_sql . '
+				AND NOT EXISTS (
+					SELECT 1
+					FROM ' . $this->sessions_table . ' newer
+					WHERE newer.room_key = s.room_key
+						AND ' . $newer_active_status_sql . '
+						AND (
+							newer.updated_at > s.updated_at
+							OR (newer.updated_at = s.updated_at AND newer.id > s.id)
+						)
+					)
+			ORDER BY s.room_key ASC, s.updated_at DESC, s.id DESC';
 		$result = $this->db->sql_query($sql);
 
 		$rows = [];
+		$seen_room_keys = [];
 		$session_ids = [];
 		$user_ids = [];
 		while ($row = $this->db->sql_fetchrow($result))
@@ -302,6 +315,12 @@ class server
 			{
 				continue;
 			}
+			$room_key = (string) ($row['room_key'] ?? '');
+			if ($room_key === '' || isset($seen_room_keys[$room_key]))
+			{
+				continue;
+			}
+			$seen_room_keys[$room_key] = true;
 
 			$rows[] = [
 				'session' => $row,
@@ -329,12 +348,12 @@ class server
 		}
 		$this->db->sql_freeresult($result);
 
-		$observers_by_session = $this->load_recovery_observers($session_ids);
-		foreach ($observers_by_session as $observers)
+		$members_by_session = $this->load_recovery_members($session_ids);
+		foreach ($members_by_session as $members)
 		{
-			foreach ($observers as $observer)
+			foreach ($members as $member)
 			{
-				$user_id = (int) ($observer['user_id'] ?? 0);
+				$user_id = (int) ($member['user_id'] ?? 0);
 				if ($user_id > 0)
 				{
 					$user_ids[] = $user_id;
@@ -357,7 +376,7 @@ class server
 					(int) ($session['state_version'] ?? 0),
 					(int) ($session['event_seq'] ?? 0)
 				),
-				'room' => $this->recovery_room_payload($session, $snapshot, $observers_by_session[$session_id] ?? [], $users),
+				'room' => $this->recovery_room_payload($session, $snapshot, $members_by_session[$session_id] ?? [], $users),
 				'snapshot' => $snapshot,
 				'state' => $snapshot,
 				'stateJson' => $snapshot,
@@ -426,6 +445,7 @@ class server
 			$snapshot_payload = $this->required_object($data, 'snapshot', 'snapshot');
 			$session_update_payload = $this->required_object($data, 'sessionUpdate', 'session_update');
 			$summary_payload = $this->optional_object($data, 'finishedSummary', 'finished_summary');
+			$lobby_events = $this->optional_rows($data, 'lobbyEvents', 'lobby_events');
 			$now = time();
 
 			$this->db->sql_transaction('begin');
@@ -488,6 +508,17 @@ class server
 				{
 					$this->upsert_finished_summary($summary_payload, $session_id, $game_type, $now);
 				}
+
+				$final_seq = $seq;
+				foreach ($lobby_events as $lobby_event)
+				{
+					$final_seq = $this->record_transition_lobby_event($lobby_event, $session_id, $game_type, $final_seq, $now);
+				}
+				if ($final_seq > $seq)
+				{
+					$this->update_transition_lobby_state($session_id, $lobby_events, $final_seq, $now);
+				}
+				$seq = $final_seq;
 
 				$this->db->sql_transaction('commit');
 			}
@@ -1060,7 +1091,7 @@ class server
 			&& (string) ($snapshot['handId'] ?? '') !== '';
 	}
 
-	protected function load_recovery_observers(array $session_ids): array
+	protected function load_recovery_members(array $session_ids): array
 	{
 		$session_ids = array_values(array_unique(array_filter(array_map('intval', $session_ids), static function ($session_id) {
 			return $session_id > 0;
@@ -1070,24 +1101,22 @@ class server
 			return [];
 		}
 
-		$sql = 'SELECT session_id, user_id, watched_seat_index, connected
-			FROM ' . $this->room_members_table . "
-			WHERE role = 'observer'
-				AND left_at = 0
-				AND " . $this->db->sql_in_set('session_id', $session_ids) . '
+		$sql = 'SELECT session_id, user_id, role, seat_index, watched_seat_index, connected, left_at
+			FROM ' . $this->room_members_table . '
+			WHERE ' . $this->db->sql_in_set('session_id', $session_ids) . '
 			ORDER BY session_id ASC, joined_at ASC, id ASC';
 		$result = $this->db->sql_query($sql);
-		$observers = [];
+		$members = [];
 		while ($row = $this->db->sql_fetchrow($result))
 		{
-			$observers[(int) $row['session_id']][] = $row;
+			$members[(int) $row['session_id']][] = $row;
 		}
 		$this->db->sql_freeresult($result);
 
-		return $observers;
+		return $members;
 	}
 
-	protected function recovery_room_payload(array $session, array $snapshot, array $observer_rows, array $users): array
+	protected function recovery_room_payload(array $session, array $snapshot, array $member_rows, array $users): array
 	{
 		$settings = $this->decode_json_field((string) ($session['settings_json'] ?? ''), []);
 		if (!is_array($settings) || $this->is_list_array($settings))
@@ -1118,21 +1147,56 @@ class server
 			];
 		}
 
-		foreach ($players as $player)
+		$has_seated_member_history = false;
+		foreach ($member_rows as $member_row)
 		{
-			$seat_index = (int) ($player['seatIndex'] ?? 0);
-			$user_id = (int) ($player['userId'] ?? 0);
+			if ((string) ($member_row['role'] ?? '') !== 'seated')
+			{
+				continue;
+			}
+			$has_seated_member_history = true;
+			if ((int) ($member_row['left_at'] ?? 0) > 0)
+			{
+				continue;
+			}
+
+			$seat_index = (int) ($member_row['seat_index'] ?? -1);
+			$user_id = (int) ($member_row['user_id'] ?? 0);
 			if ($seat_index < 0 || $seat_index >= $seat_count || empty($users[$user_id]))
 			{
 				continue;
 			}
 
 			$seats[$seat_index]['user'] = $this->room_user_payload($users[$user_id]);
+			$seats[$seat_index]['connected'] = false;
+		}
+		if (!$has_seated_member_history)
+		{
+			foreach ($players as $player)
+			{
+				$seat_index = (int) ($player['seatIndex'] ?? 0);
+				$user_id = (int) ($player['userId'] ?? 0);
+				if ($seat_index < 0 || $seat_index >= $seat_count || empty($users[$user_id]))
+				{
+					continue;
+				}
+
+				$seats[$seat_index]['user'] = $this->room_user_payload($users[$user_id]);
+			}
 		}
 
 		$observers = [];
-		foreach ($observer_rows as $observer_row)
+		foreach ($member_rows as $observer_row)
 		{
+			if ((string) ($observer_row['role'] ?? '') !== 'observer')
+			{
+				continue;
+			}
+			if ((int) ($observer_row['left_at'] ?? 0) > 0)
+			{
+				continue;
+			}
+
 			$user_id = (int) ($observer_row['user_id'] ?? 0);
 			if (empty($users[$user_id]))
 			{
@@ -1141,7 +1205,7 @@ class server
 
 			$observer = [
 				'user' => $this->room_user_payload($users[$user_id]),
-				'connected' => (bool) ((int) ($observer_row['connected'] ?? 0)),
+				'connected' => false,
 			];
 			$watched_seat_index = (int) ($observer_row['watched_seat_index'] ?? -1);
 			if ($watched_seat_index >= 0)
@@ -1158,7 +1222,7 @@ class server
 		$updated_at = max((int) ($session['updated_at'] ?? 0), (int) ($session['snapshot_created_at'] ?? 0));
 		$updated_at_text = $updated_at > 0 ? $this->iso_time($updated_at) : (string) ($snapshot['updatedAt'] ?? '');
 		$status = (string) ($session['status'] ?? 'playing');
-		if (!in_array($status, ['starting', 'playing'], true))
+		if (!in_array($status, ['starting', 'playing', 'finished'], true))
 		{
 			$status = 'playing';
 		}
@@ -2228,6 +2292,55 @@ class server
 		return $this->upsert_row($this->finished_summaries_table, ['session_id' => $session_id], $row);
 	}
 
+	protected function record_transition_lobby_event(array $event, int $session_id, string $transition_game_type, int $current_seq, int $now): int
+	{
+		$room_key = $this->required_string($event, 'roomKey', 'room_key', 64);
+		$game_type = $this->required_string($event, 'gameType', 'game_type', 32);
+		if ($transition_game_type !== '' && $game_type !== $transition_game_type)
+		{
+			throw new \InvalidArgumentException('game_type_mismatch');
+		}
+
+		$request_id = $this->nullable_string_value($event, 'requestId', 'request_id', 64);
+		$existing_seq = $this->find_event_seq_by_request_id($session_id, $request_id);
+		if ($existing_seq > 0)
+		{
+			return max($current_seq, $existing_seq);
+		}
+
+		$room_state_version = max(0, $this->int_value($event, 'roomStateVersion', 'room_state_version', 0));
+		$seq = max($current_seq + 1, $room_state_version);
+		$this->apply_lobby_membership($session_id, $room_key, $event['membership'] ?? null, $now);
+
+		$insert = $this->try_insert_row($this->events_table, $this->game_event_row($event, $session_id, $seq, $game_type));
+		if (!$insert['inserted'] && !$this->is_duplicate_insert($insert))
+		{
+			throw new \RuntimeException('event_insert_failed');
+		}
+
+		return $seq;
+	}
+
+	protected function update_transition_lobby_state(int $session_id, array $lobby_events, int $seq, int $now): void
+	{
+		$updates = [
+			'state_version' => $seq,
+			'updated_at' => $now,
+		];
+		if (!empty($lobby_events))
+		{
+			$last_event = $lobby_events[count($lobby_events) - 1];
+			if (array_key_exists('roomOwnerUserId', $last_event) || array_key_exists('room_owner_user_id', $last_event))
+			{
+				$updates['owner_user_id'] = $this->nullable_int_value($last_event, 'roomOwnerUserId', 'room_owner_user_id');
+			}
+		}
+
+		$this->db->sql_query('UPDATE ' . $this->sessions_table . '
+			SET ' . $this->db->sql_build_array('UPDATE', $updates) . '
+			WHERE id = ' . $session_id);
+	}
+
 	protected function sql_like_escape(string $value): string
 	{
 		return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
@@ -2571,6 +2684,17 @@ class server
 		}
 
 		return is_array($rows) ? array_values(array_filter($rows, 'is_array')) : [];
+	}
+
+	protected function optional_rows(array $data, string $camel_key, string $snake_key): array
+	{
+		$rows = $data[$camel_key] ?? $data[$snake_key] ?? [];
+		if (!is_array($rows))
+		{
+			throw new \InvalidArgumentException('invalid_' . $snake_key);
+		}
+
+		return array_values(array_filter($rows, 'is_array'));
 	}
 
 	protected function required_string(array $data, string $camel_key, string $snake_key, int $max_length): string
