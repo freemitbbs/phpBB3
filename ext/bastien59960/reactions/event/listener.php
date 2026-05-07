@@ -106,6 +106,12 @@ class listener implements EventSubscriberInterface
      */
     public function add_assets_to_page($event)
     {
+        if ($this->is_cardgames_page())
+        {
+            $this->template->assign_var('S_REACTIONS_ENABLED', false);
+            return;
+        }
+
         $this->language->add_lang('common', 'bastien59960/reactions');
 
         $css_path = './ext/bastien59960/reactions/styles/prosilver/theme/reactions.css';
@@ -186,6 +192,29 @@ class listener implements EventSubscriberInterface
             '};' .
             'window.REACTIONS_LANG = ' . json_encode($js_lang, JSON_UNESCAPED_UNICODE | JSON_HEX_APOS) . ';'
         );
+    }
+
+    protected function is_cardgames_page()
+    {
+        $paths = [];
+        if (!empty($this->user->page['page']))
+        {
+            $paths[] = (string) $this->user->page['page'];
+        }
+        if (!empty($this->user->page['page_name']))
+        {
+            $paths[] = (string) $this->user->page['page_name'];
+        }
+
+        foreach ($paths as $path)
+        {
+            if ((bool) preg_match('#(?:^|/)(?:app\.php/)?card-games(?:/|$)#', $path))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Le reste des méthodes reste identique...
