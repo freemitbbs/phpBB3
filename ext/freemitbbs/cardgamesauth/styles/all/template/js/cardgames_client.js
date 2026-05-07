@@ -124,6 +124,8 @@ const phaseLabels = {
 };
 
 function logClientWarn(message, details = null) {
+  const sanitized = sanitizeLogDetails(details);
+  addSentryBreadcrumb("warning", message, sanitized);
   if (!window.console?.warn) {
     return;
   }
@@ -131,21 +133,52 @@ function logClientWarn(message, details = null) {
     window.console.warn(`${logPrefix} ${message}`);
     return;
   }
-  window.console.warn(`${logPrefix} ${message}`, sanitizeLogDetails(details));
+  window.console.warn(`${logPrefix} ${message}`, sanitized);
 }
 
 function logClientError(message, error = null, details = null) {
+  const sanitizedError = sanitizeLogDetails(error);
+  const sanitizedDetails = sanitizeLogDetails(details);
+  addSentryBreadcrumb("error", message, {
+    error: sanitizedError,
+    details: sanitizedDetails
+  });
   if (!window.console?.error) {
     return;
   }
   const args = [`${logPrefix} ${message}`];
   if (error !== null && error !== undefined) {
-    args.push(sanitizeLogDetails(error));
+    args.push(sanitizedError);
   }
   if (details !== null && details !== undefined) {
-    args.push(sanitizeLogDetails(details));
+    args.push(sanitizedDetails);
   }
   window.console.error(...args);
+}
+
+function addSentryBreadcrumb(level, message, details = null) {
+  if (!window.Sentry?.addBreadcrumb) {
+    return;
+  }
+  const breadcrumb = {
+    category: "cardgames.client",
+    level,
+    message
+  };
+  if (details !== null && details !== undefined) {
+    breadcrumb.data = details;
+  }
+  window.Sentry.addBreadcrumb(breadcrumb);
+}
+
+function syncSentryUser(user) {
+  if (!window.Sentry?.setUser || !user) {
+    return;
+  }
+  const userId = Number(user.user_id ?? user.userId);
+  if (Number.isInteger(userId) && userId > 0) {
+    window.Sentry.setUser({ id: String(userId) });
+  }
 }
 
 function sanitizeLogDetails(value, depth = 0) {
@@ -741,6 +774,7 @@ function applyTokenPayload(payload) {
   state.bootstrap.wsUrl = payload.wsUrl || state.bootstrap.wsUrl;
   state.user = payload.user || state.user;
   state.token = payload.token;
+  syncSentryUser(state.user);
 }
 
 async function authenticate(connectionEpoch = state.connectionEpoch) {
@@ -1176,6 +1210,7 @@ function applyServerMessage(message, commandType = "", context = null) {
     case "auth.accepted":
       state.user = message.payload.user || state.user;
       state.authenticated = true;
+      syncSentryUser(state.user);
       playSound("effect/enter_hall_click.mp3");
       break;
     case "profile.skins":

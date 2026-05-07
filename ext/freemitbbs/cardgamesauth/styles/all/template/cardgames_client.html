@@ -5,6 +5,10 @@
 <script>
 	window.freemitbbsCardGames = {CARDGAMES_BOOTSTRAP_JSON};
 </script>
+{% if S_CARDGAMES_SENTRY %}
+<script src="{{ CARDGAMES_SENTRY_CDN_URL|e('html_attr') }}" crossorigin="anonymous"></script>
+{% INCLUDEJS '@freemitbbs_cardgamesauth/js/cardgames_sentry.js' %}
+{% endif %}
 
 <main class="app-shell">
 	<section class="topbar">

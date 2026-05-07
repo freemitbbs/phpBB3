@@ -7,6 +7,7 @@ class acp_cardgamesauth_module
 	private const FORM_KEY = 'freemitbbs/cardgamesauth';
 	private const TESTER_GROUP_NAME = 'CARD_GAME_TESTERS';
 	private const TESTER_GROUP_DESC = 'Users allowed to access card games while testing mode is enabled.';
+	private const SENTRY_DEFAULT_CDN_URL = 'https://browser.sentry-cdn.com/10.45.0/bundle.min.js';
 
 	public string $tpl_name;
 	public string $page_title;
@@ -50,6 +51,13 @@ class acp_cardgamesauth_module
 			$config->set('cardgamesauth_launch_redirect', (string) ((int) $request->variable('cardgamesauth_launch_redirect', 0) ? 1 : 0));
 			$config->set('cardgamesauth_client_url', trim((string) $request->variable('cardgamesauth_client_url', '', true)));
 			$config->set('cardgamesauth_ws_url', trim((string) $request->variable('cardgamesauth_ws_url', '', true)));
+			$config->set('cardgamesauth_sentry_enabled', (string) ((int) $request->variable('cardgamesauth_sentry_enabled', 0) ? 1 : 0));
+			$config->set('cardgamesauth_sentry_dsn', trim((string) $request->variable('cardgamesauth_sentry_dsn', '', true)));
+			$config->set('cardgamesauth_sentry_environment', $this->sentry_environment($request->variable('cardgamesauth_sentry_environment', 'production', true)));
+			$config->set('cardgamesauth_sentry_release', trim((string) $request->variable('cardgamesauth_sentry_release', '', true)));
+			$config->set('cardgamesauth_sentry_cdn_url', $this->sentry_cdn_url($request->variable('cardgamesauth_sentry_cdn_url', self::SENTRY_DEFAULT_CDN_URL, true)));
+			$config->set('cardgamesauth_sentry_sample_rate', $this->bounded_float($request->variable('cardgamesauth_sentry_sample_rate', '1', true), 0.0, 1.0));
+			$config->set('cardgamesauth_sentry_traces_sample_rate', $this->bounded_float($request->variable('cardgamesauth_sentry_traces_sample_rate', '0', true), 0.0, 1.0));
 			$config->set('cardgamesauth_token_ttl', (string) $this->bounded_int($request->variable('cardgamesauth_token_ttl', 120), 30, 600));
 			$config->set('cardgamesauth_token_rate_limit', (string) $this->bounded_int($request->variable('cardgamesauth_token_rate_limit', 20), 1, 120));
 			$config->set('cardgamesauth_token_rate_window', (string) $this->bounded_int($request->variable('cardgamesauth_token_rate_window', 60), 10, 3600));
@@ -101,6 +109,13 @@ class acp_cardgamesauth_module
 			'CARDGAMESAUTH_LAUNCH_REDIRECT' => (int) ($config['cardgamesauth_launch_redirect'] ?? 0),
 			'CARDGAMESAUTH_CLIENT_URL' => (string) ($config['cardgamesauth_client_url'] ?? ''),
 			'CARDGAMESAUTH_WS_URL' => (string) ($config['cardgamesauth_ws_url'] ?? ''),
+			'CARDGAMESAUTH_SENTRY_ENABLED' => (int) ($config['cardgamesauth_sentry_enabled'] ?? 0),
+			'CARDGAMESAUTH_SENTRY_DSN' => (string) ($config['cardgamesauth_sentry_dsn'] ?? ''),
+			'CARDGAMESAUTH_SENTRY_ENVIRONMENT' => (string) ($config['cardgamesauth_sentry_environment'] ?? 'production'),
+			'CARDGAMESAUTH_SENTRY_RELEASE' => (string) ($config['cardgamesauth_sentry_release'] ?? ''),
+			'CARDGAMESAUTH_SENTRY_CDN_URL' => (string) ($config['cardgamesauth_sentry_cdn_url'] ?? self::SENTRY_DEFAULT_CDN_URL),
+			'CARDGAMESAUTH_SENTRY_SAMPLE_RATE' => (string) ($config['cardgamesauth_sentry_sample_rate'] ?? '1'),
+			'CARDGAMESAUTH_SENTRY_TRACES_SAMPLE_RATE' => (string) ($config['cardgamesauth_sentry_traces_sample_rate'] ?? '0'),
 			'CARDGAMESAUTH_TOKEN_TTL' => (int) ($config['cardgamesauth_token_ttl'] ?? 120),
 			'CARDGAMESAUTH_TOKEN_RATE_LIMIT' => (int) ($config['cardgamesauth_token_rate_limit'] ?? 20),
 			'CARDGAMESAUTH_TOKEN_RATE_WINDOW' => (int) ($config['cardgamesauth_token_rate_window'] ?? 60),
@@ -124,6 +139,31 @@ class acp_cardgamesauth_module
 	protected function bounded_int($value, int $min, int $max): int
 	{
 		return max($min, min($max, (int) $value));
+	}
+
+	protected function bounded_float($value, float $min, float $max): string
+	{
+		$number = (float) $value;
+		if (!is_finite($number))
+		{
+			$number = $min;
+		}
+
+		$number = max($min, min($max, $number));
+		return rtrim(rtrim(sprintf('%.4F', $number), '0'), '.');
+	}
+
+	protected function sentry_environment(string $value): string
+	{
+		$environment = trim($value);
+		$environment = preg_replace('#[\s/]+#', '-', $environment) ?: 'production';
+		return substr($environment, 0, 64);
+	}
+
+	protected function sentry_cdn_url(string $value): string
+	{
+		$url = trim($value);
+		return preg_match('#^https://#i', $url) ? $url : self::SENTRY_DEFAULT_CDN_URL;
 	}
 
 	protected function ensure_secret_config(\phpbb\config\config $config, string $name): string

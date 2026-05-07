@@ -77,6 +77,69 @@
 	</fieldset>
 
 	<fieldset>
+		<legend>{{ lang('CARDGAMESAUTH_FIELDSET_SENTRY') }}</legend>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_sentry_enabled">{{ lang('CARDGAMESAUTH_SENTRY_ENABLED') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_SENTRY_ENABLED_EXPLAIN') }}</span>
+			</dt>
+			<dd>
+				<label><input type="radio" class="radio" id="cardgamesauth_sentry_enabled" name="cardgamesauth_sentry_enabled" value="1"{% if CARDGAMESAUTH_SENTRY_ENABLED %} checked="checked"{% endif %} /> {{ lang('YES') }}</label>
+				<label><input type="radio" class="radio" name="cardgamesauth_sentry_enabled" value="0"{% if not CARDGAMESAUTH_SENTRY_ENABLED %} checked="checked"{% endif %} /> {{ lang('NO') }}</label>
+			</dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_sentry_dsn">{{ lang('CARDGAMESAUTH_SENTRY_DSN') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_SENTRY_DSN_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="cardgamesauth_sentry_dsn" name="cardgamesauth_sentry_dsn" value="{CARDGAMESAUTH_SENTRY_DSN}" class="inputbox" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_sentry_environment">{{ lang('CARDGAMESAUTH_SENTRY_ENVIRONMENT') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_SENTRY_ENVIRONMENT_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="cardgamesauth_sentry_environment" name="cardgamesauth_sentry_environment" value="{CARDGAMESAUTH_SENTRY_ENVIRONMENT}" class="inputbox" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_sentry_release">{{ lang('CARDGAMESAUTH_SENTRY_RELEASE') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_SENTRY_RELEASE_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="cardgamesauth_sentry_release" name="cardgamesauth_sentry_release" value="{CARDGAMESAUTH_SENTRY_RELEASE}" class="inputbox" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_sentry_cdn_url">{{ lang('CARDGAMESAUTH_SENTRY_CDN_URL') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_SENTRY_CDN_URL_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="cardgamesauth_sentry_cdn_url" name="cardgamesauth_sentry_cdn_url" value="{CARDGAMESAUTH_SENTRY_CDN_URL}" class="inputbox" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_sentry_sample_rate">{{ lang('CARDGAMESAUTH_SENTRY_SAMPLE_RATE') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_SENTRY_SAMPLE_RATE_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="cardgamesauth_sentry_sample_rate" name="cardgamesauth_sentry_sample_rate" value="{CARDGAMESAUTH_SENTRY_SAMPLE_RATE}" /></dd>
+		</dl>
+
+		<dl>
+			<dt>
+				<label for="cardgamesauth_sentry_traces_sample_rate">{{ lang('CARDGAMESAUTH_SENTRY_TRACES_SAMPLE_RATE') }}</label><br />
+				<span>{{ lang('CARDGAMESAUTH_SENTRY_TRACES_SAMPLE_RATE_EXPLAIN') }}</span>
+			</dt>
+			<dd><input type="text" id="cardgamesauth_sentry_traces_sample_rate" name="cardgamesauth_sentry_traces_sample_rate" value="{CARDGAMESAUTH_SENTRY_TRACES_SAMPLE_RATE}" /></dd>
+		</dl>
+	</fieldset>
+
+	<fieldset>
 		<legend>{{ lang('CARDGAMESAUTH_FIELDSET_TOKEN') }}</legend>
 
 		<dl>
