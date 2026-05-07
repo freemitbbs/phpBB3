@@ -995,6 +995,7 @@ function handleMessage(raw) {
     clearPending(pending);
     if (message.type === "error") {
       logClientWarn("server command error", serverErrorLogDetails(message, pending));
+      applyCommandErrorState(message);
       if (isRetryableErrorMessage(message)) {
         rememberRetryRequest(message.requestId, pending);
       } else {
@@ -1034,6 +1035,9 @@ function handleTimedOutMessage(message) {
   }
   if (message.type === "error") {
     logClientWarn("late server command error", serverErrorLogDetails(message, pending));
+    if (applyCommandErrorState(message)) {
+      setStatus(errorMessage(message));
+    }
     if (isRetryableErrorMessage(message)) {
       rememberRetryRequest(message.requestId, pending);
     } else {
@@ -1145,8 +1149,23 @@ function serverErrorLogDetails(message, pending = null) {
     roomKey: pending?.roomKey || roomKeyFromMessage(message),
     code: payload.code || "",
     message: payload.message || "",
-    retryable: payload.retryable === true
+    retryable: payload.retryable === true,
+    details: payload.details
   };
+}
+
+function applyCommandErrorState(message) {
+  const payload = message?.payload || {};
+  if (payload.code !== "tractor_dump_failed") {
+    return false;
+  }
+
+  const failure = dumpFailureFromPayload(payload);
+  if (failure?.mustPlayCards?.length && selectHandCardsByIds(failure.mustPlayCards)) {
+    render();
+    return true;
+  }
+  return false;
 }
 
 function applyServerMessage(message, commandType = "", context = null) {
@@ -1277,6 +1296,7 @@ function applyServerMessage(message, commandType = "", context = null) {
       break;
     case "error":
       logClientWarn("server pushed error", serverErrorLogDetails(message, context));
+      applyCommandErrorState(message);
       setStatus(errorMessage(message));
       break;
     default:
@@ -1836,6 +1856,31 @@ function selectedHandCards() {
     .filter(Boolean);
 }
 
+function selectHandCardsByIds(cardIds) {
+  const cards = state.table?.engine?.private?.cards || [];
+  if (!cards.length || !Array.isArray(cardIds)) {
+    return false;
+  }
+
+  const usedIndexes = new Set();
+  const indexes = [];
+  for (const cardId of cardIds) {
+    const id = Number(cardId);
+    const index = cards.findIndex((card, cardIndex) => !usedIndexes.has(cardIndex) && Number(card?.id) === id);
+    if (index < 0) {
+      continue;
+    }
+    usedIndexes.add(index);
+    indexes.push(index);
+  }
+
+  if (!indexes.length) {
+    return false;
+  }
+  state.selectedHandIndexes = indexes;
+  return true;
+}
+
 function cardFaceHtml(card, className) {
   const image = cardImageUrl(card);
   const label = cardLabelText(card);
@@ -2383,7 +2428,53 @@ function reportError(error) {
 
 function errorMessage(message) {
   const payload = message?.payload || {};
+  if (payload.code === "tractor_dump_failed") {
+    return dumpFailureErrorText(payload);
+  }
   return serverErrorText(payload.code, payload.message);
+}
+
+function dumpFailureErrorText(payload) {
+  const failure = dumpFailureFromPayload(payload);
+  const base = serverErrorText(payload.code, payload.message);
+  if (!failure) {
+    return base;
+  }
+
+  const hints = cardIdsLabelText(failure.mustPlayCards);
+  const penalty = Number.isFinite(failure.penalty) ? `，罚分 ${failure.penalty}` : "";
+  const score = Number.isFinite(failure.score) ? ` 当前分数 ${failure.score}。` : "";
+  return hints
+    ? `${base}${penalty}。请改出：${hints}。${score}`
+    : `${base}${penalty}。${score}`;
+}
+
+function dumpFailureFromPayload(payload) {
+  const failure = payload?.details?.dumpFailure || payload?.dumpFailure;
+  if (!failure || typeof failure !== "object") {
+    return null;
+  }
+
+  return {
+    attemptedCards: numberArray(failure.attemptedCards),
+    mustPlayCards: numberArray(failure.mustPlayCards),
+    penalty: Number(failure.penalty),
+    scoreDelta: Number(failure.scoreDelta),
+    score: Number(failure.score)
+  };
+}
+
+function numberArray(value) {
+  return Array.isArray(value)
+    ? value.map(Number).filter((item) => Number.isInteger(item))
+    : [];
+}
+
+function cardIdsLabelText(cardIds) {
+  return numberArray(cardIds)
+    .map((id) => cardLabelText({ id }))
+    .filter(Boolean)
+    .join(" ");
 }
 
 function statusText() {
@@ -2487,6 +2578,7 @@ function serverErrorText(code, message) {
     tractor_card_count_mismatch: "出牌张数必须与首家一致",
     tractor_cards_not_held: "出牌必须从您的手牌中选择",
     tractor_duplicate_player: "您已经在本局其他座位中",
+    tractor_dump_failed: "甩牌失败",
     tractor_dump_not_supported: "暂不支持甩牌",
     tractor_follow_pair_required: "有对子时必须尽量跟对子",
     tractor_follow_suit_required: "有同花色时必须跟同花色",
