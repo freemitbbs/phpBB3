@@ -1,0 +1,8 @@
+.cardgames-admin-active-rooms thead th,
+.cardgames-admin-active-rooms thead th a {
+	color: #333333;
+}
+
+.cardgames-admin-active-rooms thead th {
+	background-color: #eeeeee;
+}

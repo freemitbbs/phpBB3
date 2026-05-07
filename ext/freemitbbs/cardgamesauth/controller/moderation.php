@@ -168,6 +168,7 @@ class moderation
 		$moderator_user_id = (int) ($this->user->data['user_id'] ?? 0);
 		$requested_at = gmdate('c');
 		$request_id = 'phpbb-' . time() . '-' . $this->nonce();
+		$reason = trim((string) ($input['reason'] ?? ''));
 		$payload = [
 			'action' => $action,
 			'requestId' => $request_id,
@@ -182,10 +183,13 @@ class moderation
 			'actor_user_id' => $moderator_user_id,
 			'moderatorUserId' => $moderator_user_id,
 			'moderator_user_id' => $moderator_user_id,
-			'reason' => (string) ($input['reason'] ?? ''),
 			'requestedAt' => $requested_at,
 			'requested_at' => $requested_at,
 		];
+		if ($reason !== '')
+		{
+			$payload['reason'] = $reason;
+		}
 
 		try
 		{
@@ -193,7 +197,7 @@ class moderation
 		}
 		catch (\RuntimeException $e)
 		{
-			$this->record_audit($action, $room_key, $session_id, $target_user_id, (string) ($input['reason'] ?? ''), [
+			$this->record_audit($action, $room_key, $session_id, $target_user_id, $reason, [
 				'input' => $payload,
 				'success' => false,
 				'error' => $e->getMessage(),
@@ -202,7 +206,7 @@ class moderation
 		}
 
 		$persistence_result = [];
-		$this->record_audit($action, $room_key, $session_id, $target_user_id, (string) ($input['reason'] ?? ''), [
+		$this->record_audit($action, $room_key, $session_id, $target_user_id, $reason, [
 			'input' => $payload,
 			'success' => true,
 			'runtime' => $runtime_result,
@@ -385,7 +389,7 @@ class moderation
 			LEFT JOIN ' . USERS_TABLE . ' u
 				ON u.user_id = s.owner_user_id
 			WHERE s.finished_at = 0
-				AND ' . $this->db->sql_in_set('s.status', ['waiting', 'starting', 'playing']) . '
+				AND ' . $this->db->sql_in_set('s.status', ['starting', 'playing']) . '
 			ORDER BY s.updated_at DESC, s.id DESC';
 		$result = $this->db->sql_query_limit($sql, 50);
 		$rows = [];
@@ -462,7 +466,7 @@ class moderation
 
 	protected function runtime_timeout_ms(): int
 	{
-		$timeout_ms = (int) ($this->config['cardgames_node_runtime_timeout_ms'] ?? 3000);
+		$timeout_ms = (int) ($this->config['cardgames_node_runtime_timeout_ms'] ?? 10000);
 		return max(1000, min(30000, $timeout_ms));
 	}
 

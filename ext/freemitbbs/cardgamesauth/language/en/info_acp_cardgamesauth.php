@@ -75,5 +75,5 @@ $lang = array_merge($lang, [
 	'CARDGAMESAUTH_NODE_RUNTIME_SERVICE_SECRET' => 'Node runtime service secret',
 	'CARDGAMESAUTH_NODE_RUNTIME_SERVICE_SECRET_EXPLAIN' => 'Shared HMAC secret phpBB uses to sign runtime hook requests. Set the same value as RUNTIME_HOOK_SERVICE_SECRET on the Node server.',
 	'CARDGAMESAUTH_NODE_RUNTIME_TIMEOUT_MS' => 'Node runtime timeout',
-	'CARDGAMESAUTH_NODE_RUNTIME_TIMEOUT_MS_EXPLAIN' => 'Milliseconds to wait for a runtime hook response. Allowed range: 1000-30000.',
+	'CARDGAMESAUTH_NODE_RUNTIME_TIMEOUT_MS_EXPLAIN' => 'Milliseconds to wait for a runtime hook response. Default: 10000. Allowed range: 1000-30000.',
 ]);

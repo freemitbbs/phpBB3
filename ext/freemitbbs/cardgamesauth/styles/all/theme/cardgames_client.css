@@ -718,8 +718,20 @@
 }
 
 .app-shell .chat-emoji .chat-body {
-  color: var(--accent-2);
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-shell .chat-emoji-target {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.app-shell .chat-emoji-image {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
 }
 
 .app-shell .chat-form {

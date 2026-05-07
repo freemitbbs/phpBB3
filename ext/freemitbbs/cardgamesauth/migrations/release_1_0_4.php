@@ -19,7 +19,7 @@ class release_1_0_4 extends \phpbb\db\migration\migration
 			['config.add', ['cardgames_node_runtime_service_id', 'phpbb-cardgamesauth']],
 			['config.add', ['cardgames_node_runtime_service_secret', $this->generate_secret()]],
 			['config.add', ['cardgames_node_runtime_enabled', 0]],
-			['config.add', ['cardgames_node_runtime_timeout_ms', 3000]],
+			['config.add', ['cardgames_node_runtime_timeout_ms', 10000]],
 			['permission.add', ['m_cardgames_manage', true]],
 			['permission.add', ['m_cardgames_replay_export', true]],
 			['permission.permission_set', ['GLOBAL_MODERATORS', 'm_cardgames_manage', 'group']],

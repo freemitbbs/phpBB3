@@ -45,19 +45,28 @@ const defaultSkins = [
   "skin_boy_3.webp",
   "skin_girl_3.webp"
 ];
+const emojiById = {
+  smile: { id: "smile", asset: "goodjob", label: "干得好" },
+  laugh: { id: "laugh", asset: "lol", label: "大笑" },
+  thumbs_up: { id: "thumbs_up", asset: "youareright", label: "说得对" },
+  fire: { id: "fire", asset: "fireworks", label: "烟花" },
+  thinking: { id: "thinking", asset: "hurryup", label: "快点" },
+  surprise: { id: "surprise", asset: "sorry", label: "抱歉" },
+  good_luck: { id: "good_luck", asset: "noproblem", label: "没问题" },
+  clap: { id: "clap", asset: "goodjob", label: "鼓掌" },
+  sad: { id: "sad", asset: "sorry", label: "难过" },
+  angry: { id: "angry", asset: "hurryup", label: "着急" }
+};
 const emojiCatalog = [
-  { id: "smile", asset: "goodjob", label: "微笑" },
-  { id: "laugh", asset: "lol", label: "大笑" },
-  { id: "thumbs_up", asset: "youareright", label: "点赞" },
-  { id: "clap", asset: "goodjob", label: "鼓掌" },
-  { id: "fire", asset: "fireworks", label: "烟花" },
-  { id: "thinking", asset: "hurryup", label: "思考" },
-  { id: "surprise", asset: "sorry", label: "惊讶" },
-  { id: "sad", asset: "sorry", label: "难过" },
-  { id: "angry", asset: "hurryup", label: "着急" },
-  { id: "good_luck", asset: "noproblem", label: "好运" }
+  emojiById.smile,
+  emojiById.laugh,
+  emojiById.surprise,
+  emojiById.good_luck,
+  emojiById.thinking,
+  emojiById.fire,
+  emojiById.thumbs_up
 ];
-const emojiTypes = ["goodjob", "hurryup", "sorry", "lol", "noproblem", "fireworks", "youareright"];
+const emojiTypes = ["goodjob", "lol", "sorry", "noproblem", "hurryup", "fireworks", "youareright"];
 const commandTimeoutMs = 15000;
 const lateResponseRetentionMs = 60000;
 const heartbeatIntervalMs = 25000;
@@ -1206,7 +1215,7 @@ function tableActionsHtml(table) {
     parts.push(`<button data-action="tractor.discardBottom" type="button" ${!disabled && !isActionPending("tractor.discardBottom", roomKey) && selectedCards.length === discardAction.count ? "" : "disabled"} title="请选择 ${discardAction.count} 张牌">埋牌</button>`);
   }
   if (playAction.enabled) {
-    parts.push(`<button data-action="tractor.playCards" type="button" ${!disabled && !isActionPending("tractor.playCards", roomKey) && selectedCards.length > 0 ? "" : "disabled"}>出牌</button>`);
+    parts.push(`<button data-action="tractor.playCards" type="button" ${!disabled && !isActionPending("tractor.playCards", roomKey) ? "" : "disabled"} title="${selectedCards.length > 0 ? "" : "请选择要出的牌"}">出牌</button>`);
   }
 
   return parts.join("");
@@ -1316,7 +1325,9 @@ function handHtml(table) {
 function handleTableAction(type, seatValue) {
   const seatIndex = Number(seatValue);
   const roomKey = state.currentRoomKey;
-  if (!roomKey || isGameInteractionLocked() || state.transitionRoomKey || hasRoomTransitionPending() || isActionPending(type, roomKey)) {
+  const blockedReason = tableActionBlockedReason(type, roomKey);
+  if (blockedReason) {
+    setStatus(blockedReason);
     return;
   }
 
@@ -1349,12 +1360,47 @@ function handleTableAction(type, seatValue) {
       void sendEngineCommand("tractor.makeTrump", roomKey, payload);
     }
   } else if (type === "tractor.discardBottom") {
+    const cards = selectedHandCards();
+    const discardAction = action(state.table, "tractor.discardBottom");
+    if (cards.length !== discardAction.count) {
+      setStatus(`请选择 ${discardAction.count} 张牌`);
+      return;
+    }
     setStatus("正在埋牌...");
-    void sendEngineCommand("tractor.discardBottom", roomKey, { cards: selectedHandCards().map((card) => card.id) });
+    void sendEngineCommand("tractor.discardBottom", roomKey, { cards: cards.map((card) => card.id) });
   } else if (type === "tractor.playCards") {
+    const playAction = action(state.table, "tractor.playCards");
+    if (!playAction.enabled) {
+      setStatus(actionReasonText(playAction.reason || "play_not_open"));
+      return;
+    }
+    const cards = selectedHandCards();
+    if (!cards.length) {
+      setStatus("请选择要出的牌");
+      return;
+    }
     setStatus("正在出牌...");
-    void sendEngineCommand("tractor.playCards", roomKey, { cards: selectedHandCards().map((card) => card.id) });
+    void sendEngineCommand("tractor.playCards", roomKey, { cards: cards.map((card) => card.id) });
   }
+}
+
+function tableActionBlockedReason(type, roomKey) {
+  if (!roomKey) {
+    return "请选择房间";
+  }
+  if (!state.authenticated) {
+    return "请先连接并认证";
+  }
+  if (state.connecting || state.recovering) {
+    return "正在同步，请稍候";
+  }
+  if (state.transitionRoomKey || hasRoomTransitionPending()) {
+    return "正在切换房间，请稍候";
+  }
+  if (isActionPending(type, roomKey)) {
+    return "上一个操作仍在处理中";
+  }
+  return "";
 }
 
 async function sendEngineCommand(type, roomKey, payload) {
@@ -1674,8 +1720,7 @@ function chatEventNode(event) {
   const body = document.createElement("span");
   body.className = "chat-body";
   if (event.kind === "emoji") {
-    const target = emojiTargetLabel(event);
-    body.textContent = target ? `向${target}发送了${emojiLabel(event.emojiId)}` : `发送了${emojiLabel(event.emojiId)}`;
+    appendChatEmoji(body, event);
   } else {
     body.textContent = event.text || "";
   }
@@ -1684,8 +1729,23 @@ function chatEventNode(event) {
   return item;
 }
 
-function emojiLabel(emojiId) {
-  return emojiCatalog.find((item) => item.id === emojiId)?.label || "表情";
+function appendChatEmoji(body, event) {
+  const emoji = emojiById[event.emojiId] || emojiById.smile;
+  const target = emojiTargetLabel(event);
+  if (target) {
+    const label = document.createElement("span");
+    label.className = "chat-emoji-target";
+    label.textContent = `向${target}`;
+    body.append(label);
+  }
+
+  const image = document.createElement("img");
+  image.className = "chat-emoji-image";
+  image.src = emojiUrl(String(event.emojiType || event.type || emoji.asset), Number(event.emojiIndex ?? event.index ?? 0));
+  image.alt = emoji.label;
+  image.title = emoji.label;
+  image.loading = "lazy";
+  body.append(image);
 }
 
 function emojiTargetLabel(event) {
@@ -1776,7 +1836,7 @@ function emojiTargetPayload() {
 }
 
 function showEmoji(payload = {}) {
-  const emoji = emojiCatalog.find((item) => item.id === payload.emojiId);
+  const emoji = emojiById[payload.emojiId];
   const type = String(payload.emojiType || payload.type || emoji?.asset || "goodjob");
   const index = Math.max(0, Math.min(3, Number(payload.emojiIndex ?? payload.index ?? 0)));
   const target = emojiAnimationTarget(payload);

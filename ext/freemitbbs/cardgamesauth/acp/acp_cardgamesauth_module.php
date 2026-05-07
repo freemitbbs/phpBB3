@@ -77,7 +77,7 @@ class acp_cardgamesauth_module
 			{
 				$config->set('cardgames_node_runtime_service_secret', $runtime_service_secret);
 			}
-			$config->set('cardgames_node_runtime_timeout_ms', (string) $this->bounded_int($request->variable('cardgames_node_runtime_timeout_ms', 3000), 1000, 30000));
+			$config->set('cardgames_node_runtime_timeout_ms', (string) $this->bounded_int($request->variable('cardgames_node_runtime_timeout_ms', 10000), 1000, 30000));
 			$tester_error = $this->add_tester_usernames(
 				$db,
 				$tester_group_id,
@@ -115,7 +115,7 @@ class acp_cardgamesauth_module
 			'CARDGAMES_NODE_RUNTIME_BASE_URL' => (string) ($config['cardgames_node_runtime_base_url'] ?? ''),
 			'CARDGAMES_NODE_RUNTIME_SERVICE_ID' => (string) ($config['cardgames_node_runtime_service_id'] ?? 'phpbb-cardgamesauth'),
 			'CARDGAMES_NODE_RUNTIME_SERVICE_SECRET' => $this->ensure_secret_config($config, 'cardgames_node_runtime_service_secret'),
-			'CARDGAMES_NODE_RUNTIME_TIMEOUT_MS' => (int) ($config['cardgames_node_runtime_timeout_ms'] ?? 3000),
+			'CARDGAMES_NODE_RUNTIME_TIMEOUT_MS' => (int) ($config['cardgames_node_runtime_timeout_ms'] ?? 10000),
 			'CARDGAMESAUTH_TESTER_GROUP_NAME' => self::TESTER_GROUP_NAME,
 			'CARDGAMESAUTH_TESTER_MEMBERS' => $this->tester_members_text($db, $tester_group_id),
 		]);
