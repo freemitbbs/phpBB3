@@ -74,6 +74,7 @@ const retryRequestRetentionMs = 60000;
 const heartbeatIntervalMs = 25000;
 const heartbeatTimeoutMs = 10000;
 const heartbeatMaxMisses = 2;
+const logPrefix = "[card-games]";
 const retryableCommandTypes = new Set([
   "room.join",
   "room.leave",
@@ -121,6 +122,82 @@ const phaseLabels = {
   play_not_open: "现在还不能出牌",
   game_paused: "游戏暂停，等待离线玩家重连或空位补位"
 };
+
+function logClientWarn(message, details = null) {
+  if (!window.console?.warn) {
+    return;
+  }
+  if (details === null || details === undefined) {
+    window.console.warn(`${logPrefix} ${message}`);
+    return;
+  }
+  window.console.warn(`${logPrefix} ${message}`, sanitizeLogDetails(details));
+}
+
+function logClientError(message, error = null, details = null) {
+  if (!window.console?.error) {
+    return;
+  }
+  const args = [`${logPrefix} ${message}`];
+  if (error !== null && error !== undefined) {
+    args.push(sanitizeLogDetails(error));
+  }
+  if (details !== null && details !== undefined) {
+    args.push(sanitizeLogDetails(details));
+  }
+  window.console.error(...args);
+}
+
+function sanitizeLogDetails(value, depth = 0) {
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: redactLogString(value.message),
+      stack: redactLogString(value.stack || "")
+    };
+  }
+  if (typeof value === "string") {
+    return redactLogString(value);
+  }
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  if (depth > 3) {
+    return "[truncated]";
+  }
+  if (Array.isArray(value)) {
+    return value.slice(0, 20).map((item) => sanitizeLogDetails(item, depth + 1));
+  }
+
+  const redacted = {};
+  Object.keys(value).slice(0, 50).forEach((key) => {
+    if (/token|secret|password|authorization|hash/i.test(key)) {
+      redacted[key] = "[redacted]";
+      return;
+    }
+    redacted[key] = sanitizeLogDetails(value[key], depth + 1);
+  });
+  return redacted;
+}
+
+function redactLogString(value) {
+  if (!/[?&][^=]*(token|secret|password|authorization|hash)[^=]*=/i.test(value)) {
+    return value;
+  }
+
+  try {
+    const url = new URL(value, window.location.href);
+    Array.from(url.searchParams.keys()).forEach((key) => {
+      if (/token|secret|password|authorization|hash/i.test(key)) {
+        url.searchParams.set(key, "[redacted]");
+      }
+    });
+    return url.toString();
+  } catch {
+    return value.replace(/([?&][^=]*(?:token|secret|password|authorization|hash)[^=]*=)[^&#]*/gi, "$1[redacted]");
+  }
+}
+
 const cardSuitLabels = {
   heart: "红桃",
   spade: "黑桃",
@@ -215,6 +292,7 @@ els.table.addEventListener("error", (event) => {
   }
   image.hidden = true;
   image.closest(".card-face")?.classList.add("card-face-image-missing");
+  logClientWarn("card face image failed to load", { src: image.currentSrc || image.src });
 }, true);
 window.addEventListener("pagehide", () => {
   disconnect();
@@ -266,11 +344,17 @@ async function loadBootstrap() {
   try {
     const response = await fetch(inline.configUrl || fromQuery.configUrl || defaultConfigUrl(), { credentials: "same-origin" });
     if (!response.ok) {
+      logClientWarn("client config request failed", {
+        status: response.status,
+        statusText: response.statusText,
+        url: response.url
+      });
       return fromQuery;
     }
     const config = await response.json();
     return { ...config, ...withoutEmptyValues(fromQuery) };
-  } catch {
+  } catch (error) {
+    logClientWarn("client config bootstrap failed", error);
     return fromQuery;
   }
 }
@@ -323,10 +407,15 @@ async function connect() {
       }
       handleMessage(event.data);
     });
-    ws.addEventListener("close", () => {
+    ws.addEventListener("close", (event) => {
       if (!isCurrentSocket(ws, connectionEpoch)) {
         return;
       }
+      logClientWarn("websocket closed", {
+        code: event.code,
+        reason: event.reason || "",
+        wasClean: event.wasClean
+      });
       state.connectionEpoch += 1;
       state.ws = null;
       state.connected = false;
@@ -341,6 +430,10 @@ async function connect() {
       if (!isCurrentSocket(ws, connectionEpoch)) {
         return;
       }
+      logClientError("websocket error", null, {
+        readyState: ws.readyState,
+        url: ws.url
+      });
       state.connectionEpoch += 1;
       state.ws = null;
       state.connecting = false;
@@ -358,6 +451,7 @@ async function connect() {
     if (!isCurrentConnectionAttempt(connectionEpoch)) {
       return;
     }
+    logClientError("connection failed", error);
     state.connecting = false;
     state.recovering = false;
     stopHeartbeat();
@@ -624,9 +718,19 @@ async function fetchToken() {
   });
   const payload = await response.json();
   if (!response.ok || !payload.success) {
+    logClientWarn("token request failed", {
+      status: response.status,
+      statusText: response.statusText,
+      success: payload.success,
+      error: payload.error || ""
+    });
     throw new Error(payload.error || "获取游戏令牌失败");
   }
   if (!payload.token) {
+    logClientWarn("token response omitted token", {
+      status: response.status,
+      success: payload.success
+    });
     throw new Error("获取游戏令牌失败");
   }
 
@@ -663,6 +767,7 @@ async function authenticate(connectionEpoch = state.connectionEpoch) {
     if (!isCurrentConnectionAttempt(connectionEpoch)) {
       return;
     }
+    logClientError("authentication failed", error);
     state.recovering = false;
     setStatus(error.message || "认证失败");
   }
@@ -727,6 +832,11 @@ async function refreshTable(roomKey) {
 
 function sendCommand(type, options = {}) {
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+    logClientWarn("command rejected because websocket is not open", {
+      type,
+      roomKey: options.roomKey || "",
+      readyState: state.ws?.readyState ?? null
+    });
     state.connected = false;
     state.authenticated = false;
     render();
@@ -760,6 +870,11 @@ function sendCommand(type, options = {}) {
       clearPending(pending);
       rememberRetryRequest(requestId, pending);
       rememberTimedOutPending(requestId, pending);
+      logClientWarn("command timed out", {
+        type: pending.type,
+        requestId,
+        roomKey: pending.roomKey
+      });
       pending.reject(new Error("请求超时，请重试"));
       render();
     }, options.timeoutMs || commandTimeoutMs);
@@ -784,6 +899,11 @@ function sendCommand(type, options = {}) {
       clearPending(pending);
       rememberRetryRequest(requestId, pending);
     }
+    logClientError("command send failed", error, {
+      type,
+      requestId,
+      roomKey: options.roomKey || ""
+    });
     return Promise.reject(error);
   }
   render();
@@ -858,7 +978,10 @@ function handleMessage(raw) {
   let message;
   try {
     message = JSON.parse(raw);
-  } catch {
+  } catch (error) {
+    logClientError("invalid server message", error, {
+      length: String(raw || "").length
+    });
     setStatus("收到无效的服务器消息");
     return;
   }
@@ -871,6 +994,7 @@ function handleMessage(raw) {
     state.pending.delete(message.requestId);
     clearPending(pending);
     if (message.type === "error") {
+      logClientWarn("server command error", serverErrorLogDetails(message, pending));
       if (isRetryableErrorMessage(message)) {
         rememberRetryRequest(message.requestId, pending);
       } else {
@@ -891,6 +1015,11 @@ function handleMessage(raw) {
     return;
   }
   if (message.requestId) {
+    logClientWarn("unmatched command response ignored", {
+      type: message.type || "",
+      requestId: message.requestId,
+      roomKey: roomKeyFromMessage(message)
+    });
     return;
   }
 
@@ -904,6 +1033,7 @@ function handleTimedOutMessage(message) {
     return;
   }
   if (message.type === "error") {
+    logClientWarn("late server command error", serverErrorLogDetails(message, pending));
     if (isRetryableErrorMessage(message)) {
       rememberRetryRequest(message.requestId, pending);
     } else {
@@ -1005,6 +1135,18 @@ function roomKeyFromMessage(message) {
 
 function isRetryableErrorMessage(message) {
   return message?.type === "error" && message.payload?.retryable === true;
+}
+
+function serverErrorLogDetails(message, pending = null) {
+  const payload = message?.payload || {};
+  return {
+    type: pending?.type || message?.type || "",
+    requestId: message?.requestId || "",
+    roomKey: pending?.roomKey || roomKeyFromMessage(message),
+    code: payload.code || "",
+    message: payload.message || "",
+    retryable: payload.retryable === true
+  };
 }
 
 function applyServerMessage(message, commandType = "", context = null) {
@@ -1134,9 +1276,15 @@ function applyServerMessage(message, commandType = "", context = null) {
       showEmoji(message.payload);
       break;
     case "error":
+      logClientWarn("server pushed error", serverErrorLogDetails(message, context));
       setStatus(errorMessage(message));
       break;
     default:
+      logClientWarn("unknown server message ignored", {
+        type: message.type || "",
+        requestId: message.requestId || "",
+        roomKey: roomKeyFromMessage(message)
+      });
       break;
   }
 }
