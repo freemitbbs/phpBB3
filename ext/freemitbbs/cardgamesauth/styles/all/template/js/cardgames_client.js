@@ -1846,6 +1846,9 @@ async function sendEngineCommand(type, roomKey, payload) {
     }
   } catch (error) {
     reportError(error);
+    if (type && String(type).startsWith("tractor.") && roomKey && state.currentRoomKey === roomKey) {
+      void refreshTable(roomKey).catch(() => undefined);
+    }
   }
 }
 
@@ -2466,7 +2469,77 @@ function errorMessage(message) {
   if (payload.code === "tractor_dump_failed") {
     return dumpFailureErrorText(payload);
   }
+  if (payload.code && String(payload.code).startsWith("tractor_")) {
+    return tractorRuleErrorText(payload);
+  }
   return serverErrorText(payload.code, payload.message);
+}
+
+function tractorRuleErrorText(payload) {
+  const base = serverErrorText(payload.code, payload.message);
+  const tractor = payload?.details?.tractor;
+  if (!tractor || typeof tractor !== "object") {
+    return base;
+  }
+
+  const parts = [];
+  const leadingSuit = effectiveSuitText(tractor.leadingSuit, tractor.trumpSuit);
+  const leadingCards = ruleCardsText(tractor.leadingCards, tractor.trumpSuit);
+  const selectedCards = ruleCardsText(tractor.selectedCards, tractor.trumpSuit);
+  const selectedSuits = Array.isArray(tractor.selectedSuits)
+    ? tractor.selectedSuits.map((suit) => effectiveSuitText(suit, tractor.trumpSuit)).filter(Boolean)
+    : [];
+  const selectedText = [...new Set(selectedSuits)].join("、");
+  const heldCount = Number(tractor.leadingSuitHeldCount);
+
+  if (leadingSuit) {
+    parts.push(`首家出的是${leadingSuit}${leadingCards ? `（${leadingCards}）` : ""}`);
+  } else if (leadingCards) {
+    parts.push(`首家出的是${leadingCards}`);
+  }
+  if (selectedCards) {
+    parts.push(`你出的是${selectedCards}`);
+  }
+  if (selectedText && !selectedCards) {
+    parts.push(`你选择的是${selectedText}`);
+  }
+  if (Number.isFinite(heldCount) && heldCount > 0 && leadingSuit) {
+    parts.push(`手里还有 ${heldCount} 张${leadingSuit}必须先跟`);
+  }
+
+  return parts.length ? `${base}：${parts.join("，")}。` : base;
+}
+
+function ruleCardsText(cards, trumpSuit) {
+  if (!Array.isArray(cards)) {
+    return "";
+  }
+
+  return cards
+    .map((card) => {
+      if (!card || typeof card !== "object") {
+        return "";
+      }
+      const label = cardLabelText(card) || card.label;
+      const effectiveSuit = effectiveSuitText(card.effectiveSuit, trumpSuit);
+      const reason = trumpReasonText(card.trumpReason);
+      const suffix = effectiveSuit
+        ? `按${effectiveSuit}${reason ? `（${reason}）` : ""}处理`
+        : "";
+      return suffix ? `${label}，${suffix}` : label;
+    })
+    .filter(Boolean)
+    .join("、");
+}
+
+function trumpReasonText(reason) {
+  const labels = {
+    joker: "王",
+    rank: "级牌",
+    trump_suit: "主花色",
+    trump: "主牌"
+  };
+  return labels[String(reason || "")] || "";
 }
 
 function dumpFailureErrorText(payload) {
@@ -2510,6 +2583,24 @@ function cardIdsLabelText(cardIds) {
     .map((id) => cardLabelText({ id }))
     .filter(Boolean)
     .join(" ");
+}
+
+function effectiveSuitText(suit, trumpSuit) {
+  const key = String(suit || "");
+  if (!key || key === "none") {
+    return "";
+  }
+  if (key === String(trumpSuit || "")) {
+    return "主牌";
+  }
+  const labels = {
+    heart: "红桃",
+    spade: "黑桃",
+    diamond: "方块",
+    club: "梅花",
+    joker: "王主"
+  };
+  return labels[key] || key;
 }
 
 function statusText() {
