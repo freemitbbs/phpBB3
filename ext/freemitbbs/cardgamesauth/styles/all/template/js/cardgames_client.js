@@ -1687,7 +1687,7 @@ function trickHtml(table) {
 
   const plays = trick.plays.map((play) => `
     <div class="trick-play">
-      <span>${seatLabel(play.seatIndex)}</span>
+      <span>${escapeHtml(playUserLabel(table, play))}</span>
       <span class="played-cards">${play.cards.map((card) => cardFaceHtml(card, "played-card")).join("")}</span>
     </div>
   `).join("");
@@ -1697,6 +1697,9 @@ function trickHtml(table) {
 function turnTimerHtml(table) {
   if (isTablePaused(table)) {
     return "";
+  }
+  if (isTrickReviewActive(table)) {
+    return trickReviewTimerHtml(table);
   }
 
   const turn = table.turn;
@@ -1710,6 +1713,22 @@ function turnTimerHtml(table) {
   return `
     <div class="turn-timer" data-viewer-turn="${viewerTurn ? "true" : "false"}" data-turn-deadline="${escapeAttribute(turn.deadlineAt)}" data-turn-started="${escapeAttribute(turn.startedAt || "")}" data-turn-countdown="${escapeAttribute(turn.countdownSeconds || "")}">
       <span class="turn-timer-label">${escapeHtml(label)}</span>
+      <span class="turn-timer-time">--:--</span>
+      <span class="turn-timer-bar" aria-hidden="true"><span></span></span>
+    </div>
+  `;
+}
+
+function trickReviewTimerHtml(table) {
+  const untilMs = Date.parse(table.review?.until || "");
+  if (!Number.isFinite(untilMs)) {
+    return "";
+  }
+
+  const remainingSeconds = Math.max(1, Math.ceil((untilMs - Date.now()) / 1000));
+  return `
+    <div class="turn-timer trick-review-timer" data-viewer-turn="false" data-turn-deadline="${escapeAttribute(table.review.until)}" data-turn-started="" data-turn-countdown="${escapeAttribute(remainingSeconds)}">
+      <span class="turn-timer-label">本墩回顾</span>
       <span class="turn-timer-time">--:--</span>
       <span class="turn-timer-bar" aria-hidden="true"><span></span></span>
     </div>
@@ -2688,6 +2707,20 @@ function statusTextForRoom(status) {
 
 function seatLabel(seatIndex) {
   return `${Number(seatIndex) + 1}号座位`;
+}
+
+function playUserLabel(table, play) {
+  const userId = Number(play?.userId);
+  if (Number.isInteger(userId)) {
+    const userSeat = table.room?.seats?.find((seat) => seat.user?.userId === userId);
+    if (userSeat?.user) {
+      return userSeat.user.displayName || userSeat.user.username || seatLabel(userSeat.seatIndex);
+    }
+  }
+
+  const seatIndex = Number(play?.seatIndex);
+  const seat = table.room?.seats?.find((candidate) => candidate.seatIndex === seatIndex);
+  return seat?.user?.displayName || seat?.user?.username || seatLabel(seatIndex);
 }
 
 function skinDisplayName(skin) {

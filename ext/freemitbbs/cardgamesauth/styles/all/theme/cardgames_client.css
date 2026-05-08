@@ -374,6 +374,10 @@
   color: #ffe38f;
 }
 
+.app-shell .trick-review-timer {
+  color: #ffe38f;
+}
+
 .app-shell .turn-timer-label {
   min-width: 0;
   overflow-wrap: anywhere;
