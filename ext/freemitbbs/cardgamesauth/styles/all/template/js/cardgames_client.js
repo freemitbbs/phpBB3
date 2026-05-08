@@ -2054,17 +2054,17 @@ function cardRankFromCard(card) {
 }
 
 function serverToUiCardNumber(cardId) {
-  if (cardId >= 0 && cardId < 13) {
-    return cardId < 12 ? cardId + 1 : 0;
-  }
-  if (cardId >= 13 && cardId < 26) {
-    return cardId < 25 ? cardId + 14 : 13;
-  }
-  if (cardId >= 26 && cardId < 39) {
-    return cardId < 38 ? cardId - 12 : 26;
-  }
-  if (cardId >= 39 && cardId < 52) {
-    return cardId < 51 ? cardId + 1 : 39;
+  if (cardId >= 0 && cardId < 52) {
+    const rank = cardId % 13;
+    const rankOffset = rank === 12 ? 0 : rank + 1;
+    const suitOffset = cardId < 13
+      ? 0
+      : cardId < 26
+        ? 26
+        : cardId < 39
+          ? 13
+          : 39;
+    return suitOffset + rankOffset;
   }
   if (cardId === 52) {
     return 53;
