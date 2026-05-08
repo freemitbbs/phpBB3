@@ -10,6 +10,7 @@ const state = {
   recovering: false,
   connectionEpoch: 0,
   turnTimerId: 0,
+  trickReviewTimerId: 0,
   heartbeatId: 0,
   heartbeatMisses: 0,
   requestSeq: 0,
@@ -120,6 +121,7 @@ const phaseLabels = {
   bottom_not_open: "现在还不能埋牌",
   waiting_for_turn: "还没轮到您出牌",
   play_not_open: "现在还不能出牌",
+  trick_reviewing: "请先看完上一墩出牌",
   game_paused: "游戏暂停，等待离线玩家重连或空位补位"
 };
 
@@ -320,7 +322,23 @@ els.emojiTarget.addEventListener("change", () => {
 });
 els.table.addEventListener("error", (event) => {
   const image = event.target;
-  if (!(image instanceof HTMLImageElement) || !image.classList.contains("card-face-image")) {
+  if (!(image instanceof HTMLImageElement)) {
+    return;
+  }
+  if (image.classList.contains("seat-forum-avatar")) {
+    const fallback = image.dataset.fallbackSrc || "";
+    if (fallback && image.dataset.fallbackUsed !== "true") {
+      const failedSrc = image.currentSrc || image.src;
+      image.dataset.fallbackUsed = "true";
+      image.removeAttribute("data-fallback-src");
+      image.classList.remove("seat-forum-avatar");
+      image.classList.add("seat-skin", "seat-fallback-skin");
+      image.src = fallback;
+      logClientWarn("forum avatar failed to load; using game avatar", { src: failedSrc });
+    }
+    return;
+  }
+  if (!image.classList.contains("card-face-image")) {
     return;
   }
   image.hidden = true;
@@ -730,6 +748,7 @@ function clearRoomState(advanceEpoch = true) {
   state.emojiTarget = "";
   state.selectedHandIndexes = [];
   state.handSignature = "";
+  clearTrickReviewTimer();
 }
 
 async function fetchToken() {
@@ -1423,6 +1442,7 @@ function renderTable() {
   els.leave.hidden = !state.currentRoomKey;
   if (!table) {
     clearTurnTimer();
+    clearTrickReviewTimer();
     els.title.textContent = "大厅";
     els.table.innerHTML = '<div class="empty-state">请选择房间进入牌桌。</div>';
     return;
@@ -1439,6 +1459,8 @@ function renderTable() {
   const paused = isTablePaused(table);
   const trickLabel = paused
     ? pauseText(table)
+    : isTrickReviewActive(table)
+      ? `第 ${table.review.trickNumber} 墩结束，稍候继续`
     : currentTrick
       ? `第 ${currentTrick.trickNumber} 墩，轮到${seatLabel(currentTrick.nextSeatIndex ?? currentTrick.winnerSeatIndex)}`
       : table.engineReady ? `得分 ${score}` : "等待中";
@@ -1485,6 +1507,7 @@ function renderTable() {
       ? "离开后本局会暂停，其他用户可补位继续。"
       : "";
   syncTurnTimer();
+  syncTrickReviewTimer(table);
 }
 
 function seatHtml(table, seat) {
@@ -1500,18 +1523,23 @@ function seatHtml(table, seat) {
     ? `${seat.connected ? "在线" : "离线"} · ${seat.ready ? "已准备" : "未准备"}${isOwner ? " · 房主" : ""}`
     : "空位";
   const actions = seatActionsHtml(table, seat, isViewerSeat);
-  const avatar = user?.avatarUrl
-    ? `<span class="seat-avatar-stack"><img class="seat-skin" src="${escapeAttribute(skinUrlForSeat(user, seat.seatIndex))}" alt="" loading="lazy" /><img class="seat-profile-avatar" src="${escapeAttribute(user.avatarUrl)}" alt="" loading="lazy" /></span>`
-    : `<img class="seat-skin" src="${escapeAttribute(skinUrlForSeat(user, seat.seatIndex))}" alt="" loading="lazy" />`;
 
   return `
     <div class="seat seat-${visualSeatIndex} ${isViewerSeat ? "seat-viewer" : ""} ${seat.connected ? "" : "seat-offline"} ${replacementSeat ? "seat-replacement" : ""}" data-seat-index="${seat.seatIndex}">
-      ${avatar}
+      ${seatAvatarHtml(user, seat.seatIndex)}
       <div class="seat-name">${occupied ? escapeHtml(user.displayName) : seatLabel(seat.seatIndex)}</div>
       <div class="seat-meta">${escapeHtml(meta)}</div>
       <div class="seat-actions">${actions}</div>
     </div>
   `;
+}
+
+function seatAvatarHtml(user, seatIndex) {
+  const fallback = skinUrlForSeat(user, seatIndex);
+  if (user?.avatarUrl) {
+    return `<img class="seat-avatar seat-forum-avatar" src="${escapeAttribute(user.avatarUrl)}" data-fallback-src="${escapeAttribute(fallback)}" alt="" loading="lazy" />`;
+  }
+  return `<img class="seat-avatar seat-skin" src="${escapeAttribute(fallback)}" alt="" loading="lazy" />`;
 }
 
 function visualSeatIndexFor(table, seatIndex) {
@@ -1606,6 +1634,11 @@ function isTablePaused(table) {
   });
 }
 
+function isTrickReviewActive(table) {
+  const untilMs = Date.parse(table.review?.until || "");
+  return Boolean(table.review?.active && Number.isFinite(untilMs) && untilMs > Date.now());
+}
+
 function pauseText(table) {
   if (table.pause?.reason === "empty_active_seat") {
     return "游戏暂停，等待空位补位后继续。";
@@ -1644,7 +1677,10 @@ function tableActionsHtml(table) {
 }
 
 function trickHtml(table) {
-  const trick = table.engine?.public?.currentTrick || table.engine?.public?.lastCompletedTrick;
+  const currentTrick = table.engine?.public?.currentTrick;
+  const trick = currentTrick?.plays?.length
+    ? currentTrick
+    : table.engine?.public?.lastCompletedTrick;
   if (!trick || !trick.plays?.length) {
     return "";
   }
@@ -1695,6 +1731,32 @@ function clearTurnTimer() {
   if (state.turnTimerId) {
     window.clearInterval(state.turnTimerId);
     state.turnTimerId = 0;
+  }
+}
+
+function syncTrickReviewTimer(table) {
+  clearTrickReviewTimer();
+  const untilMs = Date.parse(table.review?.until || "");
+  if (!table.review?.active || !Number.isFinite(untilMs)) {
+    return;
+  }
+
+  const roomKey = table.room?.roomKey || state.currentRoomKey;
+  const delay = Math.max(0, untilMs - Date.now()) + 50;
+  state.trickReviewTimerId = window.setTimeout(() => {
+    state.trickReviewTimerId = 0;
+    if (roomKey && state.currentRoomKey === roomKey) {
+      void refreshTable(roomKey).catch(() => render());
+    } else {
+      render();
+    }
+  }, delay);
+}
+
+function clearTrickReviewTimer() {
+  if (state.trickReviewTimerId) {
+    window.clearTimeout(state.trickReviewTimerId);
+    state.trickReviewTimerId = 0;
   }
 }
 
@@ -2727,6 +2789,7 @@ function serverErrorText(code, message) {
     tractor_requires_four_seats: "拖拉机需要四个座位",
     tractor_snapshot_unavailable: "拖拉机恢复快照不可用",
     tractor_trick_incomplete: "本墩牌尚未完成",
+    tractor_trick_reviewing: "请先看完上一墩出牌",
     tractor_trump_cards_not_held: "亮主必须使用您的手牌",
     tractor_trump_closed: "底牌发出后不能亮主",
     tractor_trump_too_weak: "亮主级别不够",
