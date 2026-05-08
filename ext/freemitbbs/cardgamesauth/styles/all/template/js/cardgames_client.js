@@ -113,10 +113,10 @@ const phaseLabels = {
   waiting_for_players: "等待玩家",
   waiting_for_four_ready_players: "等待四名玩家准备",
   making_trump: "亮主",
-  burying_bottom: "埋牌",
+  burying_bottom: "反主/埋牌",
   playing: "出牌中",
   finished: "已结束",
-  trump_not_open: "现在还不能亮主",
+  trump_not_open: "现在还不能亮主/反主",
   bottom_holder_only: "只有底牌持有者可以埋牌",
   bottom_not_open: "现在还不能埋牌",
   waiting_for_turn: "还没轮到您出牌",
@@ -1464,7 +1464,7 @@ function renderTable() {
       ? `第 ${table.review.trickNumber} 墩结束，稍候继续`
     : currentTrick
       ? `第 ${currentTrick.trickNumber} 墩，轮到${seatLabel(currentTrick.nextSeatIndex ?? currentTrick.winnerSeatIndex)}`
-      : table.engineReady ? `得分 ${score}` : "等待中";
+      : table.engineReady ? `抓分方抓分 ${score}` : "等待中";
   const leaveAction = action(table, "room.leave");
   const roomTransitionPending = hasRoomTransitionPending();
 
@@ -1473,7 +1473,6 @@ function renderTable() {
       ${seatNodes}
       <div class="table-center">
         <div>
-          <div class="table-emblem" aria-hidden="true"></div>
           <strong>${escapeHtml(phaseText(table.phase))}</strong>
           <p>${escapeHtml(trickLabel)}</p>
           <div class="table-facts">
@@ -1671,7 +1670,11 @@ function tableActionsHtml(table) {
     parts.push(`<button data-action="tractor.start" type="button" ${disabled || isActionPending("tractor.start", roomKey) ? "disabled" : ""}>发牌</button>`);
   }
   if (makeTrumpAction.enabled) {
-    parts.push(`<button data-action="tractor.makeTrump" type="button" ${!disabled && !isActionPending("tractor.makeTrump", roomKey) && inferTrumpPayload(selectedCards, table) ? "" : "disabled"} title="请选择一张级牌或一对有效的牌">亮主</button>`);
+    const label = trumpActionLabel(table);
+    const title = table.phase === "burying_bottom"
+      ? "请选择比当前主更强的级牌对子或王对"
+      : "请选择一张级牌、级牌对子或王对";
+    parts.push(`<button data-action="tractor.makeTrump" type="button" ${!disabled && !isActionPending("tractor.makeTrump", roomKey) && inferTrumpPayload(selectedCards, table) ? "" : "disabled"} title="${escapeAttribute(title)}">${escapeHtml(label)}</button>`);
   }
   if (discardAction.enabled) {
     parts.push(`<button data-action="tractor.discardBottom" type="button" ${!disabled && !isActionPending("tractor.discardBottom", roomKey) && selectedCards.length === discardAction.count ? "" : "disabled"} title="请选择 ${discardAction.count} 张牌">埋牌</button>`);
@@ -1710,12 +1713,13 @@ function handSummaryHtml(table) {
   }
 
   const teams = (summary.teams || []).map((team) => {
-    const role = team.team === summary.defendingTeam ? "守庄" : "抓分";
+    const role = team.team === summary.defendingTeam ? "庄家方" : "抓分方";
+    const scoreLabel = team.team === summary.defendingTeam ? "守住分" : "抓分";
     return `
       <div class="hand-summary-team ${team.won ? "hand-summary-winner" : ""}">
-        <strong>${escapeHtml(teamLabel(team.team))}</strong>
-        <span>${escapeHtml(role)} · ${escapeHtml(String(team.points))} 分</span>
-        <span>${escapeHtml(team.rankLabelBefore || rankLabel(team.rankBefore))} → ${escapeHtml(team.rankLabelAfter || rankLabel(team.rankAfter))} · ${escapeHtml(rankMoveText(team, summary))}</span>
+        <strong>${escapeHtml(role)}</strong>
+        <span>${escapeHtml(scoreLabel)}：${escapeHtml(String(team.points))} 分</span>
+        <span>级牌：${escapeHtml(team.rankLabelBefore || rankLabel(team.rankBefore))} → ${escapeHtml(team.rankLabelAfter || rankLabel(team.rankAfter))}（${escapeHtml(rankMoveText(team, summary))}）</span>
       </div>
     `;
   }).join("");
@@ -1727,15 +1731,11 @@ function handSummaryHtml(table) {
     <div class="hand-summary-panel">
       <div class="hand-summary-title">本局结束，等待房主开始下一局</div>
       <div class="hand-summary-meta">
-        抓分 ${escapeHtml(String(summary.attackingScore))} / ${escapeHtml(String(summary.winningThreshold))}${escapeHtml(bottom)}
+        抓分方抓分 ${escapeHtml(String(summary.attackingScore))}，${escapeHtml(String(summary.winningThreshold))} 分上台${escapeHtml(bottom)}
       </div>
       <div class="hand-summary-teams">${teams}</div>
     </div>
   `;
-}
-
-function teamLabel(team) {
-  return team === "vertical" ? "上下家" : "左右家";
 }
 
 function rankMoveText(team, summary) {
@@ -1743,7 +1743,7 @@ function rankMoveText(team, summary) {
     return "新局重置";
   }
   if (team.rankDelta > 0) {
-    return `升 ${team.rankDelta} 级`;
+    return `升${team.rankDelta}级`;
   }
   if (team.rankDelta < 0) {
     return "重置";
@@ -1909,19 +1909,22 @@ function handleTableAction(type, seatValue) {
     void sendCommand("observer.watch", { roomKey, payload: { seatIndex } }).catch(reportError);
   } else if (type === "tractor.start") {
     const roomEpoch = state.roomEpoch;
+    const previousTable = state.table;
     setStatus("正在发牌...");
     void sendCommand("tractor.start", { roomKey, payload: {}, roomEpoch })
       .then((response) => {
         if (state.roomEpoch === roomEpoch && state.currentRoomKey === roomKey && response.payload?.table) {
-          setStatus(engineCommandStatus(type, response.payload.table));
+          setStatus(engineCommandStatus(type, response.payload.table, previousTable));
         }
       })
       .catch(reportError);
   } else if (type === "tractor.makeTrump") {
     const payload = inferTrumpPayload(selectedHandCards(), state.table);
     if (payload) {
-      setStatus("正在亮主...");
+      setStatus(`正在${trumpActionLabel(state.table)}...`);
       void sendEngineCommand("tractor.makeTrump", roomKey, payload);
+    } else {
+      setStatus(state.table?.phase === "burying_bottom" ? "请选择更强的级牌对子或王对" : "请选择一张级牌、级牌对子或王对");
     }
   } else if (type === "tractor.discardBottom") {
     const cards = selectedHandCards();
@@ -1969,6 +1972,7 @@ function tableActionBlockedReason(type, roomKey) {
 
 async function sendEngineCommand(type, roomKey, payload) {
   const roomEpoch = state.roomEpoch;
+  const previousTable = state.table;
   try {
     const response = await sendCommand(type, { roomKey, payload, roomEpoch });
     if (state.roomEpoch !== roomEpoch || state.currentRoomKey !== roomKey) {
@@ -1977,7 +1981,7 @@ async function sendEngineCommand(type, roomKey, payload) {
     state.selectedHandIndexes = [];
     if (response.payload?.table) {
       applyTable(response.payload.table);
-      setStatus(engineCommandStatus(type, state.table));
+      setStatus(engineCommandStatus(type, state.table, previousTable));
     } else {
       await refreshTable(roomKey);
       setStatus("牌桌已更新");
@@ -1990,7 +1994,7 @@ async function sendEngineCommand(type, roomKey, payload) {
   }
 }
 
-function engineCommandStatus(commandType, table) {
+function engineCommandStatus(commandType, table, previousTable = null) {
   const nextSeatIndex = table?.engine?.public?.currentTrick?.nextSeatIndex;
   const isViewerTurn = nextSeatIndex !== undefined && table?.viewer?.seatIndex === nextSeatIndex;
 
@@ -2000,7 +2004,8 @@ function engineCommandStatus(commandType, table) {
   }
   if (commandType === "tractor.makeTrump" && table?.phase === "burying_bottom") {
     const discardAction = action(table, "tractor.discardBottom");
-    return discardAction.enabled ? "亮主成功，请选择 8 张牌埋牌" : "亮主成功，等待埋牌";
+    const label = previousTable?.phase === "burying_bottom" ? "反主" : "亮主";
+    return discardAction.enabled ? `${label}成功，请选择 8 张牌埋牌` : `${label}成功，等待埋牌`;
   }
   if (commandType === "tractor.discardBottom" && table?.phase === "playing") {
     return isViewerTurn ? "埋牌完成，请选择要出的牌" : `埋牌完成，等待${seatLabel(nextSeatIndex)}出牌`;
@@ -2162,27 +2167,54 @@ function syncSelectedHandIndexes() {
   state.handSignature = signature;
 }
 
+function trumpActionLabel(table) {
+  return table?.phase === "burying_bottom" ? "反主" : "亮主";
+}
+
 function inferTrumpPayload(cards, table) {
   const rank = table?.engine?.public?.rank;
   if (rank === undefined) {
     return null;
   }
-  if (cards.length === 1 && cards[0].rank === rank && cards[0].suit !== "joker") {
-    return { suit: cards[0].suit, exposure: "single_rank" };
+  let payload = null;
+  const firstCardId = Number(cards[0]?.id);
+  const secondCardId = Number(cards[1]?.id);
+  const firstCardSuit = cardSuitFromCard(cards[0]);
+  const firstCardRank = cardRankFromCard(cards[0]);
+  if (cards.length === 1 && firstCardRank === rank && firstCardSuit && firstCardSuit !== "joker") {
+    payload = { suit: firstCardSuit, exposure: "single_rank" };
   }
-  if (cards.length === 2 && cards[0].id === cards[1].id) {
-    if (cards[0].id === 52) {
-      return { suit: "joker", exposure: "pair_black_joker" };
-    }
-    if (cards[0].id === 53) {
-      return { suit: "joker", exposure: "pair_red_joker" };
-    }
-    if (cards[0].rank === rank && cards[0].suit !== "joker") {
-      return { suit: cards[0].suit, exposure: "pair_rank" };
+  if (cards.length === 2 && Number.isInteger(firstCardId) && firstCardId === secondCardId) {
+    if (firstCardId === 52) {
+      payload = { suit: "joker", exposure: "pair_black_joker" };
+    } else if (firstCardId === 53) {
+      payload = { suit: "joker", exposure: "pair_red_joker" };
+    } else if (firstCardRank === rank && firstCardSuit && firstCardSuit !== "joker") {
+      payload = { suit: firstCardSuit, exposure: "pair_rank" };
     }
   }
 
-  return null;
+  if (!payload) {
+    return null;
+  }
+
+  const currentExposure = table?.engine?.public?.trump?.exposure || "none";
+  return trumpExposureStrength(payload.exposure) > trumpExposureStrength(currentExposure) ? payload : null;
+}
+
+function trumpExposureStrength(exposure) {
+  switch (exposure) {
+    case "single_rank":
+      return 1;
+    case "pair_rank":
+      return 2;
+    case "pair_black_joker":
+      return 3;
+    case "pair_red_joker":
+      return 4;
+    default:
+      return 0;
+  }
 }
 
 function joinRoom(roomKey) {
@@ -2590,7 +2622,19 @@ function trumpLabel(trump) {
     club: "梅花主",
     joker: "王主"
   };
-  return suits[trump.suit] || "无主";
+  const label = suits[trump.suit] || "无主";
+  const exposure = trumpExposureLabel(trump.exposure);
+  return exposure ? `${label}（${exposure}）` : label;
+}
+
+function trumpExposureLabel(exposure) {
+  const labels = {
+    single_rank: "单张",
+    pair_rank: "对子",
+    pair_black_joker: "小王对",
+    pair_red_joker: "大王对"
+  };
+  return labels[exposure] || "";
 }
 
 function setStatus(message) {
@@ -2825,7 +2869,7 @@ function serverErrorText(code, message) {
     invalid_audience: "登录令牌目标无效",
     waiting_for_turn: "还没轮到您出牌",
     play_not_open: "现在还不能出牌",
-    trump_not_open: "现在还不能亮主",
+    trump_not_open: "现在还不能亮主/反主",
     empty_chat_message: "聊天内容不能为空",
     game_persistence_failed: "游戏保存失败",
     game_persistence_unavailable: "游戏保存服务暂时不可用",
@@ -2846,7 +2890,7 @@ function serverErrorText(code, message) {
     invalid_token: "登录令牌无效",
     invalid_token_claims: "登录令牌内容无效",
     invalid_token_header: "登录令牌头无效",
-    invalid_trump_exposure: "亮主组合无效",
+    invalid_trump_exposure: "亮主/反主组合无效",
     message_too_large: "消息太大",
     rate_limited: "操作太频繁，请稍后再试",
     refresh_unavailable: "用户状态暂时无法刷新",
@@ -2880,9 +2924,9 @@ function serverErrorText(code, message) {
     tractor_snapshot_unavailable: "拖拉机恢复快照不可用",
     tractor_trick_incomplete: "本墩牌尚未完成",
     tractor_trick_reviewing: "请先看完上一墩出牌",
-    tractor_trump_cards_not_held: "亮主必须使用您的手牌",
-    tractor_trump_closed: "底牌发出后不能亮主",
-    tractor_trump_too_weak: "亮主级别不够",
+    tractor_trump_cards_not_held: "亮主/反主必须使用您的手牌",
+    tractor_trump_closed: "埋牌后不能再亮主/反主",
+    tractor_trump_too_weak: "反主级别不够",
     unsupported_message: "不支持的消息类型",
     chat_rate_limited: "聊天太频繁，请稍后再试",
     emoji_rate_limited: "表情发送太频繁，请稍后再试"

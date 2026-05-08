@@ -11,6 +11,7 @@ $lang = array_merge($lang, [
 	'ACL_M_CARDGAMES_REPLAY_EXPORT' => '可以导出卡牌游戏回放',
 	'CARDGAMES_TITLE' => '卡牌游戏',
 	'CARDGAMES_NAV' => '卡牌游戏',
+	'CARDGAMES_TRACTOR_TITLE' => '升级80分',
 	'CARDGAMES_ADMIN_TITLE' => '卡牌游戏管理',
 	'CARDGAMES_ADMIN_OPEN' => '管理卡牌游戏',
 	'CARDGAMES_ADMIN_RUNTIME_NOT_CONFIGURED' => '尚未配置运行时 Hook，无法向游戏服务器发送实时控制操作。',

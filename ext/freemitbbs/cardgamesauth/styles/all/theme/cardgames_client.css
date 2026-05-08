@@ -281,8 +281,12 @@
 
 .app-shell .seat-avatar {
   grid-row: span 2;
+  display: block;
   width: 52px;
+  max-width: 52px;
   height: 76px;
+  max-height: 76px;
+  box-sizing: border-box;
 }
 
 .app-shell .seat-skin {
@@ -292,7 +296,8 @@
 }
 
 .app-shell .seat-forum-avatar {
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center center;
   border-radius: 8px;
   border: 2px solid rgba(255, 250, 240, 0.92);
   background: #fffaf0;
@@ -321,19 +326,6 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
-}
-
-.app-shell .table-emblem {
-  width: min(150px, 48vw);
-  aspect-ratio: 5 / 7;
-  display: grid;
-  place-items: center;
-  margin: 0 auto 14px;
-  border-radius: 8px;
-  background:
-    url("./images/tractor/cardsclassic/tile054.png") center / contain no-repeat,
-    #fffaf0;
-  border: 2px solid #d2c2a8;
 }
 
 .app-shell .table-facts {
@@ -472,10 +464,17 @@
 
 .app-shell .trick-play {
   display: grid;
-  grid-template-columns: 70px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: clamp(82px, 14vw, 118px) minmax(0, 1fr);
+  gap: 14px;
   color: var(--muted);
   align-items: center;
+}
+
+.app-shell .trick-play > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-shell .hand-panel {
@@ -570,15 +569,15 @@
 }
 
 .app-shell .played-card .card-symbol-rank {
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .app-shell .played-card .card-symbol-main {
-  font-size: 14px;
+  font-size: 18px;
 }
 
 .app-shell .card-face-joker .card-symbol-main {
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .app-shell .card-face-no-image .card-face-symbol,
@@ -606,12 +605,12 @@
 
 .app-shell .played-cards {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .app-shell .played-card {
-  width: 38px;
+  width: clamp(44px, 4.5vw, 62px);
   aspect-ratio: 5 / 7;
   object-fit: contain;
 }
@@ -857,6 +856,10 @@
     overflow-x: auto;
     overflow-y: visible;
     padding-bottom: 8px;
+  }
+
+  .app-shell .played-card {
+    width: 40px;
   }
 
   .app-shell .card-face-image {

@@ -117,7 +117,7 @@ class auth
 			'CARDGAMES_SENTRY_CDN_URL' => $this->sentry_cdn_url(),
 		]);
 
-		return $this->helper->render('@freemitbbs_cardgamesauth/cardgames_client.html', $this->language->lang('CARDGAMES_TITLE'));
+		return $this->helper->render('@freemitbbs_cardgamesauth/cardgames_client.html', $this->language->lang('CARDGAMES_TRACTOR_TITLE'));
 	}
 
 	public function config(): JsonResponse

@@ -11,6 +11,7 @@ $lang = array_merge($lang, [
 	'ACL_M_CARDGAMES_REPLAY_EXPORT' => 'Can export card-game replays',
 	'CARDGAMES_TITLE' => 'Card Games',
 	'CARDGAMES_NAV' => 'Card Games',
+	'CARDGAMES_TRACTOR_TITLE' => 'Tractor 80 Points',
 	'CARDGAMES_ADMIN_TITLE' => 'Card game administration',
 	'CARDGAMES_ADMIN_OPEN' => 'Manage card games',
 	'CARDGAMES_ADMIN_RUNTIME_NOT_CONFIGURED' => 'Runtime hooks are not configured. Live control actions cannot be sent to the game server.',

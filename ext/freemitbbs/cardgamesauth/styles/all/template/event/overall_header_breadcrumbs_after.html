@@ -1,7 +1,17 @@
 <!-- IF S_CARDGAMES_NAV -->
-	<li class="rightside" data-skip-responsive="true">
-		<a href="{U_CARDGAMES_LAUNCH}" data-navbar-reference="cardgames" title="{L_CARDGAMES_NAV}" aria-label="{L_CARDGAMES_NAV}">
+	<li class="dropdown-container dropdown-{S_CONTENT_FLOW_END} rightside" data-skip-responsive="true">
+		<a href="#" class="dropdown-trigger" data-navbar-reference="cardgames" title="{L_CARDGAMES_NAV}" aria-label="{L_CARDGAMES_NAV}">
 			<i class="icon fa-cards fa-fw cardgames-nav-icon" aria-hidden="true"></i><span class="responsive-hide">{L_CARDGAMES_NAV}</span>
 		</a>
+		<div class="dropdown">
+			<div class="pointer"><div class="pointer-inner"></div></div>
+			<ul class="dropdown-contents" role="menu">
+				<li>
+					<a href="{U_CARDGAMES_LAUNCH}" role="menuitem">
+						<i class="icon fa-cards fa-fw cardgames-nav-icon" aria-hidden="true"></i><span>{L_CARDGAMES_TRACTOR_TITLE}</span>
+					</a>
+				</li>
+			</ul>
+		</div>
 	</li>
 <!-- ENDIF -->
