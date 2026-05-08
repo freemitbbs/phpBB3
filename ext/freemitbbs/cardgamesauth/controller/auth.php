@@ -382,9 +382,9 @@ class auth
 			return '';
 		}
 
-		if (preg_match('#src="([^"]+)"#', $avatar_html, $match))
+		if (preg_match('#data-src="([^"]+)"#', $avatar_html, $match) || preg_match('#src="([^"]+)"#', $avatar_html, $match))
 		{
-			$url = html_entity_decode($match[1], ENT_QUOTES, 'UTF-8');
+			$url = ltrim(html_entity_decode($match[1], ENT_QUOTES, 'UTF-8'), './');
 			if (preg_match('#^https?://#i', $url))
 			{
 				return $url;

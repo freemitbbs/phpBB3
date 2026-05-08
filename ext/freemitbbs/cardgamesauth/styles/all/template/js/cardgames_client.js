@@ -1536,10 +1536,15 @@ function seatHtml(table, seat) {
 
 function seatAvatarHtml(user, seatIndex) {
   const fallback = skinUrlForSeat(user, seatIndex);
-  if (user?.avatarUrl) {
+  if (isForumAvatarUrl(user?.avatarUrl)) {
     return `<img class="seat-avatar seat-forum-avatar" src="${escapeAttribute(user.avatarUrl)}" data-fallback-src="${escapeAttribute(fallback)}" alt="" loading="lazy" />`;
   }
   return `<img class="seat-avatar seat-skin" src="${escapeAttribute(fallback)}" alt="" loading="lazy" />`;
+}
+
+function isForumAvatarUrl(url) {
+  const value = String(url || "");
+  return value !== "" && !/(^|\/)no_avatar(?:_hd)?\.(?:gif|png|jpe?g|webp)(?:[?#].*)?$/i.test(value);
 }
 
 function visualSeatIndexFor(table, seatIndex) {
@@ -1661,7 +1666,7 @@ function tableActionsHtml(table) {
   const parts = [];
 
   if (startAction.enabled) {
-    parts.push(`<button data-action="tractor.start" type="button" ${disabled || isActionPending("tractor.start", roomKey) ? "disabled" : ""}>开始</button>`);
+    parts.push(`<button data-action="tractor.start" type="button" ${disabled || isActionPending("tractor.start", roomKey) ? "disabled" : ""}>发牌</button>`);
   }
   if (makeTrumpAction.enabled) {
     parts.push(`<button data-action="tractor.makeTrump" type="button" ${!disabled && !isActionPending("tractor.makeTrump", roomKey) && inferTrumpPayload(selectedCards, table) ? "" : "disabled"} title="请选择一张级牌或一对有效的牌">亮主</button>`);
@@ -1680,7 +1685,9 @@ function trickHtml(table) {
   const currentTrick = table.engine?.public?.currentTrick;
   const trick = currentTrick?.plays?.length
     ? currentTrick
-    : table.engine?.public?.lastCompletedTrick;
+    : isTrickReviewActive(table)
+      ? table.engine?.public?.lastCompletedTrick
+      : null;
   if (!trick || !trick.plays?.length) {
     return "";
   }
@@ -1852,7 +1859,7 @@ function handleTableAction(type, seatValue) {
     void sendCommand("observer.watch", { roomKey, payload: { seatIndex } }).catch(reportError);
   } else if (type === "tractor.start") {
     const roomEpoch = state.roomEpoch;
-    setStatus("正在开始...");
+    setStatus("正在发牌...");
     void sendCommand("tractor.start", { roomKey, payload: {}, roomEpoch })
       .then((response) => {
         if (state.roomEpoch === roomEpoch && state.currentRoomKey === roomKey && response.payload?.table) {
@@ -1939,7 +1946,7 @@ function engineCommandStatus(commandType, table) {
 
   if (commandType === "tractor.start" && table?.phase === "making_trump") {
     const makeTrumpAction = action(table, "tractor.makeTrump");
-    return makeTrumpAction.enabled ? "开始成功，请选择级牌亮主" : "开始成功，等待亮主";
+    return makeTrumpAction.enabled ? "发牌成功，请选择级牌亮主" : "发牌成功，等待亮主";
   }
   if (commandType === "tractor.makeTrump" && table?.phase === "burying_bottom") {
     const discardAction = action(table, "tractor.discardBottom");
