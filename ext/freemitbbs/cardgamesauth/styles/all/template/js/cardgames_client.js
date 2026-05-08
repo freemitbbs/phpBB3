@@ -87,6 +87,7 @@ const retryableCommandTypes = new Set([
   "tractor.makeTrump",
   "tractor.discardBottom",
   "tractor.playCards",
+  "tractor.autoPlay",
   "chat.send",
   "emoji.send"
 ]);
@@ -121,6 +122,7 @@ const phaseLabels = {
   bottom_not_open: "现在还不能埋牌",
   waiting_for_turn: "还没轮到您出牌",
   play_not_open: "现在还不能出牌",
+  auto_play_not_open: "自动出牌只能在跟牌时使用",
   trick_reviewing: "请先看完上一墩出牌",
   not_room_owner: "只有房主可以开始下一局",
   game_paused: "游戏暂停，等待离线玩家重连或空位补位"
@@ -1457,6 +1459,7 @@ function renderTable() {
   }).join("");
   const score = table.engine?.public?.score ?? 0;
   const currentTrick = table.engine?.public?.currentTrick;
+  const bottomHolder = bottomHolderLabel(table);
   const paused = isTablePaused(table);
   const trickLabel = paused
     ? pauseText(table)
@@ -1478,6 +1481,7 @@ function renderTable() {
           <div class="table-facts">
             <span>级牌 ${escapeHtml(rankLabel(table.engine?.public?.rank))}</span>
             <span>${escapeHtml(trumpLabel(table.engine?.public?.trump))}</span>
+            ${bottomHolder ? `<span>埋牌者 ${escapeHtml(bottomHolder)}</span>` : ""}
           </div>
           ${paused ? `<p class="table-paused">${escapeHtml(pauseText(table))}</p>` : ""}
           ${turnTimerHtml(table)}
@@ -1661,6 +1665,7 @@ function tableActionsHtml(table) {
   const makeTrumpAction = action(table, "tractor.makeTrump");
   const discardAction = action(table, "tractor.discardBottom");
   const playAction = action(table, "tractor.playCards");
+  const autoPlayAction = action(table, "tractor.autoPlay");
   const selectedCards = selectedHandCards();
   const roomKey = table.room.roomKey;
   const disabled = isGameInteractionLocked() || Boolean(state.transitionRoomKey) || hasRoomTransitionPending();
@@ -1681,6 +1686,9 @@ function tableActionsHtml(table) {
   }
   if (playAction.enabled) {
     parts.push(`<button data-action="tractor.playCards" type="button" ${!disabled && !isActionPending("tractor.playCards", roomKey) ? "" : "disabled"} title="${selectedCards.length > 0 ? "" : "请选择要出的牌"}">出牌</button>`);
+  }
+  if (autoPlayAction.enabled) {
+    parts.push(`<button data-action="tractor.autoPlay" type="button" ${!disabled && !isActionPending("tractor.autoPlay", roomKey) ? "" : "disabled"} title="由服务器选择一组合法跟牌">自动出牌</button>`);
   }
 
   return parts.join("");
@@ -1726,16 +1734,23 @@ function handSummaryHtml(table) {
   const bottom = summary.bottomScoreBase > 0 && summary.bottomScoreMultiplier > 0
     ? ` · 扣底 ${summary.bottomScoreBase} x ${summary.bottomScoreMultiplier}`
     : "";
+  const outcome = handOutcomeText(summary, table);
 
   return `
     <div class="hand-summary-panel">
       <div class="hand-summary-title">本局结束，等待房主开始下一局</div>
       <div class="hand-summary-meta">
-        抓分方抓分 ${escapeHtml(String(summary.attackingScore))}，${escapeHtml(String(summary.winningThreshold))} 分上台${escapeHtml(bottom)}
+        ${escapeHtml(outcome)} · 抓分方抓分 ${escapeHtml(String(summary.attackingScore))}，${escapeHtml(String(summary.winningThreshold))} 分上台${escapeHtml(bottom)}
       </div>
       <div class="hand-summary-teams">${teams}</div>
     </div>
   `;
+}
+
+function handOutcomeText(summary, table) {
+  const nextStarter = seatUserLabel(table, summary.nextStarterSeatIndex);
+  const suffix = nextStarter ? `，下局先手 ${nextStarter}` : "";
+  return summary.winnerTeam === summary.attackingTeam ? `抓分方上台${suffix}` : `庄家方守庄${suffix}`;
 }
 
 function rankMoveText(team, summary) {
@@ -1948,6 +1963,15 @@ function handleTableAction(type, seatValue) {
     }
     setStatus("正在出牌...");
     void sendEngineCommand("tractor.playCards", roomKey, { cards: cards.map((card) => card.id) });
+  } else if (type === "tractor.autoPlay") {
+    const autoPlayAction = action(state.table, "tractor.autoPlay");
+    if (!autoPlayAction.enabled) {
+      setStatus(actionReasonText(autoPlayAction.reason || "auto_play_not_open"));
+      return;
+    }
+    state.selectedHandIndexes = [];
+    setStatus("正在自动出牌...");
+    void sendEngineCommand("tractor.autoPlay", roomKey, {});
   }
 }
 
@@ -2010,7 +2034,7 @@ function engineCommandStatus(commandType, table, previousTable = null) {
   if (commandType === "tractor.discardBottom" && table?.phase === "playing") {
     return isViewerTurn ? "埋牌完成，请选择要出的牌" : `埋牌完成，等待${seatLabel(nextSeatIndex)}出牌`;
   }
-  if (commandType === "tractor.playCards" && table?.phase === "playing") {
+  if ((commandType === "tractor.playCards" || commandType === "tractor.autoPlay") && table?.phase === "playing") {
     return isViewerTurn ? "请继续出牌" : `等待${seatLabel(nextSeatIndex)}出牌`;
   }
   if (table?.phase === "finished") {
@@ -2526,7 +2550,7 @@ function playTableSound(nextTable, commandType) {
     playSound("effect/liangpai_m_shelie1.mp3");
   } else if (commandType === "tractor.discardBottom") {
     playSound("effect/drawx.mp3");
-  } else if (commandType === "tractor.playCards") {
+  } else if (commandType === "tractor.playCards" || commandType === "tractor.autoPlay") {
     playSound("effect/tie.mp3");
   } else if (nextPhase === "finished" && previousPhase !== "finished") {
     playSound("effect/win.mp3");
@@ -2810,6 +2834,22 @@ function seatLabel(seatIndex) {
   return `${Number(seatIndex) + 1}号座位`;
 }
 
+function bottomHolderLabel(table) {
+  if (table?.phase !== "burying_bottom") {
+    return "";
+  }
+  return seatUserLabel(table, table.engine?.public?.bottomHolderSeatIndex);
+}
+
+function seatUserLabel(table, seatIndex) {
+  const numericSeatIndex = Number(seatIndex);
+  if (!Number.isInteger(numericSeatIndex)) {
+    return "";
+  }
+  const seat = table?.room?.seats?.find((candidate) => candidate.seatIndex === numericSeatIndex);
+  return seat?.user?.displayName || seat?.user?.username || seatLabel(numericSeatIndex);
+}
+
 function playUserLabel(table, play) {
   const userId = Number(play?.userId);
   if (Number.isInteger(userId)) {
@@ -2820,8 +2860,7 @@ function playUserLabel(table, play) {
   }
 
   const seatIndex = Number(play?.seatIndex);
-  const seat = table.room?.seats?.find((candidate) => candidate.seatIndex === seatIndex);
-  return seat?.user?.displayName || seat?.user?.username || seatLabel(seatIndex);
+  return seatUserLabel(table, seatIndex) || seatLabel(seatIndex);
 }
 
 function skinDisplayName(skin) {
@@ -2899,6 +2938,7 @@ function serverErrorText(code, message) {
     tractor_bottom_cards_not_held: "埋牌必须从您的手牌中选择",
     tractor_card_count_mismatch: "出牌张数必须与首家一致",
     tractor_cards_not_held: "出牌必须从您的手牌中选择",
+    tractor_auto_play_unavailable: "当前不能自动出牌",
     tractor_duplicate_player: "您已经在本局其他座位中",
     tractor_dump_failed: "甩牌失败",
     tractor_dump_not_supported: "暂不支持甩牌",
