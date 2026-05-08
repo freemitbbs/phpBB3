@@ -338,6 +338,42 @@
   font-size: 13px;
 }
 
+.app-shell .table-scoreboard {
+  display: grid;
+  grid-template-columns: minmax(110px, 180px);
+  justify-content: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.app-shell .table-score {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 0;
+  border: 1px solid rgba(255, 249, 236, 0.28);
+  border-radius: 8px;
+  background: rgba(255, 249, 236, 0.12);
+  padding: 8px 10px;
+}
+
+.app-shell .table-score-label,
+.app-shell .table-score-note {
+  color: #d7e8df;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.app-shell .table-score strong {
+  color: #fff9ec;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.app-shell .table-score-attacking strong {
+  color: #ffd36d;
+}
+
 .app-shell .table-paused {
   width: min(260px, 100%);
   margin: 12px auto 0;

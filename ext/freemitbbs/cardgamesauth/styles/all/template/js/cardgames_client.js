@@ -1483,6 +1483,7 @@ function renderTable() {
             <span>${escapeHtml(trumpLabel(table.engine?.public?.trump))}</span>
             ${bottomHolder ? `<span>埋牌者 ${escapeHtml(bottomHolder)}</span>` : ""}
           </div>
+          ${tableScoreboardHtml(table)}
           ${paused ? `<p class="table-paused">${escapeHtml(pauseText(table))}</p>` : ""}
           ${turnTimerHtml(table)}
           <div class="table-actions">${tableActionsHtml(table)}</div>
@@ -1513,6 +1514,29 @@ function renderTable() {
       : "";
   syncTurnTimer();
   syncTrickReviewTimer(table);
+}
+
+function tableScoreboardHtml(table) {
+  const publicState = table.engine?.public;
+  if (!publicState) {
+    return "";
+  }
+
+  const attackingScore = finiteNumber(publicState.handSummary?.attackingScore, finiteNumber(publicState.score, 0));
+  return `
+    <div class="table-scoreboard" aria-label="当前比分">
+      <div class="table-score table-score-attacking">
+        <span class="table-score-label">抓分方</span>
+        <strong>${escapeHtml(String(attackingScore))}</strong>
+        <span class="table-score-note">已抓分</span>
+      </div>
+    </div>
+  `;
+}
+
+function finiteNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 }
 
 function seatHtml(table, seat) {
