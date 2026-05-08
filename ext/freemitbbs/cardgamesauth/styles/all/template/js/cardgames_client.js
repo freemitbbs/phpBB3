@@ -122,6 +122,7 @@ const phaseLabels = {
   waiting_for_turn: "还没轮到您出牌",
   play_not_open: "现在还不能出牌",
   trick_reviewing: "请先看完上一墩出牌",
+  not_room_owner: "只有房主可以开始下一局",
   game_paused: "游戏暂停，等待离线玩家重连或空位补位"
 };
 
@@ -1486,6 +1487,7 @@ function renderTable() {
       </div>
     </div>
     ${trickHtml(table)}
+    ${handSummaryHtml(table)}
     <div class="observer-list">${observers}</div>
     ${handHtml(table)}
   `;
@@ -1699,6 +1701,54 @@ function trickHtml(table) {
     </div>
   `).join("");
   return `<div class="trick-panel">${plays}</div>`;
+}
+
+function handSummaryHtml(table) {
+  const summary = table.engine?.public?.handSummary;
+  if (!summary) {
+    return "";
+  }
+
+  const teams = (summary.teams || []).map((team) => {
+    const role = team.team === summary.defendingTeam ? "守庄" : "抓分";
+    return `
+      <div class="hand-summary-team ${team.won ? "hand-summary-winner" : ""}">
+        <strong>${escapeHtml(teamLabel(team.team))}</strong>
+        <span>${escapeHtml(role)} · ${escapeHtml(String(team.points))} 分</span>
+        <span>${escapeHtml(team.rankLabelBefore || rankLabel(team.rankBefore))} → ${escapeHtml(team.rankLabelAfter || rankLabel(team.rankAfter))} · ${escapeHtml(rankMoveText(team, summary))}</span>
+      </div>
+    `;
+  }).join("");
+  const bottom = summary.bottomScoreBase > 0 && summary.bottomScoreMultiplier > 0
+    ? ` · 扣底 ${summary.bottomScoreBase} x ${summary.bottomScoreMultiplier}`
+    : "";
+
+  return `
+    <div class="hand-summary-panel">
+      <div class="hand-summary-title">本局结束，等待房主开始下一局</div>
+      <div class="hand-summary-meta">
+        抓分 ${escapeHtml(String(summary.attackingScore))} / ${escapeHtml(String(summary.winningThreshold))}${escapeHtml(bottom)}
+      </div>
+      <div class="hand-summary-teams">${teams}</div>
+    </div>
+  `;
+}
+
+function teamLabel(team) {
+  return team === "vertical" ? "上下家" : "左右家";
+}
+
+function rankMoveText(team, summary) {
+  if (summary.resetGame) {
+    return "新局重置";
+  }
+  if (team.rankDelta > 0) {
+    return `升 ${team.rankDelta} 级`;
+  }
+  if (team.rankDelta < 0) {
+    return "重置";
+  }
+  return "不升级";
 }
 
 function turnTimerHtml(table) {
@@ -1959,7 +2009,7 @@ function engineCommandStatus(commandType, table) {
     return isViewerTurn ? "请继续出牌" : `等待${seatLabel(nextSeatIndex)}出牌`;
   }
   if (table?.phase === "finished") {
-    return "本局结束";
+    return "本局结束，等待房主开始下一局";
   }
 
   return "牌桌已更新";

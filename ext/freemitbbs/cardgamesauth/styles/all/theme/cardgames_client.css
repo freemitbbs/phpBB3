@@ -421,6 +421,7 @@
 }
 
 .app-shell .trick-panel,
+.app-shell .hand-summary-panel,
 .app-shell .hand-panel {
   margin-top: 14px;
   border: 1px solid rgba(255, 249, 236, 0.28);
@@ -433,6 +434,40 @@
 .app-shell .trick-panel {
   display: grid;
   gap: 8px;
+}
+
+.app-shell .hand-summary-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.app-shell .hand-summary-title {
+  font-weight: 700;
+}
+
+.app-shell .hand-summary-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.app-shell .hand-summary-teams {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.app-shell .hand-summary-team {
+  display: grid;
+  gap: 2px;
+  border: 1px solid rgba(123, 48, 35, 0.12);
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.44);
+}
+
+.app-shell .hand-summary-winner {
+  border-color: rgba(170, 50, 32, 0.34);
+  background: rgba(255, 239, 217, 0.72);
 }
 
 .app-shell .trick-play {
