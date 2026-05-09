@@ -10,7 +10,6 @@ class auth
 	private const TOKEN_HASH_NAME = 'freemitbbs_cardgamesauth_token';
 	private const JSON_FLAGS = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT;
 	private const TESTER_GROUP_NAME = 'CARD_GAME_TESTERS';
-	private const SENTRY_DEFAULT_CDN_URL = 'https://browser.sentry-cdn.com/10.45.0/bundle.min.js';
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\cache\driver\driver_interface $cache;
@@ -74,7 +73,6 @@ class auth
 				'assetBaseUrl' => $this->asset_base_url(),
 				'audioBaseUrl' => $this->audio_base_url(),
 				'cardStyle' => 'cardsclassic',
-				'sentry' => $this->sentry_config($can_play),
 			]),
 		]);
 
@@ -100,7 +98,6 @@ class auth
 			return $this->launch();
 		}
 
-		$sentry_config = $this->sentry_config(true);
 		$this->template->assign_vars([
 			'CARDGAMES_BOOTSTRAP_JSON' => $this->encode_json([
 				'tokenUrl' => $this->helper->route('freemitbbs_cardgamesauth_token', [], false),
@@ -111,10 +108,7 @@ class auth
 				'audioBaseUrl' => $this->audio_base_url(),
 				'cardStyle' => 'cardsclassic',
 				'user' => $this->client_user_data(),
-				'sentry' => $sentry_config,
 			]),
-			'S_CARDGAMES_SENTRY' => !empty($sentry_config['enabled']) && !empty($sentry_config['dsn']),
-			'CARDGAMES_SENTRY_CDN_URL' => $this->sentry_cdn_url(),
 		]);
 
 		return $this->helper->render('@freemitbbs_cardgamesauth/cardgames_client.html', $this->language->lang('CARDGAMES_TRACTOR_TITLE'));
@@ -140,7 +134,6 @@ class auth
 			'cardStyle' => 'cardsclassic',
 			'tokenHash' => $can_play ? generate_link_hash(self::TOKEN_HASH_NAME) : '',
 			'user' => $can_play ? $this->client_user_data() : null,
-			'sentry' => $this->sentry_config($can_play),
 		];
 
 		return $this->json($data);
@@ -425,64 +418,6 @@ class auth
 	protected function audio_base_url(): string
 	{
 		return rtrim(generate_board_url(), '/') . '/ext/freemitbbs/cardgamesauth/styles/all/theme/audio';
-	}
-
-	protected function sentry_config(bool $include_user): array
-	{
-		$enabled = (bool) ((int) ($this->config['cardgamesauth_sentry_enabled'] ?? 0));
-		$dsn = trim((string) ($this->config['cardgamesauth_sentry_dsn'] ?? ''));
-		if (!$enabled || $dsn === '')
-		{
-			return [
-				'enabled' => false,
-			];
-		}
-
-		$config = [
-			'enabled' => true,
-			'dsn' => $dsn,
-			'environment' => $this->sentry_environment(),
-			'release' => trim((string) ($this->config['cardgamesauth_sentry_release'] ?? '')),
-			'sampleRate' => $this->bounded_float_config('cardgamesauth_sentry_sample_rate', 1.0),
-			'tracesSampleRate' => $this->bounded_float_config('cardgamesauth_sentry_traces_sample_rate', 0.0),
-		];
-		if ($include_user)
-		{
-			$config['user'] = [
-				'user_id' => (int) ($this->user->data['user_id'] ?? 0),
-			];
-		}
-
-		return $config;
-	}
-
-	protected function sentry_cdn_url(): string
-	{
-		$url = trim((string) ($this->config['cardgamesauth_sentry_cdn_url'] ?? ''));
-		if (!preg_match('#^https://#i', $url))
-		{
-			return self::SENTRY_DEFAULT_CDN_URL;
-		}
-
-		return $url;
-	}
-
-	protected function sentry_environment(): string
-	{
-		$environment = trim((string) ($this->config['cardgamesauth_sentry_environment'] ?? 'production'));
-		$environment = preg_replace('#[\s/]+#', '-', $environment) ?: 'production';
-		return substr($environment, 0, 64);
-	}
-
-	protected function bounded_float_config(string $name, float $default): float
-	{
-		$value = (float) ($this->config[$name] ?? $default);
-		if (!is_finite($value))
-		{
-			return $default;
-		}
-
-		return max(0.0, min(1.0, $value));
 	}
 
 	protected function request_hash(): string

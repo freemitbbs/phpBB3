@@ -18,6 +18,7 @@ const state = {
   timedOutPending: new Map(),
   retryRequests: new Map(),
   pendingActions: new Set(),
+  pendingRoomMutations: new Set(),
   rooms: [],
   table: null,
   currentRoomKey: "",
@@ -71,7 +72,8 @@ const emojiCatalog = [
 const emojiTypes = ["goodjob", "lol", "sorry", "noproblem", "hurryup", "fireworks", "youareright"];
 const commandTimeoutMs = 15000;
 const lateResponseRetentionMs = 60000;
-const retryRequestRetentionMs = 60000;
+const retryRequestRetentionMs = 10 * 60 * 1000;
+const retryRequestStorageKey = "freemitbbs.cardgames.retryRequests.v1";
 const heartbeatIntervalMs = 25000;
 const heartbeatTimeoutMs = 10000;
 const heartbeatMaxMisses = 2;
@@ -130,7 +132,6 @@ const phaseLabels = {
 
 function logClientWarn(message, details = null) {
   const sanitized = sanitizeLogDetails(details);
-  addSentryBreadcrumb("warning", message, sanitized);
   if (!window.console?.warn) {
     return;
   }
@@ -144,10 +145,6 @@ function logClientWarn(message, details = null) {
 function logClientError(message, error = null, details = null) {
   const sanitizedError = sanitizeLogDetails(error);
   const sanitizedDetails = sanitizeLogDetails(details);
-  addSentryBreadcrumb("error", message, {
-    error: sanitizedError,
-    details: sanitizedDetails
-  });
   if (!window.console?.error) {
     return;
   }
@@ -159,31 +156,6 @@ function logClientError(message, error = null, details = null) {
     args.push(sanitizedDetails);
   }
   window.console.error(...args);
-}
-
-function addSentryBreadcrumb(level, message, details = null) {
-  if (!window.Sentry?.addBreadcrumb) {
-    return;
-  }
-  const breadcrumb = {
-    category: "cardgames.client",
-    level,
-    message
-  };
-  if (details !== null && details !== undefined) {
-    breadcrumb.data = details;
-  }
-  window.Sentry.addBreadcrumb(breadcrumb);
-}
-
-function syncSentryUser(user) {
-  if (!window.Sentry?.setUser || !user) {
-    return;
-  }
-  const userId = Number(user.user_id ?? user.userId);
-  if (Number.isInteger(userId) && userId > 0) {
-    window.Sentry.setUser({ id: String(userId) });
-  }
 }
 
 function sanitizeLogDetails(value, depth = 0) {
@@ -289,7 +261,7 @@ els.skin.addEventListener("change", () => {
 });
 els.leave.addEventListener("click", () => {
   const roomKey = state.currentRoomKey;
-  if (roomKey && !isActionPending("room.leave", roomKey)) {
+  if (roomKey && !isActionPending("room.leave", roomKey) && !isRoomMutationPending(roomKey)) {
     const roomEpoch = beginRoomTransition("");
     setStatus("正在离开房间");
     void sendCommand("room.leave", { roomKey, roomEpoch })
@@ -370,6 +342,7 @@ async function init() {
   state.assetBaseUrl = normalizeBaseUrl(state.bootstrap.assetBaseUrl || defaultAssetBaseUrl());
   state.audioBaseUrl = normalizeBaseUrl(state.bootstrap.audioBaseUrl || defaultAudioBaseUrl());
   state.cardStyle = state.bootstrap.cardStyle || "cardsclassic";
+  restoreRetryRequests();
   state.initialized = true;
   render();
   if (state.bootstrap.autoConnect !== false) {
@@ -534,6 +507,7 @@ function disconnect() {
     state.pending.clear();
     clearTimedOutPending();
     state.pendingActions.clear();
+    state.pendingRoomMutations.clear();
   }
 }
 
@@ -628,6 +602,9 @@ function clearPending(pending) {
   if (pending.pendingKey) {
     state.pendingActions.delete(pending.pendingKey);
   }
+  if (pending.pendingMutationKey) {
+    state.pendingRoomMutations.delete(pending.pendingMutationKey);
+  }
 }
 
 function rememberTimedOutPending(requestId, pending) {
@@ -682,19 +659,24 @@ function rememberRetryRequest(requestId, pending) {
   trackRetryRequest(pending.retryKey, requestId);
 }
 
-function trackRetryRequest(retryKey, requestId) {
+function trackRetryRequest(retryKey, requestId, expiresAt = Date.now() + retryRequestRetentionMs) {
   if (!retryKey || !requestId) {
     return;
   }
 
   clearRetryRequest(retryKey);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+    return;
+  }
   const expiresId = window.setTimeout(() => {
     const current = state.retryRequests.get(retryKey);
     if (current?.requestId === requestId) {
       state.retryRequests.delete(retryKey);
+      persistRetryRequests();
     }
-  }, retryRequestRetentionMs);
-  state.retryRequests.set(retryKey, { requestId, expiresId });
+  }, Math.max(0, expiresAt - Date.now()));
+  state.retryRequests.set(retryKey, { requestId, expiresId, expiresAt });
+  persistRetryRequests();
 }
 
 function clearRetryRequest(retryKey, requestId = "") {
@@ -710,10 +692,69 @@ function clearRetryRequest(retryKey, requestId = "") {
     window.clearTimeout(retry.expiresId);
   }
   state.retryRequests.delete(retryKey);
+  persistRetryRequests();
+}
+
+function restoreRetryRequests() {
+  let entries = {};
+  try {
+    entries = JSON.parse(window.sessionStorage?.getItem(retryRequestStorageKey) || "{}");
+  } catch {
+    return;
+  }
+  if (!entries || typeof entries !== "object" || Array.isArray(entries)) {
+    return;
+  }
+
+  const now = Date.now();
+  Object.entries(entries).forEach(([retryKey, retry]) => {
+    const requestId = typeof retry?.requestId === "string" ? retry.requestId : "";
+    const expiresAt = Number(retry?.expiresAt);
+    if (requestId && Number.isFinite(expiresAt) && expiresAt > now) {
+      trackRetryRequest(retryKey, requestId, expiresAt);
+    }
+  });
+  persistRetryRequests();
+}
+
+function persistRetryRequests() {
+  try {
+    const now = Date.now();
+    const entries = {};
+    state.retryRequests.forEach((retry, retryKey) => {
+      if (retry?.requestId && Number.isFinite(retry.expiresAt) && retry.expiresAt > now) {
+        entries[retryKey] = {
+          requestId: retry.requestId,
+          expiresAt: retry.expiresAt
+        };
+      }
+    });
+    window.sessionStorage?.setItem(retryRequestStorageKey, JSON.stringify(entries));
+  } catch {
+    // Session storage can be unavailable in private or embedded contexts.
+  }
 }
 
 function commandKey(type, roomKey = "") {
   return `${type}:${roomKey || ""}`;
+}
+
+function roomMutationKey(type, roomKey = "") {
+  if (!roomKey || !isRoomMutationCommand(type)) {
+    return "";
+  }
+  return `room:${roomKey}`;
+}
+
+function isRoomMutationCommand(type) {
+  return type.startsWith("tractor.")
+    || type.startsWith("seat.")
+    || type === "player.ready"
+    || type === "observer.watch";
+}
+
+function isRoomMutationPending(roomKey = "") {
+  return Boolean(roomKey) && state.pendingRoomMutations.has(`room:${roomKey}`);
 }
 
 function isActionPending(type, roomKey = "") {
@@ -796,7 +837,6 @@ function applyTokenPayload(payload) {
   state.bootstrap.wsUrl = payload.wsUrl || state.bootstrap.wsUrl;
   state.user = payload.user || state.user;
   state.token = payload.token;
-  syncSentryUser(state.user);
 }
 
 async function authenticate(connectionEpoch = state.connectionEpoch) {
@@ -905,6 +945,10 @@ function sendCommand(type, options = {}) {
   if (state.pending.has(requestId)) {
     return Promise.reject(new Error("上一个操作仍在处理中"));
   }
+  const mutationKey = roomMutationKey(type, options.roomKey || "");
+  if (mutationKey && state.pendingRoomMutations.has(mutationKey)) {
+    return Promise.reject(new Error("上一个操作仍在处理中"));
+  }
   clearTimedOutPending(requestId);
   const envelope = {
     v: 1,
@@ -915,6 +959,9 @@ function sendCommand(type, options = {}) {
   };
   const pendingKey = commandKey(type, options.roomKey);
   state.pendingActions.add(pendingKey);
+  if (mutationKey) {
+    state.pendingRoomMutations.add(mutationKey);
+  }
 
   const promise = new Promise((resolve, reject) => {
     const timeoutId = window.setTimeout(() => {
@@ -942,6 +989,7 @@ function sendCommand(type, options = {}) {
       roomEpoch: options.roomEpoch ?? state.roomEpoch,
       applyResponse: options.applyResponse !== false,
       pendingKey,
+      pendingMutationKey: mutationKey,
       retryKey,
       timeoutId
     });
@@ -970,8 +1018,11 @@ function requestIdForCommand(retryKey) {
   if (retryKey) {
     const retry = state.retryRequests.get(retryKey);
     if (retry?.requestId) {
-      trackRetryRequest(retryKey, retry.requestId);
-      return retry.requestId;
+      if (Number.isFinite(retry.expiresAt) && retry.expiresAt > Date.now()) {
+        trackRetryRequest(retryKey, retry.requestId);
+        return retry.requestId;
+      }
+      clearRetryRequest(retryKey, retry.requestId);
     }
   }
 
@@ -1232,7 +1283,6 @@ function applyServerMessage(message, commandType = "", context = null) {
     case "auth.accepted":
       state.user = message.payload.user || state.user;
       state.authenticated = true;
-      syncSentryUser(state.user);
       playSound("effect/enter_hall_click.mp3");
       break;
     case "profile.skins":
@@ -1470,6 +1520,7 @@ function renderTable() {
       : table.engineReady ? `抓分方抓分 ${score}` : "等待中";
   const leaveAction = action(table, "room.leave");
   const roomTransitionPending = hasRoomTransitionPending();
+  const roomMutationPending = isRoomMutationPending(state.currentRoomKey);
 
   els.table.innerHTML = `
     <div class="table-grid">
@@ -1506,6 +1557,7 @@ function renderTable() {
     || !leaveAction.enabled
     || isActionPending("room.leave", state.currentRoomKey)
     || roomTransitionPending
+    || roomMutationPending
     || Boolean(state.transitionRoomKey);
   els.leave.title = leaveAction.reason
     ? actionReasonText(leaveAction.reason)
@@ -1598,7 +1650,7 @@ function modulo(value, divisor) {
 
 function seatActionsHtml(table, seat, isViewerSeat) {
   const roomKey = table.room.roomKey;
-  const disabled = isGameInteractionLocked() || Boolean(state.transitionRoomKey) || hasRoomTransitionPending();
+  const disabled = isGameInteractionLocked() || Boolean(state.transitionRoomKey) || hasRoomTransitionPending() || isRoomMutationPending(roomKey);
   if (!seat.user && isSeatClaimable(table, seat.seatIndex)) {
     const replacementSeat = isReplacementSeat(table, seat);
     return `<button data-action="seat.claim" data-seat="${seat.seatIndex}" type="button" ${disabled || isActionPending("seat.claim", roomKey) ? "disabled" : ""} title="${replacementSeat ? "接替该座位继续本手牌" : ""}">${replacementSeat ? "补位" : "坐下"}</button>`;
@@ -1692,7 +1744,7 @@ function tableActionsHtml(table) {
   const autoPlayAction = action(table, "tractor.autoPlay");
   const selectedCards = selectedHandCards();
   const roomKey = table.room.roomKey;
-  const disabled = isGameInteractionLocked() || Boolean(state.transitionRoomKey) || hasRoomTransitionPending();
+  const disabled = isGameInteractionLocked() || Boolean(state.transitionRoomKey) || hasRoomTransitionPending() || isRoomMutationPending(roomKey);
   const parts = [];
 
   if (startAction.enabled) {
@@ -2012,6 +2064,9 @@ function tableActionBlockedReason(type, roomKey) {
   if (state.transitionRoomKey || hasRoomTransitionPending()) {
     return "正在切换房间，请稍候";
   }
+  if (isRoomMutationPending(roomKey)) {
+    return "上一个操作仍在处理中";
+  }
   if (isActionPending(type, roomKey)) {
     return "上一个操作仍在处理中";
   }
@@ -2266,7 +2321,7 @@ function trumpExposureStrength(exposure) {
 }
 
 function joinRoom(roomKey) {
-  if (!roomKey || isGameInteractionLocked() || hasRoomTransitionPending() || isActionPending("room.join", roomKey)) {
+  if (!roomKey || isGameInteractionLocked() || hasRoomTransitionPending() || isRoomMutationPending(state.currentRoomKey) || isActionPending("room.join", roomKey)) {
     return;
   }
 

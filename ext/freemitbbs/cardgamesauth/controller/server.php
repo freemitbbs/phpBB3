@@ -475,21 +475,46 @@ class server
 				}
 
 				$game_type = $this->transition_game_type(['game_type' => (string) ($session['game_type'] ?? '')], $session_payload ?? [], $session_update_payload, $event_payload, $snapshot_payload, $summary_payload ?? []);
-				$seq = $this->transition_seq($session, $event_payload, $snapshot_payload);
+				$seq = $this->transition_seq($session, $event_payload, $snapshot_payload, $session_update_payload);
 				$request_id = $this->nullable_string_value($event_payload, 'requestId', 'request_id', 64);
-				$existing_seq = $this->find_event_seq_by_request_id($session_id, $request_id);
+				$existing_event = $this->find_event_by_request_id($session_id, $request_id);
 
-				if ($existing_seq > 0)
+				if (!empty($existing_event))
 				{
-					$seq = $existing_seq;
+					$existing_seq = (int) ($existing_event['seq'] ?? 0);
+					$this->assert_transition_event_replay($existing_event, $event_payload, $existing_seq, $game_type);
+					$seq = $this->existing_transition_final_seq($session_id, $game_type, $existing_seq, $lobby_events);
+					$this->db->sql_transaction('commit');
+					return $this->json([
+						'ok' => true,
+						'sessionId' => $session_id,
+						'seq' => $seq,
+					]);
 				}
-				else
+
+				$this->assert_next_transition_seq($seq, (int) $session['state_version']);
+				$insert = $this->try_insert_row($this->events_table, $this->game_event_row($event_payload, $session_id, $seq, $game_type));
+				if (!$insert['inserted'])
 				{
-					$insert = $this->try_insert_row($this->events_table, $this->game_event_row($event_payload, $session_id, $seq, $game_type));
-					if (!$insert['inserted'] && !$this->is_duplicate_insert($insert))
+					if (!$this->is_duplicate_insert($insert))
 					{
 						throw new \RuntimeException('event_store_failed');
 					}
+
+					$existing_event = $this->find_event_by_seq($session_id, $seq);
+					if (empty($existing_event))
+					{
+						throw new \DomainException('transition_seq_conflict');
+					}
+
+					$this->assert_transition_event_replay($existing_event, $event_payload, $seq, $game_type);
+					$seq = $this->existing_transition_final_seq($session_id, $game_type, (int) $existing_event['seq'], $lobby_events);
+					$this->db->sql_transaction('commit');
+					return $this->json([
+						'ok' => true,
+						'sessionId' => $session_id,
+						'seq' => $seq,
+					]);
 				}
 
 				$snapshot_row = $this->game_snapshot_row($snapshot_payload, $session_id, $seq, $game_type);
@@ -500,7 +525,7 @@ class server
 					{
 						throw new \RuntimeException('snapshot_store_failed');
 					}
-					$this->update_snapshot($session_id, $seq, $snapshot_row);
+					throw new \DomainException('transition_seq_conflict');
 				}
 
 				$this->update_transition_session($session_id, $session_update_payload, $snapshot_payload, $seq, (int) $session['state_version'], $now);
@@ -531,6 +556,10 @@ class server
 		catch (\InvalidArgumentException $e)
 		{
 			return $this->json_error((string) $e->getMessage(), 'Transition payload is invalid.', 400);
+		}
+		catch (\DomainException $e)
+		{
+			return $this->json_error((string) $e->getMessage(), 'Transition conflicts with already recorded state.', 409);
 		}
 		catch (\RuntimeException $e)
 		{
@@ -656,6 +685,10 @@ class server
 		catch (\InvalidArgumentException $e)
 		{
 			return $this->json_error((string) $e->getMessage(), 'Event payload is invalid.', 400);
+		}
+		catch (\DomainException $e)
+		{
+			return $this->json_error((string) $e->getMessage(), 'Event conflicts with already recorded state.', 409);
 		}
 		catch (\RuntimeException $e)
 		{
@@ -919,9 +952,7 @@ class server
 			WHERE expires_at < ' . time());
 		$nonces = (int) $this->db->sql_affectedrows();
 
-		$this->db->sql_query('DELETE FROM ' . $this->snapshots_table . '
-			WHERE created_at < ' . $cutoff);
-		$snapshots = (int) $this->db->sql_affectedrows();
+		$snapshots = $this->delete_expired_snapshots($cutoff);
 
 		return $this->json([
 			'success' => true,
@@ -930,6 +961,43 @@ class server
 				'snapshots' => $snapshots,
 			],
 		]);
+	}
+
+	protected function delete_expired_snapshots(int $cutoff): int
+	{
+		$sql = 'SELECT snapshot_row.id
+			FROM ' . $this->snapshots_table . ' snapshot_row
+			LEFT JOIN ' . $this->sessions_table . ' session_record
+				ON session_record.id = snapshot_row.session_id
+			WHERE snapshot_row.created_at < ' . $cutoff . '
+				AND (session_record.id IS NULL OR session_record.finished_at > 0)
+				AND EXISTS (
+					SELECT 1
+					FROM ' . $this->snapshots_table . ' newer_snapshot
+					WHERE newer_snapshot.session_id = snapshot_row.session_id
+						AND newer_snapshot.seq > snapshot_row.seq
+				)';
+		$result = $this->db->sql_query($sql);
+		$ids = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$id = (int) ($row['id'] ?? 0);
+			if ($id > 0)
+			{
+				$ids[] = $id;
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		$deleted = 0;
+		foreach (array_chunk($ids, 500) as $chunk)
+		{
+			$this->db->sql_query('DELETE FROM ' . $this->snapshots_table . '
+				WHERE ' . $this->db->sql_in_set('id', $chunk));
+			$deleted += (int) $this->db->sql_affectedrows();
+		}
+
+		return $deleted;
 	}
 
 	protected function require_server_auth(string $body): ?JsonResponse
@@ -1147,22 +1215,28 @@ class server
 			];
 		}
 
-		$has_seated_member_history = false;
+		$seated_member_history = [];
 		foreach ($member_rows as $member_row)
 		{
 			if ((string) ($member_row['role'] ?? '') !== 'seated')
 			{
 				continue;
 			}
-			$has_seated_member_history = true;
+
+			$seat_index = (int) ($member_row['seat_index'] ?? -1);
+			if ($seat_index < 0 || $seat_index >= $seat_count)
+			{
+				continue;
+			}
+
+			$seated_member_history[$seat_index] = true;
 			if ((int) ($member_row['left_at'] ?? 0) > 0)
 			{
 				continue;
 			}
 
-			$seat_index = (int) ($member_row['seat_index'] ?? -1);
 			$user_id = (int) ($member_row['user_id'] ?? 0);
-			if ($seat_index < 0 || $seat_index >= $seat_count || empty($users[$user_id]))
+			if (empty($users[$user_id]))
 			{
 				continue;
 			}
@@ -1170,19 +1244,22 @@ class server
 			$seats[$seat_index]['user'] = $this->room_user_payload($users[$user_id]);
 			$seats[$seat_index]['connected'] = false;
 		}
-		if (!$has_seated_member_history)
+		foreach ($players as $player)
 		{
-			foreach ($players as $player)
+			$seat_index = (int) ($player['seatIndex'] ?? 0);
+			$user_id = (int) ($player['userId'] ?? 0);
+			if (
+				$seat_index < 0
+				|| $seat_index >= $seat_count
+				|| !empty($seats[$seat_index]['user'])
+				|| isset($seated_member_history[$seat_index])
+				|| empty($users[$user_id])
+			)
 			{
-				$seat_index = (int) ($player['seatIndex'] ?? 0);
-				$user_id = (int) ($player['userId'] ?? 0);
-				if ($seat_index < 0 || $seat_index >= $seat_count || empty($users[$user_id]))
-				{
-					continue;
-				}
-
-				$seats[$seat_index]['user'] = $this->room_user_payload($users[$user_id]);
+				continue;
 			}
+
+			$seats[$seat_index]['user'] = $this->room_user_payload($users[$user_id]);
 		}
 
 		$observers = [];
@@ -1568,9 +1645,11 @@ class server
 		{
 			$session = $this->ensure_lobby_session($room_key, $game_type, $now);
 			$session_id = (int) $session['id'];
-			$existing_seq = $this->find_event_seq_by_request_id($session_id, $request_id);
-			if ($existing_seq > 0)
+			$existing_event = $this->find_event_by_request_id($session_id, $request_id);
+			if (!empty($existing_event))
 			{
+				$existing_seq = (int) ($existing_event['seq'] ?? 0);
+				$this->assert_transition_event_replay($existing_event, $event, $existing_seq, $game_type);
 				$this->db->sql_transaction('commit');
 				return [
 					'inserted' => 0,
@@ -1607,6 +1686,15 @@ class server
 			if (!$insert['inserted'] && !$this->is_duplicate_insert($insert))
 			{
 				throw new \RuntimeException('event_insert_failed');
+			}
+			if (!$insert['inserted'])
+			{
+				$existing_event = $this->find_event_by_seq($session_id, $seq);
+				if (empty($existing_event))
+				{
+					throw new \DomainException('transition_seq_conflict');
+				}
+				$this->assert_transition_event_replay($existing_event, $event, $seq, $game_type);
 			}
 
 			$this->db->sql_transaction('commit');
@@ -2212,17 +2300,30 @@ class server
 		return substr(trim((string) ($snapshot['handId'] ?? $snapshot['hand_id'] ?? '')), 0, 64);
 	}
 
-	protected function transition_seq(array $session, array $event, array $snapshot): int
+	protected function transition_seq(array $session, array $event, array $snapshot, array $session_update): int
 	{
 		$event_seq = $this->nullable_int_value($event, 'seq', 'seq');
 		$snapshot_seq = $this->nullable_int_value($snapshot, 'seq', 'seq');
+		$session_update_seq = $this->nullable_int_value($session_update, 'stateVersion', 'state_version');
 		if ($event_seq > 0 && $snapshot_seq > 0 && $event_seq !== $snapshot_seq)
 		{
 			throw new \InvalidArgumentException('seq_mismatch');
 		}
+		if ($session_update_seq > 0 && max($event_seq, $snapshot_seq) > 0 && $session_update_seq !== max($event_seq, $snapshot_seq))
+		{
+			throw new \InvalidArgumentException('seq_mismatch');
+		}
 
-		$seq = max($event_seq, $snapshot_seq);
+		$seq = max($event_seq, $snapshot_seq, $session_update_seq);
 		return $seq > 0 ? $seq : max(1, ((int) ($session['state_version'] ?? 0)) + 1);
+	}
+
+	protected function assert_next_transition_seq(int $seq, int $current_state_version): void
+	{
+		if ($seq !== $current_state_version + 1)
+		{
+			throw new \DomainException('transition_seq_conflict');
+		}
 	}
 
 	protected function game_event_row(array $event, int $session_id, int $seq, string $game_type): array
@@ -2302,9 +2403,11 @@ class server
 		}
 
 		$request_id = $this->nullable_string_value($event, 'requestId', 'request_id', 64);
-		$existing_seq = $this->find_event_seq_by_request_id($session_id, $request_id);
-		if ($existing_seq > 0)
+		$existing_event = $this->find_event_by_request_id($session_id, $request_id);
+		if (!empty($existing_event))
 		{
+			$existing_seq = (int) ($existing_event['seq'] ?? 0);
+			$this->assert_transition_event_replay($existing_event, $event, $existing_seq, $game_type);
 			return max($current_seq, $existing_seq);
 		}
 
@@ -2313,9 +2416,19 @@ class server
 		$this->apply_lobby_membership($session_id, $room_key, $event['membership'] ?? null, $now);
 
 		$insert = $this->try_insert_row($this->events_table, $this->game_event_row($event, $session_id, $seq, $game_type));
-		if (!$insert['inserted'] && !$this->is_duplicate_insert($insert))
+		if (!$insert['inserted'])
 		{
-			throw new \RuntimeException('event_insert_failed');
+			if (!$this->is_duplicate_insert($insert))
+			{
+				throw new \RuntimeException('event_insert_failed');
+			}
+
+			$existing_event = $this->find_event_by_seq($session_id, $seq);
+			if (empty($existing_event))
+			{
+				throw new \DomainException('transition_seq_conflict');
+			}
+			$this->assert_transition_event_replay($existing_event, $event, $seq, $game_type);
 		}
 
 		return $seq;
@@ -2371,14 +2484,14 @@ class server
 		];
 	}
 
-	protected function find_event_seq_by_request_id(int $session_id, string $request_id): int
+	protected function find_event_by_request_id(int $session_id, string $request_id): array
 	{
 		if ($request_id === '')
 		{
-			return 0;
+			return [];
 		}
 
-		$sql = 'SELECT seq
+		$sql = 'SELECT id, session_id, seq, game_type, actor_user_id, request_id, event_type, payload_json
 			FROM ' . $this->events_table . "
 			WHERE session_id = " . $session_id . "
 				AND request_id = '" . $this->db->sql_escape($request_id) . "'
@@ -2386,10 +2499,86 @@ class server
 			LIMIT 1
 			FOR UPDATE";
 		$result = $this->db->sql_query($sql);
-		$seq = (int) $this->db->sql_fetchfield('seq');
+		$row = $this->db->sql_fetchrow($result);
 		$this->db->sql_freeresult($result);
 
-		return $seq;
+		return is_array($row) ? $row : [];
+	}
+
+	protected function find_event_by_seq(int $session_id, int $seq): array
+	{
+		if ($seq <= 0)
+		{
+			return [];
+		}
+
+		$sql = 'SELECT id, session_id, seq, game_type, actor_user_id, request_id, event_type, payload_json
+			FROM ' . $this->events_table . '
+			WHERE session_id = ' . $session_id . '
+				AND seq = ' . $seq . '
+			LIMIT 1
+			FOR UPDATE';
+		$result = $this->db->sql_query($sql);
+		$row = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+
+		return is_array($row) ? $row : [];
+	}
+
+	protected function assert_transition_event_replay(array $row, array $event, int $seq, string $game_type): void
+	{
+		$event_type = $this->required_string($event, 'eventType', 'event_type', 64);
+		$request_id = $this->nullable_string_value($event, 'requestId', 'request_id', 64);
+		$actor_user_id = $this->nullable_int_value($event, 'actorUserId', 'actor_user_id');
+		$event_game_type = $this->required_string($event, 'gameType', 'game_type', 32);
+		$event_seq = $this->nullable_int_value($event, 'seq', 'seq');
+
+		if (
+			(int) ($row['seq'] ?? 0) !== $seq
+			|| ($event_seq > 0 && $event_seq !== $seq)
+			|| (string) ($row['game_type'] ?? '') !== $game_type
+			|| (string) ($row['game_type'] ?? '') !== $event_game_type
+			|| (string) ($row['event_type'] ?? '') !== $event_type
+			|| (int) ($row['actor_user_id'] ?? 0) !== $actor_user_id
+			|| ($request_id !== '' && (string) ($row['request_id'] ?? '') !== $request_id)
+			|| !hash_equals(
+				$this->canonical_json_value((string) ($row['payload_json'] ?? '')),
+				$this->canonical_json_value($this->event_payload_value($event))
+			)
+		)
+		{
+			throw new \DomainException('idempotency_conflict');
+		}
+	}
+
+	protected function existing_transition_final_seq(int $session_id, string $game_type, int $seq, array $lobby_events): int
+	{
+		$final_seq = $seq;
+		foreach ($lobby_events as $lobby_event)
+		{
+			$request_id = $this->nullable_string_value($lobby_event, 'requestId', 'request_id', 64);
+			if ($request_id === '')
+			{
+				throw new \DomainException('idempotency_conflict');
+			}
+
+			$existing_event = $this->find_event_by_request_id($session_id, $request_id);
+			if (empty($existing_event))
+			{
+				throw new \DomainException('idempotency_conflict');
+			}
+
+			$existing_seq = (int) ($existing_event['seq'] ?? 0);
+			$this->assert_transition_event_replay($existing_event, $lobby_event, $existing_seq, $game_type);
+			$final_seq = max($final_seq, $existing_seq);
+		}
+
+		return $final_seq;
+	}
+
+	protected function event_payload_value(array $event)
+	{
+		return $event['payload'] ?? $event['payload_json'] ?? new \stdClass();
 	}
 
 	protected function apply_lobby_membership(int $session_id, string $room_key, $membership, int $now): void
@@ -2866,6 +3055,44 @@ class server
 	{
 		$json = json_encode($value, self::JSON_FLAGS);
 		return $json === false ? '{}' : $json;
+	}
+
+	protected function canonical_json_value($value): string
+	{
+		if (is_string($value) && $this->is_valid_json($value))
+		{
+			$value = json_decode($value, true);
+		}
+
+		return $this->encode_json_value($this->normalize_json_value($value));
+	}
+
+	protected function normalize_json_value($value)
+	{
+		if ($value instanceof \stdClass)
+		{
+			$value = get_object_vars($value);
+		}
+		else if (is_object($value))
+		{
+			$value = get_object_vars($value);
+		}
+
+		if (!is_array($value))
+		{
+			return $value;
+		}
+
+		foreach ($value as $key => $item)
+		{
+			$value[$key] = $this->normalize_json_value($item);
+		}
+		if (!$this->is_list_array($value))
+		{
+			ksort($value, SORT_STRING);
+		}
+
+		return $value;
 	}
 
 	protected function decode_json_field(string $value, $default)
