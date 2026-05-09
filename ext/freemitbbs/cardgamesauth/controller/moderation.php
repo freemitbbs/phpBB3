@@ -24,8 +24,8 @@ class moderation
 		'cancel_game' => [
 			'lang' => 'CARDGAMES_CONTROL_CANCEL_GAME',
 			'user' => false,
-			'room' => false,
-			'session' => true,
+			'room' => true,
+			'session' => false,
 		],
 		'reload_user_status' => [
 			'lang' => 'CARDGAMES_CONTROL_RELOAD_USER_STATUS',
@@ -163,6 +163,14 @@ class moderation
 		if (!empty($definition['session']) && $session_id <= 0)
 		{
 			throw new \RuntimeException($this->language->lang('CARDGAMES_CONTROL_ERR_SESSION'));
+		}
+		if ($action === 'cancel_game')
+		{
+			$session_id = $this->active_session_id_for_room($room_key);
+			if ($session_id <= 0)
+			{
+				throw new \RuntimeException($this->language->lang('CARDGAMES_CONTROL_ERR_ACTIVE_SESSION'));
+			}
 		}
 
 		$moderator_user_id = (int) ($this->user->data['user_id'] ?? 0);
@@ -412,6 +420,26 @@ class moderation
 		$this->db->sql_freeresult($result);
 
 		return $user_id;
+	}
+
+	protected function active_session_id_for_room(string $room_key): int
+	{
+		if ($room_key === '')
+		{
+			return 0;
+		}
+
+		$sql = 'SELECT id
+			FROM ' . $this->sessions_table . "
+			WHERE room_key = '" . $this->db->sql_escape($room_key) . "'
+				AND finished_at = 0
+				AND " . $this->db->sql_in_set('status', ['starting', 'playing']) . '
+			ORDER BY updated_at DESC, id DESC';
+		$result = $this->db->sql_query_limit($sql, 1);
+		$session_id = (int) $this->db->sql_fetchfield('id');
+		$this->db->sql_freeresult($result);
+
+		return $session_id;
 	}
 
 	protected function display_user(array $row): string

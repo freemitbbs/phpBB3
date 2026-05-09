@@ -1422,8 +1422,7 @@ function applyServerMessage(message, commandType = "", context = null) {
           applyTable(payload.table, false);
         } else if (payload.room) {
           const roomKey = payload.room.roomKey;
-          state.currentRoomKey = roomKey;
-          state.transitionRoomKey = "";
+          enterRoomFromServer(roomKey);
           state.table = null;
           state.emojiTarget = "";
           state.selectedHandIndexes = [];
@@ -1461,6 +1460,7 @@ function applyServerMessage(message, commandType = "", context = null) {
         return;
       }
       mergeRoom(message.payload.room);
+      enterRoomFromServer(message.payload.room?.roomKey);
       if (state.table?.room?.roomKey === message.payload.room.roomKey) {
         state.table.room = message.payload.room;
       }
@@ -1494,13 +1494,15 @@ function applyServerMessage(message, commandType = "", context = null) {
       applyTable(message.payload.table);
       break;
     case "chat.history":
-      if (!message.payload.roomKey || message.payload.roomKey === state.currentRoomKey) {
+      if (isCurrentRoomMessage(message.payload.roomKey, context)) {
+        enterRoomFromServer(message.payload.roomKey);
         setChatEvents(message.payload.events || []);
         render();
       }
       break;
     case "chat.event":
-      if (!message.payload.event?.roomKey || message.payload.event.roomKey === state.currentRoomKey) {
+      if (isCurrentRoomMessage(message.payload.event?.roomKey, context)) {
+        enterRoomFromServer(message.payload.event?.roomKey);
         appendChatEvent(message.payload.event);
         if (message.payload.event.kind === "emoji") {
           showEmoji(message.payload.event);
@@ -1533,11 +1535,21 @@ function applyTable(table, shouldRender = true) {
   }
 
   state.table = table;
-  state.currentRoomKey = table.room.roomKey;
-  state.transitionRoomKey = "";
+  enterRoomFromServer(table.room.roomKey);
   syncSelectedHandIndexes();
   if (shouldRender) {
     render();
+  }
+}
+
+function enterRoomFromServer(roomKey) {
+  if (!roomKey) {
+    return;
+  }
+
+  state.currentRoomKey = roomKey;
+  if (state.transitionRoomKey === roomKey) {
+    state.transitionRoomKey = "";
   }
 }
 

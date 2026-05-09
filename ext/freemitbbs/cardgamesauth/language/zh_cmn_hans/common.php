@@ -42,6 +42,7 @@ $lang = array_merge($lang, [
 	'CARDGAMES_CONTROL_ERR_TARGET_USER' => '此操作需要目标用户 ID 或用户名。',
 	'CARDGAMES_CONTROL_ERR_ROOM' => '此操作需要房间 key。',
 	'CARDGAMES_CONTROL_ERR_SESSION' => '此操作需要会话 ID。',
+	'CARDGAMES_CONTROL_ERR_ACTIVE_SESSION' => '此房间没有进行中的游戏。',
 	'CARDGAMES_CONTROL_ERR_RUNTIME_NOT_CONFIGURED' => '需要先在 ACP 启用并配置 Node 运行时 Hook，才能执行实时控制。',
 	'CARDGAMES_CONTROL_ERR_RUNTIME_UNREACHABLE' => '无法连接运行时 Hook。%s',
 	'CARDGAMES_CONTROL_ERR_RUNTIME_STATUS' => '运行时 Hook 返回 HTTP %1$s：%2$s',

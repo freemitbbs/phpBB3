@@ -42,6 +42,7 @@ $lang = array_merge($lang, [
 	'CARDGAMES_CONTROL_ERR_TARGET_USER' => 'This action requires a target user ID or username.',
 	'CARDGAMES_CONTROL_ERR_ROOM' => 'This action requires a room key.',
 	'CARDGAMES_CONTROL_ERR_SESSION' => 'This action requires a session ID.',
+	'CARDGAMES_CONTROL_ERR_ACTIVE_SESSION' => 'This room has no active game.',
 	'CARDGAMES_CONTROL_ERR_RUNTIME_NOT_CONFIGURED' => 'Node runtime hooks must be enabled and configured in the ACP before live controls can run.',
 	'CARDGAMES_CONTROL_ERR_RUNTIME_UNREACHABLE' => 'Runtime hook could not be reached. %s',
 	'CARDGAMES_CONTROL_ERR_RUNTIME_STATUS' => 'Runtime hook returned HTTP %1$s: %2$s',
