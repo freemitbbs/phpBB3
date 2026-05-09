@@ -107,7 +107,7 @@ class acp_videoupload_module
 			'VIDEOUPLOAD_S3_REGION' => (string) (($shared_storage['region'] ?? null) ?? ($config['videoupload_s3_region'] ?? 'us-east-1')),
 			'VIDEOUPLOAD_S3_BUCKET' => (string) (($shared_storage['bucket'] ?? null) ?? ($config['videoupload_s3_bucket'] ?? '')),
 			'VIDEOUPLOAD_S3_ACCESS_KEY' => (string) (($shared_storage['access_key'] ?? null) ?? ($config['videoupload_s3_access_key'] ?? '')),
-			'VIDEOUPLOAD_S3_PATH_PREFIX' => (string) ($config['videoupload_s3_path_prefix'] ?? 'videos'),
+			'VIDEOUPLOAD_S3_PATH_PREFIX' => (string) ($config['videoupload_s3_path_prefix'] ?? 'media'),
 			'VIDEOUPLOAD_S3_PUBLIC_BASE_URL' => (string) (($shared_storage['public_base_url'] ?? null) ?? ($config['videoupload_s3_public_base_url'] ?? '')),
 			'VIDEOUPLOAD_S3_USE_PATH_STYLE' => (int) (($shared_storage['use_path_style'] ?? null) ?? ($config['videoupload_s3_use_path_style'] ?? 0)),
 			'VIDEOUPLOAD_S3_ACL' => (string) ($config['videoupload_s3_acl'] ?? 'public-read'),

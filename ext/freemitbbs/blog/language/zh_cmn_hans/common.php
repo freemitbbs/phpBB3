@@ -8,7 +8,7 @@ if (!defined('IN_PHPBB'))
 $lang = array_merge($lang, [
 	'ACL_U_BLOG_CREATE' => '可以创建和管理自己的博客文章',
 
-	'BLOGS' => '坛友博客',
+	'BLOGS' => '未名博客',
 	'BLOG' => '博客',
 	'UCP_BLOG' => '博客',
 	'UCP_BLOG_MANAGE' => '我的博客',

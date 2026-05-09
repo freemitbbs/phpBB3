@@ -88,6 +88,7 @@ const retryableCommandTypes = new Set([
   "room.leave",
   "seat.claim",
   "seat.release",
+  "seat.remove",
   "player.ready",
   "observer.watch",
   "tractor.start",
@@ -1644,7 +1645,6 @@ function renderTable() {
   const leaveAction = action(table, "room.leave");
   const roomTransitionPending = hasRoomTransitionPending();
   const roomMutationPending = isRoomMutationPending(state.currentRoomKey);
-  const actionsHtml = tableActionsHtml(table);
 
   els.table.innerHTML = `
     <div class="table-grid">
@@ -1661,14 +1661,11 @@ function renderTable() {
           ${tableScoreboardHtml(table)}
           ${paused ? `<p class="table-paused">${escapeHtml(pauseText(table))}</p>` : ""}
           ${turnTimerHtml(table)}
+          ${handSummaryHtml(table)}
         </div>
       </div>
     </div>
-    ${trickHtml(table)}
-    ${handSummaryHtml(table)}
     <div class="observer-list">${observers}</div>
-    <div class="table-actions hand-actions">${actionsHtml}</div>
-    ${handHtml(table)}
   `;
 
   els.table.querySelectorAll("[data-action]").forEach((button) => {
@@ -1729,23 +1726,51 @@ function seatHtml(table, seat) {
     : "空位";
   const meta = side ? `${side} · ${baseMeta}` : baseMeta;
   const actions = seatActionsHtml(table, seat, isViewerSeat);
+  const seatTurn = isSeatTurn(table, seat.seatIndex);
+  const activeSeat = isActiveEngineSeat(table, seat.seatIndex);
+  const gameActions = seatGameActionsHtml(table, seat.seatIndex);
+  const trick = seatTrickHtml(table, seat.seatIndex);
+  const hand = seatHandHtml(table, seat.seatIndex);
 
   return `
-    <div class="seat seat-${visualSeatIndex} ${isViewerSeat ? "seat-viewer" : ""} ${seat.connected ? "" : "seat-offline"} ${replacementSeat ? "seat-replacement" : ""}" data-seat-index="${seat.seatIndex}">
-      ${seatAvatarHtml(user, seat.seatIndex)}
+    <div class="seat seat-${visualSeatIndex} ${isViewerSeat ? "seat-viewer" : ""} ${seat.connected ? "" : "seat-offline"} ${replacementSeat ? "seat-replacement" : ""} ${seatTurn ? "seat-turn" : ""} ${activeSeat ? "seat-active-hand" : ""}" data-seat-index="${seat.seatIndex}">
+      ${seatAvatarHtml(table, seat)}
       <div class="seat-name">${occupied ? escapeHtml(user.displayName) : seatLabel(seat.seatIndex)}</div>
       <div class="seat-meta">${escapeHtml(meta)}</div>
       <div class="seat-actions">${actions}</div>
+      ${gameActions}
+      ${trick}
+      ${hand}
     </div>
   `;
 }
 
-function seatAvatarHtml(user, seatIndex) {
+function seatAvatarHtml(table, seat) {
+  const user = seat.user;
+  const seatIndex = seat.seatIndex;
   const fallback = skinUrlForSeat(user, seatIndex);
-  if (isForumAvatarUrl(user?.avatarUrl)) {
-    return `<img class="seat-avatar seat-forum-avatar" src="${escapeAttribute(user.avatarUrl)}" data-fallback-src="${escapeAttribute(fallback)}" alt="" loading="lazy" />`;
+  const avatar = isForumAvatarUrl(user?.avatarUrl)
+    ? `<img class="seat-avatar seat-forum-avatar" src="${escapeAttribute(user.avatarUrl)}" data-fallback-src="${escapeAttribute(fallback)}" alt="" loading="lazy" />`
+    : `<img class="seat-avatar seat-skin" src="${escapeAttribute(fallback)}" alt="" loading="lazy" />`;
+
+  const watched = Number(table.viewer?.watchedSeatIndex) === Number(seatIndex);
+  if (watched) {
+    return `
+      <span class="seat-avatar-frame" title="正在观看该玩家手牌" aria-label="正在观看该玩家手牌">
+        ${avatar}
+      </span>
+    `;
   }
-  return `<img class="seat-avatar seat-skin" src="${escapeAttribute(fallback)}" alt="" loading="lazy" />`;
+
+  if (!canWatchSeat(table, seat)) {
+    return avatar;
+  }
+
+  return `
+    <button class="seat-avatar-button" data-action="observer.watch" data-seat="${seatIndex}" type="button" title="点击观看该玩家手牌" aria-label="观看该玩家手牌">
+      ${avatar}
+    </button>
+  `;
 }
 
 function isForumAvatarUrl(url) {
@@ -1822,10 +1847,24 @@ function seatActionsHtml(table, seat, isViewerSeat) {
       <button data-action="seat.release" data-seat="${seat.seatIndex}" type="button" ${releaseAction.enabled && !disabled && !isActionPending("seat.release", roomKey) ? "" : "disabled"}>离座</button>
     `;
   }
-  if (seat.user && action(table, "observer.watch").enabled && table.viewer.role === "observer") {
-    return `<button data-action="observer.watch" data-seat="${seat.seatIndex}" type="button" ${disabled || isActionPending("observer.watch", roomKey) ? "disabled" : ""}>观看</button>`;
+  if (seat.user && !seat.connected && table.viewer?.owner && isSeatRemovable(table, seat.seatIndex)) {
+    return `<button data-action="seat.remove" data-seat="${seat.seatIndex}" type="button" ${disabled || isActionPending("seat.remove", roomKey) ? "disabled" : ""} title="移除离线玩家，释放座位">移除</button>`;
   }
   return "";
+}
+
+function canWatchSeat(table, seat) {
+  if (!seat.user || table.viewer.role !== "observer") {
+    return false;
+  }
+
+  const roomKey = table.room.roomKey;
+  return action(table, "observer.watch").enabled
+    && !isGameInteractionLocked()
+    && !state.transitionRoomKey
+    && !hasRoomTransitionPending()
+    && !isRoomMutationPending(roomKey)
+    && !isActionPending("observer.watch", roomKey);
 }
 
 function skinUrlForSeat(user, seatIndex) {
@@ -1847,6 +1886,17 @@ function isSeatClaimable(table, seatIndex) {
     return true;
   }
   return claimAction.seatIndexes.includes(seatIndex);
+}
+
+function isSeatRemovable(table, seatIndex) {
+  const removeAction = action(table, "seat.remove");
+  if (!removeAction.enabled) {
+    return false;
+  }
+  if (!Array.isArray(removeAction.seatIndexes)) {
+    return true;
+  }
+  return removeAction.seatIndexes.includes(seatIndex);
 }
 
 function isReplacementSeat(table, seat) {
@@ -1927,47 +1977,130 @@ function tableActionsHtml(table) {
   return parts.join("");
 }
 
-function trickHtml(table) {
+function isSeatTurn(table, seatIndex) {
+  const currentSeat = table.turn?.seatIndex ?? table.engine?.public?.currentTrick?.nextSeatIndex;
+  return Number(currentSeat) === Number(seatIndex);
+}
+
+function isPrivateHandSeat(table, seatIndex) {
+  return Number(table.engine?.private?.seatIndex) === Number(seatIndex);
+}
+
+function isGameActionSeat(table, seatIndex) {
+  if (isPrivateHandSeat(table, seatIndex)) {
+    return true;
+  }
+  if (Number.isInteger(table.viewer?.seatIndex)) {
+    return Number(table.viewer.seatIndex) === Number(seatIndex);
+  }
+  return false;
+}
+
+function seatGameActionsHtml(table, seatIndex) {
+  if (!isGameActionSeat(table, seatIndex)) {
+    return "";
+  }
+
+  const actions = tableActionsHtml(table);
+  return `<div class="table-actions seat-game-actions">${actions}</div>`;
+}
+
+function visibleTrick(table) {
   const currentTrick = table.engine?.public?.currentTrick;
-  const trick = currentTrick?.plays?.length
+  return currentTrick?.plays?.length
     ? currentTrick
     : isTrickReviewActive(table)
       ? table.engine?.public?.lastCompletedTrick
       : currentTrick || null;
+}
+
+function seatTrickHtml(table, seatIndex) {
+  if (!table.engineReady || !isActiveEngineSeat(table, seatIndex)) {
+    return "";
+  }
+
+  const trick = visibleTrick(table);
   if (!trick) {
     return "";
   }
 
-  const playsBySeat = new Map((trick.plays || []).map((play) => [Number(play.seatIndex), play]));
-  const rows = trickSeatOrder(table, trick).map((seatIndex) => {
-    const play = playsBySeat.get(seatIndex);
-    const cards = play?.cards?.length
-      ? play.cards.map((card) => cardFaceHtml(card, "played-card")).join("")
-      : "";
-    return `
-    <div class="trick-play ${play ? "" : "trick-play-empty"}">
-      <span>${escapeHtml(play ? playUserLabel(table, play) : seatUserLabel(table, seatIndex) || seatLabel(seatIndex))}</span>
-      <span class="played-cards">${cards}</span>
+  const play = (trick.plays || []).find((candidate) => Number(candidate.seatIndex) === Number(seatIndex));
+  const cards = play?.cards?.length
+    ? play.cards.map((card) => cardFaceHtml(card, "played-card")).join("")
+    : "";
+  const points = Number(play?.points || 0);
+  const label = points > 0 ? `本墩得分 ${points}` : "本墩出牌";
+  return `
+    <div class="seat-trick ${play ? "" : "seat-trick-empty"}" title="${play ? escapeAttribute(label) : ""}">
+      <span class="played-cards ${cards ? "" : "played-cards-empty"}">${cards}</span>
     </div>
   `;
-  }).join("");
-  return `<div class="trick-panel">${rows}</div>`;
 }
 
-function trickSeatOrder(table, trick) {
-  const players = table.engine?.public?.players || [];
-  const activeSeats = new Set(players.map((player) => Number(player.seatIndex)).filter(Number.isInteger));
-  const roomSeatCount = Number(table.room?.seatCount || table.room?.seats?.length || activeSeats.size || 4);
-  const seatCount = Math.max(1, Number.isInteger(roomSeatCount) ? roomSeatCount : 4);
-  const leaderSeatIndex = Number(trick?.leaderSeatIndex);
-  const orderedSeats = Number.isInteger(leaderSeatIndex)
-    ? Array.from({ length: seatCount }, (_, offset) => modulo(leaderSeatIndex + offset, seatCount))
-    : (table.room?.seats || []).map((seat) => Number(seat.seatIndex)).filter(Number.isInteger);
-  const visibleSeats = activeSeats.size
-    ? orderedSeats.filter((seatIndex) => activeSeats.has(seatIndex))
-    : orderedSeats;
+function seatHandHtml(table, seatIndex) {
+  if (!table.engineReady || !isActiveEngineSeat(table, seatIndex)) {
+    return "";
+  }
 
-  return visibleSeats.length ? visibleSeats : [0, 1, 2, 3].slice(0, Math.min(4, seatCount));
+  const cards = isPrivateHandSeat(table, seatIndex) ? table.engine?.private?.cards || [] : [];
+  if (cards.length) {
+    return privateSeatHandHtml(cards);
+  }
+
+  const count = estimatedSeatHandCount(table, seatIndex);
+  return hiddenSeatHandHtml(count);
+}
+
+function privateSeatHandHtml(cards) {
+  const selected = new Set(state.selectedHandIndexes);
+  const nodes = cards.map((card, index) => `
+    <button class="hand-card" data-card-index="${index}" aria-pressed="${selected.has(index) ? "true" : "false"}" type="button">
+      ${cardFaceHtml(card, "hand-card-face")}
+      <span class="hand-card-label">${escapeHtml(cardLabelText(card))}</span>
+    </button>
+  `).join("");
+
+  return `<div class="seat-hand seat-hand-private" style="--hand-count: ${Math.max(cards.length, 1)}">${nodes}</div>`;
+}
+
+function hiddenSeatHandHtml(count) {
+  if (count <= 0) {
+    return "";
+  }
+
+  return `
+    <div class="seat-hand seat-hand-hidden" aria-label="对手手牌">
+      <span class="seat-zone-label">手牌 ${escapeHtml(String(count))}</span>
+      <span class="card-backs">${cardBacksHtml(count)}</span>
+    </div>
+  `;
+}
+
+function estimatedSeatHandCount(table, seatIndex) {
+  const publicState = table.engine?.public;
+  if (!publicState) {
+    return 0;
+  }
+
+  if (publicState.phase === "burying_bottom" && Number(publicState.bottomHolderSeatIndex) === Number(seatIndex)) {
+    return Number(publicState.cardsPerPlayer || 25) + 8;
+  }
+
+  let count = Number(publicState.leftCardsCount ?? publicState.cardsPerPlayer ?? 0);
+  const currentTrick = publicState.currentTrick;
+  if (currentTrick?.plays?.length) {
+    const play = currentTrick.plays.find((candidate) => Number(candidate.seatIndex) === Number(seatIndex));
+    if (play) {
+      count -= Number(currentTrick.leadingCount || play.cards?.length || 0);
+    }
+  }
+
+  return Math.max(0, count);
+}
+
+function cardBacksHtml(count) {
+  const visible = Math.max(1, Math.min(10, count));
+  return Array.from({ length: visible }, (_, index) => `<span class="card-back" style="--card-back-index: ${index}"></span>`).join("");
 }
 
 function handSummaryHtml(table) {
@@ -2137,24 +2270,6 @@ function durationLabel(milliseconds) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-function handHtml(table) {
-  const cards = table.engine?.private?.cards || [];
-  if (!cards.length) {
-    return "";
-  }
-
-  const selected = new Set(state.selectedHandIndexes);
-  const nodes = cards.map((card, index) => `
-    <button class="hand-card" data-card-index="${index}" aria-pressed="${selected.has(index) ? "true" : "false"}" type="button">
-      ${cardFaceHtml(card, "hand-card-face")}
-      <span class="hand-card-label">${escapeHtml(cardLabelText(card))}</span>
-    </button>
-  `).join("");
-
-  const columns = Math.max(1, Math.ceil(cards.length / 2));
-  return `<div class="hand-panel" style="--hand-count: ${Math.max(cards.length, 1)}; --hand-columns: ${columns}">${nodes}</div>`;
-}
-
 function handleTableAction(type, seatValue) {
   const seatIndex = Number(seatValue);
   const roomKey = state.currentRoomKey;
@@ -2168,6 +2283,8 @@ function handleTableAction(type, seatValue) {
     void sendCommand("seat.claim", { roomKey, payload: { seatIndex } }).catch(reportError);
   } else if (type === "seat.release") {
     void sendCommand("seat.release", { roomKey }).catch(reportError);
+  } else if (type === "seat.remove") {
+    void sendCommand("seat.remove", { roomKey, payload: { seatIndex } }).catch(reportError);
   } else if (type === "player.ready") {
     const seat = state.table.room.seats.find((candidate) => candidate.seatIndex === seatIndex);
     if (!seat) {
@@ -2786,6 +2903,7 @@ function playCommandSound(commandType) {
       break;
     case "seat.claim":
     case "seat.release":
+    case "seat.remove":
     case "player.ready":
     case "observer.watch":
       playSound("effect/draw.mp3");
@@ -3107,19 +3225,6 @@ function seatUserLabel(table, seatIndex) {
   return seat?.user?.displayName || seat?.user?.username || seatLabel(numericSeatIndex);
 }
 
-function playUserLabel(table, play) {
-  const userId = Number(play?.userId);
-  if (Number.isInteger(userId)) {
-    const userSeat = table.room?.seats?.find((seat) => seat.user?.userId === userId);
-    if (userSeat?.user) {
-      return userSeat.user.displayName || userSeat.user.username || seatLabel(userSeat.seatIndex);
-    }
-  }
-
-  const seatIndex = Number(play?.seatIndex);
-  return seatUserLabel(table, seatIndex) || seatLabel(seatIndex);
-}
-
 function skinDisplayName(skin) {
   return skinLabels[skin.skinId] || skin.displayName || skin.skinId;
 }
@@ -3139,7 +3244,7 @@ function serverErrorText(code, message) {
     not_authenticated: "请先连接并认证",
     not_in_room: "请先进入房间",
     not_implemented: "该操作暂未开放",
-    not_room_owner: "只有房主可以开始",
+    not_room_owner: "只有房主可以操作",
     not_tractor_room: "该房间不是拖拉机房间",
     room_not_found: "房间不存在",
     room_closed: "房间已关闭",
@@ -3151,6 +3256,7 @@ function serverErrorText(code, message) {
     room_required: "请选择房间",
     seat_taken: "座位已被占用",
     seat_not_found: "座位不存在",
+    seat_not_offline: "只能移除离线玩家",
     already_seated: "您已经入座",
     not_seated: "您尚未入座",
     seated_observer_forbidden: "已入座玩家不能观看其他手牌",

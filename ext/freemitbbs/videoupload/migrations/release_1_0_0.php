@@ -22,7 +22,7 @@ class release_1_0_0 extends \phpbb\db\migration\migration
 			['config.add', ['videoupload_s3_bucket', '']],
 			['config.add', ['videoupload_s3_access_key', '']],
 			['config.add', ['videoupload_s3_secret_key', '']],
-			['config.add', ['videoupload_s3_path_prefix', 'videos']],
+			['config.add', ['videoupload_s3_path_prefix', 'media']],
 			['config.add', ['videoupload_s3_public_base_url', '']],
 			['config.add', ['videoupload_s3_use_path_style', 0]],
 			['config.add', ['videoupload_s3_acl', 'public-read']],

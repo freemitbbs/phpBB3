@@ -7,7 +7,8 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 class upload
 {
 	private const LINK_HASH_NAME = 'freemitbbs_videoupload';
-	private const ALLOWED_EXTENSIONS = ['mp4', 'mov', 'ogg', 'webm', 'weba', 'mp3', 'm4a', 'aac', 'wav', 'oga', 'opus', 'flac'];
+	private const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+	private const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'ogg', 'webm', 'weba', 'mp3', 'm4a', 'aac', 'wav', 'oga', 'opus', 'flac'];
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
@@ -84,7 +85,7 @@ class upload
 		}
 
 		$files = $this->request->get_super_global(\phpbb\request\request_interface::FILES);
-		$file = $files['video_file'] ?? null;
+		$file = $files['media_file'] ?? ($files['video_file'] ?? null);
 		if (!is_array($file))
 		{
 			return $this->json_error($this->language->lang('VIDEOUPLOAD_ERR_NO_FILE'), 400);
@@ -114,6 +115,11 @@ class upload
 		if (!in_array($extension, self::ALLOWED_EXTENSIONS, true))
 		{
 			return $this->json_error($this->language->lang('VIDEOUPLOAD_ERR_UNSUPPORTED_EXTENSION', implode(', ', self::ALLOWED_EXTENSIONS)), 400);
+		}
+
+		if (!$this->is_valid_upload_content($tmp_name, $extension))
+		{
+			return $this->json_error($this->language->lang('VIDEOUPLOAD_ERR_INVALID_IMAGE'), 400);
 		}
 
 		$object_key = $this->build_object_key($extension);
@@ -194,6 +200,31 @@ class upload
 		}
 
 		return false;
+	}
+
+	protected function is_valid_upload_content(string $tmp_name, string $extension): bool
+	{
+		if (!in_array($extension, self::IMAGE_EXTENSIONS, true))
+		{
+			return true;
+		}
+
+		$image_info = @getimagesize($tmp_name);
+		if (!is_array($image_info) || !isset($image_info[2]))
+		{
+			return false;
+		}
+
+		$image_type = (int) $image_info[2];
+		$allowed_types = [
+			'jpg' => [IMAGETYPE_JPEG],
+			'jpeg' => [IMAGETYPE_JPEG],
+			'png' => [IMAGETYPE_PNG],
+			'gif' => [IMAGETYPE_GIF],
+			'webp' => defined('IMAGETYPE_WEBP') ? [IMAGETYPE_WEBP] : [],
+		];
+
+		return in_array($image_type, $allowed_types[$extension] ?? [], true);
 	}
 
 	protected function can_upload_in_forum(int $forum_id): bool

@@ -207,20 +207,24 @@
 
 .app-shell .table-grid {
   display: grid;
-  grid-template-columns: 1fr minmax(220px, 360px) 1fr;
-  grid-template-rows: minmax(120px, auto) minmax(220px, 1fr) minmax(120px, auto);
+  grid-template-columns: minmax(210px, 1fr) minmax(230px, 340px) minmax(210px, 1fr);
+  grid-template-rows: minmax(150px, auto) minmax(240px, 1fr) minmax(180px, auto);
   gap: 12px;
   min-height: 500px;
 }
 
 .app-shell .seat {
+  --played-card-width: clamp(34px, 3.8vw, 50px);
+  --hand-lift: 14px;
+  --hand-card-width: clamp(46px, 5.2vw, 68px);
+  --hand-overlap: clamp(24px, 3.6vw, 46px);
   position: relative;
   display: grid;
-  grid-template-columns: 52px 1fr;
-  align-content: center;
-  align-items: center;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-content: start;
+  align-items: start;
   gap: 8px;
-  min-height: 118px;
+  min-height: 150px;
   border: 1px solid rgba(255, 249, 236, 0.3);
   border-radius: 8px;
   background:
@@ -228,6 +232,16 @@
     url("./images/tractor/btn/poker_chair.png") center / cover no-repeat;
   color: var(--ink);
   padding: 12px;
+}
+
+.app-shell .seat-active-hand {
+  border-color: rgba(255, 249, 236, 0.48);
+}
+
+.app-shell .seat-turn {
+  box-shadow:
+    inset 0 0 0 2px rgba(230, 180, 71, 0.62),
+    0 0 0 1px rgba(230, 180, 71, 0.28);
 }
 
 .app-shell .seat-offline {
@@ -241,8 +255,9 @@
 }
 
 .app-shell .seat-0 {
-  grid-column: 2;
+  grid-column: 1 / -1;
   grid-row: 3;
+  --played-card-width: clamp(42px, 4.5vw, 58px);
 }
 
 .app-shell .seat-1 {
@@ -251,8 +266,9 @@
 }
 
 .app-shell .seat-2 {
-  grid-column: 2;
+  grid-column: 1 / -1;
   grid-row: 1;
+  --played-card-width: clamp(42px, 4.5vw, 58px);
 }
 
 .app-shell .seat-3 {
@@ -264,12 +280,14 @@
   min-width: 0;
   font-weight: 700;
   overflow-wrap: anywhere;
+  line-height: 1.2;
 }
 
 .app-shell .seat-meta {
   grid-column: 2;
   color: var(--muted);
   min-height: 22px;
+  font-size: 13px;
 }
 
 .app-shell .seat-actions {
@@ -279,11 +297,40 @@
   gap: 8px;
 }
 
+.app-shell .seat-actions:empty {
+  display: none;
+}
+
+.app-shell .seat-avatar-frame,
+.app-shell .seat-avatar-button {
+  grid-row: span 2;
+  width: 56px;
+  max-width: 56px;
+  height: 76px;
+  min-height: 0;
+  display: block;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+
+.app-shell .seat-avatar-button:hover,
+.app-shell .seat-avatar-button:focus {
+  outline: 2px solid rgba(165, 38, 45, 0.64);
+  outline-offset: 2px;
+}
+
+.app-shell .seat-avatar-frame {
+  cursor: default;
+}
+
 .app-shell .seat-avatar {
   grid-row: span 2;
   display: block;
-  width: 52px;
-  max-width: 52px;
+  width: 56px;
+  max-width: 56px;
   height: 76px;
   max-height: 76px;
   box-sizing: border-box;
@@ -302,6 +349,14 @@
   border: 2px solid rgba(255, 250, 240, 0.92);
   background: #fffaf0;
   box-shadow: 0 4px 10px rgba(35, 52, 58, 0.22);
+}
+
+.app-shell .seat-avatar-button .seat-avatar {
+  grid-row: auto;
+}
+
+.app-shell .seat-avatar-frame .seat-avatar {
+  grid-row: auto;
 }
 
 .app-shell .table-center {
@@ -328,8 +383,15 @@
   margin-top: 12px;
 }
 
-.app-shell .hand-actions {
-  margin-top: 14px;
+.app-shell .seat-game-actions {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+  min-height: 34px;
+  margin-top: 0;
+}
+
+.app-shell .seat-game-actions:empty {
+  visibility: hidden;
 }
 
 .app-shell .table-facts {
@@ -452,9 +514,7 @@
   gap: 8px;
 }
 
-.app-shell .trick-panel,
-.app-shell .hand-summary-panel,
-.app-shell .hand-panel {
+.app-shell .hand-summary-panel {
   margin-top: 14px;
   border: 1px solid rgba(255, 249, 236, 0.28);
   background: rgba(255, 250, 240, 0.88);
@@ -463,15 +523,21 @@
   color: var(--ink);
 }
 
-.app-shell .trick-panel {
-  --played-card-width: clamp(44px, 4.5vw, 62px);
-  display: grid;
-  gap: 8px;
+.app-shell .seat-trick,
+.app-shell .seat-hand {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  color: var(--ink);
 }
 
 .app-shell .hand-summary-panel {
   display: grid;
   gap: 8px;
+}
+
+.app-shell .table-center .hand-summary-panel {
+  width: 100%;
+  text-align: left;
 }
 
 .app-shell .hand-summary-title {
@@ -503,39 +569,70 @@
   background: rgba(255, 239, 217, 0.72);
 }
 
-.app-shell .trick-play {
-  display: grid;
-  grid-template-columns: clamp(82px, 14vw, 118px) minmax(0, 1fr);
-  gap: 14px;
-  color: var(--muted);
-  align-items: center;
+.app-shell .seat-trick {
   min-height: calc(var(--played-card-width) * 1.4);
+  margin-top: 8px;
 }
 
-.app-shell .trick-play > span:first-child {
+.app-shell .seat-zone-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.app-shell .hand-panel {
-  --hand-gap: 6px;
-  --hand-lift: 12px;
-  --hand-columns: 13;
-  --hand-card-width: min(74px, calc((100vw - 54px - (var(--hand-columns) - 1) * var(--hand-gap)) / var(--hand-columns)));
+.app-shell .seat-hand {
+  margin-top: 8px;
+}
+
+.app-shell .seat-hand-private {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 4px 4px calc(var(--hand-lift) + 8px);
+  scrollbar-width: thin;
+}
+
+.app-shell .seat-hand-hidden {
   display: grid;
-  grid-template-columns: repeat(var(--hand-columns), minmax(0, var(--hand-card-width)));
-  grid-auto-rows: calc(var(--hand-card-width) * 1.42 + var(--hand-lift) + 8px);
-  justify-content: center;
-  align-items: start;
-  gap: var(--hand-gap);
-  overflow: visible;
-  padding-bottom: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.app-shell .card-backs {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  padding-left: 4px;
+}
+
+.app-shell .card-back {
+  width: 20px;
+  height: 30px;
+  flex: 0 0 auto;
+  margin-left: -7px;
+  border: 1px solid rgba(255, 249, 236, 0.7);
+  border-radius: 4px;
+  background:
+    linear-gradient(135deg, rgba(255, 249, 236, 0.32), transparent 45%),
+    #a5262d;
+  box-shadow: 0 1px 3px rgba(35, 52, 58, 0.24);
+}
+
+.app-shell .card-back:first-child {
+  margin-left: 0;
 }
 
 .app-shell .hand-card {
   width: var(--hand-card-width);
+  flex: 0 0 var(--hand-card-width);
   min-width: 0;
   height: calc(var(--hand-card-width) * 1.42 + var(--hand-lift) + 8px);
   min-height: 0;
@@ -546,6 +643,17 @@
   padding: 4px;
   overflow: hidden;
   transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.app-shell .hand-card + .hand-card {
+  margin-left: calc(-1 * var(--hand-overlap));
+}
+
+.app-shell .hand-card:hover,
+.app-shell .hand-card:focus,
+.app-shell .hand-card[aria-pressed="true"] {
+  position: relative;
+  z-index: 2;
 }
 
 .app-shell .hand-card[aria-pressed="true"] {
@@ -637,6 +745,8 @@
   transition: transform 120ms ease;
 }
 
+.app-shell .hand-card:hover .hand-card-face,
+.app-shell .hand-card:focus .hand-card-face,
 .app-shell .hand-card[aria-pressed="true"] .hand-card-face {
   transform: translateY(0);
 }
@@ -654,6 +764,11 @@
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
+}
+
+.app-shell .played-cards-empty {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .app-shell .played-card {
@@ -897,16 +1012,13 @@
     grid-row: auto;
   }
 
-  .app-shell .hand-panel {
+  .app-shell .seat-hand-private {
     --hand-lift: 10px;
     --hand-card-width: 46px;
-    justify-content: start;
-    overflow-x: auto;
-    overflow-y: visible;
-    padding-bottom: 8px;
+    --hand-overlap: 30px;
   }
 
-  .app-shell .trick-panel {
+  .app-shell .seat-trick {
     --played-card-width: 40px;
   }
 

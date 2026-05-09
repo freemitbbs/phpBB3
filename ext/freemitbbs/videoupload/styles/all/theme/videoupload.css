@@ -6,25 +6,6 @@
 	margin-top: 8px;
 }
 
-.videoupload-inline-row {
-	display: flex;
-	align-items: center;
-	justify-content: flex-start;
-	gap: 8px;
-	flex-wrap: nowrap;
-	width: 100%;
-}
-
-.videoupload-inline-row > div {
-	margin-top: 0 !important;
-	margin-bottom: 0 !important;
-}
-
-.videoupload-inline-row .videoupload-control {
-	margin-top: 0 !important;
-	margin-left: 0;
-}
-
 .videoupload-link {
 	display: inline-flex;
 	align-items: center;

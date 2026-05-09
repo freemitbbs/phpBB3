@@ -2,7 +2,7 @@
 	'use strict';
 
 	function splitAllowedExts(rawValue) {
-		return (rawValue || '.mp4,.mov,.ogg,.webm,.weba,.mp3,.m4a,.aac,.wav,.oga,.opus,.flac')
+		return (rawValue || '.jpg,.jpeg,.png,.gif,.webp,.mp4,.mov,.ogg,.webm,.weba,.mp3,.m4a,.aac,.wav,.oga,.opus,.flac')
 			.split(',')
 			.map(function (item) { return item.trim().toLowerCase(); })
 			.filter(function (item) { return item.length > 0; });
@@ -20,6 +20,17 @@
 		return extensions.some(function (ext) {
 			return base.endsWith(ext);
 		});
+	}
+
+	function isImageUpload(file, url) {
+		var imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+		var mimeType = file && typeof file.type === 'string' ? file.type.toLowerCase() : '';
+
+		if (hasAnyExtension(url, imageExtensions)) {
+			return true;
+		}
+
+		return mimeType.indexOf('image/') === 0;
 	}
 
 	function findMessageTextarea(control) {
@@ -67,9 +78,14 @@
 		return false;
 	}
 
-	function insertUrlIntoEditor(url, wrapAsAudio, control) {
+	function insertUrlIntoEditor(url, uploadKind, control) {
 		var cleanedUrl = String(url || '').trim();
-		var text = wrapAsAudio ? ('[audio]' + cleanedUrl + '[/audio]\n') : (cleanedUrl + '\n');
+		var text = cleanedUrl + '\n';
+		if (uploadKind === 'image') {
+			text = '[img]' + cleanedUrl + '[/img]\n';
+		} else if (uploadKind === 'audio') {
+			text = '[audio]' + cleanedUrl + '[/audio]\n';
+		}
 		if (!text.trim()) {
 			return false;
 		}
@@ -98,99 +114,10 @@
 		return true;
 	}
 
-	function closestMessageBox(textarea) {
-		var node = textarea ? textarea.parentNode : null;
-		while (node && node !== document.body) {
-			if (node.classList && node.classList.contains('message-box')) {
-				return node;
-			}
-			node = node.parentNode;
-		}
-		return textarea ? textarea.parentNode : null;
-	}
-
-	function findPostimageControl(control) {
-		var textarea = findMessageTextarea(control);
-		if (!textarea || !textarea.parentNode) {
-			return null;
-		}
-
-		var messageBox = closestMessageBox(textarea);
-		if (!messageBox) {
-			return null;
-		}
-
-		var siblings = messageBox.children;
-		for (var i = 0; i < siblings.length; i++) {
-			var node = siblings[i];
-			if (!node || node.id === 'videoupload-control' || node.id === 'videoupload-qr-control' || node.id === 'videoupload-row') {
-				continue;
-			}
-			if (node.tagName !== 'DIV') {
-				continue;
-			}
-
-			var link = node.querySelector('a[role="button"][href="#"]');
-			if (link) {
-				return node;
-			}
-		}
-
-		return null;
-	}
-
-	function placeBesidePostimage(control) {
-		var postimageControl = findPostimageControl(control);
-		if (!postimageControl || !postimageControl.parentNode) {
-			return false;
-		}
-
-		var parent = postimageControl.parentNode;
-		var row = document.getElementById('videoupload-row');
-		if (!row) {
-			row = document.createElement('div');
-			row.id = 'videoupload-row';
-			row.className = 'videoupload-inline-row';
-		}
-
-		if (row.parentNode !== parent) {
-			parent.appendChild(row);
-		}
-
-		if (postimageControl.parentNode !== row) {
-			row.appendChild(postimageControl);
-		}
-		if (control.parentNode !== row) {
-			row.appendChild(control);
-		}
-
-		control.classList.add('videoupload-inline');
-		return true;
-	}
-
-	function placeBesidePostimageWithRetry(control, status) {
-		if (placeBesidePostimage(control)) {
-			return;
-		}
-
-		var attempts = 0;
-		var timer = window.setInterval(function () {
-			attempts += 1;
-			if (placeBesidePostimage(control) || attempts >= 40) {
-				window.clearInterval(timer);
-				if (attempts >= 40 && status && !status.textContent) {
-					status.textContent = '';
-				}
-			}
-		}, 250);
-	}
-
 	function initUploader(control, button, input, status) {
 		if (!button || !input || !status) {
 			return;
 		}
-
-		placeBesidePostimageWithRetry(control, status);
 
 		var allowedExts = splitAllowedExts(control.dataset.allowedExts);
 		var maxBytes = parseInt(control.dataset.maxBytes || '0', 10) || 0;
@@ -248,7 +175,7 @@
 			var formData = new FormData();
 			formData.append('hash', hash);
 			formData.append('forum_id', forumId);
-			formData.append('video_file', file);
+			formData.append('media_file', file);
 
 			setUploadingState(true);
 			setStatus(msgUploading, 'is-busy');
@@ -286,15 +213,16 @@
 						return;
 					}
 
-						if (!hasAllowedExtension(data.url, allowedExts)) {
-							setStatus(msgExtension, 'is-error');
-							return;
-						}
+					if (!hasAllowedExtension(data.url, allowedExts)) {
+						setStatus(msgExtension, 'is-error');
+						return;
+					}
 
-						if (!insertUrlIntoEditor(data.url, isAudioUpload(file, data.url), control)) {
-							setStatus(msgGeneric, 'is-error');
-							return;
-						}
+					var uploadKind = isImageUpload(file, data.url) ? 'image' : (isAudioUpload(file, data.url) ? 'audio' : 'video');
+					if (!insertUrlIntoEditor(data.url, uploadKind, control)) {
+						setStatus(msgGeneric, 'is-error');
+						return;
+					}
 
 					setStatus(msgSuccess, 'is-success');
 				})
