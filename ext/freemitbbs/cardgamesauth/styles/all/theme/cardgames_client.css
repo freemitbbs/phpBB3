@@ -328,6 +328,10 @@
   margin-top: 12px;
 }
 
+.app-shell .hand-actions {
+  margin-top: 14px;
+}
+
 .app-shell .table-facts {
   display: flex;
   justify-content: center;
@@ -460,6 +464,7 @@
 }
 
 .app-shell .trick-panel {
+  --played-card-width: clamp(44px, 4.5vw, 62px);
   display: grid;
   gap: 8px;
 }
@@ -504,6 +509,7 @@
   gap: 14px;
   color: var(--muted);
   align-items: center;
+  min-height: calc(var(--played-card-width) * 1.4);
 }
 
 .app-shell .trick-play > span:first-child {
@@ -642,11 +648,17 @@
 .app-shell .played-cards {
   display: flex;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
+  min-height: calc(var(--played-card-width) * 1.4);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .app-shell .played-card {
-  width: clamp(44px, 4.5vw, 62px);
+  width: var(--played-card-width);
+  flex: 0 0 auto;
   aspect-ratio: 5 / 7;
   object-fit: contain;
 }
@@ -894,8 +906,8 @@
     padding-bottom: 8px;
   }
 
-  .app-shell .played-card {
-    width: 40px;
+  .app-shell .trick-panel {
+    --played-card-width: 40px;
   }
 
   .app-shell .card-face-image {

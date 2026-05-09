@@ -13,6 +13,9 @@ const state = {
   trickReviewTimerId: 0,
   heartbeatId: 0,
   heartbeatMisses: 0,
+  syncPromise: null,
+  syncEpoch: 0,
+  syncRetryAttempt: 0,
   requestSeq: 0,
   pending: new Map(),
   timedOutPending: new Map(),
@@ -77,6 +80,8 @@ const retryRequestStorageKey = "freemitbbs.cardgames.retryRequests.v1";
 const heartbeatIntervalMs = 25000;
 const heartbeatTimeoutMs = 10000;
 const heartbeatMaxMisses = 2;
+const syncRetryBaseMs = 500;
+const syncRetryMaxMs = 5000;
 const logPrefix = "[card-games]";
 const retryableCommandTypes = new Set([
   "room.join",
@@ -254,7 +259,9 @@ els.sound.addEventListener("click", () => {
   render();
 });
 els.refreshRooms.addEventListener("click", () => {
-  void requestRooms();
+  if (state.authenticated) {
+    beginRecoverySync("正在同步");
+  }
 });
 els.skin.addEventListener("change", () => {
   void selectSkin(els.skin.value);
@@ -499,6 +506,9 @@ function disconnect() {
   state.authenticated = false;
   state.connecting = false;
   state.recovering = false;
+  state.syncPromise = null;
+  state.syncEpoch = 0;
+  state.syncRetryAttempt = 0;
   state.transitionRoomKey = "";
   if (ws) {
     rejectPending("连接已断开");
@@ -849,11 +859,7 @@ async function authenticate(connectionEpoch = state.connectionEpoch) {
     state.authenticated = true;
     state.recovering = true;
     void requestSkinProfile().catch(() => undefined);
-    try {
-      await requestCatchup();
-    } catch {
-      await requestRooms();
-    }
+    await requestServerSyncWithBusyRetry(connectionEpoch);
     if (!isCurrentConnectionAttempt(connectionEpoch)) {
       return;
     }
@@ -885,6 +891,60 @@ async function requestRooms() {
   const response = await sendCommand("lobby.rooms", {});
   state.rooms = response.payload.rooms;
   render();
+}
+
+async function requestServerSyncOnce() {
+  try {
+    await requestCatchup();
+  } catch (error) {
+    if (isRoomBusyError(error)) {
+      throw error;
+    }
+    await requestRooms();
+  }
+}
+
+function requestServerSyncWithBusyRetry(connectionEpoch = state.connectionEpoch) {
+  if (state.syncPromise && state.syncEpoch === connectionEpoch) {
+    return state.syncPromise;
+  }
+
+  state.syncEpoch = connectionEpoch;
+  const promise = runServerSyncWithBusyRetry(connectionEpoch)
+    .finally(() => {
+      if (state.syncPromise === promise) {
+        state.syncPromise = null;
+      }
+    });
+  state.syncPromise = promise;
+  return promise;
+}
+
+async function runServerSyncWithBusyRetry(connectionEpoch) {
+  while (isCurrentConnectionAttempt(connectionEpoch) && state.authenticated) {
+    try {
+      await requestServerSyncOnce();
+      state.syncRetryAttempt = 0;
+      return;
+    } catch (error) {
+      if (!isRoomBusyError(error)) {
+        throw error;
+      }
+      state.recovering = true;
+      setStatus("正在同步");
+      await sleep(syncRetryDelay(state.syncRetryAttempt++));
+    }
+  }
+}
+
+function syncRetryDelay(attempt) {
+  return Math.min(syncRetryMaxMs, syncRetryBaseMs * (2 ** Math.min(Math.max(0, attempt), 4)));
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 async function requestSkinProfile() {
@@ -1103,12 +1163,13 @@ function handleMessage(raw) {
     if (message.type === "error") {
       logClientWarn("server command error", serverErrorLogDetails(message, pending));
       applyCommandErrorState(message);
+      const error = commandError(message);
       if (isRetryableErrorMessage(message)) {
         rememberRetryRequest(message.requestId, pending);
       } else {
         clearRetryRequest(pending.retryKey, message.requestId);
       }
-      pending.reject(new Error(errorMessage(message)));
+      pending.reject(error);
       return;
     }
     clearRetryRequest(pending.retryKey, message.requestId);
@@ -1142,7 +1203,7 @@ function handleTimedOutMessage(message) {
   }
   if (message.type === "error") {
     logClientWarn("late server command error", serverErrorLogDetails(message, pending));
-    if (applyCommandErrorState(message)) {
+    if (applyCommandErrorState(message) && !isRoomBusyMessage(message)) {
       setStatus(errorMessage(message));
     }
     if (isRetryableErrorMessage(message)) {
@@ -1164,8 +1225,7 @@ function recoverTimedOutStatus(message, pending) {
     const connectionEpoch = state.connectionEpoch;
     state.recovering = true;
     render();
-    void requestCatchup()
-      .catch(() => requestRooms())
+    void requestServerSyncWithBusyRetry(connectionEpoch)
       .then(() => {
         if (!isCurrentConnectionAttempt(connectionEpoch)) {
           return;
@@ -1248,6 +1308,23 @@ function isRetryableErrorMessage(message) {
   return message?.type === "error" && message.payload?.retryable === true;
 }
 
+function isRoomBusyMessage(message) {
+  return message?.type === "error" && message.payload?.code === "room_busy";
+}
+
+function isRoomBusyError(error) {
+  return error?.code === "room_busy";
+}
+
+function commandError(message) {
+  const payload = message?.payload || {};
+  const error = new Error(errorMessage(message));
+  error.code = payload.code || "";
+  error.retryable = payload.retryable === true;
+  error.details = payload.details;
+  return error;
+}
+
 function serverErrorLogDetails(message, pending = null) {
   const payload = message?.payload || {};
   return {
@@ -1263,6 +1340,11 @@ function serverErrorLogDetails(message, pending = null) {
 
 function applyCommandErrorState(message) {
   const payload = message?.payload || {};
+  if (isRoomBusyMessage(message)) {
+    beginRecoverySync();
+    return true;
+  }
+
   if (payload.code !== "tractor_dump_failed") {
     return false;
   }
@@ -1273,6 +1355,32 @@ function applyCommandErrorState(message) {
     return true;
   }
   return false;
+}
+
+function beginRecoverySync(status = "正在同步") {
+  const connectionEpoch = state.connectionEpoch;
+  const existingSync = state.syncPromise && state.syncEpoch === connectionEpoch;
+  state.recovering = true;
+  setStatus(status);
+  if (!state.authenticated || existingSync) {
+    return;
+  }
+
+  void requestServerSyncWithBusyRetry(connectionEpoch)
+    .then(() => {
+      if (!isCurrentConnectionAttempt(connectionEpoch)) {
+        return;
+      }
+      state.recovering = false;
+      setStatus("已同步");
+    })
+    .catch((error) => {
+      if (!isCurrentConnectionAttempt(connectionEpoch)) {
+        return;
+      }
+      state.recovering = false;
+      reportError(error);
+    });
 }
 
 function applyServerMessage(message, commandType = "", context = null) {
@@ -1334,6 +1442,9 @@ function applyServerMessage(message, commandType = "", context = null) {
     case "lobby.updated":
       state.rooms = message.payload.rooms;
       render();
+      break;
+    case "room.recovering":
+      beginRecoverySync("正在同步");
       break;
     case "room.left":
       if (!isCurrentRoomMessage(message.payload.roomKey, context)) {
@@ -1521,6 +1632,7 @@ function renderTable() {
   const leaveAction = action(table, "room.leave");
   const roomTransitionPending = hasRoomTransitionPending();
   const roomMutationPending = isRoomMutationPending(state.currentRoomKey);
+  const actionsHtml = tableActionsHtml(table);
 
   els.table.innerHTML = `
     <div class="table-grid">
@@ -1537,13 +1649,13 @@ function renderTable() {
           ${tableScoreboardHtml(table)}
           ${paused ? `<p class="table-paused">${escapeHtml(pauseText(table))}</p>` : ""}
           ${turnTimerHtml(table)}
-          <div class="table-actions">${tableActionsHtml(table)}</div>
         </div>
       </div>
     </div>
     ${trickHtml(table)}
     ${handSummaryHtml(table)}
     <div class="observer-list">${observers}</div>
+    <div class="table-actions hand-actions">${actionsHtml}</div>
     ${handHtml(table)}
   `;
 
@@ -1580,7 +1692,6 @@ function tableScoreboardHtml(table) {
       <div class="table-score table-score-attacking">
         <span class="table-score-label">抓分方</span>
         <strong>${escapeHtml(String(attackingScore))}</strong>
-        <span class="table-score-note">已抓分</span>
       </div>
     </div>
   `;
@@ -1598,11 +1709,13 @@ function seatHtml(table, seat) {
   const isOwner = table.room.owner?.userId && user?.userId === table.room.owner.userId;
   const visualSeatIndex = visualSeatIndexFor(table, seat.seatIndex);
   const replacementSeat = isReplacementSeat(table, seat);
-  const meta = replacementSeat
+  const side = seatSideLabel(table, seat.seatIndex);
+  const baseMeta = replacementSeat
     ? "等待补位"
     : occupied
     ? `${seat.connected ? "在线" : "离线"} · ${seat.ready ? "已准备" : "未准备"}${isOwner ? " · 房主" : ""}`
     : "空位";
+  const meta = side ? `${side} · ${baseMeta}` : baseMeta;
   const actions = seatActionsHtml(table, seat, isViewerSeat);
 
   return `
@@ -1626,6 +1739,38 @@ function seatAvatarHtml(user, seatIndex) {
 function isForumAvatarUrl(url) {
   const value = String(url || "");
   return value !== "" && !/(^|\/)no_avatar(?:_hd)?\.(?:gif|png|jpe?g|webp)(?:[?#].*)?$/i.test(value);
+}
+
+function seatSideLabel(table, seatIndex) {
+  const publicState = table.engine?.public;
+  const player = playerForSeat(publicState, seatIndex);
+  const defendingTeam = defendingTeamForHand(publicState);
+  if (!player?.team || !defendingTeam) {
+    return "";
+  }
+
+  return player.team === defendingTeam ? "庄家方" : "抓分方";
+}
+
+function defendingTeamForHand(publicState) {
+  if (!publicState) {
+    return "";
+  }
+  if (publicState.handSummary?.defendingTeam) {
+    return publicState.handSummary.defendingTeam;
+  }
+
+  const starterSeatIndex = Number(publicState.starterSeatIndex ?? publicState.dealerSeatIndex);
+  return playerForSeat(publicState, starterSeatIndex)?.team || "";
+}
+
+function playerForSeat(publicState, seatIndex) {
+  const numericSeatIndex = Number(seatIndex);
+  if (!publicState || !Number.isInteger(numericSeatIndex)) {
+    return null;
+  }
+
+  return (publicState.players || []).find((player) => Number(player.seatIndex) === numericSeatIndex) || null;
 }
 
 function visualSeatIndexFor(table, seatIndex) {
@@ -1776,18 +1921,41 @@ function trickHtml(table) {
     ? currentTrick
     : isTrickReviewActive(table)
       ? table.engine?.public?.lastCompletedTrick
-      : null;
-  if (!trick || !trick.plays?.length) {
+      : currentTrick || null;
+  if (!trick) {
     return "";
   }
 
-  const plays = trick.plays.map((play) => `
-    <div class="trick-play">
-      <span>${escapeHtml(playUserLabel(table, play))}</span>
-      <span class="played-cards">${play.cards.map((card) => cardFaceHtml(card, "played-card")).join("")}</span>
+  const playsBySeat = new Map((trick.plays || []).map((play) => [Number(play.seatIndex), play]));
+  const rows = trickSeatOrder(table, trick).map((seatIndex) => {
+    const play = playsBySeat.get(seatIndex);
+    const cards = play?.cards?.length
+      ? play.cards.map((card) => cardFaceHtml(card, "played-card")).join("")
+      : "";
+    return `
+    <div class="trick-play ${play ? "" : "trick-play-empty"}">
+      <span>${escapeHtml(play ? playUserLabel(table, play) : seatUserLabel(table, seatIndex) || seatLabel(seatIndex))}</span>
+      <span class="played-cards">${cards}</span>
     </div>
-  `).join("");
-  return `<div class="trick-panel">${plays}</div>`;
+  `;
+  }).join("");
+  return `<div class="trick-panel">${rows}</div>`;
+}
+
+function trickSeatOrder(table, trick) {
+  const players = table.engine?.public?.players || [];
+  const activeSeats = new Set(players.map((player) => Number(player.seatIndex)).filter(Number.isInteger));
+  const roomSeatCount = Number(table.room?.seatCount || table.room?.seats?.length || activeSeats.size || 4);
+  const seatCount = Math.max(1, Number.isInteger(roomSeatCount) ? roomSeatCount : 4);
+  const leaderSeatIndex = Number(trick?.leaderSeatIndex);
+  const orderedSeats = Number.isInteger(leaderSeatIndex)
+    ? Array.from({ length: seatCount }, (_, offset) => modulo(leaderSeatIndex + offset, seatCount))
+    : (table.room?.seats || []).map((seat) => Number(seat.seatIndex)).filter(Number.isInteger);
+  const visibleSeats = activeSeats.size
+    ? orderedSeats.filter((seatIndex) => activeSeats.has(seatIndex))
+    : orderedSeats;
+
+  return visibleSeats.length ? visibleSeats : [0, 1, 2, 3].slice(0, Math.min(4, seatCount));
 }
 
 function handSummaryHtml(table) {
@@ -1798,11 +1966,9 @@ function handSummaryHtml(table) {
 
   const teams = (summary.teams || []).map((team) => {
     const role = team.team === summary.defendingTeam ? "庄家方" : "抓分方";
-    const scoreLabel = team.team === summary.defendingTeam ? "守住分" : "抓分";
     return `
       <div class="hand-summary-team ${team.won ? "hand-summary-winner" : ""}">
         <strong>${escapeHtml(role)}</strong>
-        <span>${escapeHtml(scoreLabel)}：${escapeHtml(String(team.points))} 分</span>
         <span>级牌：${escapeHtml(team.rankLabelBefore || rankLabel(team.rankBefore))} → ${escapeHtml(team.rankLabelAfter || rankLabel(team.rankAfter))}（${escapeHtml(rankMoveText(team, summary))}）</span>
       </div>
     `;
@@ -1816,7 +1982,7 @@ function handSummaryHtml(table) {
     <div class="hand-summary-panel">
       <div class="hand-summary-title">本局结束，等待房主开始下一局</div>
       <div class="hand-summary-meta">
-        ${escapeHtml(outcome)} · 抓分方抓分 ${escapeHtml(String(summary.attackingScore))}，${escapeHtml(String(summary.winningThreshold))} 分上台${escapeHtml(bottom)}
+        ${escapeHtml(outcome)} · 上台线 ${escapeHtml(String(summary.winningThreshold))} 分${escapeHtml(bottom)}
       </div>
       <div class="hand-summary-teams">${teams}</div>
     </div>
@@ -2967,6 +3133,7 @@ function serverErrorText(code, message) {
     room_closed: "房间已关闭",
     room_not_waiting: "房间不在等待状态",
     room_active: "房间正在游戏中",
+    room_busy: "房间正在同步，请稍候",
     room_disabled: "房间已停用",
     room_has_active_game: "房间有进行中的游戏，无法重置",
     room_required: "请选择房间",
