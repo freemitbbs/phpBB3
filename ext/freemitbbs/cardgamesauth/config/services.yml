@@ -66,6 +66,16 @@ services:
             - '%tables.freemitbbs.cardgamesauth.sessions%'
             - '%tables.freemitbbs.cardgamesauth.moderation_audit%'
 
+    freemitbbs.cardgamesauth.cron.reset_stale_rooms:
+        class: freemitbbs\cardgamesauth\cron\reset_stale_rooms
+        arguments:
+            - '@cache'
+            - '@config'
+        calls:
+            - [set_name, [cron.task.freemitbbs.cardgamesauth.reset_stale_rooms]]
+        tags:
+            - { name: cron.task }
+
     freemitbbs.cardgamesauth.listener:
         class: freemitbbs\cardgamesauth\event\listener
         arguments:

@@ -1,0 +1,14 @@
+services:
+    freemitbbs.disposableemailblocker.domain_blocklist:
+        class: freemitbbs\disposableemailblocker\service\domain_blocklist
+        arguments:
+            - '%core.root_path%'
+
+    freemitbbs.disposableemailblocker.listener:
+        class: freemitbbs\disposableemailblocker\event\listener
+        arguments:
+            - '@freemitbbs.disposableemailblocker.domain_blocklist'
+            - '@language'
+            - '@user'
+        tags:
+            - { name: event.listener }

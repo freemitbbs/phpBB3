@@ -18,6 +18,10 @@
   box-sizing: border-box;
 }
 
+.app-shell [hidden] {
+  display: none !important;
+}
+
 .app-shell {
   min-height: 100vh;
   background: linear-gradient(180deg, #f8f4eb 0%, #e9dfcd 100%);
@@ -112,7 +116,7 @@
 
 .app-shell .rooms-panel {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr);
   align-items: center;
   gap: 8px;
 }
@@ -129,22 +133,74 @@
   font-size: 18px;
 }
 
-.app-shell .rooms-panel .panel-header {
-  margin-bottom: 0;
+.app-shell .table-panel .panel-header {
+  justify-content: flex-start;
+  flex-wrap: wrap;
 }
 
-.app-shell .rooms-panel .panel-header h2 {
+.app-shell .table-panel .panel-header h2 {
+  flex: 0 0 auto;
+}
+
+.app-shell .table-panel .panel-header #leave-room-button {
+  margin-left: auto;
+}
+
+.app-shell .rooms-titleline {
+  grid-column: 1;
+  width: max-content;
+  max-width: 100%;
+  margin: 0;
+}
+
+.app-shell .rooms-titleline h2 {
+  margin: 0;
   font-size: 14px;
   line-height: 1;
 }
 
-.app-shell .rooms-panel .panel-header button {
+.app-shell .room-deadline-controls {
+  flex: 1 1 24rem;
+  min-width: 0;
+}
+
+.app-shell .room-deadline-form {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.app-shell .room-deadline-title {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.app-shell .room-deadline-form label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.app-shell .room-deadline-form input {
+  width: 4.2rem;
+  min-height: 28px;
+  padding: 0 6px;
+  font: inherit;
+  text-align: right;
+}
+
+.app-shell .room-deadline-form button {
   min-height: 28px;
   padding: 0 10px;
   font-size: 13px;
 }
 
 .app-shell .rooms-list {
+  grid-column: 2;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
@@ -217,10 +273,10 @@
   --played-card-width: clamp(34px, 3.8vw, 50px);
   --hand-lift: 14px;
   --hand-card-width: clamp(46px, 5.2vw, 68px);
-  --hand-overlap: clamp(24px, 3.6vw, 46px);
+  --hand-overlap: 0px;
   position: relative;
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
+  grid-template-columns: 56px minmax(0, 1fr) max-content;
   align-content: start;
   align-items: start;
   gap: 8px;
@@ -251,13 +307,65 @@
 .app-shell .seat-replacement {
   opacity: 1;
   border-color: rgba(230, 180, 71, 0.72);
-  background: rgba(255, 243, 204, 0.92);
+  background:
+    linear-gradient(90deg, rgba(255, 243, 204, 0.92), rgba(255, 243, 204, 0.76)),
+    url("./images/tractor/btn/poker_chair.png") center / cover no-repeat;
 }
 
 .app-shell .seat-0 {
   grid-column: 1 / -1;
   grid-row: 3;
+  grid-template-columns: minmax(0, 1fr) 56px minmax(0, 24rem) max-content minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  justify-content: center;
   --played-card-width: clamp(42px, 4.5vw, 58px);
+}
+
+.app-shell .seat-0 .seat-trick {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  margin-top: 0;
+}
+
+.app-shell .seat-0 .seat-hand {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.app-shell .seat-0 > .seat-avatar,
+.app-shell .seat-0 .seat-avatar-frame,
+.app-shell .seat-0 .seat-avatar-button {
+  grid-column: 2;
+  grid-row: 4 / span 2;
+}
+
+.app-shell .seat-0 .seat-name {
+  grid-column: 3;
+  grid-row: 4;
+}
+
+.app-shell .seat-0 .seat-actions {
+  grid-column: 4;
+  grid-row: 4;
+}
+
+.app-shell .seat-0 .seat-meta {
+  grid-column: 3;
+  grid-row: 5;
+}
+
+.app-shell .seat-0 .seat-hand-private,
+.app-shell .seat-0 .played-cards {
+  justify-content: center;
+}
+
+.app-shell .seat-0 .seat-hand-private {
+  overflow-x: visible;
+  scrollbar-width: none;
+}
+
+.app-shell .seat-0 .seat-hand-private::-webkit-scrollbar {
+  display: none;
 }
 
 .app-shell .seat-1 {
@@ -266,7 +374,7 @@
 }
 
 .app-shell .seat-2 {
-  grid-column: 1 / -1;
+  grid-column: 2;
   grid-row: 1;
   --played-card-width: clamp(42px, 4.5vw, 58px);
 }
@@ -291,10 +399,13 @@
 }
 
 .app-shell .seat-actions {
-  grid-column: 1 / -1;
+  grid-column: 3;
+  grid-row: 1;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  justify-content: flex-end;
+  justify-self: end;
+  gap: 6px;
 }
 
 .app-shell .seat-actions:empty {
@@ -383,15 +494,39 @@
   margin-top: 12px;
 }
 
-.app-shell .seat-game-actions {
-  grid-column: 1 / -1;
-  justify-content: flex-start;
-  min-height: 34px;
-  margin-top: 0;
+.app-shell .table-actions .table-action-play {
+  min-width: 8.5rem;
+  border-color: #65c7a3;
+  background: #65c7a3;
+  color: #142321;
+  font-weight: 800;
 }
 
-.app-shell .seat-game-actions:empty {
-  visibility: hidden;
+.app-shell .table-actions .table-action-play:hover,
+.app-shell .table-actions .table-action-play:focus-visible {
+  border-color: #8be0bf;
+  background: #8be0bf;
+}
+
+.app-shell .table-actions .table-action-auto {
+  margin-left: 18px;
+  border-color: #e6b447;
+  border-style: dashed;
+  background: rgba(68, 53, 17, 0.34);
+  color: #ffe38f;
+  font-weight: 700;
+}
+
+.app-shell .table-actions .table-action-auto:hover,
+.app-shell .table-actions .table-action-auto:focus-visible {
+  border-color: #ffd36d;
+  background: rgba(68, 53, 17, 0.56);
+}
+
+.app-shell .seat-actions button {
+  min-height: 28px;
+  padding: 0 8px;
+  white-space: nowrap;
 }
 
 .app-shell .table-facts {
@@ -470,6 +605,16 @@
 
 .app-shell .trick-review-timer {
   color: #ffe38f;
+}
+
+.app-shell .trump-reveal-timer {
+  width: min(280px, 100%);
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 211, 109, 0.62);
+  border-radius: 8px;
+  background: rgba(68, 53, 17, 0.44);
+  color: #ffe38f;
+  font-weight: 700;
 }
 
 .app-shell .turn-timer-label {
@@ -574,21 +719,14 @@
   margin-top: 8px;
 }
 
-.app-shell .seat-zone-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .app-shell .seat-hand {
   margin-top: 8px;
 }
 
 .app-shell .seat-hand-private {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
@@ -598,51 +736,23 @@
   scrollbar-width: thin;
 }
 
-.app-shell .seat-hand-hidden {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-}
-
-.app-shell .card-backs {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  padding-left: 4px;
-}
-
-.app-shell .card-back {
-  width: 20px;
-  height: 30px;
-  flex: 0 0 auto;
-  margin-left: -7px;
-  border: 1px solid rgba(255, 249, 236, 0.7);
-  border-radius: 4px;
-  background:
-    linear-gradient(135deg, rgba(255, 249, 236, 0.32), transparent 45%),
-    #a5262d;
-  box-shadow: 0 1px 3px rgba(35, 52, 58, 0.24);
-}
-
-.app-shell .card-back:first-child {
-  margin-left: 0;
-}
-
 .app-shell .hand-card {
   width: var(--hand-card-width);
   flex: 0 0 var(--hand-card-width);
   min-width: 0;
-  height: calc(var(--hand-card-width) * 1.42 + var(--hand-lift) + 8px);
+  height: calc(var(--hand-card-width) * 1.42 + var(--hand-lift));
   min-height: 0;
   display: grid;
-  align-content: start;
+  align-content: end;
   gap: 0;
-  background: #fffdfa;
-  padding: 4px;
-  overflow: hidden;
-  transition: box-shadow 120ms ease, border-color 120ms ease;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  overflow: visible;
+  box-shadow: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms ease;
 }
 
 .app-shell .hand-card + .hand-card {
@@ -651,17 +761,14 @@
 
 .app-shell .hand-card:hover,
 .app-shell .hand-card:focus,
-.app-shell .hand-card[aria-pressed="true"] {
-  position: relative;
-  z-index: 2;
+.app-shell .hand-card:focus-visible {
+  outline: 0 !important;
+  box-shadow: none;
 }
 
 .app-shell .hand-card[aria-pressed="true"] {
-  background: #ffe1c7;
-  border-color: var(--accent);
-  box-shadow:
-    inset 0 0 0 2px rgba(165, 38, 45, 0.34),
-    0 2px 6px rgba(35, 52, 58, 0.24);
+  background: transparent;
+  transform: translateY(calc(-1 * var(--hand-lift)));
 }
 
 .app-shell .card-face {
@@ -683,6 +790,9 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .app-shell .card-face-symbol {
@@ -741,14 +851,21 @@
 
 .app-shell .hand-card-face {
   aspect-ratio: 5 / 7;
-  transform: translateY(var(--hand-lift));
-  transition: transform 120ms ease;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  transition: outline-color 120ms ease, box-shadow 120ms ease;
 }
 
 .app-shell .hand-card:hover .hand-card-face,
-.app-shell .hand-card:focus .hand-card-face,
+.app-shell .hand-card:focus-visible .hand-card-face {
+  outline-color: rgba(165, 38, 45, 0.56);
+}
+
 .app-shell .hand-card[aria-pressed="true"] .hand-card-face {
-  transform: translateY(0);
+  outline-color: var(--accent);
+  box-shadow:
+    inset 0 0 0 2px rgba(165, 38, 45, 0.34),
+    0 2px 6px rgba(35, 52, 58, 0.24);
 }
 
 .app-shell .hand-card-label {
@@ -764,6 +881,60 @@
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
+}
+
+.app-shell .bottom-pile-cards {
+  min-height: calc(var(--played-card-width) * 1.4 + var(--hand-lift));
+  justify-content: center;
+  align-items: flex-end;
+  overflow-y: visible;
+}
+
+.app-shell .bottom-pile-card {
+  width: var(--played-card-width);
+  flex: 0 0 auto;
+  min-width: 0;
+  height: calc(var(--played-card-width) * 1.4 + var(--hand-lift));
+  min-height: 0;
+  display: grid;
+  align-content: end;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  overflow: visible;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms ease;
+}
+
+.app-shell .bottom-pile-card:hover,
+.app-shell .bottom-pile-card:focus,
+.app-shell .bottom-pile-card:focus-visible {
+  outline: 0 !important;
+  box-shadow: none;
+}
+
+.app-shell .bottom-pile-card[aria-pressed="true"] {
+  transform: translateY(calc(-1 * var(--hand-lift)));
+}
+
+.app-shell .bottom-pile-card-face {
+  width: 100%;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  transition: outline-color 120ms ease, box-shadow 120ms ease;
+}
+
+.app-shell .bottom-pile-card:hover .bottom-pile-card-face,
+.app-shell .bottom-pile-card:focus-visible .bottom-pile-card-face {
+  outline-color: rgba(165, 38, 45, 0.56);
+}
+
+.app-shell .bottom-pile-card[aria-pressed="true"] .bottom-pile-card-face {
+  outline-color: var(--accent);
+  box-shadow:
+    inset 0 0 0 2px rgba(165, 38, 45, 0.34),
+    0 2px 6px rgba(35, 52, 58, 0.24);
 }
 
 .app-shell .played-cards-empty {
@@ -975,8 +1146,12 @@
 
   .app-shell .rooms-panel {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: max-content minmax(0, 1fr);
     margin-bottom: 12px;
+  }
+
+  .app-shell .room-deadline-form {
+    flex-wrap: wrap;
   }
 
   .app-shell .rooms-list {
@@ -1012,21 +1187,118 @@
     grid-row: auto;
   }
 
+  .app-shell .table-center {
+    order: 3;
+  }
+
+  .app-shell .seat-1 {
+    order: 2;
+  }
+
+  .app-shell .seat-2 {
+    order: 0;
+  }
+
+  .app-shell .seat-3 {
+    order: 1;
+  }
+
+  .app-shell .seat-0 {
+    order: 4;
+  }
+
+  .app-shell .seat {
+    grid-template-columns: 32px minmax(0, 1fr) max-content;
+    gap: 5px;
+    min-height: 92px;
+    padding: 8px;
+  }
+
+  .app-shell .seat-0,
+  .app-shell .seat-2 {
+    border-color: rgba(31, 111, 95, 0.48);
+    background:
+      linear-gradient(90deg, rgba(225, 246, 239, 0.92), rgba(210, 236, 229, 0.78)),
+      url("./images/tractor/btn/poker_chair.png") center / cover no-repeat;
+  }
+
+  .app-shell .seat-1,
+  .app-shell .seat-3 {
+    border-color: rgba(129, 88, 149, 0.44);
+    background:
+      linear-gradient(90deg, rgba(242, 232, 249, 0.92), rgba(229, 218, 238, 0.78)),
+      url("./images/tractor/btn/poker_chair.png") center / cover no-repeat;
+  }
+
+  .app-shell .seat-0 {
+    grid-template-columns: minmax(0, 1fr) 32px minmax(0, 24rem) max-content minmax(0, 1fr);
+  }
+
+  .app-shell .seat-avatar-frame,
+  .app-shell .seat-avatar-button {
+    width: 32px;
+    max-width: 32px;
+    height: 44px;
+  }
+
+  .app-shell .seat-avatar {
+    width: 32px;
+    max-width: 32px;
+    height: 44px;
+    max-height: 44px;
+  }
+
+  .app-shell .seat-forum-avatar {
+    border-width: 1px;
+    border-radius: 6px;
+    box-shadow: 0 2px 5px rgba(35, 52, 58, 0.18);
+  }
+
+  .app-shell .seat-name {
+    font-size: 14px;
+  }
+
+  .app-shell .seat-meta {
+    min-height: 18px;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
   .app-shell .seat-hand-private {
     --hand-lift: 10px;
-    --hand-card-width: 46px;
-    --hand-overlap: 30px;
+    --hand-card-width: 52px;
+    --hand-overlap: 0px;
+  }
+
+  .app-shell .seat-0 .seat-hand-private {
+    padding-inline: 2px;
   }
 
   .app-shell .seat-trick {
     --played-card-width: 40px;
   }
 
-  .app-shell .card-face-image {
+  .app-shell .played-card .card-face-image {
     display: none;
   }
 
-  .app-shell .card-face-symbol {
+  .app-shell .played-card .card-face-symbol {
     display: grid;
+  }
+
+  .app-shell .hand-card-face {
+    border-radius: 4px;
+  }
+
+  .app-shell .hand-card-face .card-face-symbol {
+    padding: 3px;
+  }
+
+  .app-shell .hand-card-face .card-symbol-rank {
+    font-size: 13px;
+  }
+
+  .app-shell .hand-card-face .card-symbol-main {
+    font-size: 16px;
   }
 }
