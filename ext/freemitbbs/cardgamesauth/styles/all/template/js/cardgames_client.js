@@ -37,6 +37,13 @@ const state = {
   renderedChatVersion: -1,
   renderedChatRoomKey: "",
   chatDraft: "",
+  playLogEntries: [],
+  playLogKeys: new Set(),
+  playLogRoomKey: "",
+  playLogHandId: "",
+  playLogExportKey: "",
+  playLogExportLoading: false,
+  playLogExportError: "",
   emojiTarget: "",
   selectedHandIndexes: [],
   handSignature: "",
@@ -254,6 +261,7 @@ const els = {
   chatMessages: document.querySelector("#chat-messages"),
   chatForm: document.querySelector("#chat-form"),
   chatInput: document.querySelector("#chat-input"),
+  actionStatus: document.querySelector("#action-status"),
   log: document.querySelector("#event-log")
 };
 
@@ -389,6 +397,7 @@ async function loadBootstrap() {
     wsUrl: params.get("ws") || "",
     tokenUrl: params.get("tokenUrl") || "",
     configUrl: params.get("configUrl") || "",
+    roundLogUrl: params.get("roundLogUrl") || "",
     tokenHash: params.get("hash") || ""
   };
   if (params.has("connect")) {
@@ -829,6 +838,7 @@ function clearRoomState(advanceEpoch = true) {
   state.emojiTarget = "";
   state.selectedHandIndexes = [];
   state.handSignature = "";
+  resetPlayLog();
   clearTrickReviewTimer();
   clearTrumpRevealTimer();
 }
@@ -1562,6 +1572,7 @@ function applyTable(table, shouldRender = true) {
 
   state.table = table;
   enterRoomFromServer(table.room.roomKey);
+  updatePlayLogFromTable(table);
   syncSelectedHandIndexes();
   if (shouldRender) {
     scheduleRender();
@@ -1774,7 +1785,10 @@ function renderTable() {
 
   els.title.textContent = table.room.displayName;
   renderRoomDeadlineControls(table.room);
-  const seatNodes = table.room.seats.map((seat) => seatHtml(table, seat)).join("");
+  const seatHtmlByVisual = (visualSeatIndex) => {
+    const seat = table.room.seats.find((candidate) => visualSeatIndexFor(table, candidate.seatIndex) === visualSeatIndex);
+    return seat ? seatHtml(table, seat) : "";
+  };
   const observers = table.room.observers.map((observer) => {
     const watched = observer.watchedSeatIndex === undefined ? "" : ` 正在观看${seatLabel(observer.watchedSeatIndex)}`;
     return `<span class="observer-pill">${escapeHtml(observer.user.displayName)}${watched}</span>`;
@@ -1792,30 +1806,29 @@ function renderTable() {
   const leaveAction = action(table, "room.leave");
   const roomTransitionPending = hasRoomTransitionPending();
   const roomMutationPending = isRoomMutationPending(state.currentRoomKey);
-  const tableActions = tableActionsHtml(table);
 
   els.table.innerHTML = `
     <div class="table-grid">
-      ${seatNodes}
+      ${seatHtmlByVisual(2)}
+      ${tableInfoLeftHtml(table, trickLabel, trumpDeclarer, bottomHolderTitle, bottomHolder)}
+      ${tableInfoRightHtml(table, paused)}
       <div class="table-center">
-        <div>
-          ${trickLabel ? `<p>${escapeHtml(trickLabel)}</p>` : ""}
-          <div class="table-facts">
-            <span>级牌 ${escapeHtml(rankLabel(table.engine?.public?.rank))}</span>
-            <span>${escapeHtml(trumpDeclarer ? `${trumpLabel(table.engine?.public?.trump)} · 亮牌 ${trumpDeclarer}` : trumpLabel(table.engine?.public?.trump))}</span>
-            ${bottomHolder ? `<span>${escapeHtml(bottomHolderTitle)} ${escapeHtml(bottomHolder)}</span>` : ""}
-          </div>
-          ${tableScoreboardHtml(table)}
-          ${trumpRevealTimerHtml(table)}
-          ${paused ? `<p class="table-paused">${escapeHtml(pauseText(table))}</p>` : ""}
-          ${turnTimerHtml(table)}
-          ${handSummaryHtml(table)}
-          <div class="table-actions">${tableActions}</div>
-        </div>
+        ${cardDeskHtml(table)}
       </div>
+      <div class="table-side-stack table-side-stack-left">
+        ${seatHtmlByVisual(3)}
+        <div class="table-side-panel table-side-panel-left" data-table-panel="chat"></div>
+      </div>
+      <div class="table-side-stack table-side-stack-right">
+        <div class="table-side-panel table-side-panel-right" data-table-panel="log"></div>
+        ${seatHtmlByVisual(1)}
+      </div>
+      ${seatHtmlByVisual(0)}
     </div>
     <div class="observer-list">${observers}</div>
   `;
+  mountTableSidePanels();
+  renderPlayLogPanel();
 
   els.leave.disabled = isGameInteractionLocked()
     || !leaveAction.enabled
@@ -1842,6 +1855,7 @@ function scheduleFitPrivateHands() {
   state.fitPrivateHandsFrameId = window.requestAnimationFrame(() => {
     state.fitPrivateHandsFrameId = 0;
     fitPrivateHands();
+    fitDeskPlays();
   });
 }
 
@@ -1880,9 +1894,403 @@ function fitPrivateHand(hand) {
   hand.style.setProperty("--hand-overlap", `${overlap.toFixed(2)}px`);
 }
 
+function fitDeskPlays() {
+  els.table.querySelectorAll(".desk-play-cards").forEach((row) => {
+    fitDeskPlay(row);
+  });
+}
+
+function fitDeskPlay(row) {
+  const cards = Array.from(row.querySelectorAll(".desk-card"));
+  if (cards.length <= 1) {
+    row.style.removeProperty("--desk-card-overlap");
+    return;
+  }
+
+  row.style.removeProperty("--desk-card-overlap");
+  const cardWidth = cards[0].getBoundingClientRect().width;
+  const availableWidth = row.clientWidth * 0.5;
+  if (!availableWidth || !cardWidth) {
+    return;
+  }
+
+  const styles = window.getComputedStyle(row);
+  const gap = pxValue(styles.columnGap || styles.gap);
+  const naturalWidth = (cards.length * cardWidth) + ((cards.length - 1) * gap);
+  if (naturalWidth <= availableWidth) {
+    return;
+  }
+
+  const requiredOverlap = (naturalWidth - availableWidth) / (cards.length - 1);
+  const minVisibleWidth = Math.min(12, Math.max(6, cardWidth * 0.2));
+  const maxOverlap = Math.max(0, cardWidth - minVisibleWidth + gap);
+  const overlap = Math.min(maxOverlap, requiredOverlap + 0.5);
+  row.style.setProperty("--desk-card-overlap", `${overlap.toFixed(2)}px`);
+}
+
 function pxValue(value) {
   const number = Number.parseFloat(value);
   return Number.isFinite(number) ? number : 0;
+}
+
+function mountTableSidePanels() {
+  const chatSlot = els.table.querySelector('[data-table-panel="chat"]');
+  const logSlot = els.table.querySelector('[data-table-panel="log"]');
+  if (chatSlot) {
+    if (els.chatPanel) {
+      chatSlot.appendChild(els.chatPanel);
+    }
+    if (els.emojiPanel) {
+      chatSlot.appendChild(els.emojiPanel);
+    }
+  }
+  if (logSlot && els.log) {
+    logSlot.appendChild(els.log);
+  }
+}
+
+function resetPlayLog(roomKey = "") {
+  state.playLogEntries = [];
+  state.playLogKeys = new Set();
+  state.playLogRoomKey = roomKey;
+  state.playLogHandId = "";
+  state.playLogExportKey = "";
+  state.playLogExportLoading = false;
+  state.playLogExportError = "";
+}
+
+function updatePlayLogFromTable(table) {
+  const roomKey = table?.room?.roomKey || "";
+  const publicState = table?.engine?.public;
+  const handId = publicState?.handId || "";
+  if (roomKey !== state.playLogRoomKey || (handId && handId !== state.playLogHandId)) {
+    resetPlayLog(roomKey);
+    state.playLogHandId = handId;
+  }
+  if (!publicState) {
+    return;
+  }
+
+  recordTrickForPlayLog(table, publicState.lastCompletedTrick, true);
+  recordTrickForPlayLog(table, publicState.currentTrick, false);
+  recordHandSummaryForPlayLog(table);
+  ensurePlayLogExport(table);
+}
+
+function recordTrickForPlayLog(table, trick, completed) {
+  const plays = trick?.plays || [];
+  if (!Number.isFinite(Number(trick?.trickNumber)) || !plays.length) {
+    return;
+  }
+
+  plays.forEach((play) => {
+    const cards = play.cards || [];
+    const key = [
+      state.playLogHandId || table.engine?.public?.handId || table.room?.roomKey || "hand",
+      trick.trickNumber,
+      play.seatIndex,
+      cards.map(playLogCardKey).join("-")
+    ].join(":");
+    addPlayLogEntry({
+      key,
+      tone: completed && Number(play.seatIndex) === Number(trick.winnerSeatIndex) ? "winner" : "",
+      text: `${seatUserLabel(table, play.seatIndex) || seatLabel(play.seatIndex)}：${cards.map(playLogCardLabel).join(" ")}`
+    });
+  });
+
+  if (!completed || !Number.isFinite(Number(trick.winnerSeatIndex))) {
+    return;
+  }
+
+  const points = Number(trick.points || 0);
+  const pointText = points > 0 ? `，${points}分` : "";
+  addPlayLogEntry({
+    key: `${state.playLogHandId || table.room?.roomKey || "hand"}:${trick.trickNumber}:result`,
+    tone: trick.pointsAwarded ? "score" : "result",
+    text: `第 ${trick.trickNumber} 墩：${seatUserLabel(table, trick.winnerSeatIndex) || seatLabel(trick.winnerSeatIndex)}赢${pointText}`
+  });
+}
+
+function recordHandSummaryForPlayLog(table) {
+  const summary = table?.engine?.public?.handSummary;
+  if (!summary) {
+    return;
+  }
+
+  addPlayLogEntry({
+    key: `${state.playLogHandId || table.room?.roomKey || "hand"}:summary`,
+    tone: "result",
+    text: handOutcomeText(summary, table)
+  });
+}
+
+function ensurePlayLogExport(table) {
+  if (!table?.engine?.public?.handSummary) {
+    return;
+  }
+
+  const key = playLogExportKeyFor(table);
+  if (!key || state.playLogExportKey === key || (state.playLogExportLoading && state.playLogExportKey === key)) {
+    return;
+  }
+
+  state.playLogExportKey = key;
+  state.playLogExportLoading = true;
+  state.playLogExportError = "";
+  void fetchPlayLogExport(table, key);
+}
+
+async function fetchPlayLogExport(table, key) {
+  try {
+    const url = playLogExportUrl(table);
+    if (!url) {
+      throw new Error("missing_replay_export_url");
+    }
+
+    const response = await fetch(url, {
+      credentials: "same-origin",
+      headers: {
+        "Accept": "application/json"
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`replay_export_status_${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!Array.isArray(data?.events)) {
+      throw new Error("invalid_replay_export");
+    }
+    if (playLogExportKeyFor(state.table) !== key) {
+      return;
+    }
+
+    importPlayLogExport(data.events, state.table || table, key);
+  } catch (error) {
+    if (playLogExportKeyFor(state.table) === key) {
+      state.playLogExportLoading = false;
+      state.playLogExportError = error instanceof Error ? error.message : "replay_export_failed";
+      renderPlayLogPanel();
+    }
+  }
+}
+
+function importPlayLogExport(events, table, key) {
+  const publicState = table?.engine?.public;
+  const roomKey = table?.room?.roomKey || "";
+  const handId = publicState?.handId || "";
+  resetPlayLog(roomKey);
+  state.playLogHandId = handId;
+
+  events.forEach((event) => {
+    if ((event.eventType || event.event_type) !== "tractor.cards_played") {
+      return;
+    }
+
+    const payload = event.payload || event.payloadJson || event.payload_json || {};
+    const eventPublicState = payload.public || {};
+    if (handId && eventPublicState.handId !== handId) {
+      return;
+    }
+
+    const eventTable = {
+      ...table,
+      engine: {
+        ...(table.engine || {}),
+        public: eventPublicState
+      }
+    };
+    recordTrickForPlayLog(eventTable, eventPublicState.currentTrick, false);
+    recordTrickForPlayLog(eventTable, eventPublicState.lastCompletedTrick, true);
+  });
+
+  recordHandSummaryForPlayLog(table);
+  state.playLogExportKey = key;
+  state.playLogExportLoading = false;
+  state.playLogExportError = "";
+  renderPlayLogPanel();
+}
+
+function playLogExportKeyFor(table) {
+  const roomKey = table?.room?.roomKey || "";
+  const handId = table?.engine?.public?.handId || "";
+  return roomKey && handId ? `${roomKey}:${handId}` : "";
+}
+
+function playLogExportUrl(table) {
+  const base = state.bootstrap.roundLogUrl || state.bootstrap.replayExportUrl || defaultRoundLogUrl();
+  const roomKey = table?.room?.roomKey || "";
+  const handId = table?.engine?.public?.handId || "";
+  if (!base || !roomKey || !handId) {
+    return "";
+  }
+
+  const url = new URL(base, window.location.href);
+  url.searchParams.set("roomKey", roomKey);
+  url.searchParams.set("handId", handId);
+  return url.toString();
+}
+
+function addPlayLogEntry(entry) {
+  if (!entry.key) {
+    return;
+  }
+  if (state.playLogKeys.has(entry.key)) {
+    const existing = state.playLogEntries.find((item) => item.key === entry.key);
+    if (existing && entry.tone) {
+      existing.tone = entry.tone;
+    }
+    return;
+  }
+
+  state.playLogKeys.add(entry.key);
+  state.playLogEntries.push(entry);
+  if (state.playLogEntries.length <= 80) {
+    return;
+  }
+
+  const removed = state.playLogEntries.splice(0, state.playLogEntries.length - 80);
+  removed.forEach((item) => state.playLogKeys.delete(item.key));
+}
+
+function playLogCardKey(card) {
+  const id = Number(card?.id ?? card);
+  return Number.isInteger(id) ? String(id) : cardLabelText(card);
+}
+
+function playLogCardLabel(card) {
+  const id = Number(card?.id ?? card);
+  if (!Number.isInteger(id)) {
+    return cardLabelText(card);
+  }
+  return cardLabelText(card && typeof card === "object" ? card : { id });
+}
+
+function renderPlayLogPanel() {
+  if (!els.log) {
+    return;
+  }
+
+  const roomKey = state.currentRoomKey || "";
+  els.log.hidden = !roomKey;
+  if (!roomKey) {
+    els.log.replaceChildren();
+    return;
+  }
+
+  const exportKey = playLogExportKeyFor(state.table);
+  const canShowLog = Boolean(state.table?.engine?.public?.handSummary);
+  const exportReady = canShowLog && exportKey && state.playLogExportKey === exportKey && !state.playLogExportLoading && !state.playLogExportError;
+  const entries = canShowLog ? state.playLogEntries.slice(-80) : [];
+  let entryHtml = '<div class="play-log-empty">本局结束后显示</div>';
+  if (canShowLog && state.playLogExportLoading) {
+    entryHtml = '<div class="play-log-empty">正在加载完整出牌记录...</div>';
+  } else if (canShowLog && state.playLogExportError) {
+    entryHtml = entries.length
+      ? `<div class="play-log-empty" title="${escapeAttribute(state.playLogExportError)}">显示已收到的出牌记录</div>${playLogEntriesHtml(entries)}`
+      : `<div class="play-log-empty" title="${escapeAttribute(state.playLogExportError)}">完整出牌记录暂不可用</div>`;
+  } else if (exportReady) {
+    entryHtml = entries.length ? playLogEntriesHtml(entries) : '<div class="play-log-empty">暂无出牌记录</div>';
+  }
+
+  els.log.innerHTML = `
+    <div class="play-log-title">出牌记录</div>
+    <div class="play-log-list">${entryHtml}</div>
+  `;
+  const list = els.log.querySelector(".play-log-list");
+  if (list) {
+    list.scrollTop = list.scrollHeight;
+  }
+}
+
+function playLogEntriesHtml(entries) {
+  return entries.map((entry) => `
+    <div class="play-log-entry ${entry.tone ? `play-log-${entry.tone}` : ""}">
+      ${escapeHtml(entry.text)}
+    </div>
+  `).join("");
+}
+
+function tableInfoLeftHtml(table, trickLabel, trumpDeclarer, bottomHolderTitle, bottomHolder) {
+  const trumpText = trumpLabel(table.engine?.public?.trump);
+
+  return `
+    <div class="table-info table-info-left">
+      ${roomOwnerLabel(table) ? `<p class="table-owner-line">房主 ${escapeHtml(roomOwnerLabel(table))}</p>` : ""}
+      ${trickLabel ? `<p class="table-status-line">${escapeHtml(trickLabel)}</p>` : ""}
+      <p class="table-trump-line">级牌 ${escapeHtml(rankLabel(table.engine?.public?.rank))} · ${escapeHtml(trumpText)}</p>
+      ${trumpDeclarer ? `<p class="table-declarer-line">亮牌 ${escapeHtml(trumpDeclarer)}</p>` : ""}
+      <div class="table-facts">
+        ${bottomHolder ? `<span>${escapeHtml(bottomHolderTitle)} ${escapeHtml(bottomHolder)}</span>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+function tableInfoRightHtml(table, paused) {
+  return `
+    <div class="table-info table-info-right">
+      ${paused ? `<p class="table-paused">${escapeHtml(pauseText(table))}</p>` : ""}
+      ${tableScoreboardHtml(table)}
+      ${trumpRevealTimerHtml(table)}
+      ${turnTimerHtml(table)}
+    </div>
+  `;
+}
+
+function cardDeskHtml(table) {
+  const summary = handSummaryHtml(table);
+  const startControl = summary ? "" : deskStartControlHtml(table);
+  const centerContent = summary || startControl;
+  return `
+    <div class="card-desk ${centerContent ? "card-desk-has-summary" : ""}" aria-label="牌桌出牌区">
+      ${deskPlayZoneHtml(table, 2, "top")}
+      ${deskPlayZoneHtml(table, 3, "left")}
+      <div class="desk-center-content" ${centerContent ? "" : 'aria-hidden="true"'}>${centerContent}</div>
+      ${deskPlayZoneHtml(table, 1, "right")}
+      ${deskPlayZoneHtml(table, 0, "bottom")}
+    </div>
+  `;
+}
+
+function deskStartControlHtml(table) {
+  const startAction = ownerStartActionHtml(table);
+  if (!startAction) {
+    return "";
+  }
+
+  const waitingText = handSummaryWaitingText(table);
+  return `
+    <div class="desk-start-panel">
+      ${waitingText ? `<div class="hand-summary-waiting">${escapeHtml(waitingText)}</div>` : ""}
+      <div class="hand-summary-actions">${startAction}</div>
+    </div>
+  `;
+}
+
+function deskPlayZoneHtml(table, visualSeatIndex, position) {
+  const seat = (table.room?.seats || []).find((candidate) => visualSeatIndexFor(table, candidate.seatIndex) === visualSeatIndex);
+  const play = seat ? deskPlayForSeat(table, seat.seatIndex) : null;
+  const cards = (play?.cards || []).map((card) => cardFaceHtml(card, "played-card desk-card")).join("");
+  const points = Number(play?.points || 0);
+  const label = points > 0 ? `本墩得分 ${points}` : "";
+  const playerLabel = seat && visualSeatIndex !== 0 ? deskPlayerLabel(seat) : "";
+
+  return `
+    <div class="desk-play desk-play-${position} ${cards ? "desk-play-has-cards" : "desk-play-empty"} ${seat && isSeatTurn(table, seat.seatIndex) ? "desk-play-turn" : ""}" title="${escapeAttribute(label)}">
+      ${playerLabel ? `<span class="desk-player-label">${escapeHtml(playerLabel)}</span>` : ""}
+      <div class="desk-play-cards">${cards}</div>
+    </div>
+  `;
+}
+
+function deskPlayerLabel(seat) {
+  return seat.user?.username || seat.user?.displayName || seatLabel(seat.seatIndex);
+}
+
+function deskPlayForSeat(table, seatIndex) {
+  const trick = visibleTrick(table);
+  return (trick?.plays || []).find((candidate) => Number(candidate.seatIndex) === Number(seatIndex)) || null;
 }
 
 function tableScoreboardHtml(table) {
@@ -1907,6 +2315,11 @@ function finiteNumber(value, fallback) {
   return Number.isFinite(number) ? number : fallback;
 }
 
+function roomOwnerLabel(table) {
+  const owner = table?.room?.owner;
+  return owner?.displayName || owner?.username || "";
+}
+
 function seatHtml(table, seat) {
   const user = seat.user;
   const occupied = Boolean(user);
@@ -1926,14 +2339,22 @@ function seatHtml(table, seat) {
   const activeSeat = isActiveEngineSeat(table, seat.seatIndex);
   const trick = seatTrickHtml(table, seat.seatIndex);
   const hand = seatHandHtml(table, seat.seatIndex);
+  const tableActions = isViewerSeat ? tableActionsHtml(table) : "";
+  const playActions = tableActions
+    ? `<div class="seat-play-actions"><div class="table-actions">${tableActions}</div></div>`
+    : "";
 
   return `
-    <div class="seat seat-${visualSeatIndex} ${isViewerSeat ? "seat-viewer" : ""} ${seat.connected ? "" : "seat-offline"} ${replacementSeat ? "seat-replacement" : ""} ${seatTurn ? "seat-turn" : ""} ${activeSeat ? "seat-active-hand" : ""}" data-seat-index="${seat.seatIndex}">
+    <div class="seat seat-${visualSeatIndex} ${isViewerSeat ? "seat-viewer" : ""} ${seat.connected ? "" : "seat-offline"} ${replacementSeat ? "seat-replacement" : ""} ${seatTurn ? "seat-turn" : ""} ${activeSeat ? "seat-active-hand" : ""} ${tableActions ? "seat-has-table-actions" : ""}" data-seat-index="${seat.seatIndex}">
       ${seatAvatarHtml(table, seat)}
-      <div class="seat-name">${occupied ? escapeHtml(user.displayName) : seatLabel(seat.seatIndex)}</div>
+      <div class="seat-info">
+        <span class="seat-number">${escapeHtml(seatNumberLabel(seat.seatIndex))}</span>
+        <div class="seat-name">${occupied ? escapeHtml(user.displayName) : seatLabel(seat.seatIndex)}</div>
+      </div>
       <div class="seat-meta">${escapeHtml(meta)}</div>
       <div class="seat-actions">${actions}</div>
       ${trick}
+      ${playActions}
       ${hand}
     </div>
   `;
@@ -2138,7 +2559,6 @@ function pauseText(table) {
 }
 
 function tableActionsHtml(table) {
-  const startAction = action(table, "tractor.start");
   const makeTrumpAction = action(table, "tractor.makeTrump");
   const discardAction = action(table, "tractor.discardBottom");
   const playAction = action(table, "tractor.playCards");
@@ -2148,9 +2568,6 @@ function tableActionsHtml(table) {
   const disabled = isGameInteractionLocked() || Boolean(state.transitionRoomKey) || hasRoomTransitionPending() || isRoomMutationPending(roomKey);
   const parts = [];
 
-  if (startAction.enabled) {
-    parts.push(`<button data-action="tractor.start" type="button" ${disabled || isActionPending("tractor.start", roomKey) ? "disabled" : ""}>发牌</button>`);
-  }
   if (makeTrumpAction.enabled) {
     const label = trumpActionLabel(table);
     const title = table.phase === "burying_bottom"
@@ -2169,6 +2586,26 @@ function tableActionsHtml(table) {
   }
 
   return parts.join("");
+}
+
+function ownerStartActionHtml(table) {
+  const startAction = action(table, "tractor.start");
+  if (!startAction.enabled && !table.viewer?.owner) {
+    return "";
+  }
+
+  const roomKey = table.room.roomKey;
+  const disabled = isGameInteractionLocked()
+    || Boolean(state.transitionRoomKey)
+    || hasRoomTransitionPending()
+    || isRoomMutationPending(roomKey)
+    || isActionPending("tractor.start", roomKey)
+    || !startAction.enabled;
+  const label = table.phase === "finished" ? "开始下一局" : "发牌";
+  const title = !startAction.enabled
+    ? actionReasonText(startAction.reason || "waiting_for_four_ready_players")
+    : "";
+  return `<button class="table-action-start" data-action="tractor.start" type="button" ${disabled ? "disabled" : ""} title="${escapeAttribute(title)}">${escapeHtml(label)}</button>`;
 }
 
 function isSeatTurn(table, seatIndex) {
@@ -2203,18 +2640,7 @@ function seatTrickHtml(table, seatIndex) {
     `;
   }
 
-  const trick = visibleTrick(table);
-  const play = (trick?.plays || []).find((candidate) => Number(candidate.seatIndex) === Number(seatIndex));
-  const cards = play?.cards?.length
-    ? play.cards.map((card) => cardFaceHtml(card, "played-card")).join("")
-    : "";
-  const points = Number(play?.points || 0);
-  const label = points > 0 ? `本墩得分 ${points}` : "本墩出牌";
-  return `
-    <div class="seat-trick ${play ? "" : "seat-trick-empty"}" title="${play ? escapeAttribute(label) : ""}">
-      <span class="played-cards ${cards ? "" : "played-cards-empty"}">${cards}</span>
-    </div>
-  `;
+  return "";
 }
 
 function seatHandHtml(table, seatIndex) {
@@ -2313,16 +2739,51 @@ function handSummaryHtml(table) {
     ? ` · 扣底 ${summary.bottomScoreBase} x ${summary.bottomScoreMultiplier}`
     : "";
   const outcome = handOutcomeText(summary, table);
+  const waitingText = handSummaryWaitingText(table);
+  const startAction = ownerStartActionHtml(table);
 
   return `
     <div class="hand-summary-panel">
       <div class="hand-summary-title">本局结束，等待房主开始下一局</div>
+      ${waitingText ? `<div class="hand-summary-waiting">${escapeHtml(waitingText)}</div>` : ""}
       <div class="hand-summary-meta">
         ${escapeHtml(outcome)} · 上台线 ${escapeHtml(String(summary.winningThreshold))} 分${escapeHtml(bottom)}
       </div>
       <div class="hand-summary-teams">${teams}</div>
+      ${startAction ? `<div class="hand-summary-actions">${startAction}</div>` : ""}
     </div>
   `;
+}
+
+function handSummaryWaitingText(table) {
+  const startAction = action(table, "tractor.start");
+  if (startAction.enabled) {
+    return "";
+  }
+  if (isTablePaused(table)) {
+    return pauseText(table);
+  }
+
+  const waitingSeats = unreadyActiveSeatLabels(table);
+  if (waitingSeats.length) {
+    return `等待${waitingSeats.join("、")}准备`;
+  }
+
+  return startAction.reason ? actionReasonText(startAction.reason) : "";
+}
+
+function unreadyActiveSeatLabels(table) {
+  const activeSeatIndexes = new Set((table.engine?.public?.players || [])
+    .map((player) => Number(player.seatIndex))
+    .filter(Number.isInteger));
+  return (table.room?.seats || [])
+    .filter((seat) => {
+      const seatIndex = Number(seat.seatIndex);
+      return seat.user
+        && !seat.ready
+        && (!activeSeatIndexes.size || activeSeatIndexes.has(seatIndex));
+    })
+    .map((seat) => seatUserLabel(table, seat.seatIndex) || seatLabel(seat.seatIndex));
 }
 
 function handOutcomeText(summary, table) {
@@ -2895,6 +3356,7 @@ function joinRoom(roomKey) {
     state.emojiTarget = "";
     state.selectedHandIndexes = [];
     state.handSignature = "";
+    resetPlayLog(roomKey);
     state.table = null;
     state.currentRoomKey = "";
   }
@@ -3025,7 +3487,7 @@ function chatEventNode(event) {
 
   const meta = document.createElement("span");
   meta.className = "chat-meta";
-  meta.textContent = `${event.user?.displayName || event.user?.username || "玩家"} ${timeLabel(event.createdAt)}`;
+  meta.textContent = `${event.user?.username || event.user?.displayName || "玩家"} ${timeLabel(event.createdAt)}`;
 
   const body = document.createElement("span");
   body.className = "chat-body";
@@ -3325,7 +3787,7 @@ function trumpExposureLabel(exposure) {
 }
 
 function setStatus(message) {
-  els.log.textContent = message;
+  els.actionStatus.textContent = message;
   renderTopbar();
 }
 
@@ -3495,6 +3957,11 @@ function statusTextForRoom(status) {
 
 function seatLabel(seatIndex) {
   return `${Number(seatIndex) + 1}号座位`;
+}
+
+function seatNumberLabel(seatIndex) {
+  const number = Number(seatIndex) + 1;
+  return Number.isFinite(number) ? `${number}号` : "";
 }
 
 function bottomHolderLabel(table) {
@@ -3678,6 +4145,10 @@ function defaultWsUrl() {
 
 function defaultConfigUrl() {
   return new URL("../config", window.location.href).toString();
+}
+
+function defaultRoundLogUrl() {
+  return new URL("../replay/round-log", window.location.href).toString();
 }
 
 function queryParam(name) {

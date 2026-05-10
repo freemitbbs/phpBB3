@@ -726,6 +726,60 @@ class server
 		return $this->event_export_response(true, false);
 	}
 
+	public function round_log(): JsonResponse
+	{
+		$user_id = (int) ($this->user->data['user_id'] ?? ANONYMOUS);
+		if (!$this->is_enabled() || $user_id <= ANONYMOUS || !$this->auth->acl_get('u_cardgames_play'))
+		{
+			return $this->json_error('permission_denied', 'You are not allowed to view this round log.', 403);
+		}
+		if ($this->is_testing_mode() && !$this->is_tester_user($user_id))
+		{
+			return $this->json_error('permission_denied', 'You are not allowed to view this round log.', 403);
+		}
+		if ($this->is_user_banned($user_id))
+		{
+			return $this->json_error('permission_denied', 'You are not allowed to view this round log.', 403);
+		}
+
+		$room_key = trim((string) $this->query_string('roomKey', 'room_key', ''));
+		$hand_id = trim((string) $this->query_string('handId', 'hand_id', ''));
+		if ($room_key === '' || $hand_id === '' || strlen($room_key) > 64 || strlen($hand_id) > 128)
+		{
+			return $this->json_error('invalid_round_log_request', 'Round log requires roomKey and handId.', 400);
+		}
+		if (!preg_match('/^[A-Za-z0-9._:-]+$/', $hand_id))
+		{
+			return $this->json_error('invalid_round_log_request', 'Round log handId is invalid.', 400);
+		}
+
+		$result = $this->round_log_events($room_key, $hand_id);
+		if ((int) ($result['sessionId'] ?? 0) <= 0)
+		{
+			return $this->json_error('round_log_not_found', 'Round log was not found.', 404);
+		}
+		if (!$this->can_view_round_log_session((int) $result['sessionId'], $user_id, $room_key))
+		{
+			return $this->json_error('permission_denied', 'You are not allowed to view this round log.', 403);
+		}
+		if (empty($result['finished']) && !$this->round_log_session_has_finished_summary((int) $result['sessionId']))
+		{
+			return $this->json_error('round_log_not_finished', 'Round log is available after the hand is finished.', 409);
+		}
+
+		return $this->json([
+			'ok' => true,
+			'success' => true,
+			'roomKey' => $room_key,
+			'room_key' => $room_key,
+			'handId' => $hand_id,
+			'hand_id' => $hand_id,
+			'sessionId' => (int) $result['sessionId'],
+			'session_id' => (int) $result['sessionId'],
+			'events' => $result['events'],
+		]);
+	}
+
 	public function snapshots(): JsonResponse
 	{
 		$body = $this->raw_body();
@@ -1552,6 +1606,142 @@ class server
 			]),
 			'created_at' => time(),
 		]));
+	}
+
+	protected function round_log_events(string $room_key, string $hand_id): array
+	{
+		$sql = 'SELECT e.id, e.session_id, e.seq, e.event_type, e.payload_json, e.created_at
+				FROM ' . $this->events_table . ' e
+			INNER JOIN ' . $this->sessions_table . " s
+				ON s.id = e.session_id
+			WHERE s.room_key = '" . $this->db->sql_escape(substr($room_key, 0, 64)) . "'
+				AND e.event_type = 'tractor.cards_played'
+			ORDER BY e.session_id DESC, e.seq DESC";
+		$result = $this->db->sql_query_limit($sql, self::MAX_EVENT_EXPORT_LIMIT);
+		$session_id = 0;
+		$finished = false;
+		$events = [];
+
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$payload = $this->json_field_payload((string) ($row['payload_json'] ?? ''));
+			$public = is_array($payload['public'] ?? null) ? $payload['public'] : [];
+			if ((string) ($public['handId'] ?? '') !== $hand_id)
+			{
+				continue;
+			}
+
+			$row_session_id = (int) ($row['session_id'] ?? 0);
+			if ($session_id <= 0)
+			{
+				$session_id = $row_session_id;
+			}
+			if ($row_session_id !== $session_id)
+			{
+				continue;
+			}
+
+			if (!empty($public['handSummary']) || (string) ($public['phase'] ?? '') === 'finished')
+			{
+				$finished = true;
+			}
+			$events[] = $this->round_log_event_payload($row, $public);
+		}
+		$this->db->sql_freeresult($result);
+
+		usort($events, static function (array $left, array $right): int {
+			return ((int) ($left['seq'] ?? 0)) <=> ((int) ($right['seq'] ?? 0));
+		});
+
+		return [
+			'sessionId' => $session_id,
+			'finished' => $finished,
+			'events' => $events,
+		];
+	}
+
+	protected function round_log_event_payload(array $row, array $public): array
+	{
+		$event_type = (string) ($row['event_type'] ?? '');
+		$public_payload = [
+			'handId' => (string) ($public['handId'] ?? ''),
+		];
+		foreach (['currentTrick', 'lastCompletedTrick', 'handSummary'] as $key)
+		{
+			if (array_key_exists($key, $public))
+			{
+				$public_payload[$key] = $public[$key];
+			}
+		}
+
+		return [
+			'id' => (int) ($row['id'] ?? 0),
+			'sessionId' => (int) ($row['session_id'] ?? 0),
+			'session_id' => (int) ($row['session_id'] ?? 0),
+			'seq' => (int) ($row['seq'] ?? 0),
+			'eventType' => $event_type,
+			'event_type' => $event_type,
+			'payload' => [
+				'public' => $public_payload,
+			],
+			'createdAt' => $this->iso_time((int) ($row['created_at'] ?? 0)),
+			'created_at' => $this->iso_time((int) ($row['created_at'] ?? 0)),
+		];
+	}
+
+	protected function can_view_round_log_session(int $session_id, int $user_id, string $room_key): bool
+	{
+		if ($this->can_export_replay())
+		{
+			return true;
+		}
+
+		$sql = 'SELECT 1 AS can_view
+			FROM ' . $this->room_members_table . '
+			WHERE session_id = ' . $session_id . '
+				AND user_id = ' . $user_id;
+		$result = $this->db->sql_query_limit($sql, 1);
+		$can_view = (bool) $this->db->sql_fetchfield('can_view');
+		$this->db->sql_freeresult($result);
+		if ($can_view)
+		{
+			return true;
+		}
+
+		$sql = 'SELECT 1 AS can_view
+			FROM ' . $this->room_members_table . "
+			WHERE room_key = '" . $this->db->sql_escape(substr($room_key, 0, 64)) . "'
+				AND user_id = " . $user_id . '
+				AND left_at = 0';
+		$result = $this->db->sql_query_limit($sql, 1);
+		$can_view = (bool) $this->db->sql_fetchfield('can_view');
+		$this->db->sql_freeresult($result);
+		if ($can_view)
+		{
+			return true;
+		}
+
+		$sql = 'SELECT 1 AS can_view
+			FROM ' . $this->sessions_table . '
+			WHERE id = ' . $session_id . '
+				AND owner_user_id = ' . $user_id;
+		$result = $this->db->sql_query_limit($sql, 1);
+		$can_view = (bool) $this->db->sql_fetchfield('can_view');
+		$this->db->sql_freeresult($result);
+
+		return $can_view;
+	}
+
+	protected function round_log_session_has_finished_summary(int $session_id): bool
+	{
+		$sql = 'SELECT 1 AS has_summary
+			FROM ' . $this->finished_summaries_table . '
+			WHERE session_id = ' . $session_id;
+		$result = $this->db->sql_query_limit($sql, 1);
+		$has_summary = (bool) $this->db->sql_fetchfield('has_summary');
+		$this->db->sql_freeresult($result);
+
+		return $has_summary;
 	}
 
 	protected function profile_nickname(int $user_id): string

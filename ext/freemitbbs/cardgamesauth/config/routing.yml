@@ -33,6 +33,11 @@ freemitbbs_cardgamesauth_replay_export:
     defaults: { _controller: freemitbbs.cardgamesauth.controller.server:replay_export_user }
     methods: [GET]
 
+freemitbbs_cardgamesauth_round_log:
+    path: /card-games/replay/round-log
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:round_log }
+    methods: [GET]
+
 freemitbbs_cardgamesauth_server_ready:
     path: /card-games/server/ready
     defaults: { _controller: freemitbbs.cardgamesauth.controller.server:ready }
