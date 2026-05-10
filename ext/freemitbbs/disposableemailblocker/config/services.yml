@@ -12,3 +12,13 @@ services:
             - '@user'
         tags:
             - { name: event.listener }
+
+    freemitbbs.disposableemailblocker.cron.refresh_domains:
+        class: freemitbbs\disposableemailblocker\cron\refresh_domains
+        arguments:
+            - '@config'
+            - '@freemitbbs.disposableemailblocker.domain_blocklist'
+        calls:
+            - [set_name, [cron.task.freemitbbs.disposableemailblocker.refresh_domains]]
+        tags:
+            - { name: cron.task }
