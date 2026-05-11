@@ -9,7 +9,7 @@
 <main class="app-shell">
 	<section class="topbar">
 		<div>
-			<h1>{{ lang('CARDGAMES_TRACTOR_TITLE') }}</h1>
+			<h1>{{ lang('CARDGAMES_NAV') }}</h1>
 			<p id="connection-status">未连接</p>
 		</div>
 		<div class="userbar">
@@ -22,10 +22,11 @@
 
 	<section class="workspace">
 		<aside class="rooms-panel">
-			<div class="rooms-titleline">
-				<h2>房间</h2>
-			</div>
 			<div id="rooms-list" class="rooms-list"></div>
+			<div class="lobby-content">
+				<div id="lobby-chat-slot" class="lobby-chat-slot"></div>
+				<div id="lobby-users-panel" class="lobby-users-panel" aria-label="大厅用户"></div>
+			</div>
 		</aside>
 
 		<section class="table-panel">
@@ -36,7 +37,6 @@
 			</div>
 			<div id="table-view" class="table-view"></div>
 			<div id="action-status" class="action-status" aria-live="polite"></div>
-			<div id="event-log" class="event-log" aria-live="polite" hidden></div>
 			<div id="emoji-panel" class="emoji-panel" hidden>
 				<label class="emoji-target-label">
 					<span>发送给</span>

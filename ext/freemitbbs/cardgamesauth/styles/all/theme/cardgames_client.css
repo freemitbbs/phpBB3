@@ -117,9 +117,13 @@
 
 .app-shell .rooms-panel {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 250, 240, 0.72);
+  padding: 10px;
 }
 
 .app-shell .panel-header {
@@ -201,34 +205,89 @@
 }
 
 .app-shell .rooms-list {
-  grid-column: 2;
+  grid-column: 1;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+  align-items: stretch;
+  gap: 8px;
 }
 
 .app-shell .room-button {
   width: 100%;
-  min-height: 38px;
+  min-height: 112px;
   display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 5px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 7px;
   text-align: left;
   background: var(--panel);
-  padding: 3px 8px;
+  padding: 6px 8px;
+}
+
+.app-shell .room-summary-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-shell .room-button .room-game-icon {
+  width: 64px;
+  height: 64px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #b42318 url("./images/80points-icon.png") center / cover no-repeat;
+  color: transparent;
+  font-size: 0;
+  font-weight: 800;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+}
+
+.app-shell .room-main {
+  min-width: 0;
 }
 
 .app-shell .room-button strong {
   display: block;
+  min-width: 0;
   font-size: 14px;
   line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .app-shell .room-button span {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.2;
+}
+
+.app-shell .room-button .room-users {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(216, 205, 184, 0.8);
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: normal;
+  overflow: hidden;
+}
+
+.app-shell .room-button .room-user-row {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell .room-button .room-users-empty {
+  color: var(--muted);
 }
 
 .app-shell .room-button .room-status {
@@ -370,7 +429,7 @@
 }
 
 .app-shell .seat-0 .seat-hand-private {
-  overflow-x: visible;
+  overflow-x: hidden;
   scrollbar-width: none;
 }
 
@@ -425,7 +484,13 @@
   grid-row: 2;
 }
 
-.app-shell .table-side-stack > .seat {
+.app-shell .table-side-seat-slot {
+  min-width: 0;
+  display: grid;
+}
+
+.app-shell .table-side-stack > .seat,
+.app-shell .table-side-seat-slot > .seat {
   grid-column: auto;
   grid-row: auto;
   align-self: start;
@@ -488,8 +553,16 @@
   gap: 3px;
 }
 
+.app-shell .seat-label-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
 .app-shell .seat-number {
-  min-width: 2.35rem;
+  min-width: 4.2rem;
   border: 1px solid rgba(31, 111, 95, 0.22);
   border-radius: 999px;
   background: rgba(255, 250, 240, 0.78);
@@ -498,6 +571,18 @@
   font-weight: 800;
   line-height: 1.45;
   text-align: center;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
+.app-shell .seat-rank {
+  border: 1px solid rgba(184, 130, 28, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 239, 178, 0.78);
+  color: #7b4e06;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
   padding: 0 6px;
   white-space: nowrap;
 }
@@ -602,31 +687,54 @@
   padding: 12px;
 }
 
-.app-shell .table-info-left {
-  grid-column: 1;
-  grid-row: 1;
+.app-shell .table-info-status {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  align-self: stretch;
+  justify-items: stretch;
+  gap: 8px;
+  overflow-y: auto;
 }
 
-.app-shell .table-info-right {
-  grid-column: 3;
-  grid-row: 1;
-  justify-items: center;
-  text-align: center;
-}
-
-.app-shell .table-status-line {
-  margin: 0;
-  color: #ffe38f;
-  font-weight: 800;
-  line-height: 1.25;
-}
-
-.app-shell .table-owner-line {
-  margin: 0;
+.app-shell .table-owner-corner {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  left: 10px;
+  max-width: min(320px, calc(100% - 20px));
+  border: 1px solid rgba(255, 249, 236, 0.24);
+  border-radius: 999px;
+  background: rgba(20, 35, 33, 0.58);
   color: #fff9ec;
+  padding: 4px 9px;
+  font-size: 12px;
   font-weight: 800;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.app-shell .table-status-corner {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  right: 10px;
+  max-width: min(380px, calc(50% - 18px));
+  border: 1px solid rgba(255, 227, 143, 0.38);
+  border-radius: 999px;
+  background: rgba(20, 35, 33, 0.58);
+  color: #ffe38f;
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .app-shell .table-trump-line {
@@ -694,7 +802,7 @@
 .app-shell .desk-play-top {
   grid-area: top;
   z-index: 1;
-  transform: translateY(calc(-1 * clamp(56px, 5vw, 78px)));
+  transform: translateY(calc(-1 * clamp(6px, 0.8vw, 12px)));
 }
 
 .app-shell .desk-play-right {
@@ -885,6 +993,10 @@
   margin-top: 0;
 }
 
+.app-shell .table-info-status .table-scoreboard {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .app-shell .table-score {
   display: grid;
   justify-items: center;
@@ -930,6 +1042,12 @@
   text-align: center;
 }
 
+.app-shell .desk-center-content .desk-paused {
+  width: min(360px, 100%);
+  margin: 0;
+  text-align: center;
+}
+
 .app-shell .turn-timer {
   --turn-progress: 100%;
   width: min(220px, 100%);
@@ -948,7 +1066,7 @@
   margin-top: 0;
 }
 
-.app-shell .table-info-right .turn-timer {
+.app-shell .table-info-status .turn-timer {
   max-width: 260px;
 }
 
@@ -1101,6 +1219,7 @@
 
 .app-shell .seat-hand-private {
   min-width: 0;
+  width: 100%;
   max-width: 100%;
   box-sizing: border-box;
   display: flex;
@@ -1229,7 +1348,7 @@
   aspect-ratio: var(--card-face-ratio);
   outline: 2px solid transparent;
   outline-offset: -2px;
-  transition: outline-color 120ms ease, box-shadow 120ms ease;
+  transition: outline-color 120ms ease;
 }
 
 .app-shell .hand-card:hover .hand-card-face,
@@ -1237,11 +1356,26 @@
   outline-color: rgba(165, 38, 45, 0.56);
 }
 
+.app-shell .hand-card-trump-candidate .hand-card-face {
+  outline: 3px solid #ffcf4d;
+  outline-offset: -3px;
+  box-shadow:
+    inset 0 0 0 3px rgba(255, 231, 143, 0.48),
+    0 0 0 3px rgba(255, 207, 77, 0.58);
+}
+
 .app-shell .hand-card[aria-pressed="true"] .hand-card-face {
   outline-color: var(--accent);
   box-shadow:
     inset 0 0 0 2px rgba(165, 38, 45, 0.34),
     0 2px 6px rgba(35, 52, 58, 0.24);
+}
+
+.app-shell .hand-card-trump-candidate[aria-pressed="true"] .hand-card-face {
+  outline-color: var(--accent);
+  box-shadow:
+    inset 0 0 0 3px rgba(165, 38, 45, 0.46),
+    0 0 0 3px rgba(255, 207, 77, 0.7);
 }
 
 .app-shell .hand-card-label {
@@ -1484,10 +1618,95 @@
   overflow: hidden;
 }
 
+.app-shell .lobby-chat-slot {
+  min-width: 0;
+  margin-top: 0;
+  min-height: 0;
+}
+
+.app-shell .lobby-chat-slot:empty {
+  display: none;
+}
+
+.app-shell .lobby-chat-slot .chat-panel {
+  height: clamp(280px, 36vh, 360px);
+}
+
+.app-shell .lobby-content {
+  grid-column: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 2px;
+  min-width: 0;
+}
+
+.app-shell .lobby-users-panel {
+  min-width: 0;
+  height: clamp(280px, 36vh, 360px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 250, 240, 0.92);
+  overflow: hidden;
+}
+
+.app-shell .lobby-users-panel[hidden] {
+  display: none;
+}
+
+.app-shell .lobby-users-title {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(182, 168, 139, 0.6);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.app-shell .lobby-users-list {
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  padding: 8px;
+}
+
+.app-shell .lobby-user-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.app-shell .lobby-user-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell .lobby-user-detail,
+.app-shell .lobby-users-empty {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.app-shell .lobby-user-offline {
+  opacity: 0.62;
+}
+
 .app-shell .chat-messages {
   min-height: 0;
   max-height: none;
   overflow-y: auto;
+  overflow-anchor: auto;
   display: grid;
   align-content: start;
   gap: 6px;
@@ -1499,6 +1718,12 @@
   grid-template-columns: minmax(64px, max-content) minmax(0, 1fr);
   gap: 6px;
   color: var(--ink);
+  overflow-anchor: none;
+}
+
+.app-shell .chat-bottom-anchor {
+  min-height: 1px;
+  overflow-anchor: auto;
 }
 
 .app-shell .chat-meta {
@@ -1625,8 +1850,9 @@
 
   .app-shell .rooms-panel {
     display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     margin-bottom: 12px;
+    padding: 8px;
   }
 
   .app-shell .room-deadline-form {
@@ -1634,19 +1860,43 @@
   }
 
   .app-shell .rooms-list {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 4px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .app-shell .room-button {
-    grid-template-columns: 1fr;
-    gap: 2px;
-    padding: 3px 5px;
-    text-align: center;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+    padding: 5px;
+    text-align: left;
+  }
+
+  .app-shell .room-summary-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .app-shell .room-button .room-game-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 10px;
+    font-size: 13px;
   }
 
   .app-shell .room-button .room-status {
-    justify-self: center;
+    grid-column: 2;
+    justify-self: start;
+    text-align: left;
+  }
+
+  .app-shell .lobby-content {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .app-shell .lobby-chat-slot .chat-panel,
+  .app-shell .lobby-users-panel {
+    height: 220px;
   }
 
   .app-shell .chat-message {
@@ -1693,12 +1943,16 @@
     display: contents;
   }
 
+  .app-shell .table-side-seat-slot {
+    display: contents;
+  }
+
   .app-shell .table-side-panel-left {
-    order: 4;
+    order: 5;
   }
 
   .app-shell .table-side-panel-right {
-    order: 5;
+    order: 4;
   }
 
   .app-shell .seat-2 {
@@ -1793,6 +2047,11 @@
     grid-template-columns: minmax(0, 1fr) 32px minmax(0, 24rem) max-content minmax(0, 1fr);
   }
 
+  .app-shell .seat-1,
+  .app-shell .seat-3 {
+    grid-template-columns: 32px minmax(0, 1fr) max-content;
+  }
+
   .app-shell .seat-avatar-frame,
   .app-shell .seat-avatar-button {
     width: 32px;
@@ -1800,7 +2059,24 @@
     height: 44px;
   }
 
+  .app-shell .seat-1 .seat-avatar-frame,
+  .app-shell .seat-1 .seat-avatar-button,
+  .app-shell .seat-3 .seat-avatar-frame,
+  .app-shell .seat-3 .seat-avatar-button {
+    width: 32px;
+    max-width: 32px;
+    height: 44px;
+  }
+
   .app-shell .seat-avatar {
+    width: 32px;
+    max-width: 32px;
+    height: 44px;
+    max-height: 44px;
+  }
+
+  .app-shell .seat-1 .seat-avatar,
+  .app-shell .seat-3 .seat-avatar {
     width: 32px;
     max-width: 32px;
     height: 44px;

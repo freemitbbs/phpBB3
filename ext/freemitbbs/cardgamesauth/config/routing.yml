@@ -82,6 +82,11 @@ freemitbbs_cardgamesauth_server_events:
     defaults: { _controller: freemitbbs.cardgamesauth.controller.server:events }
     methods: [POST]
 
+freemitbbs_cardgamesauth_server_chat_events:
+    path: /card-games/server/chat-events
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:chat_events }
+    methods: [POST]
+
 freemitbbs_cardgamesauth_server_events_read:
     path: /card-games/server/events
     defaults: { _controller: freemitbbs.cardgamesauth.controller.server:events_read }

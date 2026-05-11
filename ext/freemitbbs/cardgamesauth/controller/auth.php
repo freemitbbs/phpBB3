@@ -113,7 +113,7 @@ class auth
 			]),
 		]);
 
-		return $this->helper->render('@freemitbbs_cardgamesauth/cardgames_client.html', $this->language->lang('CARDGAMES_TRACTOR_TITLE'));
+		return $this->helper->render('@freemitbbs_cardgamesauth/cardgames_client.html', $this->language->lang('CARDGAMES_NAV'));
 	}
 
 	public function config(): JsonResponse

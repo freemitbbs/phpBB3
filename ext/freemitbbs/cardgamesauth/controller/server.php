@@ -704,6 +704,59 @@ class server
 		]);
 	}
 
+	public function chat_events(): JsonResponse
+	{
+		$body = $this->raw_body();
+		if (($error = $this->require_server_auth($body)) !== null)
+		{
+			return $error;
+		}
+
+		$data = $this->require_json_object($body);
+		if (!is_array($data))
+		{
+			return $this->json_error('invalid_json', 'Request body must be a JSON object.', 400);
+		}
+
+		try
+		{
+			$events = $this->batch_rows($data, 'events', 'event');
+			$inserted = 0;
+			$skipped = 0;
+			$recorded = [];
+			foreach ($events as $event)
+			{
+				$result = $this->record_chat_event($event);
+				$inserted += (int) $result['inserted'];
+				$skipped += (int) $result['skipped'];
+				$recorded[] = [
+					'sessionId' => (int) $result['sessionId'],
+					'seq' => (int) $result['seq'],
+				];
+			}
+		}
+		catch (\InvalidArgumentException $e)
+		{
+			return $this->json_error((string) $e->getMessage(), 'Chat event payload is invalid.', 400);
+		}
+		catch (\DomainException $e)
+		{
+			return $this->json_error((string) $e->getMessage(), 'Chat event conflicts with existing recovery data.', 409, true);
+		}
+		catch (\Throwable $e)
+		{
+			return $this->json_error('chat_event_store_failed', 'Chat event could not be stored.', 500, true);
+		}
+
+		return $this->json([
+			'success' => true,
+			'ok' => true,
+			'inserted' => $inserted,
+			'skipped' => $skipped,
+			'recorded' => $recorded,
+		]);
+	}
+
 	public function events_read(): JsonResponse
 	{
 		return $this->event_export_response(false);
@@ -1902,6 +1955,94 @@ class server
 		}
 	}
 
+	protected function record_chat_event(array $event): array
+	{
+		$room_key = $this->required_string($event, 'roomKey', 'room_key', 64);
+		$game_type = $this->required_string($event, 'gameType', 'game_type', 32);
+		$event_type = $this->required_string($event, 'eventType', 'event_type', 64);
+		if ($event_type !== 'chat.message' && $event_type !== 'chat.emoji')
+		{
+			throw new \InvalidArgumentException('invalid_chat_event_type');
+		}
+		$request_id = $this->nullable_string_value($event, 'requestId', 'request_id', 64);
+		$now = time();
+		$release_chat_lock = false;
+
+		$this->db->sql_transaction('begin');
+		try
+		{
+			$release_chat_lock = $this->acquire_chat_session_lock($room_key);
+			$session = $this->ensure_chat_session($room_key, $game_type, $now);
+			$session_id = (int) $session['id'];
+			$existing_event = $this->find_event_by_request_id($session_id, $request_id);
+			if (!empty($existing_event))
+			{
+				$existing_seq = (int) ($existing_event['seq'] ?? 0);
+				$this->assert_transition_event_replay($existing_event, $event, $existing_seq, $game_type);
+				$this->db->sql_transaction('commit');
+				return [
+					'inserted' => 0,
+					'skipped' => 1,
+					'sessionId' => $session_id,
+					'seq' => $existing_seq,
+				];
+			}
+
+			$seq = ((int) $session['state_version']) + 1;
+			$this->db->sql_query('UPDATE ' . $this->sessions_table . '
+				SET ' . $this->db->sql_build_array('UPDATE', [
+					'state_version' => $seq,
+					'updated_at' => $now,
+				]) . '
+				WHERE id = ' . $session_id);
+
+			$insert = $this->try_insert_row($this->events_table, [
+				'session_id' => $session_id,
+				'seq' => $seq,
+				'game_type' => $game_type,
+				'actor_user_id' => $this->nullable_int_value($event, 'actorUserId', 'actor_user_id'),
+				'request_id' => $request_id,
+				'event_type' => $event_type,
+				'payload_schema_version' => $this->int_value($event, 'payloadSchemaVersion', 'payload_schema_version', 1),
+				'payload_json' => $this->json_value($event, 'payload', 'payload_json', new \stdClass()),
+				'created_at' => $this->time_value($event, 'createdAt', 'created_at', $now),
+			]);
+			if (!$insert['inserted'] && !$this->is_duplicate_insert($insert))
+			{
+				throw new \RuntimeException('chat_event_insert_failed');
+			}
+			if (!$insert['inserted'])
+			{
+				$existing_event = $this->find_event_by_seq($session_id, $seq);
+				if (empty($existing_event))
+				{
+					throw new \DomainException('chat_event_seq_conflict');
+				}
+				$this->assert_transition_event_replay($existing_event, $event, $seq, $game_type);
+			}
+
+			$this->db->sql_transaction('commit');
+			return [
+				'inserted' => $insert['inserted'] ? 1 : 0,
+				'skipped' => $insert['inserted'] ? 0 : 1,
+				'sessionId' => $session_id,
+				'seq' => $seq,
+			];
+		}
+		catch (\Throwable $e)
+		{
+			$this->db->sql_transaction('rollback');
+			throw $e;
+		}
+		finally
+		{
+			if ($release_chat_lock)
+			{
+				$this->release_chat_session_lock($room_key);
+			}
+		}
+	}
+
 	protected function event_export_response(bool $replay_export, bool $require_server_auth = true): JsonResponse
 	{
 		if ($require_server_auth && ($error = $this->require_server_auth('')) !== null)
@@ -2250,6 +2391,117 @@ class server
 			'id' => $id,
 			'state_version' => 0,
 		];
+	}
+
+	protected function ensure_chat_session(string $room_key, string $game_type, int $now): array
+	{
+		$sql = 'SELECT id, state_version
+			FROM ' . $this->sessions_table . "
+			WHERE room_key = '" . $this->db->sql_escape($room_key) . "'
+				AND status = 'chat'
+			ORDER BY id DESC
+			LIMIT 1
+			FOR UPDATE";
+		$result = $this->db->sql_query($sql);
+		$row = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+		if (is_array($row))
+		{
+			return [
+				'id' => (int) $row['id'],
+				'state_version' => (int) $row['state_version'],
+			];
+		}
+
+		$id = $this->insert_row($this->sessions_table, [
+			'room_key' => $room_key,
+			'game_type' => $game_type,
+			'status' => 'chat',
+			'owner_user_id' => 0,
+			'settings_json' => $this->room_default_settings_json($room_key),
+			'state_schema_version' => 1,
+			'state_version' => 0,
+			'random_audit_json' => '',
+			'created_at' => $now,
+			'started_at' => 0,
+			'updated_at' => $now,
+			'finished_at' => 0,
+		]);
+
+		return [
+			'id' => $id,
+			'state_version' => 0,
+		];
+	}
+
+	protected function acquire_chat_session_lock(string $room_key): bool
+	{
+		$sql_layer = $this->db->get_sql_layer();
+		if ($this->is_mysql_sql_layer($sql_layer))
+		{
+			$name = $this->chat_session_lock_name($room_key);
+			$result = $this->db->sql_query("SELECT GET_LOCK('" . $this->db->sql_escape($name) . "', 10) AS lock_acquired");
+			$acquired = (int) $this->db->sql_fetchfield('lock_acquired');
+			$this->db->sql_freeresult($result);
+			if ($acquired !== 1)
+			{
+				throw new \RuntimeException('chat_session_lock_timeout');
+			}
+
+			return true;
+		}
+
+		if ($sql_layer === 'postgres')
+		{
+			[$first, $second] = $this->chat_session_postgres_lock_keys($room_key);
+			$this->db->sql_query('SELECT pg_advisory_xact_lock(' . $first . ', ' . $second . ')');
+		}
+
+		return false;
+	}
+
+	protected function release_chat_session_lock(string $room_key): void
+	{
+		if (!$this->is_mysql_sql_layer($this->db->get_sql_layer()))
+		{
+			return;
+		}
+
+		try
+		{
+			$name = $this->chat_session_lock_name($room_key);
+			$result = $this->db->sql_query("SELECT RELEASE_LOCK('" . $this->db->sql_escape($name) . "') AS lock_released");
+			$this->db->sql_freeresult($result);
+		}
+		catch (\Throwable $e)
+		{
+			// The request is ending; do not mask the original write result with a best-effort unlock failure.
+		}
+	}
+
+	protected function is_mysql_sql_layer(string $sql_layer): bool
+	{
+		return $sql_layer === 'mysqli' || str_contains($sql_layer, 'mysql');
+	}
+
+	protected function chat_session_lock_name(string $room_key): string
+	{
+		return 'fmbbs_card_chat_' . sha1($room_key);
+	}
+
+	protected function chat_session_postgres_lock_keys(string $room_key): array
+	{
+		$hash = hash('sha256', 'chat:' . $room_key);
+		return [
+			$this->signed_int32_from_hex(substr($hash, 0, 8)),
+			$this->signed_int32_from_hex(substr($hash, 8, 8)),
+		];
+	}
+
+	protected function signed_int32_from_hex(string $hex): int
+	{
+		$value = (int) hexdec($hex);
+		return $value >= 2147483648 ? $value - 4294967296 : $value;
 	}
 
 	protected function room_default_settings_json(string $room_key): string
