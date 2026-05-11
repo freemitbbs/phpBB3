@@ -46,6 +46,7 @@ const state = {
   renderedSkinSignature: "",
   renderedDeadlineSignature: "",
   renderedEmojiSignature: "",
+  renderedMinesweeperSignature: "",
   renderedLobbyUsersSignature: "",
   renderedPlayLogSignature: "",
   renderedRoomsSignature: "",
@@ -62,6 +63,10 @@ const state = {
   playLogExportLoading: false,
   playLogExportError: "",
   emojiTarget: "",
+  minesweeper: null,
+  minesweeperExpanded: false,
+  minesweeperFlagMode: false,
+  minesweeperTimerId: 0,
   selectedHandIndexes: [],
   handSignature: "",
   privateHandAvailableWidth: 0,
@@ -124,6 +129,9 @@ const lateResponseRetentionMs = 60000;
 const retryRequestRetentionMs = 10 * 60 * 1000;
 const retryRequestStorageKey = "freemitbbs.cardgames.retryRequests.v1";
 const lobbyChatChannelKey = "__lobby__";
+const minesweeperRows = 9;
+const minesweeperCols = 9;
+const minesweeperMineCount = 10;
 const heartbeatIntervalMs = 25000;
 const heartbeatTimeoutMs = 10000;
 const heartbeatMaxMisses = 2;
@@ -286,6 +294,8 @@ const els = {
   deadlineControls: document.querySelector("#room-deadline-controls"),
   roomsPanel: document.querySelector(".rooms-panel"),
   rooms: document.querySelector("#rooms-list"),
+  lobbyContent: document.querySelector(".lobby-content"),
+  minesweeperPanel: document.querySelector("#lobby-minesweeper-panel"),
   lobbyUsersPanel: document.querySelector("#lobby-users-panel"),
   tablePanel: document.querySelector(".table-panel"),
   title: document.querySelector("#table-title"),
@@ -354,6 +364,10 @@ els.chatForm.addEventListener("submit", (event) => {
 els.chatInput.addEventListener("input", () => {
   state.chatDraft = els.chatInput.value;
 });
+if (els.minesweeperPanel) {
+  els.minesweeperPanel.addEventListener("click", handleMinesweeperClick);
+  els.minesweeperPanel.addEventListener("contextmenu", handleMinesweeperContextMenu);
+}
 els.emojiTarget.addEventListener("change", () => {
   state.emojiTarget = els.emojiTarget.value;
 });
@@ -1740,6 +1754,7 @@ function render() {
   renderTopbar();
   renderSkinSelect();
   renderRooms();
+  renderLobbyMinesweeper();
   renderLobbyUsers();
   renderTable();
 }
@@ -1830,11 +1845,16 @@ function renderRooms() {
   }
 
   if (!state.rooms.length) {
-    if (state.renderedRoomsSignature === "empty") {
+    const minesweeperRoom = lobbyMinesweeperRoomItem(hasRoomTransitionPending() || Boolean(state.transitionRoomKey));
+    const signature = `empty|${minesweeperRoom.signature}`;
+    if (state.renderedRoomsSignature === signature) {
       return;
     }
-    els.rooms.innerHTML = '<div class="empty-state">尚未加载房间。</div>';
-    state.renderedRoomsSignature = "empty";
+    const empty = document.createElement("div");
+    empty.className = "empty-state rooms-empty-state";
+    empty.textContent = "尚未加载房间。";
+    els.rooms.replaceChildren(empty, minesweeperRoom.node);
+    state.renderedRoomsSignature = signature;
     return;
   }
 
@@ -1842,18 +1862,20 @@ function renderRooms() {
   const interactionLocked = isGameInteractionLocked();
   const currentRoomKey = state.currentRoomKey;
   const roomItems = state.rooms.map(roomListItem);
+  const minesweeperRoom = lobbyMinesweeperRoomItem(roomTransitionPending || Boolean(state.transitionRoomKey));
   const signature = [
     interactionLocked ? "1" : "0",
     roomTransitionPending ? "1" : "0",
     state.transitionRoomKey,
     roomItems.map((item) => item.signature).join("\u001e"),
-    [...state.pendingActions].filter((key) => key.startsWith("room.join:")).sort().join(",")
+    [...state.pendingActions].filter((key) => key.startsWith("room.join:")).sort().join(","),
+    minesweeperRoom.signature
   ].join("|");
   if (state.renderedRoomsSignature === signature) {
     return;
   }
   state.renderedRoomsSignature = signature;
-  els.rooms.replaceChildren(...roomItems.map((item) => {
+  const roomButtons = roomItems.map((item) => {
     const { room, members, membersText, hasMembers } = item;
     const otherRoomLocked = Boolean(currentRoomKey && room.roomKey !== currentRoomKey);
     const gameLabel = roomGameLabel(room);
@@ -1882,7 +1904,9 @@ function renderRooms() {
     `;
     button.addEventListener("click", () => joinRoom(room.roomKey));
     return button;
-  }));
+  });
+  roomButtons.push(minesweeperRoom.node);
+  els.rooms.replaceChildren(...roomButtons);
 }
 
 function roomListItem(room) {
@@ -1909,6 +1933,494 @@ function roomSignature(room, members = roomMembersForDisplay(room)) {
     room.stateVersion || "",
     room.updatedAt || ""
   ].join("\u001f");
+}
+
+function lobbyMinesweeperRoomItem(disabled = false) {
+  const game = ensureMinesweeperGame();
+  const status = minesweeperStatusText(game);
+  const open = state.minesweeperExpanded;
+  const remainingSafe = Math.max(0, game.cells.length - game.mineCount - game.revealedCount);
+  const detail = game.started
+    ? `剩${remainingSafe}格 · 标记${game.flagCount}`
+    : "单人";
+  const signature = [
+    "lobby-minesweeper",
+    open ? "1" : "0",
+    disabled ? "1" : "0",
+    status,
+    game.started ? "1" : "0",
+    game.finished ? "1" : "0",
+    game.won ? "1" : "0",
+    game.revealedCount,
+    game.flagCount
+  ].join("\u001f");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "room-button lobby-mini-game-button";
+  button.disabled = disabled;
+  button.setAttribute("aria-current", "false");
+  button.setAttribute("aria-expanded", open ? "true" : "false");
+  button.innerHTML = `
+    <span class="room-summary-row">
+      <span class="room-game-icon lobby-minesweeper-icon" aria-hidden="true">扫雷</span>
+      <span class="room-main">
+        <strong>扫雷</strong>
+        <span class="room-game-label">大厅小游戏 · ${escapeHtml(detail)}</span>
+      </span>
+      <span class="room-status">${escapeHtml(open ? "打开" : status)}</span>
+    </span>
+    <span class="room-users room-users-empty">
+      <span class="room-user-row">${escapeHtml(game.won ? "已完成" : game.finished ? "新局可重开" : "点击打开")}</span>
+    </span>
+  `;
+  button.addEventListener("click", () => {
+    state.minesweeperExpanded = true;
+    state.renderedRoomsSignature = "";
+    state.renderedMinesweeperSignature = "";
+    renderRooms();
+    renderLobbyMinesweeper();
+  });
+  return { node: button, signature };
+}
+
+function renderLobbyMinesweeper() {
+  if (!els.minesweeperPanel) {
+    return;
+  }
+
+  const inLobby = !state.currentRoomKey;
+  if (!inLobby && state.minesweeperExpanded) {
+    state.minesweeperExpanded = false;
+  }
+  const expanded = inLobby && state.minesweeperExpanded;
+  els.lobbyContent?.classList.toggle("lobby-content-minigame-open", expanded);
+  els.minesweeperPanel.hidden = !expanded;
+  if (!expanded) {
+    stopMinesweeperTimer();
+    if (state.renderedMinesweeperSignature !== "hidden") {
+      els.minesweeperPanel.replaceChildren();
+      state.renderedMinesweeperSignature = "hidden";
+    }
+    return;
+  }
+
+  const game = ensureMinesweeperGame();
+  syncMinesweeperTimer();
+  const signature = minesweeperSignature(game);
+  if (state.renderedMinesweeperSignature === signature) {
+    return;
+  }
+
+  state.renderedMinesweeperSignature = signature;
+  els.minesweeperPanel.innerHTML = minesweeperHtml(game);
+}
+
+function ensureMinesweeperGame() {
+  if (!state.minesweeper) {
+    state.minesweeper = newMinesweeperGame();
+  }
+  return state.minesweeper;
+}
+
+function newMinesweeperGame() {
+  const cellCount = minesweeperRows * minesweeperCols;
+  return {
+    rows: minesweeperRows,
+    cols: minesweeperCols,
+    mineCount: minesweeperMineCount,
+    cells: Array.from({ length: cellCount }, (_, index) => ({
+      index,
+      mine: false,
+      adjacent: 0,
+      revealed: false,
+      flagged: false
+    })),
+    minesPlaced: false,
+    started: false,
+    finished: false,
+    won: false,
+    explodedIndex: -1,
+    revealedCount: 0,
+    flagCount: 0,
+    startTime: 0,
+    elapsedSeconds: 0
+  };
+}
+
+function resetMinesweeper() {
+  stopMinesweeperTimer();
+  state.minesweeper = newMinesweeperGame();
+  state.minesweeperFlagMode = false;
+  state.renderedMinesweeperSignature = "";
+  state.renderedRoomsSignature = "";
+  renderRooms();
+  renderLobbyMinesweeper();
+}
+
+function minesweeperHtml(game) {
+  const remaining = Math.max(0, game.mineCount - game.flagCount);
+  const flagPressed = state.minesweeperFlagMode ? "true" : "false";
+  return `
+    <div class="lobby-minesweeper-header">
+      <div class="lobby-minesweeper-heading">
+        <div class="lobby-minesweeper-title">扫雷</div>
+        <div class="lobby-minesweeper-status">${escapeHtml(minesweeperStatusText(game))}</div>
+      </div>
+      <div class="lobby-minesweeper-controls">
+        <button type="button" class="minesweeper-flag-toggle" data-minesweeper-action="flag" aria-pressed="${flagPressed}">标记</button>
+        <button type="button" data-minesweeper-action="restart">新局</button>
+        <button type="button" data-minesweeper-action="collapse">收起</button>
+      </div>
+    </div>
+    <div class="minesweeper-stats">
+      <span>雷 ${escapeHtml(remaining)}</span>
+      <span>时间 <span data-minesweeper-time>${escapeHtml(formatMinesweeperTime(game.elapsedSeconds))}</span></span>
+    </div>
+    <div class="minesweeper-board" role="grid" aria-label="扫雷" style="--minesweeper-cols: ${game.cols}">
+      ${game.cells.map((cell) => minesweeperCellHtml(game, cell)).join("")}
+    </div>
+  `;
+}
+
+function minesweeperCellHtml(game, cell) {
+  const classes = [
+    "minesweeper-cell",
+    cell.revealed ? "is-revealed" : "is-hidden",
+    cell.flagged ? "is-flagged" : "",
+    cell.mine && (cell.revealed || game.finished) ? "is-mine" : "",
+    cell.index === game.explodedIndex ? "is-exploded" : "",
+    cell.revealed && cell.adjacent > 0 ? `mine-n${cell.adjacent}` : ""
+  ].filter(Boolean).join(" ");
+  const content = cell.flagged && !cell.revealed
+    ? "⚑"
+    : cell.revealed && cell.mine
+      ? "✹"
+      : cell.revealed && cell.adjacent > 0
+        ? String(cell.adjacent)
+        : "";
+  const row = Math.floor(cell.index / game.cols) + 1;
+  const col = (cell.index % game.cols) + 1;
+  return `<button type="button" role="gridcell" class="${classes}" data-minesweeper-index="${cell.index}" aria-label="${escapeAttribute(minesweeperCellLabel(game, cell, row, col))}">${escapeHtml(content)}</button>`;
+}
+
+function minesweeperCellLabel(game, cell, row, col) {
+  const prefix = `第${row}行第${col}列`;
+  if (cell.flagged && !cell.revealed) {
+    return `${prefix}，已标记`;
+  }
+  if (!cell.revealed && !game.finished) {
+    return `${prefix}，未打开`;
+  }
+  if (cell.mine) {
+    return `${prefix}，地雷`;
+  }
+  if (cell.adjacent > 0) {
+    return `${prefix}，周围${cell.adjacent}颗雷`;
+  }
+  return `${prefix}，空`;
+}
+
+function minesweeperStatusText(game) {
+  if (game.won) {
+    return "完成";
+  }
+  if (game.finished) {
+    return "踩雷";
+  }
+  if (game.started) {
+    return "进行中";
+  }
+  return "新局";
+}
+
+function minesweeperSignature(game) {
+  return [
+    state.minesweeperFlagMode ? "1" : "0",
+    game.started ? "1" : "0",
+    game.finished ? "1" : "0",
+    game.won ? "1" : "0",
+    game.explodedIndex,
+    game.flagCount,
+    game.cells.map((cell) => `${cell.revealed ? "r" : ""}${cell.flagged ? "f" : ""}${cell.mine && game.finished ? "m" : ""}${cell.adjacent}`).join("")
+  ].join("\u001f");
+}
+
+function handleMinesweeperClick(event) {
+  const target = event.target instanceof Element ? event.target : null;
+  if (!target || !els.minesweeperPanel?.contains(target) || state.currentRoomKey) {
+    return;
+  }
+
+  const actionButton = target.closest("[data-minesweeper-action]");
+  if (actionButton && els.minesweeperPanel.contains(actionButton)) {
+    event.preventDefault();
+    const action = actionButton.dataset.minesweeperAction;
+    if (action === "restart") {
+      resetMinesweeper();
+      return;
+    }
+    if (action === "collapse") {
+      state.minesweeperExpanded = false;
+      state.renderedRoomsSignature = "";
+      state.renderedMinesweeperSignature = "";
+      renderRooms();
+      renderLobbyMinesweeper();
+      return;
+    }
+    if (action === "flag") {
+      state.minesweeperFlagMode = !state.minesweeperFlagMode;
+      state.renderedMinesweeperSignature = "";
+      renderLobbyMinesweeper();
+      return;
+    }
+  }
+
+  const cellButton = target.closest("[data-minesweeper-index]");
+  if (!cellButton || !els.minesweeperPanel.contains(cellButton)) {
+    return;
+  }
+
+  event.preventDefault();
+  const index = Number(cellButton.dataset.minesweeperIndex);
+  if (!Number.isInteger(index)) {
+    return;
+  }
+  if (state.minesweeperFlagMode) {
+    toggleMinesweeperFlag(index);
+  } else {
+    revealMinesweeperCell(index);
+  }
+  state.renderedRoomsSignature = "";
+  state.renderedMinesweeperSignature = "";
+  renderRooms();
+  renderLobbyMinesweeper();
+}
+
+function handleMinesweeperContextMenu(event) {
+  const target = event.target instanceof Element ? event.target : null;
+  if (!target || !els.minesweeperPanel?.contains(target) || state.currentRoomKey) {
+    return;
+  }
+
+  const cellButton = target.closest("[data-minesweeper-index]");
+  if (!cellButton || !els.minesweeperPanel.contains(cellButton)) {
+    return;
+  }
+
+  event.preventDefault();
+  const index = Number(cellButton.dataset.minesweeperIndex);
+  if (!Number.isInteger(index)) {
+    return;
+  }
+  toggleMinesweeperFlag(index);
+  state.renderedRoomsSignature = "";
+  state.renderedMinesweeperSignature = "";
+  renderRooms();
+  renderLobbyMinesweeper();
+}
+
+function revealMinesweeperCell(index) {
+  const game = ensureMinesweeperGame();
+  const cell = game.cells[index];
+  if (!cell || game.finished || cell.revealed || cell.flagged) {
+    return;
+  }
+
+  if (!game.minesPlaced) {
+    placeMinesweeperMines(game, index);
+  }
+  if (!game.started) {
+    game.started = true;
+    game.startTime = Date.now();
+    startMinesweeperTimer();
+  }
+
+  if (cell.mine) {
+    cell.revealed = true;
+    game.finished = true;
+    game.won = false;
+    game.explodedIndex = index;
+    game.cells.forEach((candidate) => {
+      if (candidate.mine) {
+        candidate.revealed = true;
+      }
+    });
+    updateMinesweeperElapsed();
+    stopMinesweeperTimer();
+    return;
+  }
+
+  revealMinesweeperArea(game, index);
+  if (game.revealedCount >= game.cells.length - game.mineCount) {
+    finishMinesweeperWin(game);
+  }
+}
+
+function revealMinesweeperArea(game, startIndex) {
+  const queue = [startIndex];
+  const queued = new Set(queue);
+  while (queue.length) {
+    const index = queue.shift();
+    const cell = game.cells[index];
+    if (!cell || cell.revealed || cell.flagged || cell.mine) {
+      continue;
+    }
+
+    cell.revealed = true;
+    game.revealedCount += 1;
+    if (cell.adjacent !== 0) {
+      continue;
+    }
+
+    minesweeperNeighborIndexes(index, game.rows, game.cols).forEach((neighborIndex) => {
+      if (!queued.has(neighborIndex)) {
+        queued.add(neighborIndex);
+        queue.push(neighborIndex);
+      }
+    });
+  }
+}
+
+function toggleMinesweeperFlag(index) {
+  const game = ensureMinesweeperGame();
+  const cell = game.cells[index];
+  if (!cell || game.finished || cell.revealed) {
+    return;
+  }
+
+  cell.flagged = !cell.flagged;
+  game.flagCount += cell.flagged ? 1 : -1;
+}
+
+function finishMinesweeperWin(game) {
+  game.finished = true;
+  game.won = true;
+  game.explodedIndex = -1;
+  game.flagCount = game.mineCount;
+  game.cells.forEach((cell) => {
+    cell.flagged = cell.mine;
+  });
+  updateMinesweeperElapsed();
+  stopMinesweeperTimer();
+}
+
+function placeMinesweeperMines(game, safeIndex) {
+  const preferredSafe = new Set([safeIndex, ...minesweeperNeighborIndexes(safeIndex, game.rows, game.cols)]);
+  const candidatesWithoutNeighborhood = game.cells
+    .map((cell) => cell.index)
+    .filter((index) => !preferredSafe.has(index));
+  const candidates = candidatesWithoutNeighborhood.length >= game.mineCount
+    ? candidatesWithoutNeighborhood
+    : game.cells.map((cell) => cell.index).filter((index) => index !== safeIndex);
+
+  shuffleInPlace(candidates);
+  candidates.slice(0, game.mineCount).forEach((index) => {
+    game.cells[index].mine = true;
+  });
+
+  game.cells.forEach((cell) => {
+    cell.adjacent = cell.mine
+      ? 0
+      : minesweeperNeighborIndexes(cell.index, game.rows, game.cols)
+        .filter((neighborIndex) => game.cells[neighborIndex]?.mine)
+        .length;
+  });
+  game.minesPlaced = true;
+}
+
+function minesweeperNeighborIndexes(index, rows, cols) {
+  const row = Math.floor(index / cols);
+  const col = index % cols;
+  const neighbors = [];
+  for (let nextRow = row - 1; nextRow <= row + 1; nextRow += 1) {
+    for (let nextCol = col - 1; nextCol <= col + 1; nextCol += 1) {
+      if (nextRow === row && nextCol === col) {
+        continue;
+      }
+      if (nextRow >= 0 && nextRow < rows && nextCol >= 0 && nextCol < cols) {
+        neighbors.push(nextRow * cols + nextCol);
+      }
+    }
+  }
+  return neighbors;
+}
+
+function shuffleInPlace(items) {
+  for (let index = items.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [items[index], items[swapIndex]] = [items[swapIndex], items[index]];
+  }
+}
+
+function syncMinesweeperTimer() {
+  const game = state.minesweeper;
+  if (!game || state.currentRoomKey || !game.started || game.finished) {
+    stopMinesweeperTimer();
+    return;
+  }
+  startMinesweeperTimer();
+}
+
+function startMinesweeperTimer() {
+  const game = state.minesweeper;
+  if (!game || game.finished || state.currentRoomKey) {
+    return;
+  }
+  if (!game.startTime) {
+    game.startTime = Date.now() - game.elapsedSeconds * 1000;
+  }
+  if (state.minesweeperTimerId) {
+    return;
+  }
+
+  state.minesweeperTimerId = window.setInterval(() => {
+    const changed = updateMinesweeperElapsed();
+    if (changed) {
+      updateMinesweeperElapsedText();
+    }
+  }, 1000);
+}
+
+function stopMinesweeperTimer() {
+  const game = state.minesweeper;
+  if (game?.started && !game.finished) {
+    updateMinesweeperElapsed();
+    game.startTime = 0;
+  }
+  if (!state.minesweeperTimerId) {
+    return;
+  }
+
+  window.clearInterval(state.minesweeperTimerId);
+  state.minesweeperTimerId = 0;
+}
+
+function updateMinesweeperElapsed() {
+  const game = state.minesweeper;
+  if (!game || !game.started || !game.startTime) {
+    return false;
+  }
+
+  const nextSeconds = Math.max(0, Math.floor((Date.now() - game.startTime) / 1000));
+  if (game.elapsedSeconds === nextSeconds) {
+    return false;
+  }
+  game.elapsedSeconds = nextSeconds;
+  return true;
+}
+
+function updateMinesweeperElapsedText() {
+  const timeElement = els.minesweeperPanel?.querySelector("[data-minesweeper-time]");
+  if (timeElement && state.minesweeper) {
+    timeElement.textContent = formatMinesweeperTime(state.minesweeper.elapsedSeconds);
+  }
+}
+
+function formatMinesweeperTime(seconds) {
+  const safeSeconds = Math.max(0, Number.isFinite(Number(seconds)) ? Math.floor(Number(seconds)) : 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainder = safeSeconds % 60;
+  return `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
 function renderLobbyUsers() {

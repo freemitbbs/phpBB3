@@ -9,14 +9,14 @@
 <main class="app-shell">
 	<section class="topbar">
 		<div>
-			<h1>{{ lang('CARDGAMES_NAV') }}</h1>
-			<p id="connection-status">未连接</p>
+			<h1>{{ lang('CARDGAMES_CLIENT_TITLE') }}</h1>
 		</div>
 		<div class="userbar">
 			<span id="user-label"></span>
 			<select id="skin-select" aria-label="皮肤" hidden></select>
 			<button id="sound-button" type="button" aria-pressed="false">声音关</button>
 			<button id="connect-button" type="button">连接</button>
+			<span id="connection-status" class="connection-status">未连接</span>
 		</div>
 	</section>
 
@@ -25,6 +25,7 @@
 			<div id="rooms-list" class="rooms-list"></div>
 			<div class="lobby-content">
 				<div id="lobby-chat-slot" class="lobby-chat-slot"></div>
+				<section id="lobby-minesweeper-panel" class="lobby-minesweeper-panel" aria-label="扫雷"></section>
 				<div id="lobby-users-panel" class="lobby-users-panel" aria-label="大厅用户"></div>
 			</div>
 		</aside>

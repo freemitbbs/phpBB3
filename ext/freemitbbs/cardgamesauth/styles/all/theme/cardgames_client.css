@@ -68,7 +68,6 @@
 }
 
 .app-shell .topbar h1,
-.app-shell .topbar p,
 .app-shell .panel-header h2 {
   margin: 0;
 }
@@ -78,16 +77,19 @@
   font-weight: 700;
 }
 
-.app-shell .topbar p {
-  color: #d7cdbd;
-}
-
 .app-shell .userbar {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
   min-width: 220px;
+}
+
+.app-shell .connection-status {
+  color: #d7cdbd;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .app-shell .userbar select {
@@ -207,56 +209,100 @@
 .app-shell .rooms-list {
   grid-column: 1;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   align-items: stretch;
-  gap: 8px;
+  gap: 10px;
 }
 
 .app-shell .room-button {
+  position: relative;
   width: 100%;
-  min-height: 112px;
+  min-height: 124px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
-  gap: 7px;
+  gap: 9px;
   text-align: left;
-  background: var(--panel);
-  padding: 6px 8px;
+  border-color: #c1ad86;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.42) 0%, transparent 36%),
+    linear-gradient(180deg, #fffaf0 0%, #eadcc2 100%);
+  padding: 9px 10px;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 2px 5px rgba(65, 50, 30, 0.12);
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.app-shell .room-button::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent) 0%, #d6a436 50%, var(--accent-2) 100%);
+  opacity: 0.74;
+  pointer-events: none;
+}
+
+.app-shell .room-button:not(:disabled):hover,
+.app-shell .room-button:not(:disabled):focus-visible {
+  border-color: var(--accent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 4px 10px rgba(65, 50, 30, 0.18);
+  transform: translateY(-1px);
 }
 
 .app-shell .room-summary-row {
+  position: relative;
+  z-index: 1;
   min-width: 0;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .app-shell .room-button .room-game-icon {
-  width: 64px;
-  height: 64px;
+  width: 76px;
+  height: 76px;
   display: inline-grid;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 10px;
   background: #b42318 url("./images/80points-icon.png") center / cover no-repeat;
   color: transparent;
   font-size: 0;
   font-weight: 800;
-  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(73, 46, 20, 0.26);
+  box-shadow:
+    inset 0 -2px 0 rgba(0, 0, 0, 0.18),
+    0 2px 4px rgba(50, 35, 20, 0.18);
 }
 
 .app-shell .room-main {
   min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 5px;
 }
 
 .app-shell .room-button strong {
   display: block;
   min-width: 0;
-  font-size: 14px;
-  line-height: 1.1;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.08;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.app-shell .room-button span.room-game-label {
+  color: #624b2b;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .app-shell .room-button span {
@@ -266,13 +312,17 @@
 }
 
 .app-shell .room-button .room-users {
+  position: relative;
+  z-index: 1;
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   min-width: 0;
-  gap: 2px;
-  padding-top: 5px;
-  border-top: 1px solid rgba(216, 205, 184, 0.8);
+  column-gap: 8px;
+  row-gap: 3px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(166, 145, 105, 0.42);
   color: var(--ink);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.2;
   white-space: normal;
   overflow: hidden;
@@ -287,19 +337,54 @@
 }
 
 .app-shell .room-button .room-users-empty {
+  grid-template-columns: minmax(0, 1fr);
   color: var(--muted);
 }
 
 .app-shell .room-button .room-status {
   justify-self: end;
+  align-self: start;
+  padding: 4px 7px;
+  border: 1px solid rgba(31, 111, 95, 0.26);
+  border-radius: 999px;
+  background: rgba(232, 248, 241, 0.82);
   color: var(--accent-2);
+  font-size: 12px;
   font-weight: 700;
+  line-height: 1;
   white-space: nowrap;
 }
 
 .app-shell .room-button[aria-current="true"] {
   border-color: var(--accent);
-  box-shadow: inset 0 -3px 0 var(--accent);
+  box-shadow:
+    inset 0 0 0 2px rgba(165, 38, 45, 0.12),
+    0 4px 10px rgba(65, 50, 30, 0.18);
+}
+
+.app-shell .rooms-empty-state {
+  min-height: 112px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed rgba(157, 143, 121, 0.65);
+  border-radius: 8px;
+  background: rgba(255, 250, 240, 0.64);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.app-shell .lobby-mini-game-button[aria-expanded="true"] {
+  border-color: var(--accent-2);
+  box-shadow:
+    inset 0 0 0 2px rgba(31, 111, 95, 0.14),
+    0 4px 10px rgba(65, 50, 30, 0.18);
+}
+
+.app-shell .room-button .lobby-minesweeper-icon {
+  background: #314b5a url("./images/minesweeper.jpeg") center / cover no-repeat;
+  color: transparent;
+  font-size: 0;
+  letter-spacing: 0;
 }
 
 .app-shell .table-view {
@@ -1629,7 +1714,7 @@
 }
 
 .app-shell .lobby-chat-slot .chat-panel {
-  height: clamp(280px, 36vh, 360px);
+  height: clamp(320px, 36vh, 360px);
 }
 
 .app-shell .lobby-content {
@@ -1642,9 +1727,164 @@
   min-width: 0;
 }
 
+.app-shell .lobby-content-minigame-open {
+  grid-template-columns: minmax(250px, 1fr) minmax(250px, 300px) minmax(200px, 240px);
+}
+
+.app-shell .lobby-minesweeper-panel {
+  min-width: 0;
+  height: clamp(360px, 42vh, 420px);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 250, 240, 0.92);
+  overflow: hidden;
+}
+
+.app-shell .lobby-minesweeper-header {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.app-shell .lobby-minesweeper-heading {
+  min-width: 0;
+}
+
+.app-shell .lobby-minesweeper-title {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.app-shell .lobby-minesweeper-status {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.app-shell .lobby-minesweeper-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+.app-shell .lobby-minesweeper-controls button {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.app-shell .lobby-minesweeper-controls button[aria-pressed="true"] {
+  border-color: #9f6b13;
+  background: #ffe08a;
+  color: #3d2c11;
+  font-weight: 700;
+}
+
+.app-shell .minesweeper-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.app-shell .minesweeper-board {
+  width: min(100%, 254px);
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
+  min-width: 0;
+  min-height: 0;
+  align-self: center;
+  justify-self: center;
+  display: grid;
+  grid-template-columns: repeat(var(--minesweeper-cols), minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid rgba(182, 168, 139, 0.55);
+  border-radius: 8px;
+  background: rgba(232, 221, 200, 0.62);
+}
+
+.app-shell .minesweeper-cell {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #9b8f79;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #fff7e8 0%, #decdae 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  color: var(--ink);
+  font-size: clamp(11px, 1.7vw, 14px);
+  font-weight: 800;
+  line-height: 1;
+  user-select: none;
+}
+
+.app-shell .minesweeper-cell:hover {
+  border-color: var(--accent);
+}
+
+.app-shell .minesweeper-cell.is-revealed {
+  border-color: rgba(157, 143, 121, 0.62);
+  background: #f4ead8;
+  box-shadow: none;
+}
+
+.app-shell .minesweeper-cell.is-flagged {
+  color: #9f2d1d;
+}
+
+.app-shell .minesweeper-cell.is-mine {
+  color: #1f2a2e;
+}
+
+.app-shell .minesweeper-cell.is-exploded {
+  border-color: #a5262d;
+  background: #ffd2c6;
+  color: #7f1720;
+}
+
+.app-shell .minesweeper-cell.mine-n1 {
+  color: #1f5fa8;
+}
+
+.app-shell .minesweeper-cell.mine-n2 {
+  color: #1d744f;
+}
+
+.app-shell .minesweeper-cell.mine-n3 {
+  color: #a5262d;
+}
+
+.app-shell .minesweeper-cell.mine-n4,
+.app-shell .minesweeper-cell.mine-n5,
+.app-shell .minesweeper-cell.mine-n6,
+.app-shell .minesweeper-cell.mine-n7,
+.app-shell .minesweeper-cell.mine-n8 {
+  color: #5e3e92;
+}
+
 .app-shell .lobby-users-panel {
   min-width: 0;
-  height: clamp(280px, 36vh, 360px);
+  height: clamp(320px, 36vh, 360px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   border: 1px solid var(--line);
@@ -1866,21 +2106,29 @@
 
   .app-shell .room-button {
     grid-template-columns: minmax(0, 1fr);
-    gap: 5px;
-    padding: 5px;
+    min-height: 112px;
+    gap: 6px;
+    padding: 7px;
     text-align: left;
   }
 
   .app-shell .room-summary-row {
     grid-template-columns: auto minmax(0, 1fr);
-    gap: 5px;
+    gap: 7px;
   }
 
   .app-shell .room-button .room-game-icon {
-    width: 52px;
-    height: 52px;
+    width: 56px;
+    height: 56px;
     border-radius: 10px;
-    font-size: 13px;
+  }
+
+  .app-shell .room-button strong {
+    font-size: 15px;
+  }
+
+  .app-shell .room-button span.room-game-label {
+    font-size: 12px;
   }
 
   .app-shell .room-button .room-status {
@@ -1892,6 +2140,18 @@
   .app-shell .lobby-content {
     grid-template-columns: 1fr;
     gap: 8px;
+  }
+
+  .app-shell .lobby-minesweeper-panel {
+    height: auto;
+  }
+
+  .app-shell .minesweeper-board {
+    width: min(100%, 300px);
+  }
+
+  .app-shell .minesweeper-cell {
+    font-size: clamp(11px, 3.8vw, 14px);
   }
 
   .app-shell .lobby-chat-slot .chat-panel,
