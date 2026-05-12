@@ -73,15 +73,12 @@ const state = {
   privateHandOverlapValue: "",
   privateHandResizeFrameId: 0,
   assetBaseUrl: "",
-  audioBaseUrl: "",
-  cardStyle: "cardsclassic",
-  soundEnabled: false
+  cardStyle: "cardsclassic"
 };
 
 const tableActionCache = new WeakMap();
 const tablePauseCache = new WeakMap();
 const privateCardSplitCache = new WeakMap();
-const audioCache = new Map();
 let tableActionsElement = null;
 let privateHandElement = null;
 let privateHandResizeObserver = null;
@@ -290,7 +287,6 @@ const els = {
   user: document.querySelector("#user-label"),
   skin: document.querySelector("#skin-select"),
   connect: document.querySelector("#connect-button"),
-  sound: document.querySelector("#sound-button"),
   deadlineControls: document.querySelector("#room-deadline-controls"),
   roomsPanel: document.querySelector(".rooms-panel"),
   rooms: document.querySelector("#rooms-list"),
@@ -314,13 +310,6 @@ const els = {
 
 els.connect.addEventListener("click", () => {
   void connect();
-});
-els.sound.addEventListener("click", () => {
-  state.soundEnabled = !state.soundEnabled;
-  if (state.soundEnabled) {
-    playSound("effect/enter_hall_click.mp3");
-  }
-  render();
 });
 els.skin.addEventListener("change", () => {
   void selectSkin(els.skin.value);
@@ -453,7 +442,6 @@ async function init() {
   state.bootstrap = await loadBootstrap();
   state.token = queryParam("token") || state.bootstrap.token || "";
   state.assetBaseUrl = normalizeBaseUrl(state.bootstrap.assetBaseUrl || defaultAssetBaseUrl());
-  state.audioBaseUrl = normalizeBaseUrl(state.bootstrap.audioBaseUrl || defaultAudioBaseUrl());
   state.cardStyle = state.bootstrap.cardStyle || "cardsclassic";
   restoreRetryRequests();
   state.initialized = true;
@@ -1553,7 +1541,6 @@ function applyServerMessage(message, commandType = "", context = null) {
       state.user = message.payload.user || state.user;
       state.authenticated = true;
       scheduleChatRender();
-      playSound("effect/enter_hall_click.mp3");
       break;
     case "profile.skins":
     case "profile.skin.selected":
@@ -1618,7 +1605,6 @@ function applyServerMessage(message, commandType = "", context = null) {
         return;
       }
       clearRoomState();
-      playSound("effect/draw.mp3");
       setStatus("已离开房间");
       void requestRooms();
       void requestChatHistory();
@@ -1633,7 +1619,6 @@ function applyServerMessage(message, commandType = "", context = null) {
       if (state.table?.room?.roomKey === message.payload.room.roomKey) {
         state.table.room = message.payload.room;
       }
-      playCommandSound(commandType);
       scheduleChatRender();
       render();
       break;
@@ -1661,7 +1646,6 @@ function applyServerMessage(message, commandType = "", context = null) {
       if (!isCurrentRoomMessage(message.payload.table?.room?.roomKey || message.roomKey, context)) {
         return;
       }
-      playTableSound(message.payload.table, commandType);
       applyTable(message.payload.table);
       break;
     case "chat.history":
@@ -1818,9 +1802,7 @@ function renderTopbar() {
   const status = statusText();
   const user = state.user ? state.user.displayName || state.user.username : "";
   const connect = state.connected ? "重新连接" : "连接";
-  const sound = state.soundEnabled ? "声音开" : "声音关";
-  const soundPressed = state.soundEnabled ? "true" : "false";
-  const signature = [status, user, connect, sound, soundPressed].join("\u001f");
+  const signature = [status, user, connect].join("\u001f");
   if (state.renderedTopbarSignature === signature) {
     return;
   }
@@ -1829,8 +1811,6 @@ function renderTopbar() {
   els.status.textContent = status;
   els.user.textContent = user;
   els.connect.textContent = connect;
-  els.sound.textContent = sound;
-  els.sound.setAttribute("aria-pressed", soundPressed);
 }
 
 function renderRooms() {
@@ -4905,7 +4885,6 @@ async function sendEngineCommand(type, roomKey, payload, button = null) {
     }
     state.selectedHandIndexes = [];
     if (response.payload?.table) {
-      playTableSound(response.payload.table, type);
       applyTable(response.payload.table);
       setStatus(engineCommandStatus(type, state.table, previousTable));
     } else {
@@ -5682,67 +5661,6 @@ function emojiUrl(type, index) {
   return `${state.assetBaseUrl}/tractor/emoji/${normalizedType}${index}.gif`;
 }
 
-function playCommandSound(commandType) {
-  switch (commandType) {
-    case "room.join":
-      playSound("effect/enter_room_kongcheng11.mp3");
-      break;
-    case "seat.claim":
-    case "seat.release":
-    case "seat.remove":
-    case "player.ready":
-    case "observer.watch":
-      playSound("effect/draw.mp3");
-      break;
-    case "tractor.start":
-      playSound("effect/game_start.mp3");
-      break;
-    default:
-      break;
-  }
-}
-
-function playTableSound(nextTable, commandType) {
-  const previousPhase = state.table?.phase || "";
-  const nextPhase = nextTable?.phase || "";
-  if (commandType === "tractor.start") {
-    playSound("effect/game_start.mp3");
-  } else if (commandType === "tractor.makeTrump") {
-    playSound("effect/liangpai_m_shelie1.mp3");
-  } else if (commandType === "tractor.discardBottom") {
-    playSound("effect/drawx.mp3");
-  } else if (commandType === "tractor.playCards" || commandType === "tractor.autoPlay") {
-    playSound("effect/tie.mp3");
-  } else if (nextPhase === "finished" && previousPhase !== "finished") {
-    playSound("effect/win.mp3");
-  }
-}
-
-function playSound(path) {
-  if (!state.soundEnabled || !state.audioBaseUrl || !path) {
-    return;
-  }
-
-  let audio = audioCache.get(path);
-  if (!audio) {
-    audio = new Audio(`${state.audioBaseUrl}/${path}`);
-    audio.preload = "auto";
-    audioCache.set(path, audio);
-  } else {
-    try {
-      audio.pause();
-      audio.currentTime = 0;
-    } catch {
-      audioCache.delete(path);
-      audio = new Audio(`${state.audioBaseUrl}/${path}`);
-      audio.preload = "auto";
-      audioCache.set(path, audio);
-    }
-  }
-  audio.volume = 0.55;
-  void audio.play().catch(() => {});
-}
-
 function mergeRoom(room) {
   if (!room?.roomKey) {
     return;
@@ -6258,14 +6176,6 @@ function defaultAssetBaseUrl() {
   }
 
   return new URL("../../theme/images", scriptUrl).toString().replace(/\/+$/, "");
-}
-
-function defaultAudioBaseUrl() {
-  if (!scriptUrl) {
-    return "/ext/freemitbbs/cardgamesauth/styles/all/theme/audio";
-  }
-
-  return new URL("../../theme/audio", scriptUrl).toString().replace(/\/+$/, "");
 }
 
 function escapeHtml(value) {

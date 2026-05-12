@@ -24,7 +24,7 @@ class listener implements EventSubscriberInterface
     // =============================================================================
     // PROPRIÉTÉS DE LA CLASSE
     // =============================================================================
-    
+
     protected $db;
     protected $user;
     protected $post_reactions_table;
@@ -37,7 +37,7 @@ class listener implements EventSubscriberInterface
     protected $prefetched_reaction_counts = [];
     protected $prefetched_user_reactions = [];
     protected $prefetched_reaction_users = [];
-    
+
     // ✅ AJOUT DE LA PROPRIÉTÉ MANQUANTE
     protected $root_path;
     protected $php_ext;
@@ -49,7 +49,7 @@ class listener implements EventSubscriberInterface
     // =============================================================================
     // CONSTRUCTEUR CORRIGÉ
     // =============================================================================
-    
+
     /**
      * ✅ CORRECTION : Ajout de $root_path et $php_ext
      */
@@ -75,7 +75,7 @@ class listener implements EventSubscriberInterface
         $this->config = $config;
         $this->root_path = $root_path;    // ✅ STOCKAGE
         $this->php_ext = $php_ext;        // ✅ STOCKAGE
-        
+
         try {
             $this->db->sql_query("SET NAMES 'utf8mb4' COLLATE 'utf8mb4_bin'");
         } catch (\Exception $e) {
@@ -86,7 +86,7 @@ class listener implements EventSubscriberInterface
     // =============================================================================
     // RESTE DU CODE INCHANGÉ
     // =============================================================================
-    
+
     public static function getSubscribedEvents()
     {
         return [
@@ -114,14 +114,16 @@ class listener implements EventSubscriberInterface
 
         $this->language->add_lang('common', 'bastien59960/reactions');
 
-        $css_path = './ext/bastien59960/reactions/styles/prosilver/theme/reactions.css';
-        $js_path  = './ext/bastien59960/reactions/styles/prosilver/template/js/reactions.js';
+        $css_path = 'ext/bastien59960/reactions/styles/prosilver/theme/reactions.css';
+        $js_path  = 'ext/bastien59960/reactions/styles/prosilver/template/js/reactions.js';
 
+        $ajax_url = '';
         try {
             $ajax_url = $this->helper->route('bastien59960_reactions_ajax', []);
         } catch (\Exception $e) {
-            $ajax_url = append_sid('app.php/reactions/ajax');
+            error_log('[phpBB Reactions] AJAX route unavailable: ' . $e->getMessage());
         }
+        $interactive_enabled = $ajax_url !== '';
 
         $post_emoji_size = (int) ($this->config['bastien59960_reactions_post_emoji_size'] ?? 24);
         $picker_width = (int) ($this->config['bastien59960_reactions_picker_width'] ?? 320);
@@ -134,7 +136,7 @@ class listener implements EventSubscriberInterface
         // Lire la valeur en secondes depuis l'ACP (défaut 5s) et la convertir en millisecondes pour le JS.
         $sync_interval_seconds = (int) ($this->config['bastien59960_reactions_sync_interval'] ?? 20);
         $sync_interval_ms = $sync_interval_seconds * 1000;
-        
+
         // CORRECTION : Utiliser un chemin web relatif au lieu d'un chemin de fichier serveur.
         // Le JavaScript (fetch) a besoin d'une URL, pas d'un chemin de disque dur.
         // CORRECTION LOGIQUE : Le chargement du JSON ne doit dépendre que de l'option `picker_use_json`.
@@ -144,6 +146,7 @@ class listener implements EventSubscriberInterface
 
         $this->template->assign_vars([
             'S_REACTIONS_ENABLED' => true,
+            'S_REACTIONS_INTERACTIVE' => $interactive_enabled,
             'REACTIONS_CSS_PATH'  => $css_path,
             'REACTIONS_JS_PATH'   => $js_path,
             'U_REACTIONS_AJAX'    => $ajax_url,
@@ -158,7 +161,7 @@ class listener implements EventSubscriberInterface
             'REACTIONS_PICKER_USE_JSON'        => $picker_use_json,
             'REACTIONS_SYNC_INTERVAL'          => $sync_interval_seconds, // On passe la valeur en secondes au template ACP
         ]);
-        
+
         // Traductions pour JavaScript
         $js_lang = [
             'SEARCH'            => $this->language->lang('SEARCH'), // Clé phpBB standard

@@ -21,7 +21,7 @@
 <!-- ============================================================================= -->
 <!-- MODE INTERACTIF POUR UTILISATEURS CONNECTÉS -->
 <!-- ============================================================================= -->
-<!-- IF S_REACTIONS_ENABLED and not S_IS_BOT and S_USER_LOGGED_IN -->
+<!-- IF S_REACTIONS_ENABLED and S_REACTIONS_INTERACTIVE and not S_IS_BOT and S_USER_LOGGED_IN -->
 <div class="post-reactions-container" data-post-id="{POST_ID}">
     <div class="post-reactions">
         <!-- Boucle des réactions existantes depuis la base de données -->
@@ -43,7 +43,7 @@
 <!-- ============================================================================= -->
 <!-- MODE LECTURE SEULE POUR UTILISATEURS NON CONNECTÉS -->
 <!-- ============================================================================= -->
-<!-- ELSEIF S_REACTIONS_ENABLED and not S_IS_BOT and not S_USER_LOGGED_IN -->
+<!-- ELSEIF S_REACTIONS_ENABLED and not S_IS_BOT -->
 <div class="post-reactions-container post-reactions-readonly" data-post-id="{POST_ID}">
     <div class="post-reactions">
         <!-- Boucle des réactions existantes (lecture seule) -->

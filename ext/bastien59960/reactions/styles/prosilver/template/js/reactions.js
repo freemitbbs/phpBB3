@@ -109,6 +109,9 @@ function toggle_visible(id) {
     /** @type {boolean} Indicateur pour éviter les requêtes de synchronisation concurrentes. `true` si une requête est en cours. */
     let liveSyncInFlight = false;
 
+    /** @type {boolean} Désactive les appels AJAX quand l'endpoint n'est pas routable. */
+    let ajaxEndpointUnavailable = false;
+
     /**
      * @const {string[]} Liste des emojis affichés dans la section "Utilisé fréquemment" du picker.
      * 
@@ -794,6 +797,25 @@ function toggle_visible(id) {
     }
 
     /**
+     * Indique si le endpoint AJAX est absent ou non autorisé côté routeur.
+     * @param {number|null} status Code HTTP
+     * @returns {boolean}
+     */
+    function isEndpointUnavailableStatus(status) {
+        return status === 404 || status === 405;
+    }
+
+    /**
+     * Arrête les appels AJAX si la route n'est pas disponible.
+     */
+    function handleEndpointUnavailable() {
+        ajaxEndpointUnavailable = true;
+        stopLiveSync();
+        switchToReadonlyMode();
+        console.warn('[Reactions] AJAX endpoint unavailable; reactions switched to readonly mode.');
+    }
+
+    /**
      * Arrête la synchronisation temps réel.
      */
     function stopLiveSync() {
@@ -913,6 +935,11 @@ function toggle_visible(id) {
         // =====================================================================
         // ÉTAPE 1 : VÉRIFICATIONS PRÉLIMINAIRES
         // =====================================================================
+
+        if (ajaxEndpointUnavailable || typeof REACTIONS_AJAX_URL === 'undefined' || !REACTIONS_AJAX_URL) {
+            handleEndpointUnavailable();
+            return;
+        }
         
         // Vérification de la variable globale REACTIONS_SID
         if (typeof REACTIONS_SID === 'undefined') {
@@ -1060,6 +1087,10 @@ function toggle_visible(id) {
                 case 401: // Unauthorized
                 case 403: // Forbidden
                     handleUnauthorizedSession(serverMessage);
+                    break;
+                case 404: // Not Found
+                case 405: // Method Not Allowed
+                    handleEndpointUnavailable();
                     break;
                 case 429: // Too Many Requests (limite atteinte)
                 case 400: // Bad Request (emoji invalide, etc.)
@@ -1230,6 +1261,11 @@ function toggle_visible(id) {
                 
                 const cleanEmoji = safeEmoji(String(emoji));
 
+                if (ajaxEndpointUnavailable || typeof REACTIONS_AJAX_URL === 'undefined' || !REACTIONS_AJAX_URL) {
+                    handleEndpointUnavailable();
+                    return;
+                }
+
                 const payload = {
                     post_id: postId,
                     emoji: cleanEmoji,
@@ -1263,8 +1299,13 @@ function toggle_visible(id) {
                     }
                 })
                 .catch(err => {
-                    if (isAuthFailureStatus(err && err.status ? err.status : null)) {
+                    const status = err && err.status ? err.status : null;
+                    if (isAuthFailureStatus(status)) {
                         handleUnauthorizedSession();
+                        return;
+                    }
+                    if (isEndpointUnavailableStatus(status)) {
+                        handleEndpointUnavailable();
                         return;
                     }
                     console.error('[Reactions] Erreur chargement users:', err);
@@ -1423,7 +1464,7 @@ function toggle_visible(id) {
      * afin d'éviter des requêtes AJAX inutiles pour les visiteurs anonymes.
      */
     function startLiveSync() {
-        if (typeof REACTIONS_AJAX_URL === 'undefined') {
+        if (ajaxEndpointUnavailable || typeof REACTIONS_AJAX_URL === 'undefined' || !REACTIONS_AJAX_URL) {
             return;
         }
 
@@ -1472,6 +1513,11 @@ function toggle_visible(id) {
             return;
         }
 
+        if (ajaxEndpointUnavailable || typeof REACTIONS_AJAX_URL === 'undefined' || !REACTIONS_AJAX_URL) {
+            handleEndpointUnavailable();
+            return;
+        }
+
         if (liveSyncInFlight) {
             return;
         }
@@ -1505,6 +1551,11 @@ function toggle_visible(id) {
             .then(({ response, data }) => {
                 if (isAuthFailureStatus(response.status)) {
                     handleUnauthorizedSession(data && data.error ? data.error : null);
+                    return;
+                }
+
+                if (isEndpointUnavailableStatus(response.status)) {
+                    handleEndpointUnavailable();
                     return;
                 }
 

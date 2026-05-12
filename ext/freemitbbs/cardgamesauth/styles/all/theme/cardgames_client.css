@@ -2147,6 +2147,18 @@
   }
 
   .app-shell .lobby-minesweeper-panel {
+    order: 0;
+  }
+
+  .app-shell .lobby-chat-slot {
+    order: 1;
+  }
+
+  .app-shell .lobby-users-panel {
+    order: 2;
+  }
+
+  .app-shell .lobby-minesweeper-panel {
     height: auto;
   }
 

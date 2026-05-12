@@ -288,6 +288,28 @@
 		form.appendChild(hidden);
 	}
 
+	function resetPostSubmitGuard(form) {
+		if (!isPostingForm(form)) {
+			return;
+		}
+
+		form.removeAttribute('data-freemitbbs-post-submitting');
+		delete form.freemitbbsPostSubmitter;
+		$(form)
+			.find('input[data-freemitbbs-post-submit="1"]')
+			.remove();
+		$(form)
+			.find('input[type="submit"][name="post"], button[type="submit"][name="post"], .default-submit-action')
+			.prop('disabled', false)
+			.removeAttr('aria-disabled');
+	}
+
+	function resetAllPostSubmitGuards() {
+		$('form#postform, form#qr_postform').each(function() {
+			resetPostSubmitGuard(this);
+		});
+	}
+
 	function disablePostSubmitters(form) {
 		$(form)
 			.find('input[type="submit"][name="post"], button[type="submit"][name="post"], .default-submit-action')
@@ -336,7 +358,15 @@
 			form.setAttribute('data-freemitbbs-post-submitting', '1');
 			preserveSubmitter(form, submitter);
 			disablePostSubmitters(form);
+
+			window.setTimeout(function() {
+				if (document.contains(form)) {
+					resetPostSubmitGuard(form);
+				}
+			}, 750);
 		});
+
+		window.addEventListener('pageshow', resetAllPostSubmitGuards);
 	}
 
 	phpbb.addAjaxCallback('toggle_toptopics_dislike', function(data) {

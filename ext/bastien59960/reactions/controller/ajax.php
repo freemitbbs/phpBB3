@@ -30,6 +30,7 @@
 namespace bastien59960\reactions\controller;
 
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 // Définir la constante ANONYMOUS si elle n'est pas définie
 if (!defined('ANONYMOUS')) {
@@ -196,6 +197,19 @@ class ajax
 
             // Démarrer un nouveau buffer pour capturer toute sortie inattendue
             ob_start();
+
+            $method = strtoupper((string) $this->request->server('REQUEST_METHOD', 'GET'));
+            if ($method !== 'POST') {
+                if (ob_get_level()) {
+                    ob_end_clean();
+                }
+
+                return new Response('', 204, [
+                    'Allow' => 'POST',
+                    'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+                    'X-Robots-Tag' => 'noindex, nofollow',
+                ]);
+            }
         
             // Forcer les headers JSON immédiatement
             if (!headers_sent()) {
