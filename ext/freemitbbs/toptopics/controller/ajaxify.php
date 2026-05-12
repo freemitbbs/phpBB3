@@ -364,7 +364,7 @@ class ajaxify
 	protected function get_post_dislike_fade_level(int $net_dislike_score): int
 	{
 		$threshold = $this->get_post_collapse_dislike_threshold();
-		if ($threshold <= 0 || $net_dislike_score <= 0)
+		if ($threshold <= 0 || $net_dislike_score <= 1)
 		{
 			return 0;
 		}
@@ -375,7 +375,7 @@ class ajaxify
 		}
 
 		$visible_range = max(1, $threshold - 1);
-		return max(1, min(4, (int) ceil(($net_dislike_score / $visible_range) * 4)));
+		return max(1, min(4, (int) ceil((($net_dislike_score - 1) / $visible_range) * 4)));
 	}
 
 	protected function json_error(string $message = ''): JsonResponse

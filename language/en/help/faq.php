@@ -51,8 +51,10 @@ $lang = array_merge($lang, array(
 
 	'HELP_FAQ_DISCOVERY_TOP_RECENT_QUESTION' => 'What is the difference between Top Topics and Recent Topics?',
 	'HELP_FAQ_DISCOVERY_TOP_RECENT_ANSWER' => 'Top Topics are sorted by a time-decayed score that considers likes, dislikes, replies, views, report penalties, and discussion quality signals. Recent Topics show recent activity. Both lists respect your read permissions and homepage forum-exclusion preferences.',
+	'HELP_FAQ_DISCOVERY_FOE_LIST_QUESTION' => 'How does my foe list affect topic lists?',
+	'HELP_FAQ_DISCOVERY_FOE_LIST_ANSWER' => 'When you are logged in, topics started by users on your foe list are hidden from the index page Top Topics and Recent Topics lists. This only changes your personalized lists; you can still visit forums and topics directly if your permissions allow it.',
 	'HELP_FAQ_DISCOVERY_DISLIKED_POSTS_QUESTION' => 'What happens to posts disliked by many users?',
-	'HELP_FAQ_DISCOVERY_DISLIKED_POSTS_ANSWER' => 'Post visibility uses net dislikes: TopTopics dislikes minus Post Love likes. Before the collapse threshold is reached, the text color fades as net dislikes increase. At the threshold, the post is collapsed in the topic page, and readers can still expand it manually.',
+	'HELP_FAQ_DISCOVERY_DISLIKED_POSTS_ANSWER' => 'Post visibility uses net dislikes: TopTopics dislikes minus Post Love likes. Text stays normal at 0 or 1 net dislike, then fades as net dislikes increase. At the collapse threshold, the post is collapsed in the topic page, and readers can still expand it manually.',
 	'HELP_FAQ_DISCOVERY_MAIN_POST_QUESTION' => 'What if the disliked post is the topic starter?',
 	'HELP_FAQ_DISCOVERY_MAIN_POST_ANSWER' => 'If the first post of a topic reaches the net-dislike collapse threshold, the whole topic is removed from the homepage Top Topics and Recent Topics lists. If a reply reaches the threshold, only that reply is collapsed; the topic is not removed just because of a reply.',
 	'HELP_FAQ_DISCOVERY_PREFERENCES_QUESTION' => 'Can I control homepage topic lists?',

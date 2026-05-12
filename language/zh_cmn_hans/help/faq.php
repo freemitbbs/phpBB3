@@ -51,8 +51,10 @@ $lang = array_merge($lang, array(
 
 	'HELP_FAQ_DISCOVERY_TOP_RECENT_QUESTION' => '热门话题和最近话题有什么区别？',
 	'HELP_FAQ_DISCOVERY_TOP_RECENT_ANSWER' => '“热门话题”按时间衰减得分排序，综合考虑赞、踩、回复、浏览、举报惩罚和讨论质量等信号。“最近话题”按最近活动展示。两者都会遵守你的阅读权限和首页隐藏版面设置。',
+	'HELP_FAQ_DISCOVERY_FOE_LIST_QUESTION' => '黑名单会影响话题列表吗？',
+	'HELP_FAQ_DISCOVERY_FOE_LIST_ANSWER' => '登录后，黑名单用户发起的主题不会出现在首页的热门话题和最近话题列表中。这只影响你的个人列表；如果你仍有阅读权限，仍然可以直接进入版面或主题查看。',
 	'HELP_FAQ_DISCOVERY_DISLIKED_POSTS_QUESTION' => '被很多人踩的帖子会怎样？',
-	'HELP_FAQ_DISCOVERY_DISLIKED_POSTS_ANSWER' => '帖子可见性使用净踩计算：TopTopics 踩数减去 Post Love 赞数。达到折叠阈值前，文字颜色会随着净踩增加逐级变淡；达到阈值后，该帖子会在主题页折叠，读者仍可手动展开。',
+	'HELP_FAQ_DISCOVERY_DISLIKED_POSTS_ANSWER' => '帖子可见性使用净踩计算：TopTopics 踩数减去 Post Love 赞数。净踩为 0 或 1 时文字保持正常；净踩大于 1 后，文字会随着净踩增加逐级变淡。达到折叠阈值后，该帖子会在主题页折叠，读者仍可手动展开。',
 	'HELP_FAQ_DISCOVERY_MAIN_POST_QUESTION' => '如果被踩的是主题主贴，会怎样？',
 	'HELP_FAQ_DISCOVERY_MAIN_POST_ANSWER' => '如果主题主贴的净踩达到折叠阈值，整个主题会从首页热门话题和最近话题列表中移除。回复达到阈值时只影响该回复本身，不会因为某个回复被折叠就移除整个主题。',
 	'HELP_FAQ_DISCOVERY_PREFERENCES_QUESTION' => '我可以控制首页话题列表吗？',

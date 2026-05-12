@@ -1891,7 +1891,7 @@ function renderRooms() {
       || Boolean(state.transitionRoomKey && state.transitionRoomKey !== room.roomKey);
     button.innerHTML = `
       <span class="room-summary-row">
-        <span class="room-game-icon" aria-hidden="true">${escapeHtml(roomGameIconText(room))}</span>
+        <span class="room-game-icon ${escapeAttribute(roomGameIconClass(room))}" aria-hidden="true">${escapeHtml(roomGameIconText(room))}</span>
         <span class="room-main">
           <strong>${escapeHtml(room.displayName)}</strong>
           <span class="room-game-label">${escapeHtml(gameLabel)} · ${Number(room.memberCount || 0)}人</span>
@@ -6019,13 +6019,27 @@ function roomGameLabel(room) {
   if (!raw || raw === "tractor" || raw === "shengji") {
     return "升级80分";
   }
+  if (raw === "guandan") {
+    return "掼蛋";
+  }
   return raw;
+}
+
+function roomGameIconClass(room) {
+  const gameType = String(room?.gameType || room?.game_type || "").trim().toLowerCase();
+  if (gameType === "guandan") {
+    return "room-game-icon-guandan";
+  }
+  return "room-game-icon-tractor";
 }
 
 function roomGameIconText(room) {
   const label = roomGameLabel(room);
   if (label === "升级" || label === "升级80分") {
     return "升";
+  }
+  if (label === "掼蛋") {
+    return "掼";
   }
   return Array.from(label)[0] || "游";
 }

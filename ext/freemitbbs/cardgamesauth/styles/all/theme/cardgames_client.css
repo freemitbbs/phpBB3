@@ -387,6 +387,10 @@
   letter-spacing: 0;
 }
 
+.app-shell .room-button .room-game-icon-guandan {
+  background: #78281f url("./images/guandan-icon.png") center / cover no-repeat;
+}
+
 .app-shell .table-view {
   position: relative;
   min-height: 560px;
