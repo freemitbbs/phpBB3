@@ -5,6 +5,7 @@ namespace freemitbbs\videoupload\service;
 class s3_object_store
 {
 	private const SERVICE = 's3';
+	private const DEFAULT_PUBLIC_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
 	public function is_configured(array $storage_config): bool
 	{
@@ -42,7 +43,8 @@ class s3_object_store
 			$request['canonical_uri'],
 			$payload_hash,
 			$content_type,
-			$config['acl']
+			$config['acl'],
+			$config['cache_control']
 		);
 
 		$file_handle = @fopen($tmp_path, 'rb');
@@ -101,6 +103,7 @@ class s3_object_store
 			$request['host'],
 			$request['canonical_uri'],
 			$payload_hash,
+			'',
 			'',
 			''
 		);
@@ -176,6 +179,7 @@ class s3_object_store
 			'secret_key' => trim((string) ($storage_config['secret_key'] ?? '')),
 			'public_base_url' => rtrim(trim((string) ($storage_config['public_base_url'] ?? '')), '/'),
 			'acl' => trim((string) ($storage_config['acl'] ?? '')),
+			'cache_control' => trim((string) ($storage_config['cache_control'] ?? '')),
 			'use_path_style' => !empty($storage_config['use_path_style']),
 		];
 		if (strtolower($config['acl']) === 'private')
@@ -184,6 +188,10 @@ class s3_object_store
 			// explicit "private" canned ACL. Omitting x-amz-acl keeps the
 			// provider's default private behavior and works with signed URLs.
 			$config['acl'] = '';
+		}
+		else if ($config['acl'] !== '' && $config['cache_control'] === '')
+		{
+			$config['cache_control'] = self::DEFAULT_PUBLIC_CACHE_CONTROL;
 		}
 
 		if (
@@ -242,7 +250,8 @@ class s3_object_store
 		string $canonical_uri,
 		string $payload_hash,
 		string $content_type,
-		string $acl
+		string $acl,
+		string $cache_control
 	): array
 	{
 		$amz_date = gmdate('Ymd\THis\Z');
@@ -258,6 +267,11 @@ class s3_object_store
 		if ($content_type !== '')
 		{
 			$canonical_headers['content-type'] = $content_type;
+		}
+
+		if ($cache_control !== '')
+		{
+			$canonical_headers['cache-control'] = $cache_control;
 		}
 
 		if ($acl !== '')
@@ -306,6 +320,11 @@ class s3_object_store
 		if ($content_type !== '')
 		{
 			$request_headers[] = 'Content-Type: ' . $content_type;
+		}
+
+		if ($cache_control !== '')
+		{
+			$request_headers[] = 'Cache-Control: ' . $cache_control;
 		}
 
 		if ($acl !== '')
