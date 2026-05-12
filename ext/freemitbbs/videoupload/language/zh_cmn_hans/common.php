@@ -12,6 +12,12 @@ if (empty($lang) || !is_array($lang))
 
 $lang = array_merge($lang, [
 	'VIDEOUPLOAD_BUTTON' => '上载图片和媒体',
+	'VIDEOUPLOAD_MULTI_BUTTON' => '上载组图',
+	'VIDEOUPLOAD_MULTI_HELP' => '一次选择多张图片并插入编辑器。',
+	'VIDEOUPLOAD_MULTI_EMPTY' => '请先选择一张或多张图片。',
+	'VIDEOUPLOAD_MULTI_UPLOADING' => '正在上载第 %1$s / %2$s 张图片...',
+	'VIDEOUPLOAD_MULTI_SUCCESS' => '%1$s 张图片已上载，BBCode 已插入编辑器。',
+	'VIDEOUPLOAD_MULTI_PARTIAL' => '%1$s 张图片已上载，%2$s 张失败。成功的 BBCode 已插入编辑器。',
 	'VIDEOUPLOAD_HELP_WITH_LIMIT' => '支持格式：%1$s。单个文件最大：%2$s。',
 	'VIDEOUPLOAD_UPLOADING' => '正在上载文件...',
 	'VIDEOUPLOAD_UPLOAD_SUCCESS' => '文件上载成功，链接已插入编辑器。',

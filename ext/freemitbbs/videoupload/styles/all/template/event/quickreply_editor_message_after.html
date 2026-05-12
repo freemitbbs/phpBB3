@@ -6,17 +6,31 @@
 	data-forum-id="{{ VIDEOUPLOAD_FORUM_ID|e('html_attr') }}"
 	data-max-bytes="{{ VIDEOUPLOAD_MAX_BYTES|e('html_attr') }}"
 	data-allowed-exts="{{ VIDEOUPLOAD_ALLOWED_EXTS|e('html_attr') }}"
+	data-image-exts="{{ VIDEOUPLOAD_IMAGE_EXTS|e('html_attr') }}"
 	data-msg-uploading="{{ VIDEOUPLOAD_MSG_UPLOADING|e('html_attr') }}"
 	data-msg-success="{{ VIDEOUPLOAD_MSG_SUCCESS|e('html_attr') }}"
 	data-msg-extension="{{ VIDEOUPLOAD_MSG_EXTENSION|e('html_attr') }}"
+	data-msg-image-extension="{{ VIDEOUPLOAD_MSG_IMAGE_EXTENSION|e('html_attr') }}"
 	data-msg-too-large="{{ VIDEOUPLOAD_MSG_TOO_LARGE|e('html_attr') }}"
-	data-msg-generic="{{ VIDEOUPLOAD_MSG_GENERIC|e('html_attr') }}">
+	data-msg-generic="{{ VIDEOUPLOAD_MSG_GENERIC|e('html_attr') }}"
+	data-msg-multi-empty="{{ VIDEOUPLOAD_MSG_MULTI_EMPTY|e('html_attr') }}"
+	data-msg-multi-uploading="{{ VIDEOUPLOAD_MSG_MULTI_UPLOADING|e('html_attr') }}"
+	data-msg-multi-success="{{ VIDEOUPLOAD_MSG_MULTI_SUCCESS|e('html_attr') }}"
+	data-msg-multi-partial="{{ VIDEOUPLOAD_MSG_MULTI_PARTIAL|e('html_attr') }}">
 	<a href="#" class="videoupload-link" id="videoupload-qr-button" title="{{ VIDEOUPLOAD_HELP_TEXT|e('html_attr') }}">
 		<i class="icon fa-upload fa-fw" aria-hidden="true"></i><span>{{ lang('VIDEOUPLOAD_BUTTON') }}</span>
+	</a>
+	<a href="#" class="videoupload-link videoupload-multi-link" id="videoupload-qr-multi-button" title="{{ lang('VIDEOUPLOAD_MULTI_HELP')|e('html_attr') }}">
+		<i class="icon fa-picture-o fa-fw" aria-hidden="true"></i><span>{{ lang('VIDEOUPLOAD_MULTI_BUTTON') }}</span>
 	</a>
 	<input type="file"
 		id="videoupload-qr-file"
 		accept="{{ VIDEOUPLOAD_ACCEPT|e('html_attr') }}"
+		hidden />
+	<input type="file"
+		id="videoupload-qr-multi-file"
+		accept="{{ VIDEOUPLOAD_IMAGE_ACCEPT|e('html_attr') }}"
+		multiple
 		hidden />
 	<span id="videoupload-qr-status" class="videoupload-status"></span>
 </div>

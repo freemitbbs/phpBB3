@@ -12,6 +12,12 @@ if (empty($lang) || !is_array($lang))
 
 $lang = array_merge($lang, [
 	'VIDEOUPLOAD_BUTTON' => 'Upload images and media',
+	'VIDEOUPLOAD_MULTI_BUTTON' => 'Upload image set',
+	'VIDEOUPLOAD_MULTI_HELP' => 'Upload multiple images and insert them into the editor.',
+	'VIDEOUPLOAD_MULTI_EMPTY' => 'Choose one or more image files first.',
+	'VIDEOUPLOAD_MULTI_UPLOADING' => 'Uploading image %1$s of %2$s...',
+	'VIDEOUPLOAD_MULTI_SUCCESS' => '%1$s image(s) uploaded. BBCode inserted into editor.',
+	'VIDEOUPLOAD_MULTI_PARTIAL' => '%1$s image(s) uploaded, %2$s failed. Successful BBCode inserted into editor.',
 	'VIDEOUPLOAD_HELP_WITH_LIMIT' => 'Supported formats: %1$s. Max file size: %2$s.',
 	'VIDEOUPLOAD_UPLOADING' => 'Uploading file...',
 	'VIDEOUPLOAD_UPLOAD_SUCCESS' => 'File uploaded. Link inserted into editor.',

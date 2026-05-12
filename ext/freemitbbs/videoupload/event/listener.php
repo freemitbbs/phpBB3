@@ -6,7 +6,14 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 class listener implements EventSubscriberInterface
 {
+	private const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
 	private const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'ogg', 'webm', 'weba', 'mp3', 'm4a', 'aac', 'wav', 'oga', 'opus', 'flac'];
+	private const IMAGE_ACCEPT_MIME_TYPES = [
+		'image/jpeg',
+		'image/png',
+		'image/gif',
+		'image/webp',
+	];
 	private const ACCEPT_MIME_TYPES = [
 		'image/jpeg',
 		'image/png',
@@ -100,12 +107,19 @@ class listener implements EventSubscriberInterface
 		$php_limit_bytes = $this->php_upload_limit_bytes();
 		$max_bytes = ($php_limit_bytes > 0) ? min($configured_max_bytes, $php_limit_bytes) : $configured_max_bytes;
 		$allowed_label = implode(', ', self::ALLOWED_EXTENSIONS);
+		$image_label = implode(', ', self::IMAGE_EXTENSIONS);
 		$allowed_exts = array_map(static function ($extension)
 		{
 			return '.' . $extension;
 		}, self::ALLOWED_EXTENSIONS);
+		$image_exts = array_map(static function ($extension)
+		{
+			return '.' . $extension;
+		}, self::IMAGE_EXTENSIONS);
 		$allowed_exts_value = implode(',', $allowed_exts);
+		$image_exts_value = implode(',', $image_exts);
 		$accept_value = implode(',', array_merge($allowed_exts, self::ACCEPT_MIME_TYPES));
+		$image_accept_value = implode(',', array_merge($image_exts, self::IMAGE_ACCEPT_MIME_TYPES));
 
 		return [
 			'S_VIDEOUPLOAD_AVAILABLE' => true,
@@ -114,13 +128,20 @@ class listener implements EventSubscriberInterface
 			'VIDEOUPLOAD_FORUM_ID' => $forum_id,
 			'VIDEOUPLOAD_MAX_BYTES' => $max_bytes,
 			'VIDEOUPLOAD_ALLOWED_EXTS' => $allowed_exts_value,
+			'VIDEOUPLOAD_IMAGE_EXTS' => $image_exts_value,
 			'VIDEOUPLOAD_ACCEPT' => $accept_value,
+			'VIDEOUPLOAD_IMAGE_ACCEPT' => $image_accept_value,
 			'VIDEOUPLOAD_HELP_TEXT' => $this->language->lang('VIDEOUPLOAD_HELP_WITH_LIMIT', $allowed_label, $this->format_size($max_bytes)),
 			'VIDEOUPLOAD_MSG_UPLOADING' => $this->language->lang('VIDEOUPLOAD_UPLOADING'),
 			'VIDEOUPLOAD_MSG_SUCCESS' => $this->language->lang('VIDEOUPLOAD_UPLOAD_SUCCESS'),
 			'VIDEOUPLOAD_MSG_EXTENSION' => $this->language->lang('VIDEOUPLOAD_ERR_UNSUPPORTED_EXTENSION', $allowed_label),
+			'VIDEOUPLOAD_MSG_IMAGE_EXTENSION' => $this->language->lang('VIDEOUPLOAD_ERR_UNSUPPORTED_EXTENSION', $image_label),
 			'VIDEOUPLOAD_MSG_TOO_LARGE' => $this->language->lang('VIDEOUPLOAD_ERR_TOO_LARGE', $this->format_size($max_bytes)),
 			'VIDEOUPLOAD_MSG_GENERIC' => $this->language->lang('VIDEOUPLOAD_ERR_SERVER'),
+			'VIDEOUPLOAD_MSG_MULTI_EMPTY' => $this->language->lang('VIDEOUPLOAD_MULTI_EMPTY'),
+			'VIDEOUPLOAD_MSG_MULTI_UPLOADING' => $this->language->lang('VIDEOUPLOAD_MULTI_UPLOADING'),
+			'VIDEOUPLOAD_MSG_MULTI_SUCCESS' => $this->language->lang('VIDEOUPLOAD_MULTI_SUCCESS'),
+			'VIDEOUPLOAD_MSG_MULTI_PARTIAL' => $this->language->lang('VIDEOUPLOAD_MULTI_PARTIAL'),
 		];
 	}
 

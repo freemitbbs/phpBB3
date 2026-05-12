@@ -22,6 +22,49 @@
 		});
 	}
 
+	function formatMessage(message) {
+		var result = String(message || '');
+		Array.prototype.slice.call(arguments, 1).forEach(function (value, index) {
+			var replacement = String(value);
+			result = result
+				.replace(new RegExp('%' + (index + 1) + '\\$s', 'g'), replacement)
+				.replace(/%s/, replacement);
+		});
+		return result;
+	}
+
+	function parseUploadResponse(response) {
+		return response.text().then(function (rawText) {
+			var data = {};
+			try {
+				data = JSON.parse(rawText);
+			} catch (e) {
+				var stripped = String(rawText || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+				if (stripped) {
+					data.error = stripped.substring(0, 220);
+				}
+			}
+			data._httpStatus = response.status;
+			return data;
+		});
+	}
+
+	function uploadMediaFile(uploadUrl, hash, forumId, file) {
+		var formData = new FormData();
+		formData.append('hash', hash);
+		formData.append('forum_id', forumId);
+		formData.append('media_file', file);
+
+		return fetch(uploadUrl, {
+			method: 'POST',
+			credentials: 'same-origin',
+			headers: {
+				'X-Requested-With': 'XMLHttpRequest',
+			},
+			body: formData,
+		}).then(parseUploadResponse);
+	}
+
 	function isImageUpload(file, url) {
 		var imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
 		var mimeType = file && typeof file.type === 'string' ? file.type.toLowerCase() : '';
@@ -90,6 +133,10 @@
 			return false;
 		}
 
+		return insertTextIntoEditor(text, control);
+	}
+
+	function insertTextIntoEditor(text, control) {
 		var textarea = findMessageTextarea(control);
 		if (!textarea) {
 			return false;
@@ -172,37 +219,10 @@
 				return;
 			}
 
-			var formData = new FormData();
-			formData.append('hash', hash);
-			formData.append('forum_id', forumId);
-			formData.append('media_file', file);
-
 			setUploadingState(true);
 			setStatus(msgUploading, 'is-busy');
 
-			fetch(uploadUrl, {
-				method: 'POST',
-				credentials: 'same-origin',
-				headers: {
-					'X-Requested-With': 'XMLHttpRequest',
-				},
-				body: formData,
-			})
-				.then(function (response) {
-					return response.text().then(function (rawText) {
-						var data = {};
-						try {
-							data = JSON.parse(rawText);
-						} catch (e) {
-							var stripped = String(rawText || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-							if (stripped) {
-								data.error = stripped.substring(0, 220);
-							}
-						}
-						data._httpStatus = response.status;
-						return data;
-					});
-				})
+			uploadMediaFile(uploadUrl, hash, forumId, file)
 				.then(function (data) {
 					if (!data || !data.success || !data.url) {
 						var message = (data && data.error) ? data.error : msgGeneric;
@@ -236,7 +256,142 @@
 		});
 	}
 
-	function initUploaderByIds(controlId, buttonId, inputId, statusId) {
+	function setControlStatus(status, message, kind) {
+		if (!status) {
+			return;
+		}
+		status.textContent = message || '';
+		status.classList.remove('is-error', 'is-success', 'is-busy');
+		if (kind) {
+			status.classList.add(kind);
+		}
+	}
+
+	function getValidImageFiles(uploader, fileList) {
+		var files = Array.prototype.slice.call(fileList || []);
+		return files.filter(function (file) {
+			return hasAllowedExtension(file.name, uploader.imageExts)
+				&& (uploader.maxBytes <= 0 || file.size <= uploader.maxBytes);
+		});
+	}
+
+	function setMultiUploadingState(uploader, uploading) {
+		uploader.isUploading = uploading;
+		uploader.button.classList.toggle('is-disabled', uploading);
+		uploader.button.setAttribute('aria-disabled', uploading ? 'true' : 'false');
+	}
+
+	function uploadSelectedImages(uploader, fileList) {
+		if (uploader.isUploading) {
+			return;
+		}
+
+		var selectedFiles = Array.prototype.slice.call(fileList || []);
+		var files = getValidImageFiles(uploader, selectedFiles);
+		var skippedCount = selectedFiles.length - files.length;
+		if (!files.length) {
+			setControlStatus(uploader.status, selectedFiles.length ? uploader.msgImageExtension : uploader.msgMultiEmpty, 'is-error');
+			uploader.input.value = '';
+			return;
+		}
+
+		setMultiUploadingState(uploader, true);
+		setControlStatus(uploader.status, formatMessage(uploader.msgMultiUploading, 1, files.length), 'is-busy');
+
+		function finish(successCount, failureCount, bbcode) {
+			var message;
+			var kind = failureCount ? 'is-error' : 'is-success';
+			if (bbcode && !insertTextIntoEditor(bbcode, uploader.control)) {
+				message = uploader.msgGeneric;
+				kind = 'is-error';
+			} else if (failureCount) {
+				message = formatMessage(uploader.msgMultiPartial, successCount, failureCount);
+			} else {
+				message = formatMessage(uploader.msgMultiSuccess, successCount);
+			}
+
+			setControlStatus(uploader.status, message, kind);
+			setMultiUploadingState(uploader, false);
+			uploader.input.value = '';
+		}
+
+		function uploadNext(index, successCount, failureCount, bbcode) {
+			if (index >= files.length) {
+				finish(successCount, failureCount, bbcode);
+				return;
+			}
+
+			var file = files[index];
+			var progressMessage = formatMessage(uploader.msgMultiUploading, index + 1, files.length);
+			setControlStatus(uploader.status, progressMessage, 'is-busy');
+
+			uploadMediaFile(uploader.uploadUrl, uploader.hash, uploader.forumId, file)
+				.then(function (data) {
+					if (!data || !data.success || !data.url) {
+						uploadNext(index + 1, successCount, failureCount + 1, bbcode);
+						return;
+					}
+
+					if (!hasAllowedExtension(data.url, uploader.imageExts)) {
+						uploadNext(index + 1, successCount, failureCount + 1, bbcode);
+						return;
+					}
+
+					uploadNext(index + 1, successCount + 1, failureCount, bbcode + '[img]' + data.url + '[/img]\n');
+				})
+				.catch(function () {
+					uploadNext(index + 1, successCount, failureCount + 1, bbcode);
+				});
+		}
+
+		uploadNext(0, 0, skippedCount, '');
+	}
+
+	function initMultiUploader(control, button, input, status) {
+		if (!button || !input || !status) {
+			return;
+		}
+
+		var uploader = {
+			control: control,
+			button: button,
+			input: input,
+			status: status,
+			imageExts: splitAllowedExts(control.dataset.imageExts || '.jpg,.jpeg,.png,.gif,.webp'),
+			maxBytes: parseInt(control.dataset.maxBytes || '0', 10) || 0,
+			uploadUrl: control.dataset.uploadUrl || '',
+			forumId: control.dataset.forumId || '',
+			hash: control.dataset.hash || '',
+			msgSuccess: control.dataset.msgSuccess || '',
+			msgExtension: control.dataset.msgExtension || '',
+			msgImageExtension: control.dataset.msgImageExtension || control.dataset.msgExtension || '',
+			msgTooLarge: control.dataset.msgTooLarge || '',
+			msgGeneric: control.dataset.msgGeneric || '',
+			msgMultiEmpty: control.dataset.msgMultiEmpty || '',
+			msgMultiUploading: control.dataset.msgMultiUploading || '',
+			msgMultiSuccess: control.dataset.msgMultiSuccess || '',
+			msgMultiPartial: control.dataset.msgMultiPartial || '',
+			isUploading: false
+		};
+
+		button.addEventListener('click', function (event) {
+			button.blur();
+			event.preventDefault();
+			if (uploader.isUploading) {
+				return;
+			}
+			input.click();
+		});
+
+		input.addEventListener('change', function () {
+			if (uploader.isUploading) {
+				return;
+			}
+			uploadSelectedImages(uploader, input.files);
+		});
+	}
+
+	function initUploaderByIds(controlId, buttonId, inputId, statusId, multiButtonId, multiInputId) {
 		var control = document.getElementById(controlId);
 		if (!control) {
 			return;
@@ -248,10 +403,16 @@
 			document.getElementById(inputId),
 			document.getElementById(statusId)
 		);
+		initMultiUploader(
+			control,
+			document.getElementById(multiButtonId),
+			document.getElementById(multiInputId),
+			document.getElementById(statusId)
+		);
 	}
 
 	document.addEventListener('DOMContentLoaded', function () {
-		initUploaderByIds('videoupload-control', 'videoupload-button', 'videoupload-file', 'videoupload-status');
-		initUploaderByIds('videoupload-qr-control', 'videoupload-qr-button', 'videoupload-qr-file', 'videoupload-qr-status');
+		initUploaderByIds('videoupload-control', 'videoupload-button', 'videoupload-file', 'videoupload-status', 'videoupload-multi-button', 'videoupload-multi-file');
+		initUploaderByIds('videoupload-qr-control', 'videoupload-qr-button', 'videoupload-qr-file', 'videoupload-qr-status', 'videoupload-qr-multi-button', 'videoupload-qr-multi-file');
 	});
 })();
