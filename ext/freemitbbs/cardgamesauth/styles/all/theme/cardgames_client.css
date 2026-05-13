@@ -362,6 +362,54 @@
     0 4px 10px rgba(65, 50, 30, 0.18);
 }
 
+.app-shell .room-button-placeholder {
+  cursor: default;
+  opacity: 1;
+}
+
+.app-shell .room-button-placeholder::after {
+  opacity: 0.32;
+}
+
+.app-shell .room-button .room-game-icon-placeholder {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.58), rgba(197, 178, 139, 0.5)),
+    #d8c8a8;
+}
+
+.app-shell .room-skeleton-line,
+.app-shell .room-skeleton-pill {
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(184, 164, 125, 0.28), rgba(255, 250, 240, 0.78), rgba(184, 164, 125, 0.28));
+}
+
+.app-shell .room-skeleton-line {
+  width: 100%;
+  height: 10px;
+}
+
+.app-shell .room-skeleton-title {
+  width: 72%;
+  height: 16px;
+}
+
+.app-shell .room-skeleton-label {
+  width: 54%;
+  height: 11px;
+}
+
+.app-shell .room-skeleton-pill {
+  justify-self: end;
+  align-self: start;
+  width: 52px;
+  height: 22px;
+}
+
+.app-shell .room-button-placeholder .room-users .room-skeleton-line:nth-child(2n) {
+  width: 72%;
+}
+
 .app-shell .rooms-empty-state {
   min-height: 112px;
   display: grid;
@@ -2071,6 +2119,7 @@
 }
 
 .app-shell .lobby-chat-slot {
+  grid-area: lobby-chat;
   min-width: 0;
   margin-top: 0;
   min-height: 0;
@@ -2088,6 +2137,7 @@
   grid-column: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
+  grid-template-areas: "lobby-chat lobby-users";
   align-items: stretch;
   gap: 10px;
   margin-top: 2px;
@@ -2095,12 +2145,16 @@
 }
 
 .app-shell .lobby-content-minigame-open {
-  grid-template-columns: minmax(250px, 1fr) minmax(250px, 300px) minmax(200px, 240px);
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
+  grid-template-areas:
+    "lobby-game lobby-game"
+    "lobby-chat lobby-users";
 }
 
 .app-shell .lobby-minesweeper-panel {
+  grid-area: lobby-game;
   min-width: 0;
-  height: clamp(360px, 42vh, 420px);
+  min-height: 360px;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 7px;
@@ -2117,6 +2171,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .app-shell .lobby-minesweeper-heading {
@@ -2135,6 +2190,42 @@
   color: var(--muted);
   font-size: 11px;
   line-height: 1.2;
+}
+
+.app-shell .lobby-minesweeper-toolbar {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.app-shell .minesweeper-size-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid rgba(182, 168, 139, 0.7);
+  border-radius: 8px;
+  background: rgba(255, 247, 232, 0.86);
+}
+
+.app-shell .minesweeper-size-control button {
+  min-width: 30px;
+  min-height: 26px;
+  padding: 0 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.app-shell .minesweeper-size-control button[aria-pressed="true"] {
+  border-color: #9f6b13;
+  background: #ffe08a;
+  color: #3d2c11;
 }
 
 .app-shell .lobby-minesweeper-controls {
@@ -2169,7 +2260,8 @@
 }
 
 .app-shell .minesweeper-board {
-  width: min(100%, 254px);
+  --minesweeper-board-size: 300px;
+  width: min(100%, var(--minesweeper-board-size));
   max-width: 100%;
   aspect-ratio: 1 / 1;
   min-width: 0;
@@ -2199,7 +2291,7 @@
   background: linear-gradient(180deg, #fff7e8 0%, #decdae 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   color: var(--ink);
-  font-size: clamp(11px, 1.7vw, 14px);
+  font-size: clamp(10px, 1.25vw, 14px);
   font-weight: 800;
   line-height: 1;
   user-select: none;
@@ -2250,6 +2342,7 @@
 }
 
 .app-shell .lobby-users-panel {
+  grid-area: lobby-users;
   min-width: 0;
   height: clamp(320px, 36vh, 360px);
   display: grid;
@@ -2309,6 +2402,14 @@
   opacity: 0.62;
 }
 
+.app-shell .lobby-user-placeholder {
+  min-height: 18px;
+}
+
+.app-shell .lobby-user-placeholder-status {
+  width: 44px;
+}
+
 .app-shell .chat-messages {
   min-height: 0;
   max-height: none;
@@ -2318,6 +2419,15 @@
   align-content: start;
   gap: 6px;
   padding: 10px;
+}
+
+.app-shell .chat-empty-state {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .app-shell .chat-message {
@@ -2511,7 +2621,18 @@
 
   .app-shell .lobby-content {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "lobby-chat"
+      "lobby-users";
     gap: 8px;
+  }
+
+  .app-shell .lobby-content-minigame-open {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "lobby-game"
+      "lobby-chat"
+      "lobby-users";
   }
 
   .app-shell .lobby-minesweeper-panel {

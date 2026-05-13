@@ -27,7 +27,9 @@ const state = {
   pendingActions: new Set(),
   pendingRoomMutations: new Set(),
   rooms: [],
+  roomsLoaded: false,
   lobbyUsers: [],
+  lobbyUsersLoaded: false,
   table: null,
   currentRoomKey: "",
   transitionRoomKey: "",
@@ -69,6 +71,7 @@ const state = {
   minesweeperExpanded: false,
   minesweeperFlagMode: false,
   minesweeperTimerId: 0,
+  minesweeperSize: "small",
   selectedHandIndexes: [],
   handSignature: "",
   dealingHandKey: "",
@@ -141,12 +144,16 @@ const lateResponseRetentionMs = 60000;
 const retryRequestRetentionMs = 10 * 60 * 1000;
 const retryRequestStorageKey = "freemitbbs.cardgames.retryRequests.v1";
 const lobbyChatChannelKey = "__lobby__";
+const lobbyRoomPlaceholderCount = 7;
 const guandanRoomKeys = new Set(["fengrenzhai", "tongtianlou", "siwangyuan"]);
 const guandanNaturalRanks = Object.freeze([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
 const guandanComparableRanks = Object.freeze([...guandanNaturalRanks, "small_joker", "big_joker"]);
-const minesweeperRows = 9;
-const minesweeperCols = 9;
-const minesweeperMineCount = 10;
+const minesweeperSizeConfigs = Object.freeze({
+  small: Object.freeze({ id: "small", label: "小", rows: 9, cols: 9, mines: 10, boardSize: 300 }),
+  medium: Object.freeze({ id: "medium", label: "中", rows: 12, cols: 12, mines: 24, boardSize: 420 }),
+  large: Object.freeze({ id: "large", label: "大", rows: 16, cols: 16, mines: 40, boardSize: 560 })
+});
+const defaultMinesweeperSize = "small";
 const heartbeatIntervalMs = 25000;
 const heartbeatTimeoutMs = 10000;
 const heartbeatMaxMisses = 2;
@@ -494,8 +501,8 @@ async function init() {
   state.cardStyle = state.bootstrap.cardStyle || "cardsclassic";
   restoreRetryRequests();
   state.initialized = true;
+  renderChatComponent();
   render();
-  scheduleChatRender();
   if (state.bootstrap.autoConnect !== false) {
     void connect();
   }
@@ -548,6 +555,7 @@ async function connect() {
   state.connecting = true;
   state.recovering = true;
   setStatus("正在连接");
+  render();
   scheduleChatRender();
 
   try {
@@ -1055,7 +1063,9 @@ async function requestRooms() {
 
   const response = await sendCommand("lobby.rooms", { applyResponse: false });
   state.rooms = response.payload.rooms;
+  state.roomsLoaded = true;
   state.lobbyUsers = lobbyUsersFromPayload(response.payload, state.lobbyUsers);
+  state.lobbyUsersLoaded = true;
   if (!state.currentRoomKey) {
     scheduleRender();
   }
@@ -1496,6 +1506,14 @@ function activeChatChannelKey() {
   return state.currentRoomKey || lobbyChatChannelKey;
 }
 
+function isLobbyDataLoading() {
+  return state.connecting
+    || state.connected
+    || state.recovering
+    || state.authenticated
+    || (state.bootstrap.autoConnect !== false && state.connectionEpoch === 0);
+}
+
 function isCurrentChatMessage(payload, context = null) {
   const scope = payload?.scope || (payload?.roomKey ? "room" : "lobby");
   const channelKey = payload?.channelKey || payload?.roomKey || (scope === "lobby" ? lobbyChatChannelKey : "");
@@ -1627,8 +1645,12 @@ function applyServerMessage(message, commandType = "", context = null) {
           clearDealingAnimation();
         }
 
-        state.rooms = payload.rooms || state.rooms;
+        if (Array.isArray(payload.rooms)) {
+          state.rooms = payload.rooms;
+          state.roomsLoaded = true;
+        }
         state.lobbyUsers = lobbyUsersFromPayload(payload, state.lobbyUsers);
+        state.lobbyUsersLoaded = true;
         if (payload.table) {
           applyTable(payload.table, false);
         } else if (payload.room) {
@@ -1651,14 +1673,18 @@ function applyServerMessage(message, commandType = "", context = null) {
       break;
     case "lobby.rooms":
       state.rooms = message.payload.rooms || [];
+      state.roomsLoaded = true;
       state.lobbyUsers = lobbyUsersFromPayload(message.payload, state.lobbyUsers);
+      state.lobbyUsersLoaded = true;
       if (!state.currentRoomKey) {
         scheduleRender();
       }
       break;
     case "lobby.updated":
       state.rooms = message.payload.rooms;
+      state.roomsLoaded = true;
       state.lobbyUsers = lobbyUsersFromPayload(message.payload, state.lobbyUsers);
+      state.lobbyUsersLoaded = true;
       if (!state.currentRoomKey) {
         scheduleRender();
       }
@@ -2028,14 +2054,19 @@ function renderRooms() {
 
   if (!state.rooms.length) {
     const minesweeperRoom = lobbyMinesweeperRoomItem(hasRoomTransitionPending() || Boolean(state.transitionRoomKey));
-    const signature = `empty|${minesweeperRoom.signature}`;
+    const loading = !state.roomsLoaded && isLobbyDataLoading();
+    const signature = `${loading ? "loading" : "empty"}|${minesweeperRoom.signature}`;
     if (state.renderedRoomsSignature === signature) {
       return;
     }
-    const empty = document.createElement("div");
-    empty.className = "empty-state rooms-empty-state";
-    empty.textContent = "尚未加载房间。";
-    els.rooms.replaceChildren(empty, minesweeperRoom.node);
+    if (loading) {
+      els.rooms.replaceChildren(...lobbyRoomPlaceholderNodes(), minesweeperRoom.node);
+    } else {
+      const empty = document.createElement("div");
+      empty.className = "empty-state rooms-empty-state";
+      empty.textContent = "尚未加载房间。";
+      els.rooms.replaceChildren(empty, minesweeperRoom.node);
+    }
     state.renderedRoomsSignature = signature;
     return;
   }
@@ -2091,6 +2122,33 @@ function renderRooms() {
   els.rooms.replaceChildren(...roomButtons);
 }
 
+function lobbyRoomPlaceholderNodes() {
+  return Array.from({ length: lobbyRoomPlaceholderCount }, () => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "room-button room-button-placeholder";
+    button.disabled = true;
+    button.setAttribute("aria-hidden", "true");
+    button.innerHTML = `
+      <span class="room-summary-row">
+        <span class="room-game-icon room-game-icon-placeholder"></span>
+        <span class="room-main">
+          <span class="room-skeleton-line room-skeleton-title"></span>
+          <span class="room-skeleton-line room-skeleton-label"></span>
+        </span>
+        <span class="room-skeleton-pill"></span>
+      </span>
+      <span class="room-users">
+        <span class="room-skeleton-line"></span>
+        <span class="room-skeleton-line"></span>
+        <span class="room-skeleton-line"></span>
+        <span class="room-skeleton-line"></span>
+      </span>
+    `;
+    return button;
+  });
+}
+
 function roomListItem(room) {
   const members = roomMembersForDisplay(room);
   return {
@@ -2123,10 +2181,14 @@ function lobbyMinesweeperRoomItem(disabled = false) {
   const open = state.minesweeperExpanded;
   const remainingSafe = Math.max(0, game.cells.length - game.mineCount - game.revealedCount);
   const detail = game.started
-    ? `剩${remainingSafe}格 · 标记${game.flagCount}`
-    : "单人";
+    ? `${game.rows}x${game.cols} · 剩${remainingSafe}格 · 标记${game.flagCount}`
+    : `单人 · ${game.rows}x${game.cols}`;
   const signature = [
     "lobby-minesweeper",
+    game.sizeId || "",
+    game.rows,
+    game.cols,
+    game.mineCount,
     open ? "1" : "0",
     disabled ? "1" : "0",
     status,
@@ -2175,14 +2237,14 @@ function renderLobbyMinesweeper() {
     state.minesweeperExpanded = false;
   }
   const expanded = inLobby && state.minesweeperExpanded;
-  els.lobbyContent?.classList.toggle("lobby-content-minigame-open", expanded);
-  els.minesweeperPanel.hidden = !expanded;
   if (!expanded) {
     stopMinesweeperTimer();
     if (state.renderedMinesweeperSignature !== "hidden") {
       els.minesweeperPanel.replaceChildren();
       state.renderedMinesweeperSignature = "hidden";
     }
+    els.minesweeperPanel.hidden = true;
+    els.lobbyContent?.classList.remove("lobby-content-minigame-open");
     return;
   }
 
@@ -2195,6 +2257,8 @@ function renderLobbyMinesweeper() {
 
   state.renderedMinesweeperSignature = signature;
   els.minesweeperPanel.innerHTML = minesweeperHtml(game);
+  els.minesweeperPanel.hidden = false;
+  els.lobbyContent?.classList.add("lobby-content-minigame-open");
 }
 
 function ensureMinesweeperGame() {
@@ -2205,11 +2269,14 @@ function ensureMinesweeperGame() {
 }
 
 function newMinesweeperGame() {
-  const cellCount = minesweeperRows * minesweeperCols;
+  const config = minesweeperConfig(state.minesweeperSize);
+  state.minesweeperSize = config.id;
+  const cellCount = config.rows * config.cols;
   return {
-    rows: minesweeperRows,
-    cols: minesweeperCols,
-    mineCount: minesweeperMineCount,
+    sizeId: config.id,
+    rows: config.rows,
+    cols: config.cols,
+    mineCount: config.mines,
     cells: Array.from({ length: cellCount }, (_, index) => ({
       index,
       mine: false,
@@ -2239,6 +2306,22 @@ function resetMinesweeper() {
   renderLobbyMinesweeper();
 }
 
+function setMinesweeperSize(sizeId) {
+  const config = minesweeperConfig(sizeId);
+  if (state.minesweeper?.sizeId === config.id && state.minesweeperSize === config.id) {
+    return;
+  }
+
+  stopMinesweeperTimer();
+  state.minesweeperSize = config.id;
+  state.minesweeper = newMinesweeperGame();
+  state.minesweeperFlagMode = false;
+  state.renderedMinesweeperSignature = "";
+  state.renderedRoomsSignature = "";
+  renderRooms();
+  renderLobbyMinesweeper();
+}
+
 function minesweeperHtml(game) {
   const remaining = Math.max(0, game.mineCount - game.flagCount);
   const flagPressed = state.minesweeperFlagMode ? "true" : "false";
@@ -2248,20 +2331,37 @@ function minesweeperHtml(game) {
         <div class="lobby-minesweeper-title">扫雷</div>
         <div class="lobby-minesweeper-status">${escapeHtml(minesweeperStatusText(game))}</div>
       </div>
-      <div class="lobby-minesweeper-controls">
-        <button type="button" class="minesweeper-flag-toggle" data-minesweeper-action="flag" aria-pressed="${flagPressed}">标记</button>
-        <button type="button" data-minesweeper-action="restart">新局</button>
-        <button type="button" data-minesweeper-action="collapse">收起</button>
+      <div class="lobby-minesweeper-toolbar">
+        <div class="minesweeper-size-control" role="group" aria-label="棋盘大小">
+          ${minesweeperSizeButtonsHtml(game)}
+        </div>
+        <div class="lobby-minesweeper-controls">
+          <button type="button" class="minesweeper-flag-toggle" data-minesweeper-action="flag" aria-pressed="${flagPressed}">标记</button>
+          <button type="button" data-minesweeper-action="restart">新局</button>
+          <button type="button" data-minesweeper-action="collapse">收起</button>
+        </div>
       </div>
     </div>
     <div class="minesweeper-stats">
+      <span>${escapeHtml(game.rows)}x${escapeHtml(game.cols)}</span>
       <span>雷 ${escapeHtml(remaining)}</span>
       <span>时间 <span data-minesweeper-time>${escapeHtml(formatMinesweeperTime(game.elapsedSeconds))}</span></span>
     </div>
-    <div class="minesweeper-board" role="grid" aria-label="扫雷" style="--minesweeper-cols: ${game.cols}">
+    <div class="minesweeper-board minesweeper-board-${escapeAttribute(game.sizeId || defaultMinesweeperSize)}" role="grid" aria-label="扫雷" style="--minesweeper-cols: ${game.cols}; --minesweeper-board-size: ${minesweeperConfig(game.sizeId).boardSize}px">
       ${game.cells.map((cell) => minesweeperCellHtml(game, cell)).join("")}
     </div>
   `;
+}
+
+function minesweeperSizeButtonsHtml(game) {
+  return Object.values(minesweeperSizeConfigs).map((config) => {
+    const selected = (game.sizeId || defaultMinesweeperSize) === config.id;
+    return `<button type="button" data-minesweeper-action="size" data-minesweeper-size="${escapeAttribute(config.id)}" aria-pressed="${selected ? "true" : "false"}" title="${escapeAttribute(`${config.rows}x${config.cols}，${config.mines}雷`)}">${escapeHtml(config.label)}</button>`;
+  }).join("");
+}
+
+function minesweeperConfig(sizeId) {
+  return minesweeperSizeConfigs[sizeId] || minesweeperSizeConfigs[defaultMinesweeperSize];
 }
 
 function minesweeperCellHtml(game, cell) {
@@ -2318,6 +2418,10 @@ function minesweeperStatusText(game) {
 function minesweeperSignature(game) {
   return [
     state.minesweeperFlagMode ? "1" : "0",
+    game.sizeId || "",
+    game.rows,
+    game.cols,
+    game.mineCount,
     game.started ? "1" : "0",
     game.finished ? "1" : "0",
     game.won ? "1" : "0",
@@ -2339,6 +2443,10 @@ function handleMinesweeperClick(event) {
     const action = actionButton.dataset.minesweeperAction;
     if (action === "restart") {
       resetMinesweeper();
+      return;
+    }
+    if (action === "size") {
+      setMinesweeperSize(actionButton.dataset.minesweeperSize || defaultMinesweeperSize);
       return;
     }
     if (action === "collapse") {
@@ -2621,7 +2729,11 @@ function renderLobbyUsers() {
   }
 
   const users = lobbyUsersForDisplay();
-  const signature = users.map(lobbyUserSignature).join("\u001e") || "empty";
+  const loading = !state.lobbyUsersLoaded && isLobbyDataLoading();
+  const signature = [
+    loading ? "loading" : "ready",
+    users.map(lobbyUserSignature).join("\u001e") || "empty"
+  ].join("|");
   if (state.renderedLobbyUsersSignature === signature) {
     return;
   }
@@ -2629,11 +2741,13 @@ function renderLobbyUsers() {
   state.renderedLobbyUsersSignature = signature;
   const title = document.createElement("div");
   title.className = "lobby-users-title";
-  title.textContent = `大厅用户 ${users.length}`;
+  title.textContent = loading ? "大厅用户" : `大厅用户 ${users.length}`;
 
   const list = document.createElement("div");
   list.className = "lobby-users-list";
-  if (!users.length) {
+  if (loading) {
+    list.append(...lobbyUserPlaceholderNodes());
+  } else if (!users.length) {
     const empty = document.createElement("div");
     empty.className = "lobby-users-empty";
     empty.textContent = "暂无用户";
@@ -2643,6 +2757,18 @@ function renderLobbyUsers() {
   }
 
   els.lobbyUsersPanel.replaceChildren(title, list);
+}
+
+function lobbyUserPlaceholderNodes() {
+  return Array.from({ length: 6 }, () => {
+    const item = document.createElement("div");
+    item.className = "lobby-user-row lobby-user-placeholder";
+    item.innerHTML = `
+      <span class="room-skeleton-line"></span>
+      <span class="room-skeleton-line lobby-user-placeholder-status"></span>
+    `;
+    return item;
+  });
 }
 
 function lobbyUserSignature(user) {
@@ -7402,6 +7528,9 @@ function renderChatMessagesFull(channelKey) {
   const nodes = [];
   const keys = [];
   const signatures = new Map();
+  if (!state.chatEvents.length) {
+    nodes.push(chatEmptyStateNode());
+  }
   state.chatEvents.forEach((event, index) => {
     const key = chatEventKey(event, index);
     const signature = chatEventSignature(event);
@@ -7415,6 +7544,13 @@ function renderChatMessagesFull(channelKey) {
   state.renderedChatKeys = keys;
   state.renderedChatSignatures = signatures;
   scheduleChatScrollToBottom();
+}
+
+function chatEmptyStateNode() {
+  const item = document.createElement("div");
+  item.className = "chat-empty-state";
+  item.textContent = state.authenticated ? "暂无消息" : "正在载入聊天";
+  return item;
 }
 
 function syncChatMessagesIncremental(channelKey) {
