@@ -50,6 +50,8 @@ const state = {
   renderedLobbyUsersSignature: "",
   renderedPlayLogSignature: "",
   renderedRoomsSignature: "",
+  tableStatusNotice: "",
+  tableStatusNoticeRoomKey: "",
   renderedTableSections: new Map(),
   renderedTableSectionSignatures: new Map(),
   requestedChatChannelKey: "",
@@ -69,9 +71,20 @@ const state = {
   minesweeperTimerId: 0,
   selectedHandIndexes: [],
   handSignature: "",
+  dealingHandKey: "",
+  dealingVisibleCount: 0,
+  dealingTotalCount: 0,
+  dealingTimerId: 0,
+  dealingCardIndexes: [],
+  dealtHandKeys: new Set(),
   privateHandAvailableWidth: 0,
   privateHandOverlapValue: "",
+  privateHandOverlapSignature: "",
   privateHandResizeFrameId: 0,
+  deskAvailableWidth: 0,
+  deskOverlapSignature: "",
+  deskOverlapFrameId: 0,
+  guandanDeskPasses: new Map(),
   assetBaseUrl: "",
   cardStyle: "cardsclassic"
 };
@@ -82,6 +95,8 @@ const privateCardSplitCache = new WeakMap();
 let tableActionsElement = null;
 let privateHandElement = null;
 let privateHandResizeObserver = null;
+let deskElement = null;
+let deskResizeObserver = null;
 const disabledAction = Object.freeze({ enabled: false });
 const emptyPrivateCardSplit = Object.freeze({
   hand: Object.freeze([]),
@@ -126,6 +141,9 @@ const lateResponseRetentionMs = 60000;
 const retryRequestRetentionMs = 10 * 60 * 1000;
 const retryRequestStorageKey = "freemitbbs.cardgames.retryRequests.v1";
 const lobbyChatChannelKey = "__lobby__";
+const guandanRoomKeys = new Set(["fengrenzhai", "tongtianlou", "siwangyuan"]);
+const guandanNaturalRanks = Object.freeze([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+const guandanComparableRanks = Object.freeze([...guandanNaturalRanks, "small_joker", "big_joker"]);
 const minesweeperRows = 9;
 const minesweeperCols = 9;
 const minesweeperMineCount = 10;
@@ -134,6 +152,22 @@ const heartbeatTimeoutMs = 10000;
 const heartbeatMaxMisses = 2;
 const syncRetryBaseMs = 500;
 const syncRetryMaxMs = 5000;
+const dealingCardIntervalMs = 450;
+const tableNoticeIgnoredMessages = new Set([
+  "",
+  "正在连接",
+  "已连接",
+  "连接出错",
+  "正在同步",
+  "已同步",
+  "服务器已就绪",
+  "已进入房间",
+  "已离开房间",
+  "正在进入房间",
+  "正在离开房间",
+  "房间设置已更新",
+  "牌桌已更新"
+]);
 const logPrefix = "[card-games]";
 const retryableCommandTypes = new Set([
   "room.join",
@@ -149,6 +183,11 @@ const retryableCommandTypes = new Set([
   "tractor.discardBottom",
   "tractor.playCards",
   "tractor.autoPlay",
+  "guandan.start",
+  "guandan.tribute",
+  "guandan.returnTribute",
+  "guandan.playCards",
+  "guandan.pass",
   "chat.send",
   "emoji.send"
 ]);
@@ -187,6 +226,11 @@ const phaseLabels = {
   trick_reviewing: "请先看完上一墩出牌",
   not_room_owner: "只有房主可以开始下一局",
   start_not_open: "当前牌局正在进行",
+  tribute: "进贡",
+  tribute_not_open: "现在还不能进贡",
+  waiting_for_tribute_turn: "等待进贡",
+  waiting_for_return_tribute_turn: "等待还贡",
+  cannot_pass_on_lead: "首家必须出牌",
   game_paused: "游戏暂停，等待玩家上线、准备或空位补位"
 };
 
@@ -433,6 +477,11 @@ window.addEventListener("online", () => {
   }
 });
 window.addEventListener("resize", () => {
+  state.privateHandOverlapSignature = "";
+  state.deskOverlapSignature = "";
+  if (deskElement) {
+    scheduleApplyDeskOverlaps(deskElement);
+  }
   scheduleRender();
 });
 
@@ -604,6 +653,7 @@ function disconnect() {
   clearTurnTimer();
   clearTrickReviewTimer();
   clearTrumpRevealTimer();
+  clearDealingAnimation();
   state.ws = null;
   state.connected = false;
   state.authenticated = false;
@@ -862,6 +912,7 @@ function roomMutationKey(type, roomKey = "") {
 
 function isRoomMutationCommand(type) {
   return type.startsWith("tractor.")
+    || type.startsWith("guandan.")
     || type.startsWith("seat.")
     || type === "room.settings.update"
     || type === "player.ready"
@@ -901,6 +952,8 @@ function clearRoomState(advanceEpoch = true) {
   }
   state.currentRoomKey = "";
   state.transitionRoomKey = "";
+  state.tableStatusNotice = "";
+  state.tableStatusNoticeRoomKey = "";
   state.table = null;
   clearChatState();
   state.emojiTarget = "";
@@ -909,6 +962,9 @@ function clearRoomState(advanceEpoch = true) {
   resetPlayLog();
   clearTrickReviewTimer();
   clearTrumpRevealTimer();
+  clearDealingAnimation();
+  disconnectDeskOverlapObserver();
+  state.guandanDeskPasses.clear();
 }
 
 async function fetchToken() {
@@ -1095,12 +1151,19 @@ async function selectSkin(skinId) {
 
 async function refreshTable(roomKey) {
   const roomEpoch = state.roomEpoch;
-  const response = await sendCommand("tractor.table", { roomKey, roomEpoch, applyResponse: false });
+  const response = await sendCommand(tableCommandTypeForRoom(roomKey), { roomKey, roomEpoch, applyResponse: false });
   if (!response.payload?.table || state.roomEpoch !== roomEpoch || state.currentRoomKey !== roomKey) {
     return;
   }
 
   applyTable(response.payload.table);
+}
+
+function tableCommandTypeForRoom(roomKey) {
+  const room = state.table?.room?.roomKey === roomKey
+    ? state.table.room
+    : state.rooms.find((candidate) => candidate.roomKey === roomKey);
+  return isGuandanRoom(room) || guandanRoomKeys.has(String(roomKey || "")) ? "guandan.table" : "tractor.table";
 }
 
 function sendCommand(type, options = {}) {
@@ -1232,7 +1295,7 @@ function retryRequestKey(type, options) {
 }
 
 function retryStateSignature(type, roomKey) {
-  if (!type.startsWith("tractor.")) {
+  if (!type.startsWith("tractor.") && !type.startsWith("guandan.")) {
     return "";
   }
   const table = state.table;
@@ -1247,6 +1310,7 @@ function retryStateSignature(type, roomKey) {
     handId: publicState.handId || "",
     phase: table.phase || publicState.phase || "",
     completedTrickCount: publicState.completedTrickCount,
+    placements: (publicState.placements || []).map((placement) => `${placement.seatIndex}:${placement.place}`).join(","),
     trickNumber: trick.trickNumber,
     nextSeatIndex: trick.nextSeatIndex,
     viewerSeatIndex: table.viewer?.seatIndex
@@ -1380,7 +1444,7 @@ function recoverTimedOutStatus(message, pending) {
     setStatus("已离开房间");
     return;
   }
-  if (pending.type.startsWith("tractor.") && message.payload?.table) {
+  if ((pending.type.startsWith("tractor.") || pending.type.startsWith("guandan.")) && message.payload?.table) {
     setStatus(engineCommandStatus(pending.type, message.payload.table));
     return;
   }
@@ -1560,6 +1624,7 @@ function applyServerMessage(message, commandType = "", context = null) {
           state.emojiTarget = "";
           state.selectedHandIndexes = [];
           state.handSignature = "";
+          clearDealingAnimation();
         }
 
         state.rooms = payload.rooms || state.rooms;
@@ -1573,6 +1638,7 @@ function applyServerMessage(message, commandType = "", context = null) {
           state.emojiTarget = "";
           state.selectedHandIndexes = [];
           state.handSignature = "";
+          clearDealingAnimation();
           void refreshTable(roomKey).catch(() => undefined);
         } else {
           clearRoomState(Boolean(state.currentRoomKey || state.table));
@@ -1636,6 +1702,7 @@ function applyServerMessage(message, commandType = "", context = null) {
         state.roomEpoch += 1;
         state.selectedHandIndexes = [];
         state.handSignature = "";
+        clearDealingAnimation();
         setStatus("本局已取消");
       }
       void requestRooms();
@@ -1643,6 +1710,8 @@ function applyServerMessage(message, commandType = "", context = null) {
       break;
     case "tractor.table":
     case "tractor.table.updated":
+    case "guandan.table":
+    case "guandan.table.updated":
       if (!isCurrentRoomMessage(message.payload.table?.room?.roomKey || message.roomKey, context)) {
         return;
       }
@@ -1691,12 +1760,145 @@ function applyTable(table, shouldRender = true) {
     return;
   }
 
+  const previousTable = state.table;
   state.table = table;
   enterRoomFromServer(table.room.roomKey);
+  syncDealingAnimation(table, previousTable);
+  syncGuandanDeskPasses(table);
   syncSelectedHandIndexes();
   if (shouldRender) {
     scheduleRender();
   }
+}
+
+function syncDealingAnimation(table, previousTable = null) {
+  const descriptor = tractorDealingDescriptor(table);
+  if (!descriptor) {
+    clearDealingAnimation();
+    return;
+  }
+
+  if (state.dealingHandKey === descriptor.key) {
+    state.dealingTotalCount = descriptor.total;
+    if (state.dealingCardIndexes.length !== descriptor.total) {
+      state.dealingCardIndexes = shuffledCardIndexes(descriptor.total);
+    }
+    if (state.dealingVisibleCount >= descriptor.total) {
+      rememberDealtHandKey(descriptor.key);
+    } else {
+      scheduleDealingTick();
+    }
+    return;
+  }
+
+  const previousRoomKey = previousTable?.room?.roomKey || "";
+  const shouldAnimate = previousRoomKey === descriptor.roomKey
+    && previousTable?.phase !== "making_trump"
+    && table.phase === "making_trump"
+    && !state.dealtHandKeys.has(descriptor.key);
+
+  clearDealingAnimation();
+  if (!shouldAnimate) {
+    return;
+  }
+
+  state.dealingHandKey = descriptor.key;
+  state.dealingVisibleCount = 0;
+  state.dealingTotalCount = descriptor.total;
+  state.dealingCardIndexes = shuffledCardIndexes(descriptor.total);
+  scheduleDealingTick();
+}
+
+function tractorDealingDescriptor(table, cards = null) {
+  if (!table || isGuandanTable(table) || table.phase !== "making_trump") {
+    return null;
+  }
+
+  const seatIndex = Number(table.viewer?.seatIndex);
+  if (!Number.isInteger(seatIndex) || !isPrivateHandSeat(table, seatIndex)) {
+    return null;
+  }
+
+  const handCards = Array.isArray(cards) ? cards : privateHandCardsForSeat(table, seatIndex);
+  if (!handCards.length) {
+    return null;
+  }
+
+  const roomKey = table.room?.roomKey || "";
+  const publicState = table.engine?.public || {};
+  const handId = publicState.handId || publicState.startedAt || handCards.map(({ card }) => card?.id ?? "").join(",");
+  return {
+    key: `${roomKey}:${seatIndex}:${handId}`,
+    roomKey,
+    seatIndex,
+    total: handCards.length
+  };
+}
+
+function scheduleDealingTick() {
+  if (state.dealingTimerId || !state.dealingHandKey) {
+    return;
+  }
+
+  state.dealingTimerId = window.setTimeout(advanceDealingAnimation, dealingCardIntervalMs);
+}
+
+function advanceDealingAnimation() {
+  state.dealingTimerId = 0;
+  const descriptor = tractorDealingDescriptor(state.table);
+  if (!descriptor || descriptor.key !== state.dealingHandKey) {
+    clearDealingAnimation();
+    scheduleRender();
+    return;
+  }
+
+  state.dealingTotalCount = descriptor.total;
+  state.dealingVisibleCount = Math.min(descriptor.total, state.dealingVisibleCount + 1);
+  if (state.dealingVisibleCount >= descriptor.total) {
+    rememberDealtHandKey(descriptor.key);
+  } else {
+    scheduleDealingTick();
+  }
+  scheduleRender();
+}
+
+function clearDealingAnimation(resetCompleted = false) {
+  if (state.dealingTimerId) {
+    window.clearTimeout(state.dealingTimerId);
+  }
+  state.dealingHandKey = "";
+  state.dealingVisibleCount = 0;
+  state.dealingTotalCount = 0;
+  state.dealingTimerId = 0;
+  state.dealingCardIndexes = [];
+  if (resetCompleted) {
+    state.dealtHandKeys.clear();
+  }
+}
+
+function rememberDealtHandKey(key) {
+  if (!key) {
+    return;
+  }
+
+  state.dealtHandKeys.add(key);
+  if (state.dealtHandKeys.size <= 12) {
+    return;
+  }
+
+  const oldestKey = state.dealtHandKeys.values().next().value;
+  if (oldestKey) {
+    state.dealtHandKeys.delete(oldestKey);
+  }
+}
+
+function shuffledCardIndexes(count) {
+  const indexes = Array.from({ length: Math.max(0, Number(count) || 0) }, (_, index) => index);
+  for (let index = indexes.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [indexes[index], indexes[swapIndex]] = [indexes[swapIndex], indexes[index]];
+  }
+  return indexes;
 }
 
 function lobbyUsersFromPayload(payload, fallback = []) {
@@ -2602,18 +2804,25 @@ function renderRoomDeadlineControls(room = currentRoom()) {
   }
 
   const roomKey = room.roomKey;
+  const guandanRoom = isGuandanRoom(room);
   const owner = isRoomOwner(room);
   const pending = isActionPending("room.settings.update", roomKey) || isRoomMutationPending(roomKey);
   const disabled = isGameInteractionLocked() || hasRoomTransitionPending() || Boolean(state.transitionRoomKey) || pending || !owner;
-  const discardSeconds = roomDeadlineSeconds(room, "tractorDiscardDeadlineSeconds", "tractor_discard_deadline_seconds");
-  const playSeconds = roomDeadlineSeconds(room, "tractorPlayDeadlineSeconds", "tractor_play_deadline_seconds");
+  const discardSeconds = guandanRoom ? 0 : roomDeadlineSeconds(room, "tractorDiscardDeadlineSeconds", "tractor_discard_deadline_seconds");
+  const tributeSeconds = guandanRoom ? roomDeadlineSeconds(room, "guandanTributeDeadlineSeconds", "guandan_tribute_deadline_seconds") : 0;
+  const playSeconds = guandanRoom
+    ? roomDeadlineSeconds(room, "guandanPlayDeadlineSeconds", "guandan_play_deadline_seconds")
+    : roomDeadlineSeconds(room, "tractorPlayDeadlineSeconds", "tractor_play_deadline_seconds");
   const reviewSeconds = roomReviewSeconds(room);
+  const reviewMaxSeconds = roomReviewMaxSeconds(room);
   const signature = [
     roomKey,
+    guandanRoom ? "guandan" : "tractor",
     owner ? "1" : "0",
     disabled ? "1" : "0",
     pending ? "1" : "0",
     discardSeconds,
+    tributeSeconds,
     playSeconds,
     reviewSeconds
   ].join("|");
@@ -2626,11 +2835,19 @@ function renderRoomDeadlineControls(room = currentRoom()) {
   els.deadlineControls.innerHTML = `
     <form class="room-deadline-form">
       <span class="room-deadline-title">硬超时</span>
-      <label>
-        <span>埋牌</span>
-        <input name="discard" type="number" min="0" max="600" step="1" inputmode="numeric" value="${discardSeconds}" ${disabled ? "disabled" : ""} />
-        <span>秒</span>
-      </label>
+      ${guandanRoom ? `
+        <label>
+          <span>进贡/还贡</span>
+          <input name="tribute" type="number" min="0" max="600" step="1" inputmode="numeric" value="${tributeSeconds}" ${disabled ? "disabled" : ""} />
+          <span>秒</span>
+        </label>
+      ` : `
+        <label>
+          <span>埋牌</span>
+          <input name="discard" type="number" min="0" max="600" step="1" inputmode="numeric" value="${discardSeconds}" ${disabled ? "disabled" : ""} />
+          <span>秒</span>
+        </label>
+      `}
       <label>
         <span>出牌</span>
         <input name="play" type="number" min="0" max="600" step="1" inputmode="numeric" value="${playSeconds}" ${disabled ? "disabled" : ""} />
@@ -2638,7 +2855,7 @@ function renderRoomDeadlineControls(room = currentRoom()) {
       </label>
       <label>
         <span>本墩回顾</span>
-        <input name="review" type="number" min="0" max="30" step="1" inputmode="numeric" value="${reviewSeconds}" ${disabled ? "disabled" : ""} />
+        <input name="review" type="number" min="0" max="${reviewMaxSeconds}" step="1" inputmode="numeric" value="${reviewSeconds}" ${disabled ? "disabled" : ""} />
         <span>秒</span>
       </label>
       ${owner ? `<button type="submit" ${disabled ? "disabled" : ""}>保存</button>` : ""}
@@ -2675,8 +2892,16 @@ function roomDeadlineSeconds(room, camelKey, snakeKey) {
 }
 
 function roomReviewSeconds(room) {
-  const seconds = Number(room.settings?.tractorTrickReviewSeconds ?? room.settings?.tractor_trick_review_seconds ?? 5);
-  return Number.isInteger(seconds) && seconds >= 0 && seconds <= 30 ? seconds : 5;
+  const guandanRoom = isGuandanRoom(room);
+  const seconds = Number(guandanRoom
+    ? room.settings?.guandanTrickReviewSeconds ?? room.settings?.guandan_trick_review_seconds ?? 5
+    : room.settings?.tractorTrickReviewSeconds ?? room.settings?.tractor_trick_review_seconds ?? 5);
+  const maxSeconds = roomReviewMaxSeconds(room);
+  return Number.isInteger(seconds) && seconds >= 0 && seconds <= maxSeconds ? seconds : 5;
+}
+
+function roomReviewMaxSeconds(room) {
+  return isGuandanRoom(room) ? 10 : 30;
 }
 
 function deadlineInputSeconds(value) {
@@ -2687,12 +2912,12 @@ function deadlineInputSeconds(value) {
   return Math.max(0, Math.min(600, Math.trunc(seconds)));
 }
 
-function reviewInputSeconds(value) {
+function reviewInputSeconds(value, maxSeconds = 30) {
   const seconds = Number(value);
   if (!Number.isFinite(seconds)) {
     return 5;
   }
-  return Math.max(0, Math.min(30, Math.trunc(seconds)));
+  return Math.max(0, Math.min(maxSeconds, Math.trunc(seconds)));
 }
 
 function updateRoomDeadlineSettings(roomKey, form) {
@@ -2701,17 +2926,23 @@ function updateRoomDeadlineSettings(roomKey, form) {
     return;
   }
 
-  const discardSeconds = deadlineInputSeconds(form.elements.discard?.value);
+  const guandanRoom = isGuandanRoom(room);
   const playSeconds = deadlineInputSeconds(form.elements.play?.value);
-  const reviewSeconds = reviewInputSeconds(form.elements.review?.value);
+  const payload = guandanRoom
+    ? {
+        guandanTributeDeadlineSeconds: deadlineInputSeconds(form.elements.tribute?.value),
+        guandanPlayDeadlineSeconds: playSeconds,
+        guandanTrickReviewSeconds: reviewInputSeconds(form.elements.review?.value, 10)
+      }
+    : {
+        tractorDiscardDeadlineSeconds: deadlineInputSeconds(form.elements.discard?.value),
+        tractorPlayDeadlineSeconds: playSeconds,
+        tractorTrickReviewSeconds: reviewInputSeconds(form.elements.review?.value)
+      };
   void sendCommand("room.settings.update", {
     roomKey,
     roomEpoch: state.roomEpoch,
-    payload: {
-      tractorDiscardDeadlineSeconds: discardSeconds,
-      tractorPlayDeadlineSeconds: playSeconds,
-      tractorTrickReviewSeconds: reviewSeconds
-    }
+    payload
   })
     .then(() => {
       setStatus("房间设置已更新");
@@ -2772,17 +3003,20 @@ function renderTable() {
     clearTurnTimer();
     clearTrickReviewTimer();
     clearTrumpRevealTimer();
+    clearDealingAnimation();
+    disconnectDeskOverlapObserver();
     renderRoomDeadlineControls(null);
     els.title.textContent = "大厅";
     if (state.currentRoomKey) {
       renderTableEmptyState();
-    } else {
-      tableActionsElement = null;
-      disconnectPrivateHandOverlapObserver();
-      mountLobbyChatPanel();
-      if (!els.table.hasChildNodes || els.table.hasChildNodes()) {
-        els.table.replaceChildren();
-      }
+      } else {
+        tableActionsElement = null;
+        disconnectPrivateHandOverlapObserver();
+        disconnectDeskOverlapObserver();
+        mountLobbyChatPanel();
+        if (!els.table.hasChildNodes || els.table.hasChildNodes()) {
+          els.table.replaceChildren();
+        }
       state.renderedTableSections.clear();
       state.renderedTableSectionSignatures.clear();
       state.renderedPlayLogSignature = "";
@@ -2811,13 +3045,16 @@ function renderTable() {
     : currentTrick
       ? `第 ${currentTrick.trickNumber} 墩，轮到${seatLabel(currentTrick.nextSeatIndex ?? currentTrick.winnerSeatIndex)}`
       : table.engineReady ? "" : "等待中";
-  const statusCornerText = tableStatusCornerText(table, trickLabel);
+  const tableStatusText = isGuandanTable(table) ? guandanStatusText(table) : trickLabel;
+  const statusCornerText = tableStatusCornerText(table, tableStatusText);
   const grid = ensureTableShell();
+  grid.classList.toggle("table-grid-guandan", isGuandanTable(table));
+  grid.classList.toggle("table-grid-tractor", !isGuandanTable(table));
   const seatTop = seatByVisual(2);
   const seatLeft = seatByVisual(3);
   const seatRight = seatByVisual(1);
   const seatBottom = seatByVisual(0);
-  const statusInfoSignature = tableStatusInfoSignature(table, trickLabel, trumpDeclarer, bottomHolderTitle, bottomHolder);
+  const statusInfoSignature = tableStatusInfoSignature(table, tableStatusText, trumpDeclarer, bottomHolderTitle, bottomHolder);
   const removedTopInfoLeft = updateDirectTableSection(grid, "info-left", ":scope > .table-info-left", "");
   const removedTopInfoRight = updateDirectTableSection(grid, "info-right", ":scope > .table-info-right", "");
   const ownerCornerChanged = updateDirectTableSectionLazy(els.table, "owner-corner", ":scope > .table-owner-corner", roomOwnerLabel(table), () => tableOwnerCornerHtml(table));
@@ -2828,7 +3065,7 @@ function renderTable() {
   const seatLeftChanged = updateTableSectionHtml("seat-left", leftSeatSlot, seatHtmlByVisual(3), seatSectionSignature(table, seatLeft));
   const stackRightChanged = updateDirectTableSectionLazy(grid, "stack-right", ":scope > .table-side-stack-right", [seatSectionSignature(table, seatRight), statusInfoSignature].join("\u001e"), () => `
     <div class="table-side-stack table-side-stack-right">
-      <div class="table-side-panel table-side-panel-right" data-table-panel="status">${tableStatusInfoHtml(table, trickLabel, trumpDeclarer, bottomHolderTitle, bottomHolder)}</div>
+      <div class="table-side-panel table-side-panel-right" data-table-panel="status">${tableStatusInfoHtml(table, tableStatusText, trumpDeclarer, bottomHolderTitle, bottomHolder)}</div>
       ${seatHtmlByVisual(1)}
     </div>
   `);
@@ -2849,6 +3086,7 @@ function renderTable() {
   }
   syncTableActions(table);
   syncPrivateHandOverlapObserver();
+  syncDeskOverlapObserver();
 
   els.leave.disabled = false;
   els.leave.title = isViewerInActiveHand(table)
@@ -2978,6 +3216,7 @@ function updateDirectTableSection(container, key, selector, html, signature = ht
     return Boolean(existing);
   }
   if (existing) {
+    preserveStablePrivateHand(existing, next);
     existing.replaceWith(next);
   } else {
     container.appendChild(next);
@@ -2985,6 +3224,25 @@ function updateDirectTableSection(container, key, selector, html, signature = ht
   state.renderedTableSections.set(key, html);
   state.renderedTableSectionSignatures.set(key, signature);
   return true;
+}
+
+function preserveStablePrivateHand(existing, next) {
+  const existingHand = existing.querySelector?.(".seat-hand-private[data-hand-signature]");
+  const nextHand = next.querySelector?.(".seat-hand-private[data-hand-signature]");
+  if (!existingHand || !nextHand || existingHand.dataset.handSignature !== nextHand.dataset.handSignature) {
+    return;
+  }
+
+  syncPreservedHandSelection(existingHand);
+  nextHand.replaceWith(existingHand);
+}
+
+function syncPreservedHandSelection(hand) {
+  const selected = new Set(state.selectedHandIndexes);
+  hand.querySelectorAll("[data-card-index]").forEach((button) => {
+    const cardIndex = Number(button.dataset.cardIndex);
+    button.setAttribute("aria-pressed", selected.has(cardIndex) ? "true" : "false");
+  });
 }
 
 function updateTableSectionHtml(key, element, html, signature = html) {
@@ -3006,6 +3264,17 @@ function htmlToElement(html) {
 
 function tableInfoLeftSignature(table, trickLabel, trumpDeclarer, bottomHolderTitle, bottomHolder) {
   const publicState = table.engine?.public || {};
+  if (isGuandanTable(table)) {
+    return [
+      publicState.rank,
+      publicState.rankLabel || "",
+      publicState.handId || "",
+      publicState.completedTrickCount ?? "",
+      publicState.tribute ? stableStringify(publicState.tribute) : "",
+      (publicState.placements || []).map((placement) => `${placement.seatIndex}:${placement.place}`).join(",")
+    ].join("|");
+  }
+
   return [
     publicState.rank,
     trumpLabel(publicState.trump),
@@ -3017,6 +3286,25 @@ function tableInfoLeftSignature(table, trickLabel, trumpDeclarer, bottomHolderTi
 
 function tableInfoRightSignature(table) {
   const publicState = table.engine?.public || {};
+  if (isGuandanTable(table)) {
+    const trick = publicState.currentTrick || {};
+    const turn = table.turn || {};
+    return [
+      table.phase || "",
+      trick.trickNumber ?? "",
+      trick.nextSeatIndex ?? "",
+      (trick.passedSeatIndexes || []).join(","),
+      turn.seatIndex ?? "",
+      turn.deadlineAt || "",
+      turn.startedAt || "",
+      turn.countdownSeconds || "",
+      turn.autoAction || "",
+      table.review?.until || "",
+      publicState.rankAdvance ? stableStringify(publicState.rankAdvance) : "",
+      activePauseSignature(table)
+    ].join("|");
+  }
+
   const turn = table.turn || {};
   return [
     finiteNumber(publicState.handSummary?.attackingScore, finiteNumber(publicState.score, 0)),
@@ -3033,18 +3321,20 @@ function tableInfoRightSignature(table) {
 function tableStatusInfoSignature(table, trickLabel, trumpDeclarer, bottomHolderTitle, bottomHolder) {
   return [
     tableInfoLeftSignature(table, trickLabel, trumpDeclarer, bottomHolderTitle, bottomHolder),
-    tableInfoRightSignature(table)
+    tableInfoRightSignature(table),
+    tableStatusNoticeFor(table)
   ].join("\u001e");
 }
 
 function cardDeskSignature(table) {
-  const summary = table.engine?.public?.handSummary;
+  const summary = gameSummarySignature(table);
   return [
     visibleTrickSignature(table),
-    summary ? stableStringify(summary) : "",
+    summary,
     activePauseSignature(table),
     table.phase || "",
     actionSignature(action(table, "tractor.start")),
+    actionSignature(action(table, "guandan.start")),
     pendingUiSignature(table.room?.roomKey || "")
   ].join("|");
 }
@@ -3058,8 +3348,10 @@ function seatSectionSignature(table, seat) {
   const privateCards = privateHandCardsForSeat(table, seat.seatIndex).map(({ card }) => card.id ?? card).join(",");
   const bottomCards = bottomPileCardsForSeat(table, seat.seatIndex).map(({ card }) => card.id ?? card).join(",");
   const playerRank = seatPlayerRank(table, seat.seatIndex);
+  const remainingCardCount = seatRemainingCardCount(table, seat.seatIndex);
   return [
     table.room?.roomKey || "",
+    table.gameType || table.room?.gameType || "",
     table.phase || "",
     table.engineReady ? "1" : "0",
     table.engine?.public?.handId || "",
@@ -3082,11 +3374,28 @@ function seatSectionSignature(table, seat) {
     isSeatTurn(table, seat.seatIndex) ? "1" : "0",
     seatSideLabel(table, seat.seatIndex),
     playerRank ?? "",
+    remainingCardCount ?? "",
+    playerForSeat(table.engine?.public, seat.seatIndex)?.team || "",
     privateCards,
     bottomCards,
+    dealingSeatSignature(table, seat),
     trumpCandidateSignature(table, seat),
+    guandanHandHintSignature(table, seat),
     seatControlsSignature(table, seat)
   ].join("|");
+}
+
+function dealingSeatSignature(table, seat) {
+  if (!isPrivateHandSeat(table, seat.seatIndex)) {
+    return "";
+  }
+
+  const descriptor = tractorDealingDescriptor(table, privateHandCardsForSeat(table, seat.seatIndex));
+  if (!descriptor || descriptor.key !== state.dealingHandKey) {
+    return "";
+  }
+
+  return `${descriptor.key}:${state.dealingVisibleCount}:${descriptor.total}`;
 }
 
 function trumpCandidateSignature(table, seat) {
@@ -3103,7 +3412,9 @@ function trumpCandidateSignature(table, seat) {
   return [
     "on",
     publicState.rank ?? "",
-    publicState.trump?.exposure || "none"
+    publicState.trump?.exposure || "none",
+    quickTrumpOptionsSignature(table),
+    isActionPending("tractor.makeTrump", table.room?.roomKey || "") ? "pending" : ""
   ].join(":");
 }
 
@@ -3154,13 +3465,29 @@ function visibleTrickSignature(table) {
     trick.winnerSeatIndex ?? "",
     trick.points ?? "",
     trick.pointsAwarded ? "1" : "0",
+    (trick.passedSeatIndexes || []).join(","),
     (trick.plays || []).map((play) => [
       play.seatIndex,
       play.userId,
       play.points || 0,
+      play.playType || "",
       (play.cards || []).map((card) => card.id ?? card).join(",")
-    ].join(":")).join(";")
+    ].join(":")).join(";"),
+    guandanDeskPassSignature(table, trick)
   ].join("|");
+}
+
+function gameSummarySignature(table) {
+  const publicState = table?.engine?.public || {};
+  if (isGuandanTable(table)) {
+    return [
+      publicState.phase === "finished" ? "finished" : "",
+      publicState.rankAdvance ? stableStringify(publicState.rankAdvance) : "",
+      (publicState.placements || []).map((placement) => `${placement.seatIndex}:${placement.place}:${placement.team}`).join(",")
+    ].join(":");
+  }
+
+  return publicState.handSummary ? stableStringify(publicState.handSummary) : "";
 }
 
 function activePauseSignature(table) {
@@ -3513,13 +3840,24 @@ function tableStatusCornerText(table, trickLabel) {
   return trickLabel || phaseText(table?.phase || table?.engine?.public?.phase);
 }
 
+function tableStatusNoticeFor(table) {
+  const roomKey = table?.room?.roomKey || "";
+  return roomKey && roomKey === state.tableStatusNoticeRoomKey ? state.tableStatusNotice : "";
+}
+
 function tableStatusInfoHtml(table, trickLabel, trumpDeclarer, bottomHolderTitle, bottomHolder) {
-  const trumpText = trumpLabel(table.engine?.public?.trump);
+  if (isGuandanTable(table)) {
+    return guandanStatusInfoHtml(table, trickLabel);
+  }
+
+  const trumpHtml = trumpLabelHtml(table.engine?.public?.trump);
+  const notice = tableStatusNoticeFor(table);
 
   return `
     <div class="table-info table-info-status">
-      <p class="table-trump-line">级牌 ${escapeHtml(rankLabel(table.engine?.public?.rank))} · ${escapeHtml(trumpText)}</p>
+      <p class="table-trump-line">级牌 ${escapeHtml(rankLabel(table.engine?.public?.rank))} · ${trumpHtml}</p>
       ${trumpDeclarer ? `<p class="table-declarer-line">亮牌 ${escapeHtml(trumpDeclarer)}</p>` : ""}
+      ${notice ? `<p class="table-notice-line">${escapeHtml(notice)}</p>` : ""}
       <div class="table-facts">
         ${bottomHolder ? `<span>${escapeHtml(bottomHolderTitle)} ${escapeHtml(bottomHolder)}</span>` : ""}
       </div>
@@ -3530,18 +3868,68 @@ function tableStatusInfoHtml(table, trickLabel, trumpDeclarer, bottomHolderTitle
   `;
 }
 
+function guandanStatusInfoHtml(table, trickLabel) {
+  const publicState = table.engine?.public || {};
+  const rank = publicState.rankLabel || guandanRankLabel(publicState.rank);
+  const trickCount = Number(publicState.completedTrickCount || 0);
+  const tribute = guandanActiveTributePhase(table) ? guandanTributeStatusText(table) : "";
+  const placements = guandanPlacementsHtml(table);
+  const notice = tableStatusNoticeFor(table);
+
+  return `
+    <div class="table-info table-info-status table-info-guandan">
+      <p class="table-trump-line">级牌 ${escapeHtml(rank)}</p>
+      ${trickLabel ? `<p class="table-declarer-line">${escapeHtml(trickLabel)}</p>` : ""}
+      ${notice ? `<p class="table-notice-line">${escapeHtml(notice)}</p>` : ""}
+      <div class="table-facts">
+        <span>已完成 ${escapeHtml(String(trickCount))} 轮</span>
+        ${tribute ? `<span>${escapeHtml(tribute)}</span>` : ""}
+        ${placements}
+      </div>
+      ${turnTimerHtml(table)}
+    </div>
+  `;
+}
+
 function cardDeskHtml(table) {
   const summary = handSummaryHtml(table);
+  const buriedCards = deskBuriedCardsHtml(table);
   const startControl = summary ? "" : deskStartControlHtml(table);
   const pauseNotice = summary || startControl ? "" : deskPauseNoticeHtml(table);
   const centerContent = summary || pauseNotice || startControl;
-  return `
-    <div class="card-desk ${centerContent ? "card-desk-has-summary" : ""}" aria-label="牌桌出牌区">
+  const deskPlays = summary ? "" : `
       ${deskPlayZoneHtml(table, 2, "top")}
       ${deskPlayZoneHtml(table, 3, "left")}
-      <div class="desk-center-content" ${centerContent ? "" : 'aria-hidden="true"'}>${centerContent}</div>
       ${deskPlayZoneHtml(table, 1, "right")}
       ${deskPlayZoneHtml(table, 0, "bottom")}
+  `;
+  return `
+    <div class="card-desk ${centerContent ? "card-desk-has-summary" : ""} ${buriedCards ? "card-desk-has-buried" : ""}" aria-label="牌桌出牌区">
+      ${deskPlays}
+      <div class="desk-center-content" ${centerContent ? "" : 'aria-hidden="true"'}>${centerContent}</div>
+      ${buriedCards}
+    </div>
+  `;
+}
+
+function deskBuriedCardsHtml(table) {
+  if (isGuandanTable(table)) {
+    return "";
+  }
+
+  const cards = summaryBottomCards(table.engine?.public?.handSummary, table);
+  if (!cards.length) {
+    return "";
+  }
+
+  const buriedWidthFactor = 0.68;
+  const buriedOverlap = deskCardOverlapPx(cards.length, deskAvailableWidthPx() * (buriedWidthFactor / 0.5));
+  return `
+    <div class="desk-buried-cards" aria-label="埋牌">
+      <span class="desk-buried-label">埋牌</span>
+      <div class="desk-buried-card-row" data-desk-card-count="${cards.length}" data-desk-card-width-factor="${buriedWidthFactor}" style="--desk-card-overlap: ${buriedOverlap}px">
+        ${cards.map((card) => cardFaceHtml(card, "played-card desk-buried-card")).join("")}
+      </div>
     </div>
   `;
 }
@@ -3575,18 +3963,23 @@ function deskStartControlHtml(table) {
 
 function deskPlayZoneHtml(table, visualSeatIndex, position) {
   const seat = (table.room?.seats || []).find((candidate) => visualSeatIndexFor(table, candidate.seatIndex) === visualSeatIndex);
-  const play = seat ? deskPlayForSeat(table, seat.seatIndex) : null;
-  const playCards = play?.cards || [];
+  const trick = visibleTrick(table);
+  const play = seat ? deskPlayForSeat(table, seat.seatIndex, trick) : null;
+  const passed = isGuandanTable(table) && seat && isGuandanSeatPassed(table, seat.seatIndex, trick);
+  const playCards = passed ? [] : play?.cards || [];
   const cards = playCards.map((card) => cardFaceHtml(card, "played-card desk-card")).join("");
   const points = Number(play?.points || 0);
-  const label = points > 0 ? `本墩得分 ${points}` : "";
+  const showPassOnly = passed;
+  const playType = isGuandanTable(table) && cards ? guandanPlayTypeLabel(play?.playType) : "";
+  const label = showPassOnly ? "不出" : playType || (points > 0 ? `本墩得分 ${points}` : "");
   const playerLabel = seat && visualSeatIndex !== 0 ? deskPlayerLabel(seat) : "";
   const cardStyle = `--desk-card-overlap: ${deskCardOverlapPx(playCards.length)}px`;
 
   return `
-    <div class="desk-play desk-play-${position} ${cards ? "desk-play-has-cards" : "desk-play-empty"} ${seat && isSeatTurn(table, seat.seatIndex) ? "desk-play-turn" : ""}" title="${escapeAttribute(label)}">
+    <div class="desk-play desk-play-${position} ${cards ? "desk-play-has-cards" : "desk-play-empty"} ${passed ? "desk-play-passed" : ""} ${seat && isSeatTurn(table, seat.seatIndex) ? "desk-play-turn" : ""}" title="${escapeAttribute(label)}">
       ${playerLabel ? `<span class="desk-player-label">${escapeHtml(playerLabel)}</span>` : ""}
-      <div class="desk-play-cards" style="${cardStyle}">${cards}</div>
+      ${cards && playType ? `<span class="desk-play-label desk-play-type-label">${escapeHtml(playType)}</span>` : ""}
+      <div class="desk-play-cards" data-desk-card-count="${playCards.length}" style="${cardStyle}">${cards}${showPassOnly ? '<span class="desk-pass-label">不出</span>' : ""}</div>
     </div>
   `;
 }
@@ -3595,9 +3988,116 @@ function deskPlayerLabel(seat) {
   return seat.user?.username || seat.user?.displayName || seatLabel(seat.seatIndex);
 }
 
-function deskPlayForSeat(table, seatIndex) {
-  const trick = visibleTrick(table);
-  return (trick?.plays || []).find((candidate) => Number(candidate.seatIndex) === Number(seatIndex)) || null;
+function deskPlayForSeat(table, seatIndex, trick = visibleTrick(table)) {
+  const plays = trick?.plays || [];
+  for (let index = plays.length - 1; index >= 0; index -= 1) {
+    const play = plays[index];
+    if (Number(play?.seatIndex) === Number(seatIndex)) {
+      return play;
+    }
+  }
+  return null;
+}
+
+function isGuandanSeatPassed(table, seatIndex, trick = visibleTrick(table)) {
+  if (!isGuandanTable(table) || !trick) {
+    return false;
+  }
+
+  const numericSeatIndex = Number(seatIndex);
+  const passBySeat = state.guandanDeskPasses.get(guandanTrickKey(table, trick));
+  if (passBySeat?.has(numericSeatIndex)) {
+    return true;
+  }
+
+  return (trick.passedSeatIndexes || []).map(Number).includes(numericSeatIndex);
+}
+
+function syncGuandanDeskPasses(table) {
+  if (!isGuandanTable(table)) {
+    state.guandanDeskPasses.clear();
+    return;
+  }
+
+  const publicState = table.engine?.public || {};
+  const validKeys = new Set();
+  if (publicState.currentTrick) {
+    const key = guandanTrickKey(table, publicState.currentTrick);
+    validKeys.add(key);
+    syncGuandanDeskPassesForTrick(key, publicState.currentTrick);
+  }
+  if (publicState.lastCompletedTrick) {
+    const key = guandanTrickKey(table, publicState.lastCompletedTrick);
+    validKeys.add(key);
+    syncGuandanDeskPassesForTrick(key, publicState.lastCompletedTrick);
+  }
+
+  for (const key of Array.from(state.guandanDeskPasses.keys())) {
+    if (!validKeys.has(key)) {
+      state.guandanDeskPasses.delete(key);
+    }
+  }
+}
+
+function syncGuandanDeskPassesForTrick(key, trick) {
+  if (!key || !trick) {
+    return;
+  }
+
+  const plays = trick.plays || [];
+  const passBySeat = state.guandanDeskPasses.get(key) || new Map();
+  for (const seatIndex of (trick.passedSeatIndexes || []).map(Number).filter(Number.isInteger)) {
+    passBySeat.set(seatIndex, plays.length);
+  }
+
+  for (const [seatIndex, passAfterPlayCount] of Array.from(passBySeat.entries())) {
+    if (guandanLastPlayOrderForSeat(plays, seatIndex) > passAfterPlayCount) {
+      passBySeat.delete(seatIndex);
+    }
+  }
+
+  if (passBySeat.size) {
+    state.guandanDeskPasses.set(key, passBySeat);
+  } else {
+    state.guandanDeskPasses.delete(key);
+  }
+}
+
+function guandanLastPlayOrderForSeat(plays, seatIndex) {
+  for (let index = (plays || []).length - 1; index >= 0; index -= 1) {
+    if (Number(plays[index]?.seatIndex) === Number(seatIndex)) {
+      return index + 1;
+    }
+  }
+  return 0;
+}
+
+function guandanTrickKey(table, trick) {
+  if (!trick) {
+    return "";
+  }
+
+  return [
+    table?.room?.roomKey || "",
+    table?.engine?.public?.handId || "",
+    trick.trickNumber ?? ""
+  ].join(":");
+}
+
+function guandanDeskPassSignature(table, trick = visibleTrick(table)) {
+  if (!isGuandanTable(table) || !trick) {
+    return "";
+  }
+
+  const passBySeat = state.guandanDeskPasses.get(guandanTrickKey(table, trick));
+  if (!passBySeat?.size) {
+    return "";
+  }
+
+  return Array.from(passBySeat.entries())
+    .sort((left, right) => left[0] - right[0])
+    .map(([seatIndex, playCount]) => `${seatIndex}:${playCount}`)
+    .join(",");
 }
 
 function handCardOverlapPx(count) {
@@ -3623,13 +4123,13 @@ function syncPrivateHandOverlapObserver() {
   }
 
   privateHandElement = hand;
-  applyPrivateHandOverlap(hand);
+  applyPrivateHandOverlap(hand, { measure: typeof ResizeObserver === "undefined" });
   if (typeof ResizeObserver === "undefined") {
     requestUiFrame(() => {
       if (!hand.isConnected || hand !== privateHandElement) {
         return;
       }
-      state.privateHandAvailableWidth = Math.max(0, hand.clientWidth - handPaddingWidthPx(hand));
+      measurePrivateHandWidth(hand);
       applyPrivateHandOverlap(hand);
     });
     return;
@@ -3655,6 +4155,7 @@ function disconnectPrivateHandOverlapObserver(resetWidth = true) {
   privateHandResizeObserver = null;
   privateHandElement = null;
   state.privateHandOverlapValue = "";
+  state.privateHandOverlapSignature = "";
   if (resetWidth) {
     state.privateHandAvailableWidth = 0;
   }
@@ -3674,18 +4175,41 @@ function scheduleApplyPrivateHandOverlap(hand) {
   });
 }
 
-function applyPrivateHandOverlap(hand) {
+function applyPrivateHandOverlap(hand, options = {}) {
   if (!hand?.isConnected) {
     return;
   }
 
+  if (options.measure) {
+    measurePrivateHandWidth(hand);
+  }
+
   const count = Number(hand.dataset.handCount || 0);
+  const signature = [
+    count,
+    Math.round(state.privateHandAvailableWidth || 0),
+    Math.round(handCardWidthPx() * 10),
+    isCompactLayout() ? "compact" : "wide"
+  ].join(":");
+  if (state.privateHandOverlapSignature === signature) {
+    return;
+  }
+
   const overlap = `${handCardOverlapPx(count)}px`;
   if (state.privateHandOverlapValue === overlap) {
+    state.privateHandOverlapSignature = signature;
     return;
   }
   hand.style.setProperty("--hand-overlap", overlap);
   state.privateHandOverlapValue = overlap;
+  state.privateHandOverlapSignature = signature;
+}
+
+function measurePrivateHandWidth(hand) {
+  const measuredWidth = Math.max(0, hand.clientWidth - handPaddingWidthPx(hand));
+  if (measuredWidth > 0) {
+    state.privateHandAvailableWidth = measuredWidth;
+  }
 }
 
 function handPaddingWidthPx(hand) {
@@ -3693,13 +4217,102 @@ function handPaddingWidthPx(hand) {
   return pxValue(style.paddingLeft) + pxValue(style.paddingRight);
 }
 
-function deskCardOverlapPx(count) {
+function syncDeskOverlapObserver() {
+  const desk = els.table.querySelector(".card-desk");
+  if (desk === deskElement) {
+    return;
+  }
+
+  disconnectDeskOverlapObserver(false);
+  if (!desk) {
+    return;
+  }
+
+  deskElement = desk;
+  applyDeskOverlaps(desk);
+  if (typeof ResizeObserver === "undefined") {
+    requestUiFrame(() => {
+      if (!desk.isConnected || desk !== deskElement) {
+        return;
+      }
+      state.deskAvailableWidth = Math.max(0, desk.clientWidth);
+      applyDeskOverlaps(desk);
+    });
+    return;
+  }
+
+  deskResizeObserver = new ResizeObserver((entries) => {
+    const entry = entries[entries.length - 1];
+    const width = Number(entry?.contentRect?.width || 0);
+    if (width > 0) {
+      state.deskAvailableWidth = width;
+    }
+    scheduleApplyDeskOverlaps(desk);
+  });
+  deskResizeObserver.observe(desk);
+}
+
+function disconnectDeskOverlapObserver(resetWidth = true) {
+  if (state.deskOverlapFrameId) {
+    cancelUiFrame(state.deskOverlapFrameId);
+    state.deskOverlapFrameId = 0;
+  }
+  deskResizeObserver?.disconnect();
+  deskResizeObserver = null;
+  deskElement = null;
+  state.deskOverlapSignature = "";
+  if (resetWidth) {
+    state.deskAvailableWidth = 0;
+  }
+}
+
+function scheduleApplyDeskOverlaps(desk) {
+  if (state.deskOverlapFrameId) {
+    return;
+  }
+
+  state.deskOverlapFrameId = requestUiFrame(() => {
+    state.deskOverlapFrameId = 0;
+    if (!desk.isConnected || desk !== deskElement) {
+      return;
+    }
+    applyDeskOverlaps(desk);
+  });
+}
+
+function applyDeskOverlaps(desk) {
+  if (!desk?.isConnected) {
+    return;
+  }
+
+  const availableWidth = Math.max(0, state.deskAvailableWidth || desk.clientWidth || 0);
+  const cardRows = Array.from(desk.querySelectorAll("[data-desk-card-count]"));
+  const signature = [
+    Math.round(availableWidth),
+    Math.round(deskCardWidthPx() * 10),
+    isCompactLayout() ? "compact" : "wide",
+    cardRows.map((row) => `${row.dataset.deskCardCount || "0"}:${row.dataset.deskCardWidthFactor || "0.5"}`).join(",")
+  ].join("|");
+  if (state.deskOverlapSignature === signature) {
+    return;
+  }
+
+  state.deskOverlapSignature = signature;
+  for (const row of cardRows) {
+    const count = Number(row.dataset.deskCardCount || 0);
+    const widthFactor = Number(row.dataset.deskCardWidthFactor || 0.5);
+    const effectiveWidthFactor = Number.isFinite(widthFactor) && widthFactor > 0 ? widthFactor : 0.5;
+    row.style.setProperty("--desk-card-overlap", `${deskCardOverlapPx(count, availableWidth * effectiveWidthFactor)}px`);
+  }
+}
+
+function deskCardOverlapPx(count, availableWidth = deskAvailableWidthPx()) {
   return overlapPxForCount({
     count,
     cardWidth: deskCardWidthPx(),
-    availableWidth: deskAvailableWidthPx(),
+    availableWidth,
     gap: 4,
-    minVisibleWidth: 12
+    minVisibleWidth: handMinVisibleWidthPx()
   });
 }
 
@@ -3725,8 +4338,7 @@ function handCardWidthPx() {
 }
 
 function deskCardWidthPx() {
-  const width = viewportWidthPx();
-  return isCompactLayout() ? 42 : clampNumber(width * 0.046, 42, 62);
+  return handCardWidthPx();
 }
 
 function handAvailableWidthPx() {
@@ -3743,6 +4355,10 @@ function handMinVisibleWidthPx() {
 }
 
 function deskAvailableWidthPx() {
+  if (state.deskAvailableWidth > 0) {
+    return Math.max(140, state.deskAvailableWidth * 0.5);
+  }
+
   const width = viewportWidthPx();
   const deskWidth = isCompactLayout() ? Math.min(width - 36, 340) : Math.min(width - 360, 620);
   return Math.max(140, deskWidth * 0.5);
@@ -3793,6 +4409,902 @@ function roomOwnerLabel(table) {
   return owner?.displayName || owner?.username || "";
 }
 
+function isGuandanTable(table) {
+  return isGuandanRoom(table?.room) || String(table?.gameType || "").toLowerCase() === "guandan";
+}
+
+function isGuandanRoom(room) {
+  return String(room?.gameType || room?.game_type || "").toLowerCase() === "guandan";
+}
+
+function guandanTeamLabel(team) {
+  if (team === "north_south") {
+    return "南北队";
+  }
+  if (team === "east_west") {
+    return "东西队";
+  }
+  return String(team || "");
+}
+
+function guandanRankLabel(rank) {
+  if (rank === "small_joker") {
+    return "小王";
+  }
+  if (rank === "big_joker") {
+    return "大王";
+  }
+
+  const labels = {
+    11: "J",
+    12: "Q",
+    13: "K",
+    14: "A"
+  };
+  const number = Number(rank);
+  if (Number.isInteger(number) && number >= 2 && number <= 14) {
+    return labels[number] || String(number);
+  }
+  return rank === undefined || rank === null ? "-" : String(rank);
+}
+
+function guandanPlayTypeLabel(type) {
+  const labels = {
+    single: "单张",
+    pair: "对子",
+    triple: "三张",
+    triple_with_pair: "三带二",
+    three_pair_run: "三连对",
+    triple_run: "钢板",
+    straight: "顺子",
+    straight_flush: "同花顺",
+    bomb: "炸弹",
+    four_jokers: "四王炸"
+  };
+  return labels[String(type || "")] || "";
+}
+
+function guandanStatusText(table) {
+  const publicState = table?.engine?.public || {};
+  if (!table?.engineReady) {
+    return "等待中";
+  }
+  if (publicState.phase === "finished") {
+    return "本手结束";
+  }
+
+  const trick = publicState.currentTrick;
+  if (trick) {
+    const nextSeat = seatUserLabel(table, trick.nextSeatIndex) || seatLabel(trick.nextSeatIndex);
+    return `第 ${trick.trickNumber} 轮，轮到${nextSeat}`;
+  }
+  if (guandanActiveTributePhase(table)) {
+    return guandanTributeStatusText(table) || "进贡";
+  }
+
+  return phaseText(table?.phase || publicState.phase);
+}
+
+function guandanTributeStatusText(table) {
+  if (!guandanActiveTributePhase(table)) {
+    return "";
+  }
+
+  const tribute = table?.engine?.public?.tribute;
+  if (!tribute) {
+    return "";
+  }
+
+  const pendingTribute = (tribute.tributeSeatIndexes || [])
+    .filter((seatIndex) => !(tribute.submittedSeatIndexes || []).map(Number).includes(Number(seatIndex)))
+    .map((seatIndex) => seatUserLabel(table, seatIndex) || seatLabel(seatIndex));
+  if (pendingTribute.length) {
+    return `等待${pendingTribute.join("、")}进贡`;
+  }
+
+  const pendingReturn = (tribute.receiverSeatIndexes || [])
+    .filter((seatIndex) => !(tribute.returnedSeatIndexes || []).map(Number).includes(Number(seatIndex)))
+    .map((seatIndex) => seatUserLabel(table, seatIndex) || seatLabel(seatIndex));
+  if (pendingReturn.length) {
+    return `等待${pendingReturn.join("、")}还贡`;
+  }
+
+  return "进贡完成";
+}
+
+function guandanActiveTributePhase(table) {
+  if (!isGuandanTable(table)) {
+    return false;
+  }
+
+  const publicState = table?.engine?.public || {};
+  if (publicState.currentTrick || Number(publicState.completedTrickCount || 0) > 0) {
+    return false;
+  }
+
+  const phase = publicState.phase || table?.phase || "";
+  return phase === "tribute";
+}
+
+function guandanPlacementsHtml(table) {
+  const placements = table?.engine?.public?.placements || [];
+  if (!placements.length) {
+    return "";
+  }
+
+  const rows = placements
+    .slice()
+    .sort((left, right) => Number(left.place || 0) - Number(right.place || 0))
+    .map((placement) => {
+      const place = `${placement.place}游`;
+      const player = seatUserLabel(table, placement.seatIndex) || seatLabel(placement.seatIndex);
+      return `
+        <div class="guandan-placement-row">
+          <span class="guandan-placement-place">${escapeHtml(place)}</span>
+          <span class="guandan-placement-player">${escapeHtml(player)}</span>
+        </div>
+      `;
+    }).join("");
+
+  return `<div class="guandan-placement-list" aria-label="本手名次">${rows}</div>`;
+}
+
+function guandanLevelRank(table) {
+  const rank = Number(table?.engine?.public?.levelRank ?? table?.engine?.public?.rank);
+  return Number.isInteger(rank) && rank >= 2 && rank <= 14 ? rank : 2;
+}
+
+function guandanCardId(card) {
+  const id = Number(card?.id ?? card);
+  return Number.isInteger(id) ? id : Number.NaN;
+}
+
+function guandanRankFromCard(card) {
+  if (card?.rank === "small_joker" || card?.rank === "big_joker") {
+    return card.rank;
+  }
+  const explicitRank = Number(card?.rank);
+  if (Number.isInteger(explicitRank) && explicitRank >= 2 && explicitRank <= 14) {
+    return explicitRank;
+  }
+
+  const id = guandanCardId(card);
+  if (!Number.isInteger(id) || id < 0) {
+    return -1;
+  }
+
+  const deckCardId = id % 54;
+  if (deckCardId === 52) {
+    return "small_joker";
+  }
+  if (deckCardId === 53) {
+    return "big_joker";
+  }
+  return deckCardId <= 51 ? 2 + (deckCardId % 13) : -1;
+}
+
+function guandanNormalizeCard(card, levelRank) {
+  const id = guandanCardId(card);
+  const rank = guandanRankFromCard(card);
+  const suit = cardSuitLabels[card?.suit] ? card.suit : cardSuitFromId(id);
+  if (!Number.isInteger(id) || id < 0 || !suit || rank === -1) {
+    return null;
+  }
+
+  return {
+    id,
+    suit,
+    rank,
+    wild: Boolean(card?.wild) || (suit === "heart" && rank === levelRank),
+    source: card
+  };
+}
+
+function guandanNormalizeCards(cards, levelRank) {
+  return (cards || [])
+    .map((card) => guandanNormalizeCard(card, levelRank))
+    .filter(Boolean);
+}
+
+function guandanRankValue(rank, levelRank) {
+  if (rank === "big_joker") {
+    return 17;
+  }
+  if (rank === "small_joker") {
+    return 16;
+  }
+  if (rank === levelRank) {
+    return 15;
+  }
+  return Number(rank);
+}
+
+function guandanIsJokerRank(rank) {
+  return rank === "small_joker" || rank === "big_joker";
+}
+
+function guandanRankCounts(cards) {
+  const counts = new Map();
+  for (const card of cards) {
+    counts.set(card.rank, (counts.get(card.rank) || 0) + 1);
+  }
+  return counts;
+}
+
+function guandanAnalyzeCards(cards, levelRank) {
+  const normalizedCards = guandanNormalizeCards(cards, levelRank);
+  const wildCards = normalizedCards.filter((card) => card.wild);
+  const nonWildCards = normalizedCards.filter((card) => !card.wild);
+  return {
+    levelRank,
+    cards: normalizedCards,
+    wildCards,
+    nonWildCards,
+    nonWildRankCounts: guandanRankCounts(nonWildCards)
+  };
+}
+
+function guandanMakePlay(input) {
+  return {
+    type: input.type,
+    cards: input.facts.cards.map((card) => card.source || card),
+    length: input.facts.cards.length,
+    rank: input.rank,
+    rankValue: input.rankValue,
+    bombLike: Boolean(input.bombLike),
+    ...(input.bombSize === undefined ? {} : { bombSize: input.bombSize }),
+    ...(input.sequenceRanks === undefined ? {} : { sequenceRanks: [...input.sequenceRanks] }),
+    ...(input.suit === undefined ? {} : { suit: input.suit })
+  };
+}
+
+function guandanClassifyCards(cards, levelRank = 2) {
+  if (!cards?.length) {
+    return null;
+  }
+
+  const facts = guandanAnalyzeCards(cards, levelRank);
+  if (facts.cards.length !== cards.length) {
+    return null;
+  }
+
+  const candidates = [
+    guandanClassifyFourJokers(facts),
+    ...guandanClassifyBomb(facts),
+    ...guandanClassifyStraightFlush(facts),
+    ...guandanClassifyTripleWithPair(facts),
+    ...guandanClassifyTripleRun(facts),
+    ...guandanClassifyThreePairRun(facts),
+    ...guandanClassifyStraight(facts),
+    ...guandanClassifyKind(facts, 3, "triple"),
+    ...guandanClassifyKind(facts, 2, "pair"),
+    ...guandanClassifySingle(facts)
+  ].filter(Boolean);
+
+  candidates.sort(guandanComparePlayForClassification);
+  return candidates[candidates.length - 1] || null;
+}
+
+function guandanClassifySingle(facts) {
+  if (facts.cards.length !== 1) {
+    return [];
+  }
+  const card = facts.cards[0];
+  return [guandanMakePlay({
+    type: "single",
+    facts,
+    rank: card.rank,
+    rankValue: guandanRankValue(card.rank, facts.levelRank),
+    bombLike: false
+  })];
+}
+
+function guandanClassifyKind(facts, size, type) {
+  if (facts.cards.length !== size) {
+    return [];
+  }
+
+  const plays = [];
+  for (const rank of guandanComparableRanks) {
+    const nonWildCount = facts.nonWildRankCounts.get(rank) || 0;
+    if (facts.nonWildCards.length !== nonWildCount) {
+      continue;
+    }
+    const missing = size - nonWildCount;
+    if (missing < 0) {
+      continue;
+    }
+    if (guandanIsJokerRank(rank)) {
+      if (missing === 0) {
+        plays.push(guandanMakePlay({
+          type,
+          facts,
+          rank,
+          rankValue: guandanRankValue(rank, facts.levelRank),
+          bombLike: false
+        }));
+      }
+    } else if (missing <= facts.wildCards.length) {
+      plays.push(guandanMakePlay({
+        type,
+        facts,
+        rank,
+        rankValue: guandanRankValue(rank, facts.levelRank),
+        bombLike: false
+      }));
+    }
+  }
+  return plays;
+}
+
+function guandanClassifyTripleWithPair(facts) {
+  if (facts.cards.length !== 5) {
+    return [];
+  }
+
+  const plays = [];
+  for (const tripleRank of guandanNaturalRanks) {
+    for (const pairRank of guandanNaturalRanks) {
+      if (tripleRank === pairRank) {
+        continue;
+      }
+
+      const tripleCount = facts.nonWildRankCounts.get(tripleRank) || 0;
+      const pairCount = facts.nonWildRankCounts.get(pairRank) || 0;
+      if (tripleCount > 3 || pairCount > 2) {
+        continue;
+      }
+      if (facts.nonWildCards.some((card) => card.rank !== tripleRank && card.rank !== pairRank)) {
+        continue;
+      }
+
+      const missing = (3 - tripleCount) + (2 - pairCount);
+      if (missing <= facts.wildCards.length) {
+        plays.push(guandanMakePlay({
+          type: "triple_with_pair",
+          facts,
+          rank: tripleRank,
+          rankValue: guandanRankValue(tripleRank, facts.levelRank),
+          bombLike: false
+        }));
+      }
+    }
+  }
+  return plays;
+}
+
+function guandanClassifyStraight(facts) {
+  return guandanClassifySequence(facts, {
+    type: "straight",
+    groupSize: 1,
+    groupCount: 5
+  });
+}
+
+function guandanClassifyStraightFlush(facts) {
+  if (facts.cards.length !== 5) {
+    return [];
+  }
+
+  const plays = [];
+  for (const suit of Object.keys(cardSuitLabels).filter((candidate) => candidate !== "joker")) {
+    const suitedNonWildCards = facts.nonWildCards.filter((card) => card.suit === suit);
+    if (suitedNonWildCards.length !== facts.nonWildCards.length) {
+      continue;
+    }
+    const suitedFacts = {
+      ...facts,
+      nonWildCards: suitedNonWildCards,
+      nonWildRankCounts: guandanRankCounts(suitedNonWildCards)
+    };
+    plays.push(...guandanClassifySequence(suitedFacts, {
+      type: "straight_flush",
+      groupSize: 1,
+      groupCount: 5,
+      suit
+    }));
+  }
+  return plays;
+}
+
+function guandanClassifyThreePairRun(facts) {
+  return guandanClassifySequence(facts, {
+    type: "three_pair_run",
+    groupSize: 2,
+    groupCount: 3
+  });
+}
+
+function guandanClassifyTripleRun(facts) {
+  return guandanClassifySequence(facts, {
+    type: "triple_run",
+    groupSize: 3,
+    groupCount: 2
+  });
+}
+
+function guandanClassifySequence(facts, input) {
+  const expectedLength = input.groupSize * input.groupCount;
+  if (facts.cards.length !== expectedLength) {
+    return [];
+  }
+  if (facts.nonWildCards.some((card) => guandanIsJokerRank(card.rank))) {
+    return [];
+  }
+
+  const plays = [];
+  for (const sequenceRanks of guandanSequenceRankOptions(input.groupCount)) {
+    const sequenceRankSet = new Set(sequenceRanks);
+    if (facts.nonWildCards.some((card) => !sequenceRankSet.has(card.rank))) {
+      continue;
+    }
+
+    let missing = 0;
+    let invalid = false;
+    for (const rank of sequenceRanks) {
+      const count = facts.nonWildRankCounts.get(rank) || 0;
+      if (count > input.groupSize) {
+        invalid = true;
+        break;
+      }
+      missing += input.groupSize - count;
+    }
+    if (invalid || missing > facts.wildCards.length) {
+      continue;
+    }
+
+    const rank = sequenceRanks[sequenceRanks.length - 1];
+    plays.push(guandanMakePlay({
+      type: input.type,
+      facts,
+      rank,
+      rankValue: guandanRankValue(rank, facts.levelRank),
+      bombLike: input.type === "straight_flush",
+      sequenceRanks,
+      suit: input.suit
+    }));
+  }
+  return plays;
+}
+
+function guandanSequenceRankOptions(groupCount) {
+  const options = [];
+  if (groupCount > 1) {
+    options.push([14, ...guandanNaturalRanks.slice(0, groupCount - 1)]);
+  }
+  for (let startIndex = 0; startIndex <= guandanNaturalRanks.length - groupCount; startIndex += 1) {
+    const sequenceRanks = guandanNaturalRanks.slice(startIndex, startIndex + groupCount);
+    if (sequenceRanks.length === groupCount) {
+      options.push(sequenceRanks);
+    }
+  }
+  return options;
+}
+
+function guandanClassifyBomb(facts) {
+  if (facts.cards.length < 4) {
+    return [];
+  }
+
+  const plays = [];
+  for (const rank of guandanNaturalRanks) {
+    const nonWildCount = facts.nonWildRankCounts.get(rank) || 0;
+    if (nonWildCount === 0) {
+      continue;
+    }
+    if (facts.nonWildCards.some((card) => card.rank !== rank)) {
+      continue;
+    }
+    if (nonWildCount + facts.wildCards.length === facts.cards.length) {
+      plays.push(guandanMakePlay({
+        type: "bomb",
+        facts,
+        rank,
+        rankValue: guandanRankValue(rank, facts.levelRank),
+        bombLike: true,
+        bombSize: facts.cards.length
+      }));
+    }
+  }
+  return plays;
+}
+
+function guandanClassifyFourJokers(facts) {
+  if (facts.cards.length !== 4 || !facts.cards.every((card) => card.suit === "joker")) {
+    return null;
+  }
+
+  return guandanMakePlay({
+    type: "four_jokers",
+    facts,
+    rank: "big_joker",
+    rankValue: guandanRankValue("big_joker", facts.levelRank),
+    bombLike: true,
+    bombSize: 4
+  });
+}
+
+function guandanComparePlayForClassification(left, right) {
+  const priorityDifference = guandanClassificationPriority(left) - guandanClassificationPriority(right);
+  return priorityDifference !== 0 ? priorityDifference : guandanComparePlays(left, right);
+}
+
+function guandanClassificationPriority(play) {
+  if (play.bombLike) {
+    return 100 + guandanBombTier(play);
+  }
+
+  const priorities = {
+    triple_with_pair: 16,
+    triple_run: 15,
+    three_pair_run: 14,
+    straight: 13,
+    triple: 12,
+    pair: 11,
+    single: 10
+  };
+  return priorities[play.type] || 0;
+}
+
+function guandanBombTier(play) {
+  if (play.type === "four_jokers") {
+    return 100;
+  }
+  if (play.type === "bomb" && (play.bombSize || 0) >= 6) {
+    return 60 + (play.bombSize || 0);
+  }
+  if (play.type === "straight_flush") {
+    return 50;
+  }
+  if (play.type === "bomb" && play.bombSize === 5) {
+    return 40;
+  }
+  if (play.type === "bomb" && play.bombSize === 4) {
+    return 30;
+  }
+  return 0;
+}
+
+function guandanComparePlays(challenger, lead) {
+  if (!challenger || !lead) {
+    return challenger ? 1 : -1;
+  }
+  if (challenger.bombLike || lead.bombLike) {
+    if (!challenger.bombLike) {
+      return -1;
+    }
+    if (!lead.bombLike) {
+      return 1;
+    }
+
+    const tierDifference = guandanBombTier(challenger) - guandanBombTier(lead);
+    if (tierDifference !== 0) {
+      return tierDifference;
+    }
+    if (challenger.type === "bomb" && lead.type === "bomb") {
+      const sizeDifference = (challenger.bombSize || 0) - (lead.bombSize || 0);
+      if (sizeDifference !== 0) {
+        return sizeDifference;
+      }
+    }
+    return challenger.rankValue - lead.rankValue;
+  }
+
+  if (challenger.type !== lead.type || challenger.length !== lead.length) {
+    return -1;
+  }
+  return challenger.rankValue - lead.rankValue;
+}
+
+function guandanActivePlay(table) {
+  const plays = table?.engine?.public?.currentTrick?.plays || [];
+  return plays.length ? plays[plays.length - 1] : null;
+}
+
+function guandanClassifiedActivePlay(table) {
+  const activePlay = guandanActivePlay(table);
+  if (!activePlay?.cards?.length) {
+    return null;
+  }
+
+  const play = guandanClassifyCards(activePlay.cards, guandanLevelRank(table));
+  if (!play) {
+    return null;
+  }
+  return {
+    ...play,
+    type: activePlay.playType || play.type,
+    seatIndex: activePlay.seatIndex
+  };
+}
+
+function guandanPlaySummaryLabel(play) {
+  if (!play) {
+    return "";
+  }
+
+  if (play.type === "four_jokers") {
+    return guandanPlayTypeLabel(play.type);
+  }
+
+  const typeLabel = play.type === "bomb" && play.bombSize
+    ? `${play.bombSize}张炸弹`
+    : guandanPlayTypeLabel(play.type);
+  const rankLabel = guandanRankLabel(play.rank);
+  return [typeLabel, rankLabel && typeLabel !== "四王炸" ? rankLabel : ""].filter(Boolean).join(" ");
+}
+
+function guandanCompareCardsById(left, right, levelRank) {
+  const leftCard = guandanNormalizeCard(left, levelRank);
+  const rightCard = guandanNormalizeCard(right, levelRank);
+  if (!leftCard || !rightCard) {
+    return 0;
+  }
+
+  const rankDifference = guandanRankValue(leftCard.rank, levelRank) - guandanRankValue(rightCard.rank, levelRank);
+  return rankDifference !== 0 ? rankDifference : leftCard.id - rightCard.id;
+}
+
+function guandanIsTributableCard(card, levelRank) {
+  const normalized = guandanNormalizeCard(card, levelRank);
+  return Boolean(normalized && !(normalized.suit === "heart" && normalized.rank === levelRank));
+}
+
+function guandanHighestTributeCard(cards, levelRank) {
+  let highest = null;
+  for (const card of cards || []) {
+    if (!guandanIsTributableCard(card, levelRank)) {
+      continue;
+    }
+    if (!highest || guandanCompareCardsById(card, highest, levelRank) > 0) {
+      highest = card;
+    }
+  }
+  return highest;
+}
+
+function guandanIsReturnTributeCard(card) {
+  const rank = guandanRankFromCard(card);
+  return typeof rank === "number" && rank <= 10;
+}
+
+function guandanSelectionPreview(table, cards = selectedHandCards()) {
+  const empty = {
+    visible: false,
+    tone: "idle",
+    text: "",
+    canSubmitTribute: false,
+    canSubmitReturn: false,
+    canSubmitPlay: false,
+    play: null
+  };
+  if (!isGuandanTable(table) || !isViewerInActiveHand(table)) {
+    return empty;
+  }
+
+  const tributeAction = action(table, "guandan.tribute");
+  const returnAction = action(table, "guandan.returnTribute");
+  const playAction = action(table, "guandan.playCards");
+  const selectedCount = cards.length;
+  const levelRank = guandanLevelRank(table);
+
+  if (tributeAction.enabled) {
+    if (selectedCount === 0) {
+      return { ...empty, visible: true, text: "请选择 1 张最高可进贡牌" };
+    }
+    if (selectedCount !== 1) {
+      return { ...empty, visible: true, tone: "invalid", text: "进贡只能选择 1 张牌" };
+    }
+
+    const selected = cards[0];
+    const highest = guandanHighestTributeCard(table.engine?.private?.cards || [], levelRank);
+    if (!guandanIsTributableCard(selected, levelRank)) {
+      return { ...empty, visible: true, tone: "invalid", text: "逢人配不能进贡" };
+    }
+    if (highest && guandanCardId(selected) !== guandanCardId(highest)) {
+      return { ...empty, visible: true, tone: "invalid", text: `必须进贡最高牌：${guandanCardLabel(highest, levelRank)}` };
+    }
+
+    return { ...empty, visible: true, tone: "valid", text: `进贡 ${guandanCardLabel(selected, levelRank)}`, canSubmitTribute: true };
+  }
+
+  if (returnAction.enabled) {
+    if (selectedCount === 0) {
+      return { ...empty, visible: true, text: "请选择 1 张 10 或以下的还贡牌" };
+    }
+    if (selectedCount !== 1) {
+      return { ...empty, visible: true, tone: "invalid", text: "还贡只能选择 1 张牌" };
+    }
+
+    const selected = cards[0];
+    if (!guandanIsReturnTributeCard(selected)) {
+      return { ...empty, visible: true, tone: "invalid", text: "还贡必须选择 10 或以下的牌" };
+    }
+
+    return { ...empty, visible: true, tone: "valid", text: `还贡 ${guandanCardLabel(selected, levelRank)}`, canSubmitReturn: true };
+  }
+
+  if (!playAction.enabled) {
+    return empty;
+  }
+
+  const activePlay = guandanClassifiedActivePlay(table);
+  if (selectedCount === 0) {
+    return {
+      ...empty,
+      visible: true,
+      text: activePlay ? `请选择能大过 ${guandanPlaySummaryLabel(activePlay)} 的牌，或不出` : "请选择要出的牌"
+    };
+  }
+
+  const play = guandanClassifyCards(cards, levelRank);
+  if (!play) {
+    return { ...empty, visible: true, tone: "invalid", text: `所选 ${selectedCount} 张牌不成牌型` };
+  }
+  if (activePlay && guandanComparePlays(play, activePlay) <= 0) {
+    return {
+      ...empty,
+      visible: true,
+      tone: "invalid",
+      play,
+      text: `必须大过 ${guandanPlaySummaryLabel(activePlay)}`
+    };
+  }
+
+  return {
+    ...empty,
+    visible: true,
+    tone: "valid",
+    text: activePlay
+      ? `可出 ${guandanPlaySummaryLabel(play)}`
+      : `领出 ${guandanPlaySummaryLabel(play)}`,
+    canSubmitPlay: true,
+    play
+  };
+}
+
+function guandanCardLabel(card, levelRank = 2) {
+  const normalized = guandanNormalizeCard(card, levelRank);
+  if (!normalized) {
+    return cardLabelText(card);
+  }
+  if (normalized.rank === "small_joker" || normalized.rank === "big_joker") {
+    return guandanRankLabel(normalized.rank);
+  }
+  return `${cardSuitLabels[normalized.suit] || ""}${guandanRankLabel(normalized.rank)}`;
+}
+
+function guandanActionPromptText(table) {
+  if (!isGuandanTable(table) || !isViewerInActiveHand(table)) {
+    return "";
+  }
+
+  const tributeAction = action(table, "guandan.tribute");
+  if (tributeAction.enabled) {
+    return "轮到你进贡";
+  }
+
+  const returnAction = action(table, "guandan.returnTribute");
+  if (returnAction.enabled) {
+    const assignment = guandanReturnAssignmentForViewer(table);
+    const contributor = assignment
+      ? seatUserLabel(table, assignment.contributorSeatIndex) || seatLabel(assignment.contributorSeatIndex)
+      : "";
+    return contributor ? `轮到你还贡给${contributor}` : "轮到你还贡";
+  }
+
+  const playAction = action(table, "guandan.playCards");
+  if (playAction.enabled) {
+    const activePlay = guandanClassifiedActivePlay(table);
+    if (activePlay) {
+      const player = seatUserLabel(table, activePlay.seatIndex) || seatLabel(activePlay.seatIndex);
+      return `轮到你：大过${player}的${guandanPlaySummaryLabel(activePlay)}，或不出`;
+    }
+    return "轮到你：请出牌";
+  }
+
+  return "";
+}
+
+function guandanReturnAssignmentForViewer(table) {
+  const seatIndex = Number(table?.viewer?.seatIndex);
+  if (!Number.isInteger(seatIndex)) {
+    return null;
+  }
+
+  return (table?.engine?.public?.tribute?.assignments || [])
+    .find((assignment) => Number(assignment.receiverSeatIndex) === seatIndex) || null;
+}
+
+function guandanSelectionPreviewHtml(preview) {
+  if (!preview?.visible || !preview.text) {
+    return "";
+  }
+
+  return `<div class="guandan-selection-preview guandan-selection-preview-${escapeAttribute(preview.tone || "idle")}" aria-live="polite">${escapeHtml(preview.text)}</div>`;
+}
+
+function guandanActionPromptHtml(text) {
+  return text ? `<div class="guandan-action-prompt">${escapeHtml(text)}</div>` : "";
+}
+
+function guandanActionPanelSignature(table) {
+  if (!isGuandanTable(table)) {
+    return "";
+  }
+
+  const tribute = table?.engine?.public?.tribute || {};
+  return [
+    table.engine?.public?.phase || table.phase || "",
+    table.engine?.public?.levelRank ?? table.engine?.public?.rank ?? "",
+    visibleTrickSignature(table),
+    (tribute.submittedSeatIndexes || []).join(","),
+    (tribute.returnedSeatIndexes || []).join(","),
+    (tribute.assignments || []).map((assignment) => [
+      assignment.contributorSeatIndex,
+      assignment.receiverSeatIndex,
+      assignment.card?.id ?? "",
+      assignment.returnCard?.id ?? ""
+    ].join(":")).join(";")
+  ].join("|");
+}
+
+function guandanHandHintContext(table) {
+  if (!isGuandanTable(table) || !isViewerInActiveHand(table)) {
+    return null;
+  }
+
+  const levelRank = guandanLevelRank(table);
+  const tributeEnabled = action(table, "guandan.tribute").enabled;
+  const returnEnabled = action(table, "guandan.returnTribute").enabled;
+  return {
+    levelRank,
+    tributeEnabled,
+    returnEnabled,
+    highestTributeCard: tributeEnabled ? guandanHighestTributeCard(table.engine?.private?.cards || [], levelRank) : null
+  };
+}
+
+function guandanHandCardHint(table, card, context = guandanHandHintContext(table)) {
+  if (!context) {
+    return { classes: "", title: "" };
+  }
+
+  const levelRank = context.levelRank;
+  if (context.tributeEnabled) {
+    const highest = context.highestTributeCard;
+    if (highest && guandanCardId(card) === guandanCardId(highest)) {
+      return { classes: "hand-card-guandan-hint hand-card-guandan-required", title: "最高可进贡牌" };
+    }
+    if (!guandanIsTributableCard(card, levelRank)) {
+      return { classes: "hand-card-guandan-muted", title: "逢人配不能进贡" };
+    }
+    return { classes: "hand-card-guandan-muted", title: "不是最高可进贡牌" };
+  }
+
+  if (context.returnEnabled) {
+    if (guandanIsReturnTributeCard(card)) {
+      return { classes: "hand-card-guandan-hint", title: "可还贡牌（10 或以下）" };
+    }
+    return { classes: "hand-card-guandan-muted", title: "还贡必须选择 10 或以下的牌" };
+  }
+
+  return { classes: "", title: "" };
+}
+
+function guandanHandHintSignature(table, seat) {
+  if (!isGuandanTable(table) || !isPrivateHandSeat(table, seat?.seatIndex)) {
+    return "";
+  }
+
+  return [
+    actionSignature(action(table, "guandan.tribute")),
+    actionSignature(action(table, "guandan.returnTribute")),
+    guandanLevelRank(table),
+    (table.engine?.private?.cards || []).map((card) => card?.id ?? card).join(",")
+  ].join(":");
+}
+
 function seatHtml(table, seat) {
   const user = seat.user;
   const occupied = Boolean(user);
@@ -3813,18 +5325,22 @@ function seatHtml(table, seat) {
   const trick = seatTrickHtml(table, seat.seatIndex);
   const hand = seatHandHtml(table, seat.seatIndex);
   const rank = seatRankHtml(table, seat.seatIndex);
+  const remainingCards = seatRemainingCardCountHtml(table, seat.seatIndex);
+  const teamClass = seatTeamClass(table, seat.seatIndex);
   const tableActions = isViewerSeat ? tableActionsHtml(table) : "";
+  const trumpRevealChoices = isViewerSeat ? trumpRevealChoicesHtml(table) : "";
   const playActions = isViewerSeat
-    ? `<div class="seat-play-actions"><div class="table-actions" data-actions-signature="${escapeAttribute(tableActionsRenderSignature(table))}">${tableActions}</div></div>`
+    ? `<div class="seat-play-actions"><div class="table-actions" data-actions-signature="${escapeAttribute(tableActionsRenderSignature(table))}">${tableActions}</div>${trumpRevealChoices}</div>`
     : "";
 
   return `
-    <div class="seat seat-${visualSeatIndex} ${isViewerSeat ? "seat-viewer seat-has-table-actions" : ""} ${seat.connected ? "" : "seat-offline"} ${replacementSeat ? "seat-replacement" : ""} ${seatTurn ? "seat-turn" : ""} ${activeSeat ? "seat-active-hand" : ""}" data-seat-index="${seat.seatIndex}">
+    <div class="seat seat-${visualSeatIndex} ${teamClass} ${isViewerSeat ? "seat-viewer seat-has-table-actions" : ""} ${seat.connected ? "" : "seat-offline"} ${replacementSeat ? "seat-replacement" : ""} ${seatTurn ? "seat-turn" : ""} ${activeSeat ? "seat-active-hand" : ""}" data-seat-index="${seat.seatIndex}">
       ${seatAvatarHtml(table, seat)}
       <div class="seat-info">
         <div class="seat-label-row">
           <span class="seat-number">${escapeHtml(seatNumberLabel(seat.seatIndex))}</span>
           ${rank}
+          ${remainingCards}
         </div>
         <div class="seat-name">${occupied ? escapeHtml(user.displayName) : seatLabel(seat.seatIndex)}</div>
       </div>
@@ -3843,7 +5359,7 @@ function seatRankHtml(table, seatIndex) {
     return "";
   }
 
-  const label = `打${rankLabel(rank)}`;
+  const label = `打${isGuandanTable(table) ? guandanRankLabel(rank) : rankLabel(rank)}`;
   return `<span class="seat-rank" title="${escapeAttribute(`当前${label}`)}">${escapeHtml(label)}</span>`;
 }
 
@@ -3851,6 +5367,27 @@ function seatPlayerRank(table, seatIndex) {
   const rank = playerForSeat(table.engine?.public || {}, seatIndex)?.rank;
   const numericRank = Number(rank);
   return Number.isInteger(numericRank) ? numericRank : undefined;
+}
+
+function seatRemainingCardCountHtml(table, seatIndex) {
+  const count = seatRemainingCardCount(table, seatIndex);
+  if (count === undefined) {
+    return "";
+  }
+
+  return `<span class="seat-card-count" title="${escapeAttribute(`剩余 ${count} 张牌`)}">${escapeHtml(`剩${count}张`)}</span>`;
+}
+
+function seatRemainingCardCount(table, seatIndex) {
+  if (!isGuandanTable(table) || !table.engineReady) {
+    return undefined;
+  }
+
+  const numericSeatIndex = Number(seatIndex);
+  const entry = (table.engine?.public?.cardCounts || [])
+    .find((candidate) => Number(candidate.seatIndex) === numericSeatIndex);
+  const count = Number(entry?.count);
+  return Number.isInteger(count) && count >= 0 ? count : undefined;
 }
 
 function seatAvatarHtml(table, seat) {
@@ -3889,12 +5426,49 @@ function isForumAvatarUrl(url) {
 function seatSideLabel(table, seatIndex) {
   const publicState = table.engine?.public;
   const player = playerForSeat(publicState, seatIndex);
+  if (isGuandanTable(table)) {
+    return guandanSeatSideLabel(table, player);
+  }
+
   const defendingTeam = defendingTeamForHand(publicState);
   if (!player?.team || !defendingTeam) {
     return "";
   }
 
   return player.team === defendingTeam ? "庄家方" : "抓分方";
+}
+
+function guandanSeatSideLabel(table, player) {
+  if (!player?.team) {
+    return "";
+  }
+
+  const viewerTeam = playerForSeat(table.engine?.public, tablePerspectiveSeatIndex(table))?.team || "";
+  if (viewerTeam) {
+    return player.team === viewerTeam ? "同队" : "对手";
+  }
+
+  return guandanTeamLabel(player.team);
+}
+
+function seatTeamClass(table, seatIndex) {
+  const team = playerForSeat(table.engine?.public, seatIndex)?.team || "";
+  if (team === "north_south" || team === "vertical") {
+    return "seat-team-north-south";
+  }
+  if (team === "east_west" || team === "horizontal") {
+    return "seat-team-east-west";
+  }
+  if (!isGuandanTable(table)) {
+    const numericSeatIndex = Number(seatIndex);
+    if (numericSeatIndex === 0 || numericSeatIndex === 2) {
+      return "seat-team-north-south";
+    }
+    if (numericSeatIndex === 1 || numericSeatIndex === 3) {
+      return "seat-team-east-west";
+    }
+  }
+  return "";
 }
 
 function defendingTeamForHand(publicState) {
@@ -4108,7 +5682,10 @@ function activePauseDetails(table) {
 }
 
 function tableActionsHtml(table) {
-  const makeTrumpAction = action(table, "tractor.makeTrump");
+  if (isGuandanTable(table)) {
+    return guandanTableActionsHtml(table);
+  }
+
   const discardAction = action(table, "tractor.discardBottom");
   const playAction = action(table, "tractor.playCards");
   const autoPlayAction = action(table, "tractor.autoPlay");
@@ -4117,13 +5694,6 @@ function tableActionsHtml(table) {
   const disabled = isGameInteractionLocked() || Boolean(state.transitionRoomKey) || hasRoomTransitionPending() || isRoomMutationPending(roomKey);
   const parts = [];
 
-  if (makeTrumpAction.enabled) {
-    const label = trumpActionLabel(table);
-    const title = table.phase === "burying_bottom"
-      ? "请选择比当前主更强的级牌对子或王对"
-      : "请选择一张级牌、级牌对子或王对";
-    parts.push(`<button data-action="tractor.makeTrump" type="button" ${!disabled && !isActionPending("tractor.makeTrump", roomKey) && inferTrumpPayload(selectedCards, table) ? "" : "disabled"} title="${escapeAttribute(title)}">${escapeHtml(label)}</button>`);
-  }
   if (discardAction.enabled) {
     parts.push(`<button data-action="tractor.discardBottom" type="button" ${!disabled && !isActionPending("tractor.discardBottom", roomKey) && selectedCards.length === discardAction.count ? "" : "disabled"} title="请选择 ${discardAction.count} 张牌">埋牌</button>`);
   }
@@ -4135,6 +5705,170 @@ function tableActionsHtml(table) {
   }
 
   return parts.join("");
+}
+
+function trumpRevealChoicesHtml(table) {
+  const makeTrumpAction = action(table, "tractor.makeTrump");
+  if (isGuandanTable(table) || !makeTrumpAction.enabled) {
+    return "";
+  }
+
+  const options = quickTrumpOptions(table);
+  if (!options.length) {
+    return "";
+  }
+
+  const roomKey = table.room?.roomKey || "";
+  const disabled = isGameInteractionLocked()
+    || Boolean(state.transitionRoomKey)
+    || hasRoomTransitionPending()
+    || isRoomMutationPending(roomKey)
+    || isActionPending("tractor.makeTrump", roomKey);
+  const label = table.phase === "burying_bottom" ? "反主" : "亮牌";
+  const actionLabel = trumpActionLabel(table);
+  const buttons = options.map((option) => {
+    const suitClass = option.suit === "heart" || option.suit === "diamond" || option.exposure === "pair_red_joker" ? "trump-reveal-red" : "trump-reveal-black";
+    const symbol = option.label || cardSuitSymbols[option.suit] || "";
+    const exposureText = option.exposure === "pair_rank" ? "对子" : "";
+    const title = `${actionLabel}${option.label || cardSuitLabels[option.suit] || ""}${exposureText}`;
+    return `
+      <button
+        class="trump-reveal-button ${suitClass}"
+        data-action="tractor.makeTrump"
+        data-trump-suit="${escapeAttribute(option.suit)}"
+        data-trump-exposure="${escapeAttribute(option.exposure)}"
+        type="button"
+        ${disabled ? "disabled" : ""}
+        title="${escapeAttribute(title)}"
+        aria-label="${escapeAttribute(title)}"
+      >
+        <span class="trump-reveal-symbol">${escapeHtml(symbol)}</span>
+        ${exposureText ? `<span class="trump-reveal-exposure">${escapeHtml(exposureText)}</span>` : ""}
+      </button>
+    `;
+  }).join("");
+
+  return `
+    <div class="trump-reveal-row" role="group" aria-label="${escapeAttribute(label)}">
+      <span class="trump-reveal-label">${escapeHtml(label)}</span>
+      ${buttons}
+    </div>
+  `;
+}
+
+function quickTrumpOptionsSignature(table) {
+  return quickTrumpOptions(table)
+    .map((option) => `${option.suit}:${option.exposure}`)
+    .join(",");
+}
+
+function quickTrumpOptions(table) {
+  const makeTrumpAction = action(table, "tractor.makeTrump");
+  const rank = table?.engine?.public?.rank;
+  const seatIndex = Number(table?.viewer?.seatIndex);
+  if (isGuandanTable(table) || !makeTrumpAction.enabled || rank === undefined || rank === null || !Number.isInteger(seatIndex)) {
+    return [];
+  }
+
+  const cards = visiblePrivateHandCards(table, privateHandCardsForSeat(table, seatIndex));
+  const currentStrength = trumpExposureStrength(table.engine?.public?.trump?.exposure || "none");
+  const countsById = cardCountsById(cards);
+  const optionsBySuit = new Map();
+  cards.forEach(({ card }) => {
+    const suit = cardSuitFromCard(card);
+    if (!suit || !cardSuitLabels[suit] || cardRankFromCard(card) !== rank) {
+      return;
+    }
+
+    const id = comparableCardId(card);
+    const hasPair = Number.isInteger(id) && (countsById.get(id) || 0) >= 2;
+    const pairStrength = trumpExposureStrength("pair_rank");
+    const singleStrength = trumpExposureStrength("single_rank");
+    let exposure = "";
+    if (hasPair && pairStrength > currentStrength) {
+      exposure = "pair_rank";
+    } else if (singleStrength > currentStrength) {
+      exposure = "single_rank";
+    }
+    if (!exposure) {
+      return;
+    }
+
+    const previous = optionsBySuit.get(suit);
+    if (!previous || trumpExposureStrength(exposure) > trumpExposureStrength(previous.exposure)) {
+      optionsBySuit.set(suit, { suit, exposure });
+    }
+  });
+
+  return Object.keys(cardSuitLabels)
+    .map((suit) => optionsBySuit.get(suit))
+    .filter(Boolean)
+    .concat(jokerTrumpOptions(countsById, currentStrength));
+}
+
+function cardCountsById(cards) {
+  const counts = new Map();
+  cards.forEach(({ card }) => {
+    const id = comparableCardId(card);
+    if (Number.isInteger(id)) {
+      counts.set(id, (counts.get(id) || 0) + 1);
+    }
+  });
+  return counts;
+}
+
+function comparableCardId(card) {
+  const id = Number(card?.id);
+  return Number.isInteger(id) && id >= 0 ? id % 54 : Number.NaN;
+}
+
+function jokerTrumpOptions(countsById, currentStrength) {
+  const options = [];
+  if ((countsById.get(52) || 0) >= 2 && trumpExposureStrength("pair_black_joker") > currentStrength) {
+    options.push({ suit: "joker", exposure: "pair_black_joker", label: "小王对" });
+  }
+  if ((countsById.get(53) || 0) >= 2 && trumpExposureStrength("pair_red_joker") > currentStrength) {
+    options.push({ suit: "joker", exposure: "pair_red_joker", label: "大王对" });
+  }
+  return options;
+}
+
+function guandanTableActionsHtml(table) {
+  const tributeAction = action(table, "guandan.tribute");
+  const returnAction = action(table, "guandan.returnTribute");
+  const playAction = action(table, "guandan.playCards");
+  const passAction = action(table, "guandan.pass");
+  const selectedCards = selectedHandCards();
+  const roomKey = table.room.roomKey;
+  const disabled = isGameInteractionLocked() || Boolean(state.transitionRoomKey) || hasRoomTransitionPending() || isRoomMutationPending(roomKey);
+  const preview = guandanSelectionPreview(table, selectedCards);
+  const prompt = guandanActionPromptText(table);
+  const parts = [];
+
+  if (tributeAction.enabled) {
+    parts.push(`<button data-action="guandan.tribute" type="button" ${!disabled && !isActionPending("guandan.tribute", roomKey) && preview.canSubmitTribute ? "" : "disabled"} title="${escapeAttribute(preview.text || "请选择一张最高可进贡牌")}">进贡</button>`);
+  }
+  if (returnAction.enabled) {
+    parts.push(`<button data-action="guandan.returnTribute" type="button" ${!disabled && !isActionPending("guandan.returnTribute", roomKey) && preview.canSubmitReturn ? "" : "disabled"} title="${escapeAttribute(preview.text || "请选择一张 10 或以下的牌")}">还贡</button>`);
+  }
+  if (playAction.enabled) {
+    parts.push(`<button class="table-action-play" data-action="guandan.playCards" type="button" ${!disabled && !isActionPending("guandan.playCards", roomKey) && preview.canSubmitPlay ? "" : "disabled"} title="${escapeAttribute(preview.text || "请选择要出的牌")}">出选中的牌</button>`);
+  }
+  if (passAction.enabled) {
+    parts.push(`<button class="table-action-pass" data-action="guandan.pass" type="button" ${!disabled && !isActionPending("guandan.pass", roomKey) ? "" : "disabled"} title="不跟本轮">不出</button>`);
+  }
+
+  if (!prompt && !preview.visible && !parts.length) {
+    return "";
+  }
+
+  return `
+    <div class="guandan-action-panel">
+      ${guandanActionPromptHtml(prompt)}
+      ${guandanSelectionPreviewHtml(preview)}
+      ${parts.length ? `<div class="guandan-action-buttons">${parts.join("")}</div>` : ""}
+    </div>
+  `;
 }
 
 function syncTableActions(table) {
@@ -4165,20 +5899,27 @@ function tableActionsRenderSignature(table) {
   const roomKey = table.room?.roomKey || "";
   return [
     state.selectedHandIndexes.join(","),
-    actionSignature(action(table, "tractor.makeTrump")),
     actionSignature(action(table, "tractor.discardBottom")),
     actionSignature(action(table, "tractor.playCards")),
     actionSignature(action(table, "tractor.autoPlay")),
+    actionSignature(action(table, "guandan.tribute")),
+    actionSignature(action(table, "guandan.returnTribute")),
+    actionSignature(action(table, "guandan.playCards")),
+    actionSignature(action(table, "guandan.pass")),
+    guandanActionPanelSignature(table),
     state.authenticated ? "1" : "0",
     state.connecting ? "1" : "0",
     state.recovering ? "1" : "0",
     state.transitionRoomKey,
     hasRoomTransitionPending() ? "1" : "0",
     isRoomMutationPending(roomKey) ? "1" : "0",
-    isActionPending("tractor.makeTrump", roomKey) ? "1" : "0",
     isActionPending("tractor.discardBottom", roomKey) ? "1" : "0",
     isActionPending("tractor.playCards", roomKey) ? "1" : "0",
-    isActionPending("tractor.autoPlay", roomKey) ? "1" : "0"
+    isActionPending("tractor.autoPlay", roomKey) ? "1" : "0",
+    isActionPending("guandan.tribute", roomKey) ? "1" : "0",
+    isActionPending("guandan.returnTribute", roomKey) ? "1" : "0",
+    isActionPending("guandan.playCards", roomKey) ? "1" : "0",
+    isActionPending("guandan.pass", roomKey) ? "1" : "0"
   ].join("|");
 }
 
@@ -4187,7 +5928,8 @@ function ownerStartActionHtml(table) {
     return "";
   }
 
-  const startAction = action(table, "tractor.start");
+  const startType = isGuandanTable(table) ? "guandan.start" : "tractor.start";
+  const startAction = action(table, startType);
   if (!startAction.enabled && !table.viewer?.owner) {
     return "";
   }
@@ -4197,13 +5939,13 @@ function ownerStartActionHtml(table) {
     || Boolean(state.transitionRoomKey)
     || hasRoomTransitionPending()
     || isRoomMutationPending(roomKey)
-    || isActionPending("tractor.start", roomKey)
+    || isActionPending(startType, roomKey)
     || !startAction.enabled;
   const label = table.phase === "finished" ? "开始下一局" : "发牌";
   const title = !startAction.enabled
     ? tableActionReasonText(table, startAction.reason || "waiting_for_four_ready_players")
     : "";
-  return `<button class="table-action-start" data-action="tractor.start" type="button" ${disabled ? "disabled" : ""} title="${escapeAttribute(title)}">${escapeHtml(label)}</button>`;
+  return `<button class="table-action-start" data-action="${escapeAttribute(startType)}" type="button" ${disabled ? "disabled" : ""} title="${escapeAttribute(title)}">${escapeHtml(label)}</button>`;
 }
 
 function isSeatTurn(table, seatIndex) {
@@ -4216,12 +5958,18 @@ function isPrivateHandSeat(table, seatIndex) {
 }
 
 function visibleTrick(table) {
-  const currentTrick = table.engine?.public?.currentTrick;
-  return currentTrick?.plays?.length
-    ? currentTrick
-    : isTrickReviewActive(table)
-      ? table.engine?.public?.lastCompletedTrick
-      : currentTrick || null;
+  const publicState = table.engine?.public || {};
+  const currentTrick = publicState.currentTrick;
+  if (currentTrick?.plays?.length) {
+    return currentTrick;
+  }
+
+  const lastCompletedTrick = publicState.lastCompletedTrick;
+  if (lastCompletedTrick?.plays?.length && (isTrickReviewActive(table) || (table.phase === "playing" && currentTrick))) {
+    return lastCompletedTrick;
+  }
+
+  return currentTrick || null;
 }
 
 function seatTrickHtml(table, seatIndex) {
@@ -4255,20 +6003,73 @@ function seatHandHtml(table, seatIndex) {
 }
 
 function privateSeatHandHtml(table, cards) {
+  const visibleCards = visiblePrivateHandCards(table, cards);
   const selected = new Set(state.selectedHandIndexes);
-  const trumpCandidates = trumpCandidateIndexes(table, cards);
-  const nodes = cards.map(({ card, index }) => `
-    <button class="hand-card ${trumpCandidates.has(index) ? "hand-card-trump-candidate" : ""}" data-card-index="${index}" aria-pressed="${selected.has(index) ? "true" : "false"}" type="button" ${trumpCandidates.has(index) ? 'title="可亮牌"' : ""}>
-      ${cardFaceHtml(card, "hand-card-face")}
-      <span class="hand-card-label">${escapeHtml(cardLabelText(card))}</span>
-    </button>
-  `).join("");
+  const trumpCandidates = trumpCandidateIndexes(table, visibleCards);
+  const guandanHintContext = guandanHandHintContext(table);
+  const nodes = visibleCards.map(({ card, index }) => {
+    const guandanHint = guandanHandCardHint(table, card, guandanHintContext);
+    const classes = [
+      "hand-card",
+      trumpCandidates.has(index) ? "hand-card-trump-candidate" : "",
+      guandanHint.classes
+    ].filter(Boolean).join(" ");
+    const title = guandanHint.title || (trumpCandidates.has(index) ? "可亮牌" : "");
+    return `
+      <button class="${classes}" data-card-index="${index}" aria-pressed="${selected.has(index) ? "true" : "false"}" type="button" ${title ? `title="${escapeAttribute(title)}"` : ""}>
+        ${cardFaceHtml(card, "hand-card-face")}
+        <span class="hand-card-label">${escapeHtml(cardLabelText(card))}</span>
+      </button>
+    `;
+  }).join("");
   const style = [
-    `--hand-count: ${Math.max(cards.length, 1)}`,
-    `--hand-overlap: ${handCardOverlapPx(cards.length)}px`
+    `--hand-count: ${Math.max(visibleCards.length, 1)}`,
+    `--hand-overlap: ${handCardOverlapPx(visibleCards.length)}px`
   ].join("; ");
+  const handSignature = privateHandRenderSignature(table, visibleCards, trumpCandidates, guandanHintContext);
 
-  return `<div class="seat-hand seat-hand-private" data-hand-count="${cards.length}" style="${style}">${nodes}</div>`;
+  return `<div class="seat-hand seat-hand-private" data-hand-count="${visibleCards.length}" data-hand-signature="${escapeAttribute(handSignature)}" style="${style}">${nodes}</div>`;
+}
+
+function privateHandRenderSignature(table, visibleCards, trumpCandidates, guandanHintContext) {
+  const guandanHintSignature = guandanHintContext
+    ? [
+        guandanHintContext.levelRank ?? "",
+        guandanHintContext.tributeEnabled ? "tribute" : "",
+        guandanHintContext.returnEnabled ? "return" : "",
+        guandanHintContext.highestTributeCard?.id ?? "",
+        guandanHintContext.highestTributeCard?.deckIndex ?? ""
+      ].join(":")
+    : "";
+  return [
+    table.room?.roomKey || "",
+    table.phase || "",
+    table.engine?.public?.handId || "",
+    visibleCards.map(({ card, index }) => [
+      index,
+      card?.id ?? card,
+      card?.deckIndex ?? "",
+      card?.suit ?? "",
+      card?.rank ?? "",
+      card?.wild ? "1" : "0"
+    ].join(":")).join(","),
+    Array.from(trumpCandidates).sort((left, right) => left - right).join(","),
+    guandanHintSignature
+  ].join("|");
+}
+
+function visiblePrivateHandCards(table, cards) {
+  const descriptor = tractorDealingDescriptor(table, cards);
+  if (!descriptor || descriptor.key !== state.dealingHandKey) {
+    return cards;
+  }
+
+  const visibleCount = Math.min(Math.max(state.dealingVisibleCount, 0), cards.length);
+  const order = state.dealingCardIndexes.length === cards.length
+    ? state.dealingCardIndexes
+    : cards.map((_, index) => index);
+  const revealedIndexes = new Set(order.slice(0, visibleCount));
+  return cards.filter((_, index) => revealedIndexes.has(index));
 }
 
 function trumpCandidateIndexes(table, cards) {
@@ -4279,13 +6080,7 @@ function trumpCandidateIndexes(table, cards) {
   }
 
   const currentStrength = trumpExposureStrength(table.engine?.public?.trump?.exposure || "none");
-  const countsById = new Map();
-  cards.forEach(({ card }) => {
-    const id = Number(card?.id);
-    if (Number.isInteger(id)) {
-      countsById.set(id, (countsById.get(id) || 0) + 1);
-    }
-  });
+  const countsById = cardCountsById(cards);
 
   const candidates = new Set();
   cards.forEach(({ card, index }) => {
@@ -4297,7 +6092,7 @@ function trumpCandidateIndexes(table, cards) {
 }
 
 function isTrumpCandidateCard(card, rank, currentStrength, countsById) {
-  const id = Number(card?.id);
+  const id = comparableCardId(card);
   if (!Number.isInteger(id)) {
     return false;
   }
@@ -4424,7 +6219,30 @@ function bottomPileCardsHtml(cards) {
   `).join("");
 }
 
+function summaryBottomCards(summary, table) {
+  const rawCards = summary?.bottomCards
+    || summary?.bottom_cards
+    || summary?.buriedCards
+    || summary?.buried_cards
+    || summary?.bottom
+    || table?.engine?.public?.bottomCards
+    || table?.engine?.public?.bottom_cards
+    || table?.engine?.public?.bottom
+    || [];
+  if (!Array.isArray(rawCards)) {
+    return [];
+  }
+
+  return rawCards
+    .map((card) => typeof card === "number" ? { id: card } : card)
+    .filter((card) => card && Number.isInteger(Number(card.id)));
+}
+
 function handSummaryHtml(table) {
+  if (isGuandanTable(table)) {
+    return guandanHandSummaryHtml(table);
+  }
+
   const summary = table.engine?.public?.handSummary;
   if (!summary) {
     return "";
@@ -4459,8 +6277,62 @@ function handSummaryHtml(table) {
   `;
 }
 
+function guandanHandSummaryHtml(table) {
+  const publicState = table.engine?.public || {};
+  if (publicState.phase !== "finished" && !publicState.rankAdvance) {
+    return "";
+  }
+
+  const advance = publicState.rankAdvance || {};
+  const placements = (publicState.placements || [])
+    .slice()
+    .sort((left, right) => Number(left.place || 0) - Number(right.place || 0))
+    .map((placement) => `
+      <div class="hand-summary-team hand-summary-placement ${placement.team === advance.winnerTeam ? "hand-summary-winner" : ""}">
+        <strong>${escapeHtml(`${placement.place}游`)}</strong>
+        <span>${escapeHtml(seatUserLabel(table, placement.seatIndex) || seatLabel(placement.seatIndex))}</span>
+        <small>${escapeHtml(guandanTeamLabel(placement.team))}</small>
+      </div>
+    `).join("");
+  const winner = advance.winnerTeam ? guandanTeamLabel(advance.winnerTeam) : "";
+  const rankText = advance.rankBefore
+    ? `${guandanRankLabel(advance.rankBefore)} → ${guandanRankLabel(advance.rankAfter)}（${guandanRankMoveText(advance)}）`
+    : "";
+  const nextStarter = Number.isInteger(Number(advance.nextStarterSeatIndex))
+    ? seatUserLabel(table, advance.nextStarterSeatIndex) || seatLabel(advance.nextStarterSeatIndex)
+    : "";
+  const partner = Number.isInteger(Number(advance.partnerSeatIndex))
+    ? seatUserLabel(table, advance.partnerSeatIndex) || seatLabel(advance.partnerSeatIndex)
+    : "";
+  const winnerLead = winner ? `${winner}获胜` : "本手已结束";
+  const winnerDetail = partner && advance.partnerPlace
+    ? `头游搭档${partner}为${advance.partnerPlace}游`
+    : "";
+  const waitingText = handSummaryWaitingText(table);
+  const startAction = ownerStartActionHtml(table);
+
+  return `
+    <div class="hand-summary-panel hand-summary-guandan">
+      <div class="hand-summary-title">本手结束，等待房主开始下一手</div>
+      ${waitingText ? `<div class="hand-summary-waiting">${escapeHtml(waitingText)}</div>` : ""}
+      <div class="hand-summary-meta hand-summary-guandan-main">
+        <strong>${escapeHtml(winnerLead)}</strong>
+        ${rankText ? `<span>${escapeHtml(rankText)}</span>` : ""}
+      </div>
+      ${winnerDetail || nextStarter ? `
+        <div class="hand-summary-meta hand-summary-next">
+          ${winnerDetail ? `<span>${escapeHtml(winnerDetail)}</span>` : ""}
+          ${nextStarter ? `<span>下手先出：${escapeHtml(nextStarter)}</span>` : ""}
+        </div>
+      ` : ""}
+      ${placements ? `<div class="hand-summary-teams hand-summary-placements">${placements}</div>` : ""}
+      ${startAction ? `<div class="hand-summary-actions">${startAction}</div>` : ""}
+    </div>
+  `;
+}
+
 function handSummaryWaitingText(table) {
-  const startAction = action(table, "tractor.start");
+  const startAction = action(table, isGuandanTable(table) ? "guandan.start" : "tractor.start");
   if (startAction.enabled) {
     return "";
   }
@@ -4474,6 +6346,19 @@ function handSummaryWaitingText(table) {
   }
 
   return startAction.reason ? actionReasonText(startAction.reason) : "";
+}
+
+function guandanRankMoveText(advance) {
+  if (advance.matchFinished) {
+    return "过A";
+  }
+  if (advance.resetToTwo) {
+    return "回到2";
+  }
+  if (advance.rankDelta > 0) {
+    return `升${advance.rankDelta}级`;
+  }
+  return "不升级";
 }
 
 function unreadyActiveSeatLabels(table) {
@@ -4523,7 +6408,7 @@ function turnTimerHtml(table) {
   }
 
   const viewerTurn = table.viewer?.seatIndex === turn.seatIndex;
-  const actionLabel = table.phase === "burying_bottom" ? "埋牌" : "出牌";
+  const actionLabel = turnTimerActionLabel(table, turn);
   const label = viewerTurn ? `轮到你${actionLabel}` : `${seatLabel(turn.seatIndex)}${actionLabel}`;
   return `
     <div class="turn-timer" data-viewer-turn="${viewerTurn ? "true" : "false"}" data-turn-deadline="${escapeAttribute(turn.deadlineAt)}" data-turn-started="${escapeAttribute(turn.startedAt || "")}" data-turn-countdown="${escapeAttribute(turn.countdownSeconds || "")}">
@@ -4532,6 +6417,20 @@ function turnTimerHtml(table) {
       <span class="turn-timer-bar" aria-hidden="true"><span></span></span>
     </div>
   `;
+}
+
+function turnTimerActionLabel(table, turn) {
+  if (isGuandanTable(table)) {
+    const labels = {
+      tribute: "进贡",
+      returnTribute: "还贡",
+      playCards: "出牌",
+      pass: "不出"
+    };
+    return labels[turn?.autoAction] || (table.phase === "tribute" ? "进贡" : "出牌");
+  }
+
+  return table.phase === "burying_bottom" ? "埋牌" : "出牌";
 }
 
 function trickReviewTimerHtml(table) {
@@ -4761,7 +6660,8 @@ function handleTableAction(type, seatValue, button = null) {
       })
       .catch((error) => reportActionError(error, button));
   } else if (type === "tractor.makeTrump") {
-    const payload = inferTrumpPayload(selectedHandCards(), state.table);
+    const payload = quickTrumpPayloadFromButton(button, state.table)
+      || (!button?.dataset?.trumpSuit ? inferTrumpPayload(selectedHandCards(), state.table) : null);
     if (payload) {
       setStatus(`正在${trumpActionLabel(state.table)}...`);
       markActionButtonPending(button);
@@ -4803,6 +6703,63 @@ function handleTableAction(type, seatValue, button = null) {
     setStatus("正在自动出牌...");
     markActionButtonPending(button);
     void sendEngineCommand("tractor.autoPlay", roomKey, {}, button);
+  } else if (type === "guandan.start") {
+    const roomEpoch = state.roomEpoch;
+    const previousTable = state.table;
+    setStatus("正在发牌...");
+    markActionButtonPending(button);
+    void sendCommand("guandan.start", { roomKey, payload: {}, roomEpoch })
+      .then((response) => {
+        if (state.roomEpoch === roomEpoch && state.currentRoomKey === roomKey && response.payload?.table) {
+          setStatus(engineCommandStatus(type, response.payload.table, previousTable));
+        }
+      })
+      .catch((error) => reportActionError(error, button));
+  } else if (type === "guandan.tribute") {
+    const cards = selectedHandCards();
+    const preview = guandanSelectionPreview(state.table, cards);
+    if (!preview.canSubmitTribute) {
+      setStatus(preview.text || "请选择一张进贡牌");
+      return;
+    }
+    setStatus("正在进贡...");
+    markActionButtonPending(button);
+    void sendEngineCommand("guandan.tribute", roomKey, { cardId: cards[0].id }, button);
+  } else if (type === "guandan.returnTribute") {
+    const cards = selectedHandCards();
+    const preview = guandanSelectionPreview(state.table, cards);
+    if (!preview.canSubmitReturn) {
+      setStatus(preview.text || "请选择一张还贡牌");
+      return;
+    }
+    setStatus("正在还贡...");
+    markActionButtonPending(button);
+    void sendEngineCommand("guandan.returnTribute", roomKey, { cardId: cards[0].id }, button);
+  } else if (type === "guandan.playCards") {
+    const playAction = action(state.table, "guandan.playCards");
+    if (!playAction.enabled) {
+      setStatus(tableActionReasonText(state.table, playAction.reason || "play_not_open"));
+      return;
+    }
+    const cards = selectedHandCards();
+    const preview = guandanSelectionPreview(state.table, cards);
+    if (!preview.canSubmitPlay) {
+      setStatus(preview.text || "请选择要出的牌");
+      return;
+    }
+    setStatus("正在出牌...");
+    markActionButtonPending(button);
+    void sendEngineCommand("guandan.playCards", roomKey, { cards: cards.map((card) => card.id) }, button);
+  } else if (type === "guandan.pass") {
+    const passAction = action(state.table, "guandan.pass");
+    if (!passAction.enabled) {
+      setStatus(tableActionReasonText(state.table, passAction.reason || "play_not_open"));
+      return;
+    }
+    state.selectedHandIndexes = [];
+    setStatus("正在不出...");
+    markActionButtonPending(button);
+    void sendEngineCommand("guandan.pass", roomKey, {}, button);
   }
 }
 
@@ -4814,14 +6771,15 @@ function markActionButtonPending(button) {
 
 function playSingleCardFromDoubleClick(cardIndex, cardButton) {
   const roomKey = state.currentRoomKey;
-  const blockedReason = tableActionBlockedReason("tractor.playCards", roomKey);
+  const playType = isGuandanTable(state.table) ? "guandan.playCards" : "tractor.playCards";
+  const blockedReason = tableActionBlockedReason(playType, roomKey);
   if (blockedReason) {
     setStatus(blockedReason);
     return;
   }
 
   const table = state.table;
-  const playAction = action(table, "tractor.playCards");
+  const playAction = action(table, playType);
   if (!playAction.enabled) {
     setStatus(tableActionReasonText(table, playAction.reason || "play_not_open"));
     return;
@@ -4832,12 +6790,97 @@ function playSingleCardFromDoubleClick(cardIndex, cardButton) {
     return;
   }
 
+  if (isGuandanTable(table)) {
+    const preview = guandanSelectionPreview(table, [card]);
+    if (!preview.canSubmitPlay) {
+      setStatus(preview.text || "这张牌现在不能出");
+      return;
+    }
+  } else {
+    const blocked = tractorSingleCardPlayBlockedReason(table, card);
+    if (blocked) {
+      setStatus(blocked);
+      return;
+    }
+  }
+
   state.selectedHandIndexes = [cardIndex];
   refreshSelectionUi(cardIndex, cardButton);
   setStatus("正在出牌...");
-  const playButton = viewerTableActionsElement()?.querySelector('[data-action="tractor.playCards"]');
+  const playButton = viewerTableActionsElement()?.querySelector(`[data-action="${playType}"]`);
   markActionButtonPending(playButton);
-  void sendEngineCommand("tractor.playCards", roomKey, { cards: [card.id] }, playButton);
+  void sendEngineCommand(playType, roomKey, { cards: [card.id] }, playButton);
+}
+
+function tractorSingleCardPlayBlockedReason(table, card) {
+  if (!table || isGuandanTable(table)) {
+    return "";
+  }
+
+  const trick = table.engine?.public?.currentTrick;
+  const plays = trick?.plays || [];
+  if (!plays.length) {
+    return "";
+  }
+
+  const leadingCount = Number(trick.leadingCount || plays[0]?.cards?.length || 0);
+  if (!Number.isFinite(leadingCount) || leadingCount < 1) {
+    return "当前墩不能双击单张出牌";
+  }
+  if (leadingCount !== 1) {
+    return `本墩要跟 ${leadingCount} 张牌，不能双击单张出牌`;
+  }
+
+  const leadingSuit = trick.leadingSuit || tractorEffectiveSuitForCard(table, plays[0]?.cards?.[0]);
+  const selectedSuit = tractorEffectiveSuitForCard(table, card);
+  if (!leadingSuit || selectedSuit === leadingSuit) {
+    return "";
+  }
+
+  const hasLeadingSuit = (table.engine?.private?.cards || [])
+    .some((candidate) => tractorEffectiveSuitForCard(table, candidate) === leadingSuit);
+  if (!hasLeadingSuit) {
+    return "";
+  }
+
+  const suitText = effectiveSuitText(leadingSuit, table.engine?.public?.trump?.suit) || "主牌";
+  return `手里还有${suitText}，不能双击垫其他花色`;
+}
+
+function tractorEffectiveSuitForCard(table, card) {
+  if (!card) {
+    return "";
+  }
+
+  const trump = table?.engine?.public?.trump || {};
+  const trumpSuit = trump.suit || "none";
+  const rank = Number(table?.engine?.public?.rank);
+  const id = Number(card?.id ?? card);
+  if (!Number.isInteger(id) || id < 0) {
+    return "";
+  }
+
+  if (card?.trump === true || isTractorTrumpCardId(id, trumpSuit, rank)) {
+    return trumpSuit;
+  }
+  return cardSuitFromId(id % 54);
+}
+
+function isTractorTrumpCardId(cardId, trumpSuit, rank) {
+  const id = Number(cardId);
+  if (!Number.isInteger(id) || id < 0) {
+    return false;
+  }
+
+  const deckCardId = id % 54;
+  if (deckCardId >= 52) {
+    return true;
+  }
+
+  const suit = cardSuitFromId(deckCardId);
+  const cardRank = cardRankFromId(deckCardId);
+  return (Number.isInteger(rank) && cardRank === rank)
+    || (trumpSuit && trumpSuit !== "none" && suit === trumpSuit);
 }
 
 function reportActionError(error, button) {
@@ -4894,7 +6937,7 @@ async function sendEngineCommand(type, roomKey, payload, button = null) {
   } catch (error) {
     restoreActionButton(button);
     reportError(error);
-    if (type && String(type).startsWith("tractor.") && roomKey && state.currentRoomKey === roomKey) {
+    if (type && (String(type).startsWith("tractor.") || String(type).startsWith("guandan.")) && roomKey && state.currentRoomKey === roomKey) {
       void refreshTable(roomKey).catch(() => undefined);
     }
   }
@@ -4903,26 +6946,55 @@ async function sendEngineCommand(type, roomKey, payload, button = null) {
 function engineCommandStatus(commandType, table, previousTable = null) {
   const nextSeatIndex = table?.engine?.public?.currentTrick?.nextSeatIndex;
   const isViewerTurn = nextSeatIndex !== undefined && table?.viewer?.seatIndex === nextSeatIndex;
+  const nextSeatLabel = seatUserLabel(table, nextSeatIndex) || seatLabel(nextSeatIndex);
 
-  if (commandType === "tractor.start" && table?.phase === "making_trump") {
-    const makeTrumpAction = action(table, "tractor.makeTrump");
-    return makeTrumpAction.enabled ? "发牌成功，请选择级牌亮主" : "发牌成功，等待亮主";
+	if (String(commandType).startsWith("guandan.")) {
+		if (commandType === "guandan.start") {
+			if (table?.phase === "tribute") {
+				return action(table, "guandan.tribute").enabled ? "发牌成功，请进贡" : "发牌成功";
+			}
+			if (table?.phase === "playing") {
+				return isViewerTurn ? "发牌成功，请出牌" : "发牌成功";
+			}
+			return "发牌成功";
+		}
+		if (commandType === "guandan.tribute") {
+			return action(table, "guandan.returnTribute").enabled ? "进贡完成，请还贡" : "进贡完成";
+		}
+		if (commandType === "guandan.returnTribute") {
+			if (table?.phase === "playing") {
+				return isViewerTurn ? "还贡完成，请出牌" : "还贡完成";
+			}
+			return "还贡完成";
+		}
+		if ((commandType === "guandan.playCards" || commandType === "guandan.pass") && table?.phase === "playing") {
+			return isViewerTurn ? "请继续出牌" : "";
+		}
+    if (table?.phase === "finished") {
+      return "本手结束，等待房主开始下一手";
+    }
+    return "牌桌已更新";
   }
-  if (commandType === "tractor.makeTrump" && table?.phase === "burying_bottom") {
-    const discardAction = action(table, "tractor.discardBottom");
-    const label = makeTrumpResultLabel(previousTable);
-    return discardAction.enabled ? `${label}成功，请选择 8 张牌埋牌` : `${label}成功，等待埋牌`;
-  }
-  if (commandType === "tractor.makeTrump" && table?.phase === "making_trump" && Number.isFinite(trumpRevealAtMs(table))) {
-    const label = makeTrumpResultLabel(previousTable);
-    return `${label}成功，等待反主窗口结束后翻开底牌`;
-  }
-  if (commandType === "tractor.discardBottom" && table?.phase === "playing") {
-    return isViewerTurn ? "埋牌完成，请选择要出的牌" : `埋牌完成，等待${seatLabel(nextSeatIndex)}出牌`;
-  }
-  if ((commandType === "tractor.playCards" || commandType === "tractor.autoPlay") && table?.phase === "playing") {
-    return isViewerTurn ? "请继续出牌" : `等待${seatLabel(nextSeatIndex)}出牌`;
-  }
+
+	if (commandType === "tractor.start" && table?.phase === "making_trump") {
+		const makeTrumpAction = action(table, "tractor.makeTrump");
+		return makeTrumpAction.enabled ? "发牌成功，请选择级牌亮主" : "发牌成功";
+	}
+	if (commandType === "tractor.makeTrump" && table?.phase === "burying_bottom") {
+		const discardAction = action(table, "tractor.discardBottom");
+		const label = makeTrumpResultLabel(previousTable);
+		return discardAction.enabled ? `${label}成功，请选择 8 张牌埋牌` : `${label}成功`;
+	}
+	if (commandType === "tractor.makeTrump" && table?.phase === "making_trump" && Number.isFinite(trumpRevealAtMs(table))) {
+		const label = makeTrumpResultLabel(previousTable);
+		return `${label}成功`;
+	}
+	if (commandType === "tractor.discardBottom" && table?.phase === "playing") {
+		return isViewerTurn ? "埋牌完成，请选择要出的牌" : "埋牌完成";
+	}
+	if ((commandType === "tractor.playCards" || commandType === "tractor.autoPlay") && table?.phase === "playing") {
+		return isViewerTurn ? "请继续出牌" : "";
+	}
   if (table?.phase === "finished") {
     return "本局结束，等待房主开始下一局";
   }
@@ -5015,18 +7087,25 @@ function cardFaceHtml(card, className) {
 
 function cardImageUrl(card) {
   const cardId = Number(card?.id);
-  if (!Number.isInteger(cardId) || cardId < 0 || cardId > 54 || !state.assetBaseUrl) {
+  if (!Number.isInteger(cardId) || cardId < 0 || !state.assetBaseUrl) {
     return "";
   }
 
-  const uiCardNumber = serverToUiCardNumber(cardId);
+  const deckCardId = cardId >= 54 ? cardId % 54 : cardId;
+  if (deckCardId > 53) {
+    return "";
+  }
+
+  const uiCardNumber = serverToUiCardNumber(deckCardId);
   return `${state.assetBaseUrl}/tractor/${encodeURIComponent(state.cardStyle)}/tile${String(uiCardNumber).padStart(3, "0")}.png`;
 }
 
 function cardSymbolHtml(card) {
   const id = Number(card?.id);
-  if (id === 52 || id === 53) {
-    const joker = id === 52 ? "小王" : "大王";
+  const deckCardId = Number.isInteger(id) ? id % 54 : Number.NaN;
+  const rank = cardRankFromCard(card);
+  if (deckCardId === 52 || deckCardId === 53 || rank === "small_joker" || rank === "big_joker") {
+    const joker = deckCardId === 52 || rank === "small_joker" ? "小王" : "大王";
     return `
       <span class="card-face-symbol" aria-hidden="true">
         <span class="card-symbol-rank">${joker}</span>
@@ -5036,9 +7115,8 @@ function cardSymbolHtml(card) {
   }
 
   const suit = cardSuitFromCard(card);
-  const rank = cardRankFromCard(card);
   const symbol = cardSuitSymbols[suit] || "";
-  const rankText = cardRankLabels[rank] || "";
+  const rankText = cardDisplayRankLabel(card, rank);
   const fallback = cardLabelText(card);
   return `
     <span class="card-face-symbol" aria-hidden="true">
@@ -5050,12 +7128,20 @@ function cardSymbolHtml(card) {
 
 function cardFaceToneClass(card) {
   const id = Number(card?.id);
-  if (id === 52 || id === 53) {
-    return id === 53 ? "card-face-red card-face-joker" : "card-face-black card-face-joker";
+  const deckCardId = Number.isInteger(id) ? id % 54 : Number.NaN;
+  const rank = cardRankFromCard(card);
+  const classes = [];
+  if (deckCardId === 52 || deckCardId === 53 || rank === "small_joker" || rank === "big_joker") {
+    classes.push(deckCardId === 53 || rank === "big_joker" ? "card-face-red" : "card-face-black", "card-face-joker");
+    return classes.join(" ");
   }
 
   const suit = cardSuitFromCard(card);
-  return suit === "heart" || suit === "diamond" ? "card-face-red" : "card-face-black";
+  classes.push(suit === "heart" || suit === "diamond" ? "card-face-red" : "card-face-black");
+  if (card?.wild) {
+    classes.push("card-face-wild");
+  }
+  return classes.join(" ");
 }
 
 function cardSuitFromCard(card) {
@@ -5065,6 +7151,9 @@ function cardSuitFromCard(card) {
 
 function cardRankFromCard(card) {
   const id = Number(card?.id);
+  if (card?.rank === "small_joker" || card?.rank === "big_joker") {
+    return card.rank;
+  }
   const rank = Number(card?.rank);
   return Number.isInteger(rank) ? rank : cardRankFromId(id);
 }
@@ -5106,14 +7195,63 @@ function trumpActionLabel(table) {
   return table?.phase === "burying_bottom" ? "反主" : "亮主";
 }
 
+function quickTrumpPayloadFromButton(button, table) {
+  const suit = button?.dataset?.trumpSuit || "";
+  const exposure = button?.dataset?.trumpExposure || "";
+  if (!isQuickTrumpPayloadShape(suit, exposure)) {
+    return null;
+  }
+
+  const seatIndex = Number(table?.viewer?.seatIndex);
+  if (!Number.isInteger(seatIndex)) {
+    return null;
+  }
+
+  const payload = { suit, exposure };
+  const cards = visiblePrivateHandCards(table, privateHandCardsForSeat(table, seatIndex));
+  return hasTrumpPayloadInCards(payload, cards, table) ? payload : null;
+}
+
+function isQuickTrumpPayloadShape(suit, exposure) {
+  if (cardSuitLabels[suit]) {
+    return exposure === "single_rank" || exposure === "pair_rank";
+  }
+  return suit === "joker" && (exposure === "pair_black_joker" || exposure === "pair_red_joker");
+}
+
+function hasTrumpPayloadInCards(payload, cards, table) {
+  const rank = table?.engine?.public?.rank;
+  if (rank === undefined || rank === null || !payload) {
+    return false;
+  }
+
+  const currentExposure = table?.engine?.public?.trump?.exposure || "none";
+  if (trumpExposureStrength(payload.exposure) <= trumpExposureStrength(currentExposure)) {
+    return false;
+  }
+
+  if (payload.exposure === "pair_black_joker" || payload.exposure === "pair_red_joker") {
+    const jokerId = payload.exposure === "pair_black_joker" ? 52 : 53;
+    return (cardCountsById(cards).get(jokerId) || 0) >= 2;
+  }
+
+  const matchingCards = cards.filter(({ card }) => cardSuitFromCard(card) === payload.suit && cardRankFromCard(card) === rank);
+  if (payload.exposure === "single_rank") {
+    return matchingCards.length > 0;
+  }
+
+  const countsById = cardCountsById(matchingCards);
+  return Array.from(countsById.values()).some((count) => count >= 2);
+}
+
 function inferTrumpPayload(cards, table) {
   const rank = table?.engine?.public?.rank;
   if (rank === undefined) {
     return null;
   }
   let payload = null;
-  const firstCardId = Number(cards[0]?.id);
-  const secondCardId = Number(cards[1]?.id);
+  const firstCardId = comparableCardId(cards[0]);
+  const secondCardId = comparableCardId(cards[1]);
   const firstCardSuit = cardSuitFromCard(cards[0]);
   const firstCardRank = cardRankFromCard(cards[0]);
   if (cards.length === 1 && firstCardRank === rank && firstCardSuit && firstCardSuit !== "joker") {
@@ -5167,6 +7305,7 @@ function joinRoom(roomKey) {
     state.emojiTarget = "";
     state.selectedHandIndexes = [];
     state.handSignature = "";
+    clearDealingAnimation();
     resetPlayLog(roomKey);
     state.table = null;
     state.currentRoomKey = "";
@@ -5327,21 +7466,26 @@ function updateRenderedChatEvents(keys) {
 }
 
 function renderedChatMessageCount() {
-  return els.chatMessages.querySelectorAll(":scope > .chat-message").length;
+  const last = els.chatMessages.lastElementChild;
+  const anchorCount = last?.classList?.contains("chat-bottom-anchor") ? 1 : 0;
+  return Math.max(0, els.chatMessages.childElementCount - anchorCount);
 }
 
 function renderedChatMessageAt(index) {
-  return els.chatMessages.querySelectorAll(":scope > .chat-message")[index] || null;
+  const node = els.chatMessages.children[index] || null;
+  return node?.classList?.contains("chat-message") ? node : null;
 }
 
 function chatBottomAnchorNode() {
-  let anchor = els.chatMessages.querySelector(":scope > .chat-bottom-anchor");
+  let anchor = els.chatMessages.lastElementChild?.classList?.contains("chat-bottom-anchor")
+    ? els.chatMessages.lastElementChild
+    : els.chatMessages.querySelector(":scope > .chat-bottom-anchor");
   if (!anchor) {
     anchor = document.createElement("div");
     anchor.className = "chat-bottom-anchor";
     anchor.setAttribute("aria-hidden", "true");
   }
-  if (anchor.parentElement !== els.chatMessages) {
+  if (anchor.parentElement !== els.chatMessages || anchor !== els.chatMessages.lastElementChild) {
     els.chatMessages.append(anchor);
   }
   return anchor;
@@ -5393,7 +7537,7 @@ function scrollChatMessagesToBottom() {
   }
 
   chatBottomAnchorNode();
-  els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+  els.chatMessages.scrollTop = 1000000;
 }
 
 function clearChatState(clearDraft = true) {
@@ -5698,42 +7842,81 @@ function rankLabel(rank) {
     return "-";
   }
 
-  return cardRankLabels[rank] || String(rank);
+  return cardRankLabel(rank);
+}
+
+function cardRankLabel(rank) {
+  if (rank === "small_joker") {
+    return "小王";
+  }
+  if (rank === "big_joker") {
+    return "大王";
+  }
+
+  return cardRankLabels[Number(rank)] || String(rank);
+}
+
+function cardDisplayRankLabel(card, rank = cardRankFromCard(card)) {
+  return isGuandanCardView(card) ? guandanRankLabel(rank) : cardRankLabel(rank);
+}
+
+function isGuandanCardView(card) {
+  if (!card || typeof card !== "object") {
+    return false;
+  }
+
+  return Object.prototype.hasOwnProperty.call(card, "deckIndex")
+    || Object.prototype.hasOwnProperty.call(card, "wild");
 }
 
 function cardLabelText(card) {
   const id = Number(card?.id);
-  if (id === 52) {
+  const deckCardId = Number.isInteger(id) ? id % 54 : Number.NaN;
+  if (deckCardId === 52 || card?.rank === "small_joker") {
     return "小王";
   }
-  if (id === 53) {
+  if (deckCardId === 53 || card?.rank === "big_joker") {
     return "大王";
   }
 
   const suit = cardSuitLabels[card?.suit] ? card.suit : cardSuitFromId(id);
-  const rank = Number.isInteger(Number(card?.rank)) ? Number(card.rank) : cardRankFromId(id);
-  const label = `${cardSuitLabels[suit] || ""}${cardRankLabels[rank] || ""}`;
+  const rank = cardRankFromCard(card);
+  const label = `${cardSuitLabels[suit] || ""}${cardDisplayRankLabel(card, rank)}`;
   return label || card?.label || "";
 }
 
 function cardSuitFromId(id) {
-  if (!Number.isInteger(id) || id < 0 || id > 51) {
+  if (!Number.isInteger(id) || id < 0) {
     return "";
   }
-  if (id < 13) {
+  const deckCardId = id % 54;
+  if (deckCardId > 51) {
+    return "joker";
+  }
+  if (deckCardId < 13) {
     return "heart";
   }
-  if (id < 26) {
+  if (deckCardId < 26) {
     return "spade";
   }
-  if (id < 39) {
+  if (deckCardId < 39) {
     return "diamond";
   }
   return "club";
 }
 
 function cardRankFromId(id) {
-  return Number.isInteger(id) && id >= 0 && id <= 51 ? id % 13 : -1;
+  if (!Number.isInteger(id) || id < 0) {
+    return -1;
+  }
+  const deckCardId = id % 54;
+  if (deckCardId === 52) {
+    return "small_joker";
+  }
+  if (deckCardId === 53) {
+    return "big_joker";
+  }
+  return deckCardId <= 51 ? deckCardId % 13 : -1;
 }
 
 function trumpLabel(trump) {
@@ -5742,15 +7925,29 @@ function trumpLabel(trump) {
   }
 
   const suits = {
-    heart: "红桃主",
-    spade: "黑桃主",
-    diamond: "方块主",
-    club: "梅花主",
+    heart: `${cardSuitSymbols.heart}主`,
+    spade: `${cardSuitSymbols.spade}主`,
+    diamond: `${cardSuitSymbols.diamond}主`,
+    club: `${cardSuitSymbols.club}主`,
     joker: "王主"
   };
   const label = suits[trump.suit] || "无主";
   const exposure = trumpExposureLabel(trump.exposure);
   return exposure ? `${label}（${exposure}）` : label;
+}
+
+function trumpLabelHtml(trump) {
+  if (!trump || trump.suit === "none" || !cardSuitSymbols[trump.suit]) {
+    return escapeHtml(trumpLabel(trump));
+  }
+
+  const tone = trump.suit === "heart" || trump.suit === "diamond" ? "red" : "black";
+  const exposure = trumpExposureLabel(trump.exposure);
+  return `
+    <span class="trump-label">
+      <span class="trump-label-symbol trump-label-${tone}">${escapeHtml(cardSuitSymbols[trump.suit])}</span><span class="trump-label-main">主</span>${exposure ? `<span class="trump-label-exposure">（${escapeHtml(exposure)}）</span>` : ""}
+    </span>
+  `;
 }
 
 function trumpExposureLabel(exposure) {
@@ -5764,8 +7961,27 @@ function trumpExposureLabel(exposure) {
 }
 
 function setStatus(message) {
-  els.actionStatus.textContent = message;
+  const text = String(message || "");
+  const noticeShown = syncTableStatusNotice(text);
+  els.actionStatus.textContent = noticeShown || tableNoticeIgnoredMessages.has(text) ? "" : text;
   renderTopbar();
+}
+
+function syncTableStatusNotice(message) {
+  const roomKey = state.table?.room?.roomKey || state.currentRoomKey || "";
+  const nextNotice = tableNoticeIgnoredMessages.has(message) || !state.table || state.table?.room?.roomKey !== roomKey
+    ? ""
+    : message;
+  if (state.tableStatusNotice === nextNotice && state.tableStatusNoticeRoomKey === (nextNotice ? roomKey : "")) {
+    return Boolean(nextNotice);
+  }
+
+  state.tableStatusNotice = nextNotice;
+  state.tableStatusNoticeRoomKey = nextNotice ? roomKey : "";
+  if (state.table) {
+    scheduleRender();
+  }
+  return Boolean(nextNotice);
 }
 
 function reportError(error) {
@@ -6028,7 +8244,7 @@ function skinDisplayName(skin) {
 }
 
 function serverErrorText(code, message) {
-  if (code === "tractor_game_paused") {
+  if (code === "tractor_game_paused" || code === "guandan_game_paused") {
     return pausedErrorText();
   }
 
@@ -6043,6 +8259,7 @@ function serverErrorText(code, message) {
     not_in_room: "请先进入房间",
     not_implemented: "该操作暂未开放",
     not_room_owner: "只有房主可以操作",
+    not_guandan_room: "该房间不是掼蛋房间",
     not_tractor_room: "该房间不是拖拉机房间",
     room_not_found: "房间不存在",
     room_closed: "房间已关闭",
@@ -6097,6 +8314,47 @@ function serverErrorText(code, message) {
     refresh_unavailable: "用户状态暂时无法刷新",
     session_not_active: "游戏会话未激活",
     session_not_found: "游戏会话不存在",
+    guandan_card_not_held: "请选择自己手里的牌",
+    guandan_duplicate_card: "不能重复选择同一张牌",
+    guandan_hand_active: "本房间已有进行中的掼蛋牌局",
+    guandan_hand_finished: "本手掼蛋已经结束",
+    guandan_hand_not_active: "本房间没有进行中的掼蛋",
+    guandan_hand_not_finished: "本手尚未结束",
+    guandan_invalid_card: "掼蛋牌面无效",
+    guandan_invalid_deck: "掼蛋牌堆无效",
+    guandan_invalid_placements: "掼蛋名次无效",
+    guandan_invalid_play: "所选牌型不合法",
+    guandan_invalid_rank: "级牌无效",
+    guandan_invalid_recovery_snapshot: "掼蛋恢复快照无效",
+    guandan_invalid_return_card: "还贡必须选择 10 或以下的牌",
+    guandan_invalid_seat: "掼蛋座位无效",
+    guandan_invalid_starter: "先手座位无效",
+    guandan_missing_player: "掼蛋玩家信息缺失",
+    guandan_invalid_tribute_card: "逢人配不能进贡",
+    guandan_no_next_player: "无法确定下一位出牌玩家",
+    guandan_not_player: "只有入座玩家可以操作",
+    guandan_not_return_player: "当前不需要您还贡",
+    guandan_not_tribute_player: "当前不需要您进贡",
+    guandan_not_turn: "还没轮到您出牌",
+    guandan_pass_on_lead: "首家必须出牌，不能不出",
+    guandan_persistence_unavailable: "掼蛋保存服务暂时不可用",
+    guandan_play_not_big_enough: "所选牌必须大过当前牌",
+    guandan_players_changed: "玩家已变化，不能继续下一手",
+    guandan_players_not_ready: "四名玩家都在线并准备后才能开始",
+    guandan_requires_four_seats: "掼蛋需要四个座位",
+    guandan_return_already_submitted: "您已经还贡",
+    guandan_snapshot_unavailable: "掼蛋恢复数据暂不可用",
+    guandan_start_not_open: "当前不能开始掼蛋",
+    guandan_summary_unavailable: "本手结算暂不可用",
+    guandan_tribute_already_submitted: "您已经进贡",
+    guandan_tribute_incomplete: "进贡尚未完成",
+    guandan_tribute_leader_missing: "无法确定进贡后的先手",
+    guandan_tribute_not_open: "当前不能进贡",
+    guandan_tribute_not_highest_card: "进贡必须选择最高可进贡牌",
+    guandan_tribute_not_ready: "进贡完成后才能还贡",
+    guandan_trick_not_open: "当前不能出牌",
+    guandan_trick_reviewing: "请先看完上一墩出牌",
+    guandan_waiting_for_four_ready_players: "四名玩家都在线并准备后才能开始",
     tractor_bottom_cards_not_held: "埋牌必须从您的手牌中选择",
     tractor_card_count_mismatch: "出牌张数必须与首家一致",
     tractor_cards_not_held: "出牌必须从您的手牌中选择",

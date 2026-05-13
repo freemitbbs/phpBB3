@@ -71,6 +71,8 @@ services:
         arguments:
             - '@cache'
             - '@config'
+            - '@dbal.conn'
+            - '%tables.freemitbbs.cardgamesauth.sessions%'
         calls:
             - [set_name, [cron.task.freemitbbs.cardgamesauth.reset_stale_rooms]]
         tags:

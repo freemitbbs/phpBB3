@@ -406,6 +406,9 @@ class server
 
 		try
 		{
+			$game_type = $this->required_string($data, 'gameType', 'game_type', 32);
+			$this->assert_legacy_game_write_allowed($game_type);
+
 			$now = time();
 			$id = $this->insert_row($this->sessions_table, $this->session_insert_row($data, $now));
 		}
@@ -447,10 +450,38 @@ class server
 			$summary_payload = $this->optional_object($data, 'finishedSummary', 'finished_summary');
 			$lobby_events = $this->optional_rows($data, 'lobbyEvents', 'lobby_events');
 			$now = time();
+			$release_transition_lock = false;
+			$transition_lock_key = $this->transition_lock_key_from_payloads($session_payload ?? [], $event_payload, $snapshot_payload, $session_update_payload, $summary_payload ?? []);
 
 			$this->db->sql_transaction('begin');
 			try
 			{
+				if ($transition_lock_key !== '')
+				{
+					$release_transition_lock = $this->acquire_transition_lock($transition_lock_key);
+				}
+
+				$game_type = $this->transition_game_type($session_payload ?? [], $session_update_payload, $event_payload, $snapshot_payload, $summary_payload ?? []);
+				$request_id = $this->nullable_string_value($event_payload, 'requestId', 'request_id', 64);
+				$room_key = $this->transition_room_key($session_payload ?? [], $session_update_payload, $event_payload, $snapshot_payload, $summary_payload ?? []);
+				if ($request_id !== '' && $room_key !== '')
+				{
+					$existing_event = $this->find_event_by_room_request_id($room_key, $game_type, $request_id);
+					if (!empty($existing_event))
+					{
+						$session_id = (int) ($existing_event['session_id'] ?? 0);
+						$existing_seq = (int) ($existing_event['seq'] ?? 0);
+						$this->assert_transition_event_replay($existing_event, $event_payload, $existing_seq, $game_type);
+						$seq = $this->existing_transition_final_seq($session_id, $game_type, $existing_seq, $lobby_events);
+						$this->db->sql_transaction('commit');
+						return $this->json([
+							'ok' => true,
+							'sessionId' => $session_id,
+							'seq' => $seq,
+						]);
+					}
+				}
+
 				if ($session_payload !== null)
 				{
 					$session = $this->ensure_game_session_for_transition($session_payload, $snapshot_payload, $now);
@@ -476,7 +507,6 @@ class server
 
 				$game_type = $this->transition_game_type(['game_type' => (string) ($session['game_type'] ?? '')], $session_payload ?? [], $session_update_payload, $event_payload, $snapshot_payload, $summary_payload ?? []);
 				$seq = $this->transition_seq($session, $event_payload, $snapshot_payload, $session_update_payload);
-				$request_id = $this->nullable_string_value($event_payload, 'requestId', 'request_id', 64);
 				$existing_event = $this->find_event_by_request_id($session_id, $request_id);
 
 				if (!empty($existing_event))
@@ -552,6 +582,13 @@ class server
 				$this->db->sql_transaction('rollback');
 				throw $e;
 			}
+			finally
+			{
+				if ($release_transition_lock)
+				{
+					$this->release_transition_lock($transition_lock_key);
+				}
+			}
 		}
 		catch (\InvalidArgumentException $e)
 		{
@@ -592,6 +629,13 @@ class server
 		{
 			return $this->json_error('invalid_json', 'Request body must be a JSON object.', 400);
 		}
+
+		$game_type = $this->transition_payload_game_type($data);
+		if ($game_type === '')
+		{
+			$game_type = $this->load_session_game_type($id);
+		}
+		$this->assert_legacy_game_write_allowed($game_type);
 
 		$updates = [];
 		$this->copy_string_update($updates, $data, 'status', 'status', 32);
@@ -643,8 +687,14 @@ class server
 			$recorded = [];
 			foreach ($events as $event)
 			{
-				if (isset($event['roomKey']) || isset($event['room_key']))
+				if ((isset($event['roomKey']) || isset($event['room_key'])) && $this->transition_payload_session_id($event) <= 0)
 				{
+					$event_type = $this->string_value($event, 'eventType', 'event_type', 64, '');
+					if ($this->is_guandan_game_event_type($event_type))
+					{
+						throw new \InvalidArgumentException('guandan_requires_game_transitions');
+					}
+
 					$result = $this->record_lobby_event($event);
 					$inserted += (int) $result['inserted'];
 					$skipped += (int) $result['skipped'];
@@ -657,10 +707,12 @@ class server
 
 				$session_id = $this->required_int($event, 'sessionId', 'session_id');
 				$seq = $this->required_int($event, 'seq', 'seq');
+				$game_type = $this->required_string($event, 'gameType', 'game_type', 32);
+				$this->assert_legacy_game_write_allowed($game_type);
 				$insert = $this->try_insert_row($this->events_table, [
 					'session_id' => $session_id,
 					'seq' => $seq,
-					'game_type' => $this->required_string($event, 'gameType', 'game_type', 32),
+					'game_type' => $game_type,
 					'actor_user_id' => $this->nullable_int_value($event, 'actorUserId', 'actor_user_id'),
 					'request_id' => $this->nullable_string_value($event, 'requestId', 'request_id', 64),
 					'event_type' => $this->required_string($event, 'eventType', 'event_type', 64),
@@ -856,12 +908,14 @@ class server
 			{
 				$session_id = $this->required_int($snapshot, 'sessionId', 'session_id');
 				$seq = $this->required_int($snapshot, 'seq', 'seq');
+				$game_type = $this->required_string($snapshot, 'gameType', 'game_type', 32);
+				$this->assert_legacy_game_write_allowed($game_type);
 				$row = [
 					'session_id' => $session_id,
 					'seq' => $seq,
-					'game_type' => $this->required_string($snapshot, 'gameType', 'game_type', 32),
-					'state_schema_version' => $this->int_value($snapshot, 'stateSchemaVersion', 'state_schema_version', 1),
-					'state_json' => $this->json_value($snapshot, 'state', 'state_json', new \stdClass()),
+					'game_type' => $game_type,
+					'state_schema_version' => $this->snapshot_schema_version($snapshot),
+					'state_json' => $this->snapshot_state_json($snapshot),
 					'created_at' => $this->time_value($snapshot, 'createdAt', 'created_at', time()),
 				];
 
@@ -910,9 +964,11 @@ class server
 		try
 		{
 			$session_id = $this->required_int($data, 'sessionId', 'session_id');
+			$game_type = $this->required_string($data, 'gameType', 'game_type', 32);
+			$this->assert_legacy_game_write_allowed($game_type);
 			$row = [
 				'session_id' => $session_id,
-				'game_type' => $this->required_string($data, 'gameType', 'game_type', 32),
+				'game_type' => $game_type,
 				'room_key' => $this->required_string($data, 'roomKey', 'room_key', 64),
 				'winner_json' => $this->json_value($data, 'winner', 'winner_json', new \stdClass()),
 				'score_json' => $this->json_value($data, 'score', 'score_json', new \stdClass()),
@@ -1260,10 +1316,12 @@ class server
 			return false;
 		}
 
-		return (int) ($snapshot['schemaVersion'] ?? 0) === 1
-			&& (string) ($snapshot['gameType'] ?? '') === 'tractor'
-			&& (string) ($snapshot['roomKey'] ?? '') !== ''
-			&& (string) ($snapshot['handId'] ?? '') !== '';
+		$game_type = (string) ($snapshot['gameType'] ?? $snapshot['game_type'] ?? '');
+
+		return (int) ($snapshot['schemaVersion'] ?? $snapshot['schema_version'] ?? 0) === 1
+			&& in_array($game_type, ['tractor', 'guandan'], true)
+			&& (string) ($snapshot['roomKey'] ?? $snapshot['room_key'] ?? '') !== ''
+			&& (string) ($snapshot['handId'] ?? $snapshot['hand_id'] ?? '') !== '';
 	}
 
 	protected function load_recovery_members(array $session_ids): array
@@ -1276,7 +1334,7 @@ class server
 			return [];
 		}
 
-		$sql = 'SELECT session_id, user_id, role, seat_index, watched_seat_index, connected, left_at
+		$sql = 'SELECT session_id, user_id, role, seat_index, watched_seat_index, ready, connected, left_at
 			FROM ' . $this->room_members_table . '
 			WHERE ' . $this->db->sql_in_set('session_id', $session_ids) . '
 			ORDER BY session_id ASC, joined_at ASC, id ASC';
@@ -1349,6 +1407,7 @@ class server
 			}
 
 			$seats[$seat_index]['user'] = $this->room_user_payload($users[$user_id]);
+			$seats[$seat_index]['ready'] = (bool) ((int) ($member_row['ready'] ?? 0));
 			$seats[$seat_index]['connected'] = false;
 		}
 		foreach ($players as $player)
@@ -2479,6 +2538,51 @@ class server
 		}
 	}
 
+	protected function acquire_transition_lock(string $key): bool
+	{
+		$sql_layer = $this->db->get_sql_layer();
+		if ($this->is_mysql_sql_layer($sql_layer))
+		{
+			$name = $this->transition_lock_name($key);
+			$result = $this->db->sql_query("SELECT GET_LOCK('" . $this->db->sql_escape($name) . "', 10) AS lock_acquired");
+			$acquired = (int) $this->db->sql_fetchfield('lock_acquired');
+			$this->db->sql_freeresult($result);
+			if ($acquired !== 1)
+			{
+				throw new \RuntimeException('transition_lock_timeout');
+			}
+
+			return true;
+		}
+
+		if ($sql_layer === 'postgres')
+		{
+			[$first, $second] = $this->transition_postgres_lock_keys($key);
+			$this->db->sql_query('SELECT pg_advisory_xact_lock(' . $first . ', ' . $second . ')');
+		}
+
+		return false;
+	}
+
+	protected function release_transition_lock(string $key): void
+	{
+		if (!$this->is_mysql_sql_layer($this->db->get_sql_layer()))
+		{
+			return;
+		}
+
+		try
+		{
+			$name = $this->transition_lock_name($key);
+			$result = $this->db->sql_query("SELECT RELEASE_LOCK('" . $this->db->sql_escape($name) . "') AS lock_released");
+			$this->db->sql_freeresult($result);
+		}
+		catch (\Throwable $e)
+		{
+			// The request is ending; do not mask the original write result with a best-effort unlock failure.
+		}
+	}
+
 	protected function is_mysql_sql_layer(string $sql_layer): bool
 	{
 		return $sql_layer === 'mysqli' || str_contains($sql_layer, 'mysql');
@@ -2492,6 +2596,20 @@ class server
 	protected function chat_session_postgres_lock_keys(string $room_key): array
 	{
 		$hash = hash('sha256', 'chat:' . $room_key);
+		return [
+			$this->signed_int32_from_hex(substr($hash, 0, 8)),
+			$this->signed_int32_from_hex(substr($hash, 8, 8)),
+		];
+	}
+
+	protected function transition_lock_name(string $key): string
+	{
+		return 'fmbbs_card_transition_' . sha1($key);
+	}
+
+	protected function transition_postgres_lock_keys(string $key): array
+	{
+		$hash = hash('sha256', 'transition:' . $key);
 		return [
 			$this->signed_int32_from_hex(substr($hash, 0, 8)),
 			$this->signed_int32_from_hex(substr($hash, 8, 8)),
@@ -2521,6 +2639,7 @@ class server
 		return [
 			'room_key' => $this->required_string($data, 'roomKey', 'room_key', 64),
 			'game_type' => $this->required_string($data, 'gameType', 'game_type', 32),
+			'hand_id' => substr(trim((string) ($data['handId'] ?? $data['hand_id'] ?? '')), 0, 64),
 			'status' => $this->string_value($data, 'status', 'status', 32, 'waiting'),
 			'owner_user_id' => $this->nullable_int_value($data, 'ownerUserId', 'owner_user_id'),
 			'settings_json' => $this->json_value($data, 'settings', 'settings_json', new \stdClass()),
@@ -2550,11 +2669,13 @@ class server
 			$existing = $this->find_transition_session_by_hand_id($room_key, $game_type, $hand_id);
 			if (!empty($existing))
 			{
+				$existing['recovered_by_hand_id'] = true;
 				return $existing;
 			}
 		}
 
 		$row = $this->session_insert_row($session, $now);
+		$row['hand_id'] = $hand_id;
 		$id = $this->insert_row($this->sessions_table, $row);
 		return [
 			'id' => $id,
@@ -2588,16 +2709,12 @@ class server
 	protected function find_transition_session_by_hand_id(string $room_key, string $game_type, string $hand_id): array
 	{
 		$hand_id = substr($hand_id, 0, 64);
-		$hand_id_like = $this->sql_like_escape($hand_id);
-		$sql = 'SELECT id, game_type, state_version
-			FROM ' . $this->sessions_table . "
-			WHERE room_key = '" . $this->db->sql_escape($room_key) . "'
-				AND game_type = '" . $this->db->sql_escape($game_type) . "'
-				AND (
-					random_audit_json LIKE '%\"handId\":\"" . $this->db->sql_escape($hand_id_like) . "\"%' ESCAPE '\\\\'
-					OR random_audit_json LIKE '%\"hand_id\":\"" . $this->db->sql_escape($hand_id_like) . "\"%' ESCAPE '\\\\'
-				)
-			ORDER BY id DESC
+		$sql = 'SELECT s.id, s.game_type, s.state_version
+			FROM ' . $this->sessions_table . " s
+			WHERE s.room_key = '" . $this->db->sql_escape($room_key) . "'
+				AND s.game_type = '" . $this->db->sql_escape($game_type) . "'
+				AND s.hand_id = '" . $this->db->sql_escape($hand_id) . "'
+			ORDER BY s.id DESC
 			LIMIT 1
 			FOR UPDATE";
 		$result = $this->db->sql_query($sql);
@@ -2675,6 +2792,32 @@ class server
 		$payload['session_id'] = $session_id;
 	}
 
+	protected function transition_lock_key_from_payloads(array ...$payloads): string
+	{
+		$room_key = $this->transition_room_key(...$payloads);
+		if ($room_key !== '')
+		{
+			return 'room:' . $room_key;
+		}
+
+		$session_id = 0;
+		foreach ($payloads as $payload)
+		{
+			$payload_session_id = $this->transition_payload_session_id($payload);
+			if ($payload_session_id <= 0)
+			{
+				continue;
+			}
+			if ($session_id > 0 && $payload_session_id !== $session_id)
+			{
+				throw new \InvalidArgumentException('session_id_mismatch');
+			}
+			$session_id = $payload_session_id;
+		}
+
+		return $session_id > 0 ? 'session:' . $session_id : '';
+	}
+
 	protected function transition_game_type(array ...$payloads): string
 	{
 		$game_type = '';
@@ -2723,6 +2866,50 @@ class server
 		return $game_type;
 	}
 
+	protected function transition_room_key(array ...$payloads): string
+	{
+		$room_key = '';
+		foreach ($payloads as $payload)
+		{
+			$value = $this->transition_payload_room_key($payload);
+			if ($value === '')
+			{
+				continue;
+			}
+			if ($room_key !== '' && $value !== $room_key)
+			{
+				throw new \InvalidArgumentException('room_key_mismatch');
+			}
+			$room_key = $value;
+		}
+
+		return $room_key;
+	}
+
+	protected function transition_payload_room_key(array $payload): string
+	{
+		$room_key = '';
+		foreach (['roomKey', 'room_key'] as $key)
+		{
+			if (!array_key_exists($key, $payload))
+			{
+				continue;
+			}
+			$value = substr(trim((string) $payload[$key]), 0, 64);
+			if ($value === '')
+			{
+				continue;
+			}
+			if ($room_key !== '' && $value !== $room_key)
+			{
+				throw new \InvalidArgumentException('room_key_mismatch');
+			}
+			$room_key = $value;
+		}
+
+		return $room_key;
+	}
+
 	protected function transition_hand_id(array $session, array $snapshot): string
 	{
 		$random_audit = $session['randomAudit'] ?? $session['random_audit_json'] ?? null;
@@ -2739,6 +2926,20 @@ class server
 			}
 		}
 
+		$snapshot_state = $this->snapshot_state_payload($snapshot);
+		if (is_string($snapshot_state))
+		{
+			$snapshot_state = $this->decode_json_field($snapshot_state, []);
+		}
+		if (is_array($snapshot_state))
+		{
+			$hand_id = trim((string) ($snapshot_state['handId'] ?? $snapshot_state['hand_id'] ?? ''));
+			if ($hand_id !== '')
+			{
+				return substr($hand_id, 0, 64);
+			}
+		}
+
 		return substr(trim((string) ($snapshot['handId'] ?? $snapshot['hand_id'] ?? '')), 0, 64);
 	}
 
@@ -2747,6 +2948,7 @@ class server
 		$event_seq = $this->nullable_int_value($event, 'seq', 'seq');
 		$snapshot_seq = $this->nullable_int_value($snapshot, 'seq', 'seq');
 		$session_update_seq = $this->nullable_int_value($session_update, 'stateVersion', 'state_version');
+		$current_state_version = (int) ($session['state_version'] ?? 0);
 		if ($event_seq > 0 && $snapshot_seq > 0 && $event_seq !== $snapshot_seq)
 		{
 			throw new \InvalidArgumentException('seq_mismatch');
@@ -2757,7 +2959,12 @@ class server
 		}
 
 		$seq = max($event_seq, $snapshot_seq, $session_update_seq);
-		return $seq > 0 ? $seq : max(1, ((int) ($session['state_version'] ?? 0)) + 1);
+		if (!empty($session['recovered_by_hand_id']) && $seq > 0 && $seq <= $current_state_version)
+		{
+			return $current_state_version + 1;
+		}
+
+		return $seq > 0 ? $seq : max(1, $current_state_version + 1);
 	}
 
 	protected function assert_next_transition_seq(int $seq, int $current_state_version): void
@@ -2789,10 +2996,66 @@ class server
 			'session_id' => $session_id,
 			'seq' => $seq,
 			'game_type' => $game_type,
-			'state_schema_version' => $this->int_value($snapshot, 'stateSchemaVersion', 'state_schema_version', 1),
-			'state_json' => $this->json_value($snapshot, 'state', 'state_json', new \stdClass()),
+			'state_schema_version' => $this->snapshot_schema_version($snapshot),
+			'state_json' => $this->snapshot_state_json($snapshot),
 			'created_at' => $this->time_value($snapshot, 'createdAt', 'created_at', time()),
 		];
+	}
+
+	protected function snapshot_schema_version(array $snapshot): int
+	{
+		return (int) ($snapshot['stateSchemaVersion'] ?? $snapshot['state_schema_version'] ?? $snapshot['schemaVersion'] ?? $snapshot['schema_version'] ?? 1);
+	}
+
+	protected function snapshot_state_json(array $snapshot): string
+	{
+		$value = $this->snapshot_state_payload($snapshot);
+		if (is_string($value) && $this->is_valid_json($value))
+		{
+			return $value;
+		}
+
+		return $this->encode_json_value($value);
+	}
+
+	protected function snapshot_state_payload(array $snapshot)
+	{
+		foreach (['state', 'stateJson', 'state_json', 'snapshot'] as $key)
+		{
+			if (array_key_exists($key, $snapshot) && $snapshot[$key] !== null)
+			{
+				return $snapshot[$key];
+			}
+		}
+
+		if ($this->snapshot_has_inline_state($snapshot))
+		{
+			return $this->snapshot_without_transport_fields($snapshot);
+		}
+
+		return new \stdClass();
+	}
+
+	protected function snapshot_has_inline_state(array $snapshot): bool
+	{
+		return array_key_exists('schemaVersion', $snapshot)
+			|| array_key_exists('schema_version', $snapshot)
+			|| array_key_exists('gameType', $snapshot)
+			|| array_key_exists('game_type', $snapshot)
+			|| array_key_exists('roomKey', $snapshot)
+			|| array_key_exists('room_key', $snapshot)
+			|| array_key_exists('handId', $snapshot)
+			|| array_key_exists('hand_id', $snapshot);
+	}
+
+	protected function snapshot_without_transport_fields(array $snapshot): array
+	{
+		foreach (['sessionId', 'session_id', 'seq', 'stateSchemaVersion', 'state_schema_version', 'createdAt', 'created_at'] as $key)
+		{
+			unset($snapshot[$key]);
+		}
+
+		return $snapshot;
 	}
 
 	protected function update_transition_session(int $session_id, array $session, array $snapshot, int $seq, int $current_state_version, int $now): void
@@ -2810,10 +3073,15 @@ class server
 
 		if (!isset($updates['state_schema_version']))
 		{
-			$updates['state_schema_version'] = $this->int_value($snapshot, 'stateSchemaVersion', 'state_schema_version', 1);
+			$updates['state_schema_version'] = $this->snapshot_schema_version($snapshot);
+		}
+		$hand_id = $this->transition_hand_id($session, $snapshot);
+		if ($hand_id !== '')
+		{
+			$updates['hand_id'] = $hand_id;
 		}
 		$updates['state_version'] = max($current_state_version, $seq, $this->int_value($session, 'stateVersion', 'state_version', $seq));
-		$updates['updated_at'] = $this->time_value($session, 'updatedAt', 'updated_at', $now);
+		$updates['updated_at'] = $this->time_value($session, 'updatedAt', 'updated_at', $this->time_value($snapshot, 'updatedAt', 'updated_at', $now));
 
 		$this->db->sql_query('UPDATE ' . $this->sessions_table . '
 			SET ' . $this->db->sql_build_array('UPDATE', $updates) . '
@@ -2926,6 +3194,35 @@ class server
 		];
 	}
 
+	protected function load_session_game_type(int $session_id): string
+	{
+		$sql = 'SELECT game_type
+			FROM ' . $this->sessions_table . '
+			WHERE id = ' . $session_id;
+		$result = $this->db->sql_query_limit($sql, 1);
+		$game_type = (string) $this->db->sql_fetchfield('game_type');
+		$this->db->sql_freeresult($result);
+		if ($game_type === '')
+		{
+			throw new \InvalidArgumentException('invalid_session_id');
+		}
+
+		return $game_type;
+	}
+
+	protected function assert_legacy_game_write_allowed(string $game_type): void
+	{
+		if ($game_type === 'guandan')
+		{
+			throw new \InvalidArgumentException('guandan_requires_game_transitions');
+		}
+	}
+
+	protected function is_guandan_game_event_type(string $event_type): bool
+	{
+		return str_starts_with($event_type, 'guandan.');
+	}
+
 	protected function find_event_by_request_id(int $session_id, string $request_id): array
 	{
 		if ($request_id === '')
@@ -2938,6 +3235,30 @@ class server
 			WHERE session_id = " . $session_id . "
 				AND request_id = '" . $this->db->sql_escape($request_id) . "'
 			ORDER BY id DESC
+			LIMIT 1
+			FOR UPDATE";
+		$result = $this->db->sql_query($sql);
+		$row = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+
+		return is_array($row) ? $row : [];
+	}
+
+	protected function find_event_by_room_request_id(string $room_key, string $game_type, string $request_id): array
+	{
+		if ($room_key === '' || $request_id === '')
+		{
+			return [];
+		}
+
+		$sql = 'SELECT e.id, e.session_id, e.seq, e.game_type, e.actor_user_id, e.request_id, e.event_type, e.payload_json
+			FROM ' . $this->events_table . ' e
+			INNER JOIN ' . $this->sessions_table . " s
+				ON s.id = e.session_id
+			WHERE s.room_key = '" . $this->db->sql_escape(substr($room_key, 0, 64)) . "'
+				AND e.game_type = '" . $this->db->sql_escape(substr($game_type, 0, 32)) . "'
+				AND e.request_id = '" . $this->db->sql_escape(substr($request_id, 0, 64)) . "'
+			ORDER BY e.id DESC
 			LIMIT 1
 			FOR UPDATE";
 		$result = $this->db->sql_query($sql);
@@ -3049,6 +3370,10 @@ class server
 					'connected' => (int) ((bool) ($membership['connected'] ?? 1)),
 					'last_seen_at' => $now,
 				];
+				if (array_key_exists('ready', $membership))
+				{
+					$row['ready'] = (int) ((bool) $membership['ready']);
+				}
 				if ($member_id > 0)
 				{
 					$this->db->sql_query('UPDATE ' . $this->room_members_table . '
@@ -3068,24 +3393,58 @@ class server
 				}
 			break;
 
-			case 'close':
-				if ($member_id > 0)
-				{
-					$this->db->sql_query('UPDATE ' . $this->room_members_table . '
+				case 'close':
+					if ($member_id > 0)
+					{
+						$this->db->sql_query('UPDATE ' . $this->room_members_table . '
 						SET ' . $this->db->sql_build_array('UPDATE', [
 							'connected' => 0,
+							'ready' => 0,
 							'last_seen_at' => $now,
 							'left_at' => $now,
 						]) . '
 						WHERE id = ' . $member_id);
-				}
-			break;
+					}
+				break;
 
-			case 'touch':
-				if ($member_id > 0)
-				{
+				case 'releaseSeat':
+					if ($member_id > 0)
+					{
+						$this->db->sql_query('UPDATE ' . $this->room_members_table . '
+							SET ' . $this->db->sql_build_array('UPDATE', [
+								'connected' => 0,
+								'ready' => 0,
+								'last_seen_at' => $now,
+								'left_at' => $now,
+							]) . '
+							WHERE id = ' . $member_id);
+					}
+
+					$this->insert_row($this->room_members_table, [
+						'session_id' => $session_id,
+						'room_key' => $room_key,
+						'user_id' => $user_id,
+						'role' => 'observer',
+						'seat_index' => 0,
+						'watched_seat_index' => 0,
+						'connected' => (int) ((bool) ($membership['connected'] ?? 1)),
+						'ready' => 0,
+						'joined_at' => $now,
+						'last_seen_at' => $now,
+						'left_at' => 0,
+					]);
+				break;
+
+				case 'touch':
+					if ($member_id > 0)
+					{
+						$row = ['last_seen_at' => $now];
+					if (array_key_exists('ready', $membership))
+					{
+						$row['ready'] = (int) ((bool) $membership['ready']);
+					}
 					$this->db->sql_query('UPDATE ' . $this->room_members_table . '
-						SET last_seen_at = ' . $now . '
+						SET ' . $this->db->sql_build_array('UPDATE', $row) . '
 						WHERE id = ' . $member_id);
 				}
 			break;
@@ -3108,6 +3467,7 @@ class server
 					$this->db->sql_query('UPDATE ' . $this->room_members_table . '
 						SET ' . $this->db->sql_build_array('UPDATE', [
 							'connected' => 0,
+							'ready' => 0,
 							'last_seen_at' => $now,
 						]) . '
 						WHERE id = ' . $member_id);

@@ -8,14 +8,24 @@ class reset_stale_rooms extends \phpbb\cron\task\base
 	private const NO_READY_CACHE_PREFIX = '_freemitbbs_cardgamesauth_no_ready_since_';
 	private const CHECK_INTERVAL_SECONDS = 60;
 	private const NO_READY_SECONDS = 600;
+	private const ACTIVE_SESSION_STATUSES = ['starting', 'playing', 'finished'];
 
 	protected \phpbb\cache\service $cache;
 	protected \phpbb\config\config $config;
+	protected \phpbb\db\driver\driver_interface $db;
+	protected string $sessions_table;
 
-	public function __construct(\phpbb\cache\service $cache, \phpbb\config\config $config)
+	public function __construct(
+		\phpbb\cache\service $cache,
+		\phpbb\config\config $config,
+		\phpbb\db\driver\driver_interface $db,
+		string $sessions_table
+	)
 	{
 		$this->cache = $cache;
 		$this->config = $config;
+		$this->db = $db;
+		$this->sessions_table = $sessions_table;
 	}
 
 	public function run()
@@ -55,7 +65,7 @@ class reset_stale_rooms extends \phpbb\cron\task\base
 				continue;
 			}
 
-			if ((int) ($room['memberCount'] ?? $room['member_count'] ?? 0) <= 0 || $this->has_ready_seated_player($room))
+			if ($this->has_ready_seated_player($room) || !$this->should_track_no_ready_room($room))
 			{
 				$this->clear_no_ready_since($room_key);
 				continue;
@@ -75,14 +85,7 @@ class reset_stale_rooms extends \phpbb\cron\task\base
 			try
 			{
 				$request_id = $this->request_id($room_key, (int) ($room['stateVersion'] ?? $room['state_version'] ?? 0), $now);
-				$this->runtime_request('POST', '/card-games/runtime/rooms/' . rawurlencode($room_key) . '/reset', [
-					'action' => 'reset_room',
-					'requestId' => $request_id,
-					'request_id' => $request_id,
-					'roomKey' => $room_key,
-					'room_key' => $room_key,
-					'reason' => 'room_idle_unready',
-				]);
+				$this->reset_no_ready_room($room, $room_key, $request_id);
 				$this->clear_no_ready_since($room_key);
 			}
 			catch (\RuntimeException $e)
@@ -271,6 +274,68 @@ class reset_stale_rooms extends \phpbb\cron\task\base
 	protected function request_id(string $room_key, int $state_version, int $now): string
 	{
 		return 'phpbb-cron-reset-' . $now . '-' . substr(hash('sha256', $room_key . ':' . $state_version), 0, 16);
+	}
+
+	protected function reset_no_ready_room(array $room, string $room_key, string $request_id): void
+	{
+		$payload = [
+			'requestId' => $request_id,
+			'request_id' => $request_id,
+			'roomKey' => $room_key,
+			'room_key' => $room_key,
+			'reason' => 'room_idle_unready',
+		];
+
+		if ($this->truthy($room['activeHand'] ?? $room['active_hand'] ?? false))
+		{
+			$session_id = $this->latest_active_session_id($room_key);
+			if ($session_id <= 0)
+			{
+				throw new \RuntimeException('active_session_not_found');
+			}
+
+			$this->runtime_request('POST', '/card-games/runtime/sessions/' . $session_id . '/cancel', $payload + [
+				'action' => 'cancel_game',
+				'sessionId' => $session_id,
+				'session_id' => $session_id,
+			]);
+			return;
+		}
+
+		$this->runtime_request('POST', '/card-games/runtime/rooms/' . rawurlencode($room_key) . '/reset', $payload + [
+			'action' => 'reset_room',
+		]);
+	}
+
+	protected function should_track_no_ready_room(array $room): bool
+	{
+		if ($this->truthy($room['activeHand'] ?? $room['active_hand'] ?? false))
+		{
+			return true;
+		}
+
+		if ((int) ($room['memberCount'] ?? $room['member_count'] ?? 0) > 0)
+		{
+			return true;
+		}
+
+		$status = (string) ($room['status'] ?? 'waiting');
+
+		return $status !== 'waiting';
+	}
+
+	protected function latest_active_session_id(string $room_key): int
+	{
+		$sql = 'SELECT id
+			FROM ' . $this->sessions_table . "
+			WHERE room_key = '" . $this->db->sql_escape($room_key) . "'
+				AND " . $this->db->sql_in_set('status', self::ACTIVE_SESSION_STATUSES) . '
+			ORDER BY updated_at DESC, id DESC';
+		$result = $this->db->sql_query_limit($sql, 1);
+		$session_id = (int) $this->db->sql_fetchfield('id');
+		$this->db->sql_freeresult($result);
+
+		return $session_id;
 	}
 
 	protected function has_ready_seated_player(array $room): bool
