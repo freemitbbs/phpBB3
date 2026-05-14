@@ -3211,11 +3211,12 @@ function roomDeadlineSeconds(room, camelKey, snakeKey) {
 
 function roomReviewSeconds(room) {
   const guandanRoom = isGuandanRoom(room);
+  const defaultSeconds = guandanRoom ? 1 : 2;
   const seconds = Number(guandanRoom
-    ? room.settings?.guandanTrickReviewSeconds ?? room.settings?.guandan_trick_review_seconds ?? 5
-    : room.settings?.tractorTrickReviewSeconds ?? room.settings?.tractor_trick_review_seconds ?? 5);
+    ? room.settings?.guandanTrickReviewSeconds ?? room.settings?.guandan_trick_review_seconds ?? defaultSeconds
+    : room.settings?.tractorTrickReviewSeconds ?? room.settings?.tractor_trick_review_seconds ?? defaultSeconds);
   const maxSeconds = roomReviewMaxSeconds(room);
-  return Number.isInteger(seconds) && seconds >= 0 && seconds <= maxSeconds ? seconds : 5;
+  return Number.isInteger(seconds) && seconds >= 0 && seconds <= maxSeconds ? seconds : defaultSeconds;
 }
 
 function roomReviewMaxSeconds(room) {
