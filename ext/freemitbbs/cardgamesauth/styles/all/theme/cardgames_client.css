@@ -1831,6 +1831,14 @@
   transform: translateY(calc(-1 * var(--hand-lift)));
 }
 
+.app-shell .hand-card-pending-play {
+  pointer-events: none;
+}
+
+.app-shell .hand-card-pending-play .hand-card-face {
+  opacity: 0.62;
+}
+
 .app-shell .card-face {
   position: relative;
   display: block;

@@ -40,6 +40,7 @@ const state = {
   chatEvents: [],
   chatVersion: 0,
   chatRenderFrameId: 0,
+  tableActionsFrameId: 0,
   renderedChatVersion: -1,
   renderedChatRoomKey: "",
   renderedChatKeys: [],
@@ -67,6 +68,9 @@ const state = {
   playLogExportKey: "",
   playLogExportLoading: false,
   playLogExportError: "",
+  retryPersistDirty: false,
+  retryPersistHandle: 0,
+  retryPersistIdle: false,
   emojiTarget: "",
   minesweeper: null,
   minesweeperExpanded: false,
@@ -166,6 +170,17 @@ const tableNoticeIgnoredMessages = new Set([
   "正在离开房间",
   "房间设置已更新",
   "牌桌已更新"
+]);
+const tableNoticeTransientMessages = new Set([
+  "正在亮主...",
+  "正在反主...",
+  "正在埋牌...",
+  "正在出牌...",
+  "正在自动出牌...",
+  "正在不出...",
+  "正在进贡...",
+  "正在还贡...",
+  "正在发牌..."
 ]);
 const logPrefix = "[card-games]";
 const retryableCommandTypes = new Set([
@@ -540,6 +555,7 @@ els.table.addEventListener("error", (event) => {
   logClientWarn("card face image failed to load", { src: image.currentSrc || image.src });
 }, true);
 window.addEventListener("pagehide", () => {
+  flushPersistRetryRequests();
   disconnect();
 });
 document.addEventListener("click", (event) => {
@@ -990,6 +1006,48 @@ function restoreRetryRequests() {
 }
 
 function persistRetryRequests() {
+  schedulePersistRetryRequests();
+}
+
+function schedulePersistRetryRequests() {
+  state.retryPersistDirty = true;
+  if (state.retryPersistHandle) {
+    return;
+  }
+
+  const flush = () => {
+    state.retryPersistHandle = 0;
+    state.retryPersistIdle = false;
+    flushPersistRetryRequests();
+  };
+  if (typeof window.requestIdleCallback === "function") {
+    state.retryPersistIdle = true;
+    state.retryPersistHandle = window.requestIdleCallback(flush, { timeout: 1000 });
+    return;
+  }
+
+  state.retryPersistHandle = window.setTimeout(flush, 200);
+}
+
+function flushPersistRetryRequests() {
+  if (state.retryPersistHandle) {
+    if (state.retryPersistIdle && typeof window.cancelIdleCallback === "function") {
+      window.cancelIdleCallback(state.retryPersistHandle);
+    } else {
+      window.clearTimeout(state.retryPersistHandle);
+    }
+    state.retryPersistHandle = 0;
+    state.retryPersistIdle = false;
+  }
+  if (!state.retryPersistDirty) {
+    return;
+  }
+
+  state.retryPersistDirty = false;
+  persistRetryRequestsNow();
+}
+
+function persistRetryRequestsNow() {
   try {
     const now = Date.now();
     const entries = {};
@@ -6219,6 +6277,17 @@ function syncTableActions(table) {
   actions.innerHTML = tableActionsHtml(table);
 }
 
+function scheduleSyncTableActions() {
+  if (state.tableActionsFrameId) {
+    return;
+  }
+
+  state.tableActionsFrameId = requestUiFrame(() => {
+    state.tableActionsFrameId = 0;
+    syncTableActions(state.table);
+  });
+}
+
 function viewerTableActionsElement() {
   if (tableActionsElement?.isConnected && els.table.contains(tableActionsElement)) {
     return tableActionsElement;
@@ -7025,6 +7094,7 @@ function handleTableAction(type, seatValue, button = null) {
     }
     setStatus("正在出牌...");
     markActionButtonPending(button);
+    markPendingHandCards(state.selectedHandIndexes);
     void sendEngineCommand("tractor.playCards", roomKey, { cards: cards.map((card) => card.id) }, button);
   } else if (type === "tractor.autoPlay") {
     const autoPlayAction = action(state.table, "tractor.autoPlay");
@@ -7082,6 +7152,7 @@ function handleTableAction(type, seatValue, button = null) {
     }
     setStatus("正在出牌...");
     markActionButtonPending(button);
+    markPendingHandCards(state.selectedHandIndexes);
     void sendEngineCommand("guandan.playCards", roomKey, { cards: cards.map((card) => card.id) }, button);
   } else if (type === "guandan.pass") {
     const passAction = action(state.table, "guandan.pass");
@@ -7100,6 +7171,26 @@ function markActionButtonPending(button) {
   if (button instanceof HTMLButtonElement) {
     button.disabled = true;
   }
+}
+
+function markPendingHandCards(indexes) {
+  const pending = new Set((indexes || [])
+    .map((index) => Number(index))
+    .filter((index) => Number.isInteger(index)));
+  if (!pending.size) {
+    return;
+  }
+
+  els.table.querySelectorAll(".seat-0 .hand-card[data-card-index]").forEach((button) => {
+    const cardIndex = Number(button.dataset.cardIndex);
+    button.classList.toggle("hand-card-pending-play", pending.has(cardIndex));
+  });
+}
+
+function clearPendingHandCards() {
+  els.table.querySelectorAll(".hand-card-pending-play").forEach((button) => {
+    button.classList.remove("hand-card-pending-play");
+  });
 }
 
 function playSingleCardFromDoubleClick(cardIndex, cardButton) {
@@ -7142,6 +7233,7 @@ function playSingleCardFromDoubleClick(cardIndex, cardButton) {
   setStatus("正在出牌...");
   const playButton = viewerTableActionsElement()?.querySelector(`[data-action="${playType}"]`);
   markActionButtonPending(playButton);
+  markPendingHandCards([cardIndex]);
   void sendEngineCommand(playType, roomKey, { cards: [card.id] }, playButton);
 }
 
@@ -7256,6 +7348,7 @@ async function sendEngineCommand(type, roomKey, payload, button = null) {
     const command = sendCommand(type, { roomKey, payload, roomEpoch, applyResponse: false });
     syncTableActions(state.table);
     const response = await command;
+    clearPendingHandCards();
     if (state.roomEpoch !== roomEpoch || state.currentRoomKey !== roomKey) {
       return;
     }
@@ -7268,6 +7361,7 @@ async function sendEngineCommand(type, roomKey, payload, button = null) {
       setStatus("牌桌已更新");
     }
   } catch (error) {
+    clearPendingHandCards();
     restoreActionButton(button);
     reportError(error);
     if (type && (String(type).startsWith("tractor.") || String(type).startsWith("guandan.")) && roomKey && state.currentRoomKey === roomKey) {
@@ -7367,7 +7461,7 @@ function refreshSelectionUi(changedIndex = null, changedButton = null) {
     els.table.querySelectorAll("[data-card-index]").forEach(updateButton);
   }
 
-  syncTableActions(state.table);
+  scheduleSyncTableActions();
 }
 
 function selectedHandCards() {
@@ -8312,7 +8406,10 @@ function setStatus(message) {
 
 function syncTableStatusNotice(message) {
   const roomKey = state.table?.room?.roomKey || state.currentRoomKey || "";
-  const nextNotice = tableNoticeIgnoredMessages.has(message) || !state.table || state.table?.room?.roomKey !== roomKey
+  const nextNotice = tableNoticeIgnoredMessages.has(message)
+    || tableNoticeTransientMessages.has(message)
+    || !state.table
+    || state.table?.room?.roomKey !== roomKey
     ? ""
     : message;
   if (state.tableStatusNotice === nextNotice && state.tableStatusNoticeRoomKey === (nextNotice ? roomKey : "")) {
