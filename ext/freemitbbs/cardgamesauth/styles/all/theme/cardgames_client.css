@@ -23,6 +23,20 @@
   display: none !important;
 }
 
+#page-header,
+.navbar {
+  position: relative;
+  z-index: 50;
+}
+
+.dropdown-container,
+.dropdown,
+.dropdown-extended,
+.dropdown .dropdown-contents,
+.dropdown-extended .dropdown-contents {
+  z-index: 1000;
+}
+
 .app-shell {
   min-height: 100vh;
   background: linear-gradient(180deg, #f8f4eb 0%, #e9dfcd 100%);
@@ -89,6 +103,95 @@
   color: #d7cdbd;
   font-size: 13px;
   line-height: 1;
+  white-space: nowrap;
+}
+
+.app-shell .skin-picker {
+  position: relative;
+  min-width: 158px;
+}
+
+.app-shell .skin-picker-button {
+  width: 100%;
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border-color: #9d8f79;
+  background: #fffdfa;
+  color: var(--ink);
+  padding: 3px 9px 3px 5px;
+}
+
+.app-shell .skin-picker-thumb {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 5px;
+  border: 1px solid rgba(36, 45, 49, 0.18);
+  background: #eadfcd;
+}
+
+.app-shell .skin-picker-option .skin-picker-thumb {
+  width: 38px;
+  height: 38px;
+}
+
+.app-shell .skin-picker-name,
+.app-shell .skin-picker-option-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell .skin-picker-caret {
+  color: #6f604c;
+  font-size: 12px;
+}
+
+.app-shell .skin-picker-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 1200;
+  width: min(320px, calc(100vw - 24px));
+  max-height: min(430px, calc(100vh - 96px));
+  display: grid;
+  gap: 4px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid #bba780;
+  border-radius: 8px;
+  background: #fffaf0;
+  box-shadow: 0 12px 28px rgba(21, 28, 31, 0.28);
+}
+
+.app-shell .skin-picker-option {
+  width: 100%;
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+  padding: 5px 7px;
+}
+
+.app-shell .skin-picker-option:hover,
+.app-shell .skin-picker-option:focus-visible,
+.app-shell .skin-picker-option-active {
+  border-color: #c7ab6a;
+  background: #f4ead6;
+}
+
+.app-shell .skin-picker-lock {
+  color: #8d3a31;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -215,6 +318,7 @@
 }
 
 .app-shell .room-button {
+  isolation: isolate;
   position: relative;
   width: 100%;
   min-height: 124px;

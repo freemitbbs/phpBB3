@@ -36,6 +36,7 @@ const state = {
   roomEpoch: 0,
   lastSeenSeq: 0,
   skinProfile: null,
+  skinPickerOpen: false,
   chatEvents: [],
   chatVersion: 0,
   chatRenderFrameId: 0,
@@ -107,16 +108,7 @@ const emptyPrivateCardSplit = Object.freeze({
 });
 
 const scriptUrl = document.currentScript?.src || "";
-const defaultSkins = [
-  "skin_basicmale.webp",
-  "skin_basicfemale.webp",
-  "skin_boy_1.webp",
-  "skin_girl_1.webp",
-  "skin_boy_2.webp",
-  "skin_girl_2.webp",
-  "skin_boy_3.webp",
-  "skin_girl_3.webp"
-];
+const defaultSkinId = "skin_basicmale";
 const emojiById = {
   smile: { id: "smile", asset: "goodjob", label: "干得好" },
   laugh: { id: "laugh", asset: "lol", label: "大笑" },
@@ -199,14 +191,48 @@ const retryableCommandTypes = new Set([
   "emoji.send"
 ]);
 const skinLabels = {
-  "skin_basicmale": "基础男角色",
-  "skin_basicfemale": "基础女角色",
-  "skin_boy_1": "少年侠客",
-  "skin_girl_1": "少女侠客",
-  "skin_boy_2": "书生",
-  "skin_girl_2": "仕女",
-  "skin_boy_3": "游侠",
-  "skin_girl_3": "女游侠"
+  "frame": "头像边框",
+  "skin_basicmale": "西装先生",
+  "skin_basicfemale": "白衫女士",
+  "skin_questionmark": "默认头像",
+  "skin_boy_1": "白衣剑童",
+  "skin_boy_2": "圆框少年",
+  "skin_boy_3": "灰衣少年",
+  "skin_boy_4": "蓝衣学生",
+  "skin_boy_5": "眼镜少年",
+  "skin_boy_6": "捧花绅士",
+  "skin_boy_7": "眼镜学长",
+  "skin_boy_8": "黑衣少年",
+  "skin_boy_9": "西装少年",
+  "skin_boy_mask": "口罩少年",
+  "skin_boy_moyu": "摸鱼男孩",
+  "skin_girl_1": "蓝裙公主",
+  "skin_girl_2": "碎花少女",
+  "skin_girl_3": "墨镜短发",
+  "skin_girl_4": "粉衣姑娘",
+  "skin_girl_5": "双辫少女",
+  "skin_girl_6": "黑衣少女",
+  "skin_girl_7": "长发微笑",
+  "skin_girl_8": "银发雪姬",
+  "skin_girl_9": "双丸子少女",
+  "skin_girl_mask": "口罩双马尾",
+  "skin_girl_moyu": "摸鱼女孩",
+  "skin_noname_gjqt_bailitusu": "黑衣剑客",
+  "skin_noname_gjqt_yinqianshang": "青袍长侠",
+  "skin_noname_gw_luobo": "屋顶坐骑",
+  "skin_noname_key_haruko": "海风笑颜",
+  "skin_noname_key_hinata": "夕阳紫发",
+  "skin_noname_key_kotori": "森林长裙",
+  "skin_noname_key_yui": "粉发吉他",
+  "skin_noname_pal_lixiaoyao": "背剑少侠",
+  "skin_noname_pal_linyueru": "紫衣女侠",
+  "skin_noname_pal_wangxiaohu": "背剑武者",
+  "skin_noname_yxs_wangzhaojun": "雪原琵琶",
+  "skin_noname_yxs_wuzetian": "金冠女皇",
+  "skin_ry_diaochan": "炎舞红姬",
+  "skin_ry_luna": "月影女神",
+  "skin_ry_sunwukong": "筋斗行者",
+  "skin_ry_zhaoyun": "金甲枪客"
 };
 const statusLabels = {
   waiting: "等待中",
@@ -336,7 +362,7 @@ const cardRankLabels = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", 
 const els = {
   status: document.querySelector("#connection-status"),
   user: document.querySelector("#user-label"),
-  skin: document.querySelector("#skin-select"),
+  skin: ensureSkinPickerElement(),
   connect: document.querySelector("#connect-button"),
   deadlineControls: document.querySelector("#room-deadline-controls"),
   roomsPanel: document.querySelector(".rooms-panel"),
@@ -359,12 +385,55 @@ const els = {
   actionStatus: document.querySelector("#action-status")
 };
 
+function ensureSkinPickerElement() {
+  const picker = document.querySelector("#skin-picker");
+  if (picker) {
+    return picker;
+  }
+
+  const legacySelect = document.querySelector("#skin-select");
+  if (!legacySelect) {
+    return null;
+  }
+
+  const replacement = document.createElement("div");
+  replacement.id = "skin-picker";
+  replacement.className = "skin-picker";
+  replacement.hidden = legacySelect.hidden;
+  replacement.setAttribute("aria-label", legacySelect.getAttribute("aria-label") || "皮肤");
+  legacySelect.replaceWith(replacement);
+  return replacement;
+}
+
 els.connect.addEventListener("click", () => {
   void connect();
 });
-els.skin.addEventListener("change", () => {
-  void selectSkin(els.skin.value);
-});
+if (els.skin) {
+  els.skin.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) {
+      return;
+    }
+    event.stopPropagation();
+
+    const toggle = target.closest("[data-skin-action='toggle']");
+    if (toggle && els.skin.contains(toggle) && !toggle.hasAttribute("disabled")) {
+      state.skinPickerOpen = !state.skinPickerOpen;
+      renderSkinSelect();
+      return;
+    }
+
+    const option = target.closest("[data-skin-id]");
+    if (!option || !els.skin.contains(option) || option.hasAttribute("disabled")) {
+      return;
+    }
+
+    const skinId = option.getAttribute("data-skin-id") || "";
+    state.skinPickerOpen = false;
+    renderSkinSelect();
+    void selectSkin(skinId);
+  });
+}
 els.leave.addEventListener("click", () => {
   const roomKey = state.currentRoomKey;
   if (!roomKey) {
@@ -473,6 +542,28 @@ els.table.addEventListener("error", (event) => {
 window.addEventListener("pagehide", () => {
   disconnect();
 });
+document.addEventListener("click", (event) => {
+  if (!state.skinPickerOpen || !els.skin) {
+    return;
+  }
+  const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+  if (path.includes(els.skin)) {
+    return;
+  }
+  const target = event.target instanceof Node ? event.target : null;
+  if (target && els.skin.contains(target)) {
+    return;
+  }
+  state.skinPickerOpen = false;
+  renderSkinSelect();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !state.skinPickerOpen) {
+    return;
+  }
+  state.skinPickerOpen = false;
+  renderSkinSelect();
+});
 window.addEventListener("pageshow", (event) => {
   if (event.persisted || !isSocketOpen()) {
     void reconnectAfterRestore();
@@ -499,6 +590,7 @@ async function init() {
   state.token = queryParam("token") || state.bootstrap.token || "";
   state.assetBaseUrl = normalizeBaseUrl(state.bootstrap.assetBaseUrl || defaultAssetBaseUrl());
   state.cardStyle = state.bootstrap.cardStyle || "cardsclassic";
+  initializeLobbyRooms();
   restoreRetryRequests();
   state.initialized = true;
   renderChatComponent();
@@ -506,6 +598,14 @@ async function init() {
   if (state.bootstrap.autoConnect !== false) {
     void connect();
   }
+}
+
+function initializeLobbyRooms() {
+  if (state.rooms.length) {
+    return;
+  }
+
+  state.rooms = defaultLobbyRooms();
 }
 
 async function loadBootstrap() {
@@ -2149,6 +2249,40 @@ function lobbyRoomPlaceholderNodes() {
   });
 }
 
+function defaultLobbyRooms() {
+  return [
+    defaultLobbyRoom("qinglong", "青龙阁", "tractor", 10),
+    defaultLobbyRoom("baihu", "白虎堂", "tractor", 20),
+    defaultLobbyRoom("zhuque", "朱雀台", "tractor", 30),
+    defaultLobbyRoom("xuanwu", "玄武厅", "tractor", 40),
+    defaultLobbyRoom("fengrenzhai", "逢人斋", "guandan", 50),
+    defaultLobbyRoom("tongtianlou", "通天楼", "guandan", 60),
+    defaultLobbyRoom("siwangyuan", "四王院", "guandan", 70)
+  ];
+}
+
+function defaultLobbyRoom(roomKey, displayName, gameType, sortOrder) {
+  return {
+    roomKey,
+    displayName,
+    gameType,
+    sortOrder,
+    status: "waiting",
+    enabled: true,
+    memberCount: 0,
+    seatCount: 4,
+    seats: [0, 1, 2, 3].map((seatIndex) => ({
+      seatIndex,
+      ready: false,
+      connected: false
+    })),
+    observers: [],
+    settings: {},
+    stateVersion: 0,
+    updatedAt: ""
+  };
+}
+
 function roomListItem(room) {
   const members = roomMembersForDisplay(room);
   return {
@@ -3077,9 +3211,15 @@ function updateRoomDeadlineSettings(roomKey, form) {
 }
 
 function renderSkinSelect() {
+  if (!els.skin) {
+    state.skinPickerOpen = false;
+    return;
+  }
+
   const profile = state.skinProfile;
   els.skin.hidden = !profile;
   if (!profile) {
+    state.skinPickerOpen = false;
     if (state.renderedSkinSignature !== "hidden") {
       els.skin.replaceChildren();
       state.renderedSkinSignature = "hidden";
@@ -3088,35 +3228,68 @@ function renderSkinSelect() {
   }
 
   const disabled = isGameInteractionLocked();
+  if (disabled) {
+    state.skinPickerOpen = false;
+  }
   const owned = new Set(profile.ownedSkinIds || []);
   const skins = profile.skins || [];
+  const selected = selectedSkinDefinition(profile);
   const signature = [
     disabled ? "1" : "0",
+    state.skinPickerOpen ? "1" : "0",
     profile.selectedSkinId || "",
     skins.map((skin) => [
       skin.skinId,
+      skinFileName(skin),
       skinDisplayName(skin),
       owned.has(skin.skinId) ? "1" : "0"
     ].join("\u001f")).join("\u001e")
   ].join("|");
   if (state.renderedSkinSignature === signature) {
-    els.skin.disabled = disabled;
-    if (els.skin.value !== (profile.selectedSkinId || "")) {
-      els.skin.value = profile.selectedSkinId || "";
-    }
     return;
   }
 
   state.renderedSkinSignature = signature;
-  els.skin.disabled = disabled;
-  els.skin.replaceChildren(...skins.map((skin) => {
-    const option = document.createElement("option");
-    option.value = skin.skinId;
-    option.textContent = skinDisplayName(skin);
-    option.disabled = !owned.has(skin.skinId);
-    return option;
-  }));
-  els.skin.value = profile.selectedSkinId || "";
+  const selectedName = selected ? skinDisplayName(selected) : "皮肤";
+  const selectedImage = selected ? skinImageUrl(selected) : "";
+  const menu = state.skinPickerOpen
+    ? `<div class="skin-picker-menu" role="listbox" aria-label="选择皮肤">
+        ${skins.map((skin) => {
+          const ownedSkin = owned.has(skin.skinId);
+          const active = skin.skinId === profile.selectedSkinId;
+          return `
+            <button
+              class="skin-picker-option${active ? " skin-picker-option-active" : ""}"
+              data-skin-id="${escapeAttribute(skin.skinId)}"
+              type="button"
+              role="option"
+              aria-selected="${active ? "true" : "false"}"
+              ${ownedSkin ? "" : "disabled"}
+            >
+              <img class="skin-picker-thumb" src="${escapeAttribute(skinImageUrl(skin))}" alt="" loading="lazy" decoding="async" />
+              <span class="skin-picker-option-name">${escapeHtml(skinDisplayName(skin))}</span>
+              ${ownedSkin ? "" : '<span class="skin-picker-lock">未拥有</span>'}
+            </button>
+          `;
+        }).join("")}
+      </div>`
+    : "";
+
+  els.skin.innerHTML = `
+    <button
+      class="skin-picker-button"
+      data-skin-action="toggle"
+      type="button"
+      aria-haspopup="listbox"
+      aria-expanded="${state.skinPickerOpen ? "true" : "false"}"
+      ${disabled ? "disabled" : ""}
+    >
+      ${selectedImage ? `<img class="skin-picker-thumb" src="${escapeAttribute(selectedImage)}" alt="" loading="lazy" decoding="async" />` : ""}
+      <span class="skin-picker-name">${escapeHtml(selectedName)}</span>
+      <span class="skin-picker-caret" aria-hidden="true">▾</span>
+    </button>
+    ${menu}
+  `;
 }
 
 function renderTable() {
@@ -5675,9 +5848,43 @@ function canWatchSeat(table, seat) {
     && !isActionPending("observer.watch", roomKey);
 }
 
+function selectedSkinDefinition(profile) {
+  const skins = profile?.skins || [];
+  const selectedId = profile?.selectedSkinId || "";
+  return skins.find((skin) => skin.skinId === selectedId)
+    || skins.find((skin) => skin.skinId === defaultSkinId)
+    || skins.find((skin) => (profile?.ownedSkinIds || []).includes(skin.skinId))
+    || skins[0]
+    || null;
+}
+
+function skinDefinitionForId(skinId) {
+  const value = String(skinId || "").replace(/\.(?:gif|png|jpe?g|webp)$/i, "");
+  return (state.skinProfile?.skins || []).find((skin) => skin.skinId === value) || null;
+}
+
+function skinFileName(skin) {
+  const fileName = String(skin?.fileName || skin?.filename || "").trim();
+  if (fileName) {
+    return fileName;
+  }
+
+  const skinId = String(skin?.skinId || "").trim();
+  return skinId.includes(".") ? skinId : `${skinId}.webp`;
+}
+
+function skinImageUrl(skin) {
+  return `${state.assetBaseUrl}/tractor/skin/${encodeURIComponent(skinFileName(skin))}`;
+}
+
 function skinUrlForSeat(user, seatIndex) {
-  const skinName = user?.selectedSkinId || user?.skinInUse || user?.skin || defaultSkins[Math.abs(Number(user?.userId ?? seatIndex)) % defaultSkins.length] || "skin_questionmark.webp";
-  const fileName = skinName.includes(".") ? skinName : `${skinName}.webp`;
+  const skinName = user?.selectedSkinId || user?.skinInUse || user?.skin || defaultSkinId;
+  const definition = skinDefinitionForId(skinName);
+  if (definition) {
+    return skinImageUrl(definition);
+  }
+
+  const fileName = String(skinName).includes(".") ? String(skinName) : `${skinName}.webp`;
   return `${state.assetBaseUrl}/tractor/skin/${encodeURIComponent(fileName)}`;
 }
 
@@ -8376,7 +8583,18 @@ function seatUserLabel(table, seatIndex) {
 }
 
 function skinDisplayName(skin) {
-  return skinLabels[skin.skinId] || skin.displayName || skin.skinId;
+  const skinId = String(skin?.skinId || "");
+  const boyMatch = /^skin_boy_(\d+)$/.exec(skinId);
+  if (boyMatch && !skinLabels[skinId]) {
+    return `少年头像 ${boyMatch[1]}`;
+  }
+
+  const girlMatch = /^skin_girl_(\d+)$/.exec(skinId);
+  if (girlMatch && !skinLabels[skinId]) {
+    return `少女头像 ${girlMatch[1]}`;
+  }
+
+  return skinLabels[skinId] || skin?.displayName || skinId;
 }
 
 function serverErrorText(code, message) {
