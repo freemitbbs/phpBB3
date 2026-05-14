@@ -490,6 +490,7 @@ els.chatInput.addEventListener("input", () => {
 });
 if (els.minesweeperPanel) {
   els.minesweeperPanel.addEventListener("click", handleMinesweeperClick);
+  els.minesweeperPanel.addEventListener("dblclick", handleMinesweeperDoubleClick);
   els.minesweeperPanel.addEventListener("contextmenu", handleMinesweeperContextMenu);
 }
 els.emojiTarget.addEventListener("change", () => {
@@ -2678,6 +2679,29 @@ function handleMinesweeperClick(event) {
   renderLobbyMinesweeper();
 }
 
+function handleMinesweeperDoubleClick(event) {
+  const target = event.target instanceof Element ? event.target : null;
+  if (!target || !els.minesweeperPanel?.contains(target) || state.currentRoomKey) {
+    return;
+  }
+
+  const cellButton = target.closest("[data-minesweeper-index]");
+  if (!cellButton || !els.minesweeperPanel.contains(cellButton)) {
+    return;
+  }
+
+  event.preventDefault();
+  const index = Number(cellButton.dataset.minesweeperIndex);
+  if (!Number.isInteger(index) || !chordMinesweeperCell(index)) {
+    return;
+  }
+
+  state.renderedRoomsSignature = "";
+  state.renderedMinesweeperSignature = "";
+  renderRooms();
+  renderLobbyMinesweeper();
+}
+
 function handleMinesweeperContextMenu(event) {
   const target = event.target instanceof Element ? event.target : null;
   if (!target || !els.minesweeperPanel?.contains(target) || state.currentRoomKey) {
@@ -2718,17 +2742,7 @@ function revealMinesweeperCell(index) {
   }
 
   if (cell.mine) {
-    cell.revealed = true;
-    game.finished = true;
-    game.won = false;
-    game.explodedIndex = index;
-    game.cells.forEach((candidate) => {
-      if (candidate.mine) {
-        candidate.revealed = true;
-      }
-    });
-    updateMinesweeperElapsed();
-    stopMinesweeperTimer();
+    finishMinesweeperLoss(game, index);
     return;
   }
 
@@ -2763,6 +2777,41 @@ function revealMinesweeperArea(game, startIndex) {
   }
 }
 
+function chordMinesweeperCell(index) {
+  const game = ensureMinesweeperGame();
+  const cell = game.cells[index];
+  if (!cell || game.finished || !cell.revealed || cell.mine || cell.adjacent <= 0) {
+    return false;
+  }
+
+  const neighbors = minesweeperNeighborIndexes(index, game.rows, game.cols);
+  const flaggedCount = neighbors.filter((neighborIndex) => game.cells[neighborIndex]?.flagged).length;
+  if (flaggedCount !== cell.adjacent) {
+    return false;
+  }
+
+  let changed = false;
+  for (const neighborIndex of neighbors) {
+    const neighbor = game.cells[neighborIndex];
+    if (!neighbor || neighbor.flagged || neighbor.revealed) {
+      continue;
+    }
+
+    changed = true;
+    if (neighbor.mine) {
+      finishMinesweeperLoss(game, neighborIndex);
+      return true;
+    }
+
+    revealMinesweeperArea(game, neighborIndex);
+  }
+
+  if (changed && game.revealedCount >= game.cells.length - game.mineCount) {
+    finishMinesweeperWin(game);
+  }
+  return changed;
+}
+
 function toggleMinesweeperFlag(index) {
   const game = ensureMinesweeperGame();
   const cell = game.cells[index];
@@ -2772,6 +2821,23 @@ function toggleMinesweeperFlag(index) {
 
   cell.flagged = !cell.flagged;
   game.flagCount += cell.flagged ? 1 : -1;
+}
+
+function finishMinesweeperLoss(game, explodedIndex) {
+  const cell = game.cells[explodedIndex];
+  if (cell) {
+    cell.revealed = true;
+  }
+  game.finished = true;
+  game.won = false;
+  game.explodedIndex = explodedIndex;
+  game.cells.forEach((candidate) => {
+    if (candidate.mine) {
+      candidate.revealed = true;
+    }
+  });
+  updateMinesweeperElapsed();
+  stopMinesweeperTimer();
 }
 
 function finishMinesweeperWin(game) {
