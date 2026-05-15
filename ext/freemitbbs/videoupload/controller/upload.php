@@ -9,6 +9,20 @@ class upload
 	private const LINK_HASH_NAME = 'freemitbbs_videoupload';
 	private const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
 	private const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'ogg', 'webm', 'weba', 'mp3', 'm4a', 'aac', 'wav', 'oga', 'opus', 'flac'];
+	private const MEDIA_MIME_TYPES = [
+		'mp4' => ['video/mp4', 'application/mp4'],
+		'mov' => ['video/quicktime', 'video/mp4'],
+		'ogg' => ['video/ogg', 'audio/ogg', 'application/ogg'],
+		'webm' => ['video/webm', 'audio/webm'],
+		'weba' => ['audio/webm', 'video/webm'],
+		'mp3' => ['audio/mpeg', 'audio/mp3', 'audio/x-mpeg', 'audio/x-mp3'],
+		'm4a' => ['audio/mp4', 'audio/x-m4a', 'video/mp4'],
+		'aac' => ['audio/aac', 'audio/x-aac', 'audio/x-hx-aac-adts'],
+		'wav' => ['audio/wav', 'audio/wave', 'audio/x-wav', 'audio/vnd.wave'],
+		'oga' => ['audio/ogg', 'application/ogg'],
+		'opus' => ['audio/opus', 'audio/ogg', 'application/ogg'],
+		'flac' => ['audio/flac', 'audio/x-flac'],
+	];
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
@@ -204,27 +218,57 @@ class upload
 
 	protected function is_valid_upload_content(string $tmp_name, string $extension): bool
 	{
-		if (!in_array($extension, self::IMAGE_EXTENSIONS, true))
+		if (in_array($extension, self::IMAGE_EXTENSIONS, true))
 		{
-			return true;
+			$image_info = @getimagesize($tmp_name);
+			if (!is_array($image_info) || !isset($image_info[2]))
+			{
+				return false;
+			}
+
+			$image_type = (int) $image_info[2];
+			$allowed_types = [
+				'jpg' => [IMAGETYPE_JPEG],
+				'jpeg' => [IMAGETYPE_JPEG],
+				'png' => [IMAGETYPE_PNG],
+				'gif' => [IMAGETYPE_GIF],
+				'webp' => defined('IMAGETYPE_WEBP') ? [IMAGETYPE_WEBP] : [],
+			];
+
+			return in_array($image_type, $allowed_types[$extension] ?? [], true);
 		}
 
-		$image_info = @getimagesize($tmp_name);
-		if (!is_array($image_info) || !isset($image_info[2]))
+		$mime_type = $this->detect_upload_mime_type($tmp_name);
+
+		return $mime_type !== '' && in_array($mime_type, self::MEDIA_MIME_TYPES[$extension] ?? [], true);
+	}
+
+	protected function detect_upload_mime_type(string $tmp_name): string
+	{
+		if (function_exists('finfo_open'))
 		{
-			return false;
+			$finfo = finfo_open(FILEINFO_MIME_TYPE);
+			if ($finfo !== false)
+			{
+				$mime_type = finfo_file($finfo, $tmp_name);
+				finfo_close($finfo);
+				if (is_string($mime_type) && $mime_type !== '')
+				{
+					return strtolower(trim($mime_type));
+				}
+			}
 		}
 
-		$image_type = (int) $image_info[2];
-		$allowed_types = [
-			'jpg' => [IMAGETYPE_JPEG],
-			'jpeg' => [IMAGETYPE_JPEG],
-			'png' => [IMAGETYPE_PNG],
-			'gif' => [IMAGETYPE_GIF],
-			'webp' => defined('IMAGETYPE_WEBP') ? [IMAGETYPE_WEBP] : [],
-		];
+		if (function_exists('mime_content_type'))
+		{
+			$mime_type = mime_content_type($tmp_name);
+			if (is_string($mime_type) && $mime_type !== '')
+			{
+				return strtolower(trim($mime_type));
+			}
+		}
 
-		return in_array($image_type, $allowed_types[$extension] ?? [], true);
+		return '';
 	}
 
 	protected function can_upload_in_forum(int $forum_id): bool

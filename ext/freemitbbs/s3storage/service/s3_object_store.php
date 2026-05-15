@@ -257,7 +257,22 @@ class s3_object_store
 			throw new \RuntimeException('S3 configuration is incomplete.');
 		}
 
+		$this->assert_secure_endpoint($config['endpoint']);
+
 		return $config;
+	}
+
+	private function assert_secure_endpoint(string $endpoint): void
+	{
+		$parts = parse_url($endpoint);
+		$scheme = strtolower((string) ($parts['scheme'] ?? ''));
+		$host = strtolower(trim((string) ($parts['host'] ?? ''), '[]'));
+		if ($scheme === 'https' || ($scheme === 'http' && in_array($host, ['localhost', '127.0.0.1', '::1'], true)))
+		{
+			return;
+		}
+
+		throw new \RuntimeException('S3 endpoint must use HTTPS.');
 	}
 
 	private function build_request(array $config, string $object_key): array

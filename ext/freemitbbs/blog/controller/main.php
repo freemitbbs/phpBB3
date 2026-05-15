@@ -12,6 +12,8 @@ class main
 	private const SHARE_IMAGE_HEIGHT = 1440;
 	private const SHARE_CONTENT_IMAGE_MIN_SIDE = 120;
 	private const SHARE_CONTENT_IMAGE_MIN_AREA = 20000;
+	private const SHARE_REMOTE_IMAGE_MAX_BYTES = 20971520;
+	private const SHARE_REMOTE_IMAGE_MIME_TYPES = ['image/gif', 'image/jpeg', 'image/png', 'image/webp'];
 	private const COMMENT_PAGE_SIZE = 50;
 	private const TOP_BLOG_COLLAPSE_ID = 'freemitbbs_blog_top';
 	private const BLOG_HEADER_IMAGE_EXTENSIONS = ['gif', 'jpg', 'jpeg', 'png', 'webp'];
@@ -2274,7 +2276,7 @@ class main
 
 		$scheme = strtolower((string) ($parts['scheme'] ?? ''));
 		$host = strtolower((string) ($parts['host'] ?? ''));
-		if (!in_array($scheme, ['http', 'https'], true) || $host === '' || !$this->share_image_remote_host_allowed($host))
+		if (!in_array($scheme, ['http', 'https'], true) || $host === '' || empty($this->share_image_public_addresses($host)))
 		{
 			return null;
 		}
@@ -2282,34 +2284,42 @@ class main
 		return $src;
 	}
 
-	protected function share_image_remote_host_allowed(string $host): bool
+	protected function share_image_public_addresses(string $host): array
 	{
 		$host = trim($host, " \t\n\r\0\x0B[]");
 		if ($host === '' || in_array($host, ['localhost', '127.0.0.1', '::1'], true) || preg_match('#(?:^|\.)local(?:host)?$#i', $host))
 		{
-			return false;
+			return [];
 		}
 
 		if (filter_var($host, FILTER_VALIDATE_IP))
 		{
-			return (bool) filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+			return $this->share_image_public_ip($host) ? [$host] : [];
 		}
 
 		$addresses = @gethostbynamel($host);
 		if (!$addresses)
 		{
-			return true;
+			return [];
 		}
 
+		$public_addresses = [];
 		foreach ($addresses as $address)
 		{
-			if (!filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE))
+			if (!$this->share_image_public_ip($address))
 			{
-				return false;
+				return [];
 			}
+
+			$public_addresses[] = $address;
 		}
 
-		return true;
+		return array_values(array_unique($public_addresses));
+	}
+
+	protected function share_image_public_ip(string $address): bool
+	{
+		return (bool) filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
 	}
 
 	protected function share_image_attachment_id_from_src(string $src): int
@@ -2461,7 +2471,7 @@ class main
 
 	protected function load_share_image_from_path(string $path)
 	{
-		if (!is_readable($path) || (is_file($path) && filesize($path) > 20 * 1024 * 1024))
+		if (!is_readable($path) || (is_file($path) && filesize($path) > self::SHARE_REMOTE_IMAGE_MAX_BYTES))
 		{
 			return null;
 		}
@@ -2477,24 +2487,95 @@ class main
 
 	protected function load_share_image_from_url(string $url)
 	{
-		if (!preg_match('#^https?://#i', $url))
+		$parts = parse_url($url);
+		if (!is_array($parts))
 		{
 			return null;
 		}
 
-		$context = stream_context_create([
-			'http' => [
-				'timeout' => 5,
-				'follow_location' => 0,
-			],
-		]);
-		$data = @file_get_contents($url, false, $context);
-		if ($data === false || $data === '' || strlen($data) > 20 * 1024 * 1024)
+		$scheme = strtolower((string) ($parts['scheme'] ?? ''));
+		$host = strtolower((string) ($parts['host'] ?? ''));
+		$port = isset($parts['port']) ? (int) $parts['port'] : ($scheme === 'https' ? 443 : 80);
+		if (!in_array($scheme, ['http', 'https'], true) || $host === '' || $port < 1 || $port > 65535 || !function_exists('curl_init'))
+		{
+			return null;
+		}
+
+		$addresses = $this->share_image_public_addresses($host);
+		if (empty($addresses))
+		{
+			return null;
+		}
+
+		$data = '';
+		$too_large = false;
+		$curl = curl_init($url);
+		if ($curl === false)
+		{
+			return null;
+		}
+
+		$address = $addresses[0];
+		if (!filter_var($host, FILTER_VALIDATE_IP))
+		{
+			if (!defined('CURLOPT_RESOLVE'))
+			{
+				curl_close($curl);
+				return null;
+			}
+			curl_setopt($curl, CURLOPT_RESOLVE, [$this->share_image_curl_resolve_entry($host, $port, $address)]);
+		}
+		curl_setopt($curl, CURLOPT_RETURNTRANSFER, false);
+		curl_setopt($curl, CURLOPT_FOLLOWLOCATION, false);
+		curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 3);
+		curl_setopt($curl, CURLOPT_TIMEOUT, 5);
+		if (defined('CURLOPT_PROTOCOLS') && defined('CURLPROTO_HTTP') && defined('CURLPROTO_HTTPS'))
+		{
+			curl_setopt($curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+		}
+		curl_setopt($curl, CURLOPT_WRITEFUNCTION, static function ($curl, string $chunk) use (&$data, &$too_large): int
+		{
+			if (strlen($data) + strlen($chunk) > self::SHARE_REMOTE_IMAGE_MAX_BYTES)
+			{
+				$too_large = true;
+				return 0;
+			}
+
+			$data .= $chunk;
+			return strlen($chunk);
+		});
+
+		$response = curl_exec($curl);
+		$status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+		$content_type = (string) curl_getinfo($curl, CURLINFO_CONTENT_TYPE);
+		$primary_ip = defined('CURLINFO_PRIMARY_IP') ? (string) curl_getinfo($curl, CURLINFO_PRIMARY_IP) : $address;
+		curl_close($curl);
+
+		if ($response === false
+			|| $too_large
+			|| $status !== 200
+			|| $data === ''
+			|| !$this->share_image_public_ip($primary_ip)
+			|| !$this->share_image_content_type_allowed($content_type))
 		{
 			return null;
 		}
 
 		return $this->load_share_image_from_string($data);
+	}
+
+	protected function share_image_curl_resolve_entry(string $host, int $port, string $address): string
+	{
+		$address = strpos($address, ':') === false ? $address : '[' . $address . ']';
+
+		return $host . ':' . $port . ':' . $address;
+	}
+
+	protected function share_image_content_type_allowed(string $content_type): bool
+	{
+		$content_type = strtolower(trim(explode(';', $content_type, 2)[0]));
+
+		return in_array($content_type, self::SHARE_REMOTE_IMAGE_MIME_TYPES, true);
 	}
 
 	protected function load_share_image_from_string(string $data)
