@@ -326,7 +326,6 @@ class session
 		$session_id = $request->variable('sid', '');
 		if (defined('NEED_SID') && (empty($session_id) || $this->session_id !== $session_id))
 		{
-			send_status_line(401, 'Unauthorized');
 			redirect(append_sid("{$phpbb_root_path}index.$phpEx"));
 		}
 

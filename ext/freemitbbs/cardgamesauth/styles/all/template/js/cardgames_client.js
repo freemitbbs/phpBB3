@@ -2668,10 +2668,11 @@ function handleMinesweeperClick(event) {
   if (!Number.isInteger(index)) {
     return;
   }
-  if (state.minesweeperFlagMode) {
-    toggleMinesweeperFlag(index);
-  } else {
-    revealMinesweeperCell(index);
+  const changed = state.minesweeperFlagMode
+    ? toggleMinesweeperFlag(index)
+    : revealMinesweeperCell(index);
+  if (!changed) {
+    return;
   }
   state.renderedRoomsSignature = "";
   state.renderedMinesweeperSignature = "";
@@ -2718,7 +2719,9 @@ function handleMinesweeperContextMenu(event) {
   if (!Number.isInteger(index)) {
     return;
   }
-  toggleMinesweeperFlag(index);
+  if (!toggleMinesweeperFlag(index)) {
+    return;
+  }
   state.renderedRoomsSignature = "";
   state.renderedMinesweeperSignature = "";
   renderRooms();
@@ -2729,7 +2732,7 @@ function revealMinesweeperCell(index) {
   const game = ensureMinesweeperGame();
   const cell = game.cells[index];
   if (!cell || game.finished || cell.revealed || cell.flagged) {
-    return;
+    return false;
   }
 
   if (!game.minesPlaced) {
@@ -2743,13 +2746,14 @@ function revealMinesweeperCell(index) {
 
   if (cell.mine) {
     finishMinesweeperLoss(game, index);
-    return;
+    return true;
   }
 
   revealMinesweeperArea(game, index);
   if (game.revealedCount >= game.cells.length - game.mineCount) {
     finishMinesweeperWin(game);
   }
+  return true;
 }
 
 function revealMinesweeperArea(game, startIndex) {
@@ -2816,11 +2820,12 @@ function toggleMinesweeperFlag(index) {
   const game = ensureMinesweeperGame();
   const cell = game.cells[index];
   if (!cell || game.finished || cell.revealed) {
-    return;
+    return false;
   }
 
   cell.flagged = !cell.flagged;
   game.flagCount += cell.flagged ? 1 : -1;
+  return true;
 }
 
 function finishMinesweeperLoss(game, explodedIndex) {
