@@ -1192,9 +1192,10 @@ class session
 				}
 			}
 
+			$email_banned = !empty($row['ban_email']) && $user_email !== false && $this->email_matches_ban_entry($row['ban_email'], $user_email);
 			if ((!empty($row['ban_userid']) && intval($row['ban_userid']) == $user_id) ||
 				$ip_banned ||
-				(!empty($row['ban_email']) && preg_match('#^' . str_replace('\*', '.*?', preg_quote($row['ban_email'], '#')) . '$#i', $user_email)))
+				$email_banned)
 			{
 				if (!empty($row['ban_exclude']))
 				{
@@ -1313,6 +1314,68 @@ class session
 	}
 
 	/**
+	 * Match an email address against a phpBB email ban entry.
+	 *
+	 * Gmail treats dots in the local part as optional and supports plus tags,
+	 * so compare those addresses by canonical form as well as the raw value.
+	 *
+	 * @param string $ban_email Email ban entry
+	 * @param string $email User email address
+	 *
+	 * @return bool True if the ban entry matches the email address
+	 */
+	protected function email_matches_ban_entry($ban_email, $email)
+	{
+		$ban_email = strtolower(trim((string) $ban_email));
+		$email = strtolower(trim((string) $email));
+		if ($ban_email === '' || $email === '')
+		{
+			return false;
+		}
+
+		if (preg_match('#^' . str_replace('\*', '.*?', preg_quote($ban_email, '#')) . '$#i', $email))
+		{
+			return true;
+		}
+
+		$canonical_ban_email = $this->email_address_for_ban_comparison($ban_email);
+		$canonical_email = $this->email_address_for_ban_comparison($email);
+		if ($canonical_ban_email === $ban_email && $canonical_email === $email)
+		{
+			return false;
+		}
+
+		return (bool) preg_match('#^' . str_replace('\*', '.*?', preg_quote($canonical_ban_email, '#')) . '$#i', $canonical_email);
+	}
+
+	/**
+	 * Normalize an email address for ban comparisons.
+	 *
+	 * @param string $email Email address or email ban pattern
+	 *
+	 * @return string Normalized comparison value
+	 */
+	protected function email_address_for_ban_comparison($email)
+	{
+		$email = strtolower(trim((string) $email));
+		$parts = explode('@', $email, 2);
+		if (count($parts) !== 2)
+		{
+			return $email;
+		}
+
+		list($local, $domain) = $parts;
+		if (in_array(strtolower(trim($domain)), array('gmail.com', 'googlemail.com'), true))
+		{
+			$local = explode('+', $local, 2)[0];
+			$local = str_replace('.', '', $local);
+			$domain = 'gmail.com';
+		}
+
+		return $local . '@' . $domain;
+	}
+
+	/**
 	 * Check the current session for bans
 	 *
 	 * @return true if session user is banned.
@@ -1321,15 +1384,16 @@ class session
 	{
 		if (!defined('SKIP_CHECK_BAN') && $this->data['user_type'] != USER_FOUNDER)
 		{
+			$user_email = !empty($this->data['user_email']) ? $this->data['user_email'] : false;
 			if (!$config['forwarded_for_check'])
 			{
-				$this->check_ban($this->data['user_id'], $this->ip);
+				$this->check_ban($this->data['user_id'], $this->ip, $user_email);
 			}
 			else
 			{
 				$ips = explode(' ', $this->forwarded_for);
 				$ips[] = $this->ip;
-				$this->check_ban($this->data['user_id'], $ips);
+				$this->check_ban($this->data['user_id'], $ips, $user_email);
 			}
 		}
 	}

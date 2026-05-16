@@ -13,7 +13,7 @@ class listener implements EventSubscriberInterface
 	private const INDEX_CATEGORY_FORUM_CANDIDATE_MULTIPLIER = 2;
 	private const DEFAULT_CANDIDATE_POOL_LIMIT = 2000;
 	private const DEFAULT_POST_COLLAPSE_DISLIKE_THRESHOLD = 5;
-	private const DUPLICATE_POST_WINDOW_SECONDS = 5;
+	private const DUPLICATE_POST_WINDOW_SECONDS = 60;
 	private const DUPLICATE_POST_LOCK_TIMEOUT_SECONDS = 10;
 	private const REPUTATION_TIER_STEADY = 100;
 	private const REPUTATION_TIER_TRUSTED = 500;

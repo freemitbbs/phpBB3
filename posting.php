@@ -22,6 +22,204 @@ include($phpbb_root_path . 'includes/functions_posting.' . $phpEx);
 include($phpbb_root_path . 'includes/functions_display.' . $phpEx);
 include($phpbb_root_path . 'includes/message_parser.' . $phpEx);
 
+function phpbb_posting_recent_post_url($phpbb_root_path, $phpEx, $post_id, $topic_id)
+{
+	if ($post_id > 0)
+	{
+		return append_sid("{$phpbb_root_path}viewtopic.$phpEx", 'p=' . (int) $post_id) . '#p' . (int) $post_id;
+	}
+
+	if ($topic_id > 0)
+	{
+		return append_sid("{$phpbb_root_path}viewtopic.$phpEx", 't=' . (int) $topic_id);
+	}
+
+	return append_sid("{$phpbb_root_path}index.$phpEx");
+}
+
+function phpbb_find_recent_submitted_post($db, $user, $mode, $forum_id, $topic_id, $message_md5, $subject, $post_author_name, $current_time, $window_seconds = 600)
+{
+	if (!in_array($mode, array('post', 'reply', 'quote'), true) || $message_md5 === '' || $forum_id <= 0)
+	{
+		return array();
+	}
+
+	if ($mode !== 'post' && $topic_id <= 0)
+	{
+		return array();
+	}
+
+	$poster_id = (int) $user->data['user_id'];
+	$where = array(
+		'p.poster_id = ' . $poster_id,
+		'p.forum_id = ' . (int) $forum_id,
+		"p.post_checksum = '" . $db->sql_escape($message_md5) . "'",
+		'p.post_time >= ' . max(0, (int) $current_time - (int) $window_seconds),
+		'p.post_visibility <> ' . ITEM_DELETED,
+	);
+
+	if ($poster_id === ANONYMOUS)
+	{
+		$where[] = "p.poster_ip = '" . $db->sql_escape((string) $user->ip) . "'";
+		if ($post_author_name !== '')
+		{
+			$where[] = "p.post_username = '" . $db->sql_escape($post_author_name) . "'";
+		}
+	}
+
+	if ($mode === 'post')
+	{
+		$from_sql = POSTS_TABLE . ' p
+			INNER JOIN ' . TOPICS_TABLE . ' t
+				ON t.topic_id = p.topic_id
+					AND t.topic_first_post_id = p.post_id
+					AND t.topic_moved_id = 0';
+		$where[] = "p.post_subject = '" . $db->sql_escape($subject) . "'";
+	}
+	else
+	{
+		$from_sql = POSTS_TABLE . ' p';
+		$where[] = 'p.topic_id = ' . (int) $topic_id;
+	}
+
+	$sql = 'SELECT p.post_id, p.topic_id
+		FROM ' . $from_sql . '
+		WHERE ' . implode('
+			AND ', $where) . '
+		ORDER BY p.post_time DESC, p.post_id DESC';
+	$result = $db->sql_query_limit($sql, 1);
+	$row = $db->sql_fetchrow($result);
+	$db->sql_freeresult($result);
+
+	return is_array($row) ? $row : array();
+}
+
+function phpbb_wait_for_recent_submitted_post($db, $user, $mode, $forum_id, $topic_id, $message_md5, $subject, $post_author_name, $current_time)
+{
+	for ($attempt = 0; $attempt < 4; $attempt++)
+	{
+		$row = phpbb_find_recent_submitted_post($db, $user, $mode, $forum_id, $topic_id, $message_md5, $subject, $post_author_name, $current_time);
+		if (!empty($row))
+		{
+			return $row;
+		}
+
+		if ($attempt < 3)
+		{
+			usleep(250000);
+		}
+	}
+
+	return array();
+}
+
+function phpbb_save_posting_recovery_draft($db, $auth, $user, $mode, $forum_id, $topic_id, $subject, $message, $current_time)
+{
+	if (!$user->data['is_registered'] || !$auth->acl_get('u_savedrafts') || !in_array($mode, array('post', 'reply', 'quote'), true) || $message === '')
+	{
+		return array('draft_id' => 0, 'created' => false);
+	}
+
+	$subject = (string) $subject;
+	if ($subject === '')
+	{
+		$subject = 'Recovered post';
+	}
+
+	try
+	{
+		$where = array(
+			'user_id = ' . (int) $user->data['user_id'],
+			'topic_id = ' . (int) $topic_id,
+			'forum_id = ' . (int) $forum_id,
+			"draft_subject = '" . $db->sql_escape($subject) . "'",
+			"draft_message = '" . $db->sql_escape($message) . "'",
+			'save_time >= ' . max(0, (int) $current_time - 86400),
+		);
+		$sql = 'SELECT draft_id
+			FROM ' . DRAFTS_TABLE . '
+			WHERE ' . implode('
+				AND ', $where) . '
+			ORDER BY save_time DESC, draft_id DESC';
+		$result = $db->sql_query_limit($sql, 1);
+		$existing_draft_id = (int) $db->sql_fetchfield('draft_id');
+		$db->sql_freeresult($result);
+
+		if ($existing_draft_id > 0)
+		{
+			$sql = 'UPDATE ' . DRAFTS_TABLE . '
+				SET save_time = ' . (int) $current_time . '
+				WHERE draft_id = ' . $existing_draft_id . '
+					AND user_id = ' . (int) $user->data['user_id'];
+			$db->sql_query($sql);
+
+			return array('draft_id' => $existing_draft_id, 'created' => false);
+		}
+
+		$sql = 'INSERT INTO ' . DRAFTS_TABLE . ' ' . $db->sql_build_array('INSERT', array(
+			'user_id'		=> (int) $user->data['user_id'],
+			'topic_id'		=> (int) $topic_id,
+			'forum_id'		=> (int) $forum_id,
+			'save_time'		=> (int) $current_time,
+			'draft_subject'	=> $subject,
+			'draft_message'	=> $message,
+		));
+		$db->sql_query($sql);
+
+		return array('draft_id' => (int) $db->sql_nextid(), 'created' => true);
+	}
+	catch (\Throwable $e)
+	{
+		error_log('phpBB posting recovery draft save failed: ' . $e->getMessage());
+	}
+
+	return array('draft_id' => 0, 'created' => false);
+}
+
+function phpbb_delete_posting_recovery_draft($db, $user, $draft)
+{
+	$draft_id = (int) ($draft['draft_id'] ?? 0);
+	if (empty($draft['created']) || $draft_id <= 0 || !$user->data['is_registered'])
+	{
+		return;
+	}
+
+	try
+	{
+		$sql = 'DELETE FROM ' . DRAFTS_TABLE . '
+			WHERE draft_id = ' . $draft_id . '
+				AND user_id = ' . (int) $user->data['user_id'];
+		$db->sql_query($sql);
+	}
+	catch (\Throwable $e)
+	{
+		error_log('phpBB posting recovery draft cleanup failed: ' . $e->getMessage());
+	}
+}
+
+function phpbb_rollback_posting_transaction($db)
+{
+	try
+	{
+		$db->sql_transaction('rollback');
+	}
+	catch (\Throwable $e)
+	{
+	}
+}
+
+function phpbb_log_posting_submit_failure($e, $mode, $forum_id, $topic_id, $post_id)
+{
+	error_log(sprintf(
+		'phpBB posting submit failed: mode=%s forum_id=%d topic_id=%d post_id=%d error=%s',
+		(string) $mode,
+		(int) $forum_id,
+		(int) $topic_id,
+		(int) $post_id,
+		$e->getMessage()
+	));
+}
+
 
 // Start session management
 $user->session_begin();
@@ -1529,107 +1727,157 @@ if ($submit || $preview || $refresh)
 			// post's poster, not the poster of the current post). See: PHPBB3-11769 for more information.
 			$post_author_name = ((!$user->data['is_registered'] || $mode == 'edit') && $post_data['username'] !== '') ? $post_data['username'] : '';
 
-			/**
-			* This event allows you to define errors before the post action is performed
-			*
-			* @event core.posting_modify_submit_post_before
-			* @var	array	post_data	Array with post data
-			* @var	array	poll		Array with poll data
-			* @var	array	data		Array with post data going to be stored in the database
-			* @var	string	mode		What action to take if the form is submitted
-			*				post|reply|quote|edit|delete
-			* @var	int	post_id		ID of the post
-			* @var	int	topic_id	ID of the topic
-			* @var	int	forum_id	ID of the forum
-			* @var	string	post_author_name	Author name for guest posts
-			* @var	bool	update_message		Boolean if the post message was changed
-			* @var	bool	update_subject		Boolean if the post subject was changed
-			*				NOTE: Should be actual language strings, NOT language keys.
-			* @since 3.1.0-RC5
-			* @changed 3.1.6-RC1 remove submit and error from event  Submit and Error are checked previously prior to running event
-			* @change 3.2.0-a1 Removed undefined page_title
-			*/
-			$vars = array(
-				'post_data',
-				'poll',
-				'data',
-				'mode',
-				'post_id',
-				'topic_id',
-				'forum_id',
-				'post_author_name',
-				'update_message',
-				'update_subject',
-			);
-			extract($phpbb_dispatcher->trigger_event('core.posting_modify_submit_post_before', compact($vars)));
-
-			// The last parameter tells submit_post if search indexer has to be run
-			$redirect_url = submit_post($mode, $post_data['post_subject'], $post_author_name, $post_data['topic_type'], $poll, $data, $update_message, ($update_message || $update_subject) ? true : false);
-
-			/**
-			* This event allows you to define errors after the post action is performed
-			*
-			* @event core.posting_modify_submit_post_after
-			* @var	array	post_data	Array with post data
-			* @var	array	poll		Array with poll data
-			* @var	array	data		Array with post data going to be stored in the database
-			* @var	string	mode		What action to take if the form is submitted
-			*				post|reply|quote|edit|delete
-			* @var	int	post_id		ID of the post
-			* @var	int	topic_id	ID of the topic
-			* @var	int	forum_id	ID of the forum
-			* @var	string	post_author_name	Author name for guest posts
-			* @var	bool	update_message		Boolean if the post message was changed
-			* @var	bool	update_subject		Boolean if the post subject was changed
-			* @var	string	redirect_url		URL the user is going to be redirected to
-			*				NOTE: Should be actual language strings, NOT language keys.
-			* @since 3.1.0-RC5
-			* @changed 3.1.6-RC1 remove submit and error from event  Submit and Error are checked previously prior to running event
-			* @change 3.2.0-a1 Removed undefined page_title
-			*/
-			$vars = array(
-				'post_data',
-				'poll',
-				'data',
-				'mode',
-				'post_id',
-				'topic_id',
-				'forum_id',
-				'post_author_name',
-				'update_message',
-				'update_subject',
-				'redirect_url',
-			);
-			extract($phpbb_dispatcher->trigger_event('core.posting_modify_submit_post_after', compact($vars)));
-
-			if ($config['enable_post_confirm'] && !$user->data['is_registered'] && (isset($captcha) && $captcha->is_solved() === true) && ($mode == 'post' || $mode == 'reply' || $mode == 'quote'))
+			$recovery_draft = array('draft_id' => 0, 'created' => false);
+			try
 			{
-				$captcha->reset();
-			}
+				/**
+				* This event allows you to define errors before the post action is performed
+				*
+				* @event core.posting_modify_submit_post_before
+				* @var	array	post_data	Array with post data
+				* @var	array	poll		Array with poll data
+				* @var	array	data		Array with post data going to be stored in the database
+				* @var	string	mode		What action to take if the form is submitted
+				*				post|reply|quote|edit|delete
+				* @var	int	post_id		ID of the post
+				* @var	int	topic_id	ID of the topic
+				* @var	int	forum_id	ID of the forum
+				* @var	string	post_author_name	Author name for guest posts
+				* @var	bool	update_message		Boolean if the post message was changed
+				* @var	bool	update_subject		Boolean if the post subject was changed
+				*				NOTE: Should be actual language strings, NOT language keys.
+				* @since 3.1.0-RC5
+				* @changed 3.1.6-RC1 remove submit and error from event  Submit and Error are checked previously prior to running event
+				* @change 3.2.0-a1 Removed undefined page_title
+				*/
+				$vars = array(
+					'post_data',
+					'poll',
+					'data',
+					'mode',
+					'post_id',
+					'topic_id',
+					'forum_id',
+					'post_author_name',
+					'update_message',
+					'update_subject',
+				);
+				extract($phpbb_dispatcher->trigger_event('core.posting_modify_submit_post_before', compact($vars)));
 
-			// Handle delete mode...
-			if ($request->is_set_post('delete_permanent') || ($request->is_set_post('delete') && $post_data['post_visibility'] != ITEM_DELETED))
+				$recovery_subject = ($post_data['post_subject'] !== '') ? $post_data['post_subject'] : ($post_data['topic_title'] ?: $language->lang('POST_SUBMIT_RECOVERY_DRAFT_SUBJECT'));
+				$recovery_draft = phpbb_save_posting_recovery_draft($db, $auth, $user, $mode, $forum_id, $topic_id, $recovery_subject, $message_parser->message, $current_time);
+
+				// The last parameter tells submit_post if search indexer has to be run
+				$redirect_url = submit_post($mode, $post_data['post_subject'], $post_author_name, $post_data['topic_type'], $poll, $data, $update_message, ($update_message || $update_subject) ? true : false);
+
+				/**
+				* This event allows you to define errors after the post action is performed
+				*
+				* @event core.posting_modify_submit_post_after
+				* @var	array	post_data	Array with post data
+				* @var	array	poll		Array with poll data
+				* @var	array	data		Array with post data going to be stored in the database
+				* @var	string	mode		What action to take if the form is submitted
+				*				post|reply|quote|edit|delete
+				* @var	int	post_id		ID of the post
+				* @var	int	topic_id	ID of the topic
+				* @var	int	forum_id	ID of the forum
+				* @var	string	post_author_name	Author name for guest posts
+				* @var	bool	update_message		Boolean if the post message was changed
+				* @var	bool	update_subject		Boolean if the post subject was changed
+				* @var	string	redirect_url		URL the user is going to be redirected to
+				*				NOTE: Should be actual language strings, NOT language keys.
+				* @since 3.1.0-RC5
+				* @changed 3.1.6-RC1 remove submit and error from event  Submit and Error are checked previously prior to running event
+				* @change 3.2.0-a1 Removed undefined page_title
+				*/
+				$vars = array(
+					'post_data',
+					'poll',
+					'data',
+					'mode',
+					'post_id',
+					'topic_id',
+					'forum_id',
+					'post_author_name',
+					'update_message',
+					'update_subject',
+					'redirect_url',
+				);
+				extract($phpbb_dispatcher->trigger_event('core.posting_modify_submit_post_after', compact($vars)));
+
+				if ($config['enable_post_confirm'] && !$user->data['is_registered'] && (isset($captcha) && $captcha->is_solved() === true) && ($mode == 'post' || $mode == 'reply' || $mode == 'quote'))
+				{
+					$captcha->reset();
+				}
+
+				// Handle delete mode...
+				if ($request->is_set_post('delete_permanent') || ($request->is_set_post('delete') && $post_data['post_visibility'] != ITEM_DELETED))
+				{
+					$delete_reason = $request->variable('delete_reason', '', true);
+					phpbb_handle_post_delete($forum_id, $topic_id, $post_id, $post_data, !$request->is_set_post('delete_permanent'), $delete_reason);
+					return;
+				}
+
+				// Check the permissions for post approval.
+				// Moderators must go through post approval like ordinary users.
+				if ((!$auth->acl_get('f_noapprove', $data['forum_id']) && empty($data['force_approved_state'])) || (isset($data['force_approved_state']) && !$data['force_approved_state']))
+				{
+					phpbb_delete_posting_recovery_draft($db, $user, $recovery_draft);
+					meta_refresh(10, $redirect_url);
+					$message = ($mode == 'edit') ? $user->lang['POST_EDITED_MOD'] : $user->lang['POST_STORED_MOD'];
+					$message .= (($user->data['user_id'] == ANONYMOUS) ? '' : ' '. $user->lang['POST_APPROVAL_NOTIFY']);
+					$message .= '<br /><br />' . sprintf($user->lang['RETURN_FORUM'], '<a href="' . append_sid("{$phpbb_root_path}viewforum.$phpEx", 'f=' . $data['forum_id']) . '">', '</a>');
+					trigger_error($message);
+				}
+
+				phpbb_delete_posting_recovery_draft($db, $user, $recovery_draft);
+				redirect($redirect_url);
+			}
+			catch (\Throwable $e)
 			{
-				$delete_reason = $request->variable('delete_reason', '', true);
-				phpbb_handle_post_delete($forum_id, $topic_id, $post_id, $post_data, !$request->is_set_post('delete_permanent'), $delete_reason);
-				return;
-			}
+				phpbb_rollback_posting_transaction($db);
+				phpbb_log_posting_submit_failure($e, $mode, $forum_id, $topic_id, $post_id);
 
-			// Check the permissions for post approval.
-			// Moderators must go through post approval like ordinary users.
-			if ((!$auth->acl_get('f_noapprove', $data['forum_id']) && empty($data['force_approved_state'])) || (isset($data['force_approved_state']) && !$data['force_approved_state']))
-			{
-				meta_refresh(10, $redirect_url);
-				$message = ($mode == 'edit') ? $user->lang['POST_EDITED_MOD'] : $user->lang['POST_STORED_MOD'];
-				$message .= (($user->data['user_id'] == ANONYMOUS) ? '' : ' '. $user->lang['POST_APPROVAL_NOTIFY']);
-				$message .= '<br /><br />' . sprintf($user->lang['RETURN_FORUM'], '<a href="' . append_sid("{$phpbb_root_path}viewforum.$phpEx", 'f=' . $data['forum_id']) . '">', '</a>');
-				trigger_error($message);
-			}
+				try
+				{
+					$stored_post = phpbb_find_recent_submitted_post($db, $user, $mode, $forum_id, $topic_id, $message_md5, $post_data['post_subject'], $post_author_name, $current_time);
+				}
+				catch (\Throwable $lookup_error)
+				{
+					error_log('phpBB posting recovery lookup failed: ' . $lookup_error->getMessage());
+					$stored_post = array();
+				}
 
-			redirect($redirect_url);
+				if (!empty($stored_post))
+				{
+					phpbb_delete_posting_recovery_draft($db, $user, $recovery_draft);
+					redirect(phpbb_posting_recent_post_url($phpbb_root_path, $phpEx, (int) $stored_post['post_id'], (int) $stored_post['topic_id']));
+				}
+
+				$submit = false;
+				$refresh = true;
+				$error[] = $language->lang(!empty($recovery_draft['draft_id']) ? 'POST_SUBMIT_ERROR_DRAFT_SAVED' : 'POST_SUBMIT_ERROR_RETRY');
+			}
 		}
 		else
 		{
+			$duplicate_post_author_name = ((!$user->data['is_registered'] || $mode == 'edit') && $post_data['username'] !== '') ? $post_data['username'] : '';
+			try
+			{
+				$duplicate = phpbb_wait_for_recent_submitted_post($db, $user, $mode, $forum_id, $topic_id, $message_md5, $post_data['post_subject'], $duplicate_post_author_name, $current_time);
+			}
+			catch (\Throwable $e)
+			{
+				error_log('phpBB posting duplicate lookup failed: ' . $e->getMessage());
+				$duplicate = array();
+			}
+
+			if (!empty($duplicate))
+			{
+				redirect(phpbb_posting_recent_post_url($phpbb_root_path, $phpEx, (int) $duplicate['post_id'], (int) $duplicate['topic_id']));
+			}
+
 			// Posting was already locked before, hence form submission was already attempted once and is now invalid
 			$error[] = $language->lang('FORM_INVALID');
 		}

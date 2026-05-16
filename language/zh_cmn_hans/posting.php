@@ -217,6 +217,9 @@ $lang = array_merge($lang, array(
 	'POST_REVIEW_EXPLAIN'		=> '已有至少一篇新回复在这个主题下发表了，您或许希望重新审视您的回贴。',
 	'POST_STORED'				=> '帖子已经成功发表。',
 	'POST_STORED_MOD'			=> '帖子已经保存但是需要等待批准发布。',
+	'POST_SUBMIT_RECOVERY_DRAFT_SUBJECT'	=> '恢复草稿',
+	'POST_SUBMIT_ERROR_DRAFT_SAVED'	=> '服务器未能完成发帖。您的正文仍保留在下方，并已保存一份恢复草稿。请检查后再提交。',
+	'POST_SUBMIT_ERROR_RETRY'	=> '服务器未能完成发帖。您的正文仍保留在下方。请检查后再提交。',
 	'POST_TOPIC_AS'				=> '发表新主题为',
 	'PROGRESS_BAR'				=> '进度条',
 

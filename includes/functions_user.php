@@ -1158,10 +1158,11 @@ function user_ban($mode, $ban, $ban_len, $ban_len_other, $ban_exclude, $ban_reas
 
 		case 'email':
 			$type = 'ban_email';
+			$founder_emails = array_map('phpbb_email_address_for_ban_comparison', $founder);
 
 			foreach ($ban_list as $ban_item)
 			{
-				$ban_item = trim($ban_item);
+				$ban_item = phpbb_email_address_for_ban_comparison(trim($ban_item));
 
 				if (preg_match('#^.*?@*|(([a-z0-9\-]+\.)+([a-z]{2,3}))$#i', $ban_item))
 				{
@@ -1170,7 +1171,7 @@ function user_ban($mode, $ban, $ban_len, $ban_len_other, $ban_exclude, $ban_reas
 						continue;
 					}
 
-					if (!count($founder) || !in_array($ban_item, $founder))
+					if (!count($founder) || strpos($ban_item, '*') !== false || !in_array($ban_item, $founder_emails, true))
 					{
 						$banlist_ary[] = $ban_item;
 					}
@@ -1216,13 +1217,19 @@ function user_ban($mode, $ban, $ban_len, $ban_len_other, $ban_exclude, $ban_reas
 				break;
 
 				case 'email':
-					$banlist_ary_tmp[] = $row['ban_email'];
+					if (in_array(phpbb_email_address_for_ban_comparison($row['ban_email']), $banlist_ary, true))
+					{
+						$banlist_ary_tmp[] = $row['ban_email'];
+					}
 				break;
 			}
 		}
 		while ($row = $db->sql_fetchrow($result));
 
-		$banlist_ary_tmp = array_intersect($banlist_ary, $banlist_ary_tmp);
+		if ($mode !== 'email')
+		{
+			$banlist_ary_tmp = array_intersect($banlist_ary, $banlist_ary_tmp);
+		}
 
 		if (count($banlist_ary_tmp))
 		{
@@ -1270,16 +1277,9 @@ function user_ban($mode, $ban, $ban_len, $ban_len_other, $ban_exclude, $ban_reas
 				break;
 
 				case 'email':
-					$banlist_ary_sql = array();
-
-					foreach ($banlist_ary as $ban_entry)
-					{
-						$banlist_ary_sql[] = (string) str_replace('*', '%', $ban_entry);
-					}
-
-					$sql = 'SELECT user_id
+					$sql = 'SELECT user_id, user_email
 						FROM ' . USERS_TABLE . '
-						WHERE ' . $db->sql_in_set('user_email', $banlist_ary_sql);
+						WHERE user_email <> \'\'';
 					$result = $db->sql_query($sql);
 
 					$sql_in = array();
@@ -1288,11 +1288,21 @@ function user_ban($mode, $ban, $ban_len, $ban_len_other, $ban_exclude, $ban_reas
 					{
 						do
 						{
-							$sql_in[] = $row['user_id'];
+							foreach ($banlist_ary as $ban_entry)
+							{
+								if (phpbb_email_matches_ban_entry($ban_entry, $row['user_email']))
+								{
+									$sql_in[] = (int) $row['user_id'];
+									break;
+								}
+							}
 						}
 						while ($row = $db->sql_fetchrow($result));
 
-						$sql_where = 'WHERE ' . $db->sql_in_set('session_user_id', $sql_in);
+						if (count($sql_in))
+						{
+							$sql_where = 'WHERE ' . $db->sql_in_set('session_user_id', array_unique($sql_in));
+						}
 					}
 					$db->sql_freeresult($result);
 				break;
@@ -1885,6 +1895,96 @@ function validate_password($password)
 }
 
 /**
+* Normalize an email address for ban/reuse comparisons.
+*
+* Gmail treats dots in the local part as optional and supports plus tags.
+* Normalizing those aliases prevents banned users from registering variants of
+* the same mailbox.
+*
+* @param string $email Email address or email ban pattern
+*
+* @return string Normalized comparison value
+*/
+function phpbb_email_address_for_ban_comparison($email)
+{
+	$email = strtolower(trim((string) $email));
+	$parts = explode('@', $email, 2);
+	if (count($parts) !== 2)
+	{
+		return $email;
+	}
+
+	list($local, $domain) = $parts;
+	if (phpbb_email_domain_uses_gmail_dot_aliasing($domain))
+	{
+		$local = explode('+', $local, 2)[0];
+		$local = str_replace('.', '', $local);
+		$domain = 'gmail.com';
+	}
+
+	return $local . '@' . $domain;
+}
+
+/**
+* Determine whether an email address belongs to a Gmail domain where dots are aliases.
+*
+* @param string $email Email address
+*
+* @return bool True if Gmail dot aliasing applies
+*/
+function phpbb_email_address_uses_gmail_dot_aliasing($email)
+{
+	$email = strtolower(trim((string) $email));
+	$parts = explode('@', $email, 2);
+
+	return count($parts) === 2 && phpbb_email_domain_uses_gmail_dot_aliasing($parts[1]);
+}
+
+/**
+* Determine whether a domain is a Gmail-family domain.
+*
+* @param string $domain Email domain
+*
+* @return bool True if dots in the local part should be ignored
+*/
+function phpbb_email_domain_uses_gmail_dot_aliasing($domain)
+{
+	return in_array(strtolower(trim((string) $domain)), array('gmail.com', 'googlemail.com'), true);
+}
+
+/**
+* Match an email address against a phpBB email ban entry, including Gmail dot aliases.
+*
+* @param string $ban_email Email ban entry
+* @param string $email User email address
+*
+* @return bool True if the ban entry matches the email address
+*/
+function phpbb_email_matches_ban_entry($ban_email, $email)
+{
+	$ban_email = strtolower(trim((string) $ban_email));
+	$email = strtolower(trim((string) $email));
+	if ($ban_email === '' || $email === '')
+	{
+		return false;
+	}
+
+	if (preg_match('#^' . str_replace('\*', '.*?', preg_quote($ban_email, '#')) . '$#i', $email))
+	{
+		return true;
+	}
+
+	$canonical_ban_email = phpbb_email_address_for_ban_comparison($ban_email);
+	$canonical_email = phpbb_email_address_for_ban_comparison($email);
+	if ($canonical_ban_email === $ban_email && $canonical_email === $email)
+	{
+		return false;
+	}
+
+	return (bool) preg_match('#^' . str_replace('\*', '.*?', preg_quote($canonical_ban_email, '#')) . '$#i', $canonical_email);
+}
+
+/**
 * Check to see if email address is a valid address and contains a MX record
 *
 * @param string $email The email to check
@@ -1947,6 +2047,12 @@ function validate_user_email($email, $allowed_email = false)
 		return $validate_email;
 	}
 
+	$email_comparison = phpbb_email_address_for_ban_comparison($email);
+	if (phpbb_email_address_uses_gmail_dot_aliasing($email) && $email_comparison === phpbb_email_address_for_ban_comparison($allowed_email))
+	{
+		return false;
+	}
+
 	$ban = $user->check_ban(false, false, $email, true);
 	if (!empty($ban))
 	{
@@ -1955,17 +2061,29 @@ function validate_user_email($email, $allowed_email = false)
 
 	if (!$config['allow_emailreuse'])
 	{
-		$sql = 'SELECT user_email
-			FROM ' . USERS_TABLE . "
-			WHERE user_email = '" . $db->sql_escape($email) . "'";
-		$result = $db->sql_query($sql);
-		$row = $db->sql_fetchrow($result);
-		$db->sql_freeresult($result);
-
-		if ($row)
+		if (phpbb_email_address_uses_gmail_dot_aliasing($email))
 		{
-			return 'EMAIL_TAKEN';
+			$sql = 'SELECT user_email
+				FROM ' . USERS_TABLE . '
+				WHERE user_email ' . $db->sql_like_expression($db->get_any_char() . '@gmail.com') . '
+					OR user_email ' . $db->sql_like_expression($db->get_any_char() . '@googlemail.com');
 		}
+		else
+		{
+			$sql = 'SELECT user_email
+				FROM ' . USERS_TABLE . "
+				WHERE user_email = '" . $db->sql_escape($email) . "'";
+		}
+		$result = $db->sql_query($sql);
+		while ($row = $db->sql_fetchrow($result))
+		{
+			if (!phpbb_email_address_uses_gmail_dot_aliasing($email) || $email_comparison === phpbb_email_address_for_ban_comparison($row['user_email']))
+			{
+				$db->sql_freeresult($result);
+				return 'EMAIL_TAKEN';
+			}
+		}
+		$db->sql_freeresult($result);
 	}
 
 	return false;

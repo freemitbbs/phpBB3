@@ -228,6 +228,9 @@ $lang = array_merge($lang, array(
 	'POST_REVIEW_EXPLAIN'		=> 'At least one new post has been made to this topic. You may wish to review your post in light of this.',
 	'POST_STORED'				=> 'This message has been posted successfully.',
 	'POST_STORED_MOD'			=> 'This message has been submitted successfully, but it will need to be approved by a moderator before it is publicly viewable.',
+	'POST_SUBMIT_RECOVERY_DRAFT_SUBJECT'	=> 'Recovered post',
+	'POST_SUBMIT_ERROR_DRAFT_SAVED'	=> 'The server could not finish submitting this post. Your text is still shown below and a recovery draft was saved. Please review it and submit again.',
+	'POST_SUBMIT_ERROR_RETRY'	=> 'The server could not finish submitting this post. Your text is still shown below. Please review it and submit again.',
 	'POST_TOPIC_AS'				=> 'Post topic as',
 	'PROGRESS_BAR'				=> 'Progress bar',
 
