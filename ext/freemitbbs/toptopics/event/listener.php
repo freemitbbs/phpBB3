@@ -139,6 +139,8 @@ class listener implements EventSubscriberInterface
 			'imcger.recenttopicsng.sql_pull_topics_data' => 'recenttopics_exclude_first_post_disliked_topics',
 			'imcger.recenttopicsng.modify_topics_list' => 'recenttopics_filter_first_post_disliked_topics',
 			'imcger.recenttopicsng.modify_tpl_ary' => 'recenttopics_fade_first_post_disliked_topic',
+			'core.viewforum_modify_topics_data' => 'viewforum_score_first_post_disliked_topics',
+			'core.viewforum_modify_topicrow' => 'viewforum_fade_first_post_disliked_topic',
 			'core.viewtopic_modify_post_data' => 'prefetch_dislikes',
 			'core.viewtopic_modify_post_row' => 'modify_post_row',
 			'core.viewtopic_modify_page_title' => 'viewtopic_admin_override',
@@ -781,6 +783,71 @@ class listener implements EventSubscriberInterface
 			(int) ($row['TOPTOPICS_FIRST_POST_NET_DISLIKE_SCORE'] ?? 0)
 		);
 		$event['tpl_ary'] = $tpl_ary;
+	}
+
+	public function viewforum_score_first_post_disliked_topics($event): void
+	{
+		$rowset = $event['rowset'] ?? [];
+		if (!is_array($rowset) || empty($rowset))
+		{
+			return;
+		}
+
+		$topic_ids = [];
+		$topic_list = $event['topic_list'] ?? [];
+		if (is_array($topic_list))
+		{
+			foreach ($topic_list as $topic_id)
+			{
+				$topic_id = (int) $topic_id;
+				if ($topic_id > 0)
+				{
+					$topic_ids[$topic_id] = true;
+				}
+			}
+		}
+
+		foreach ($rowset as $row)
+		{
+			$topic_id = is_array($row) ? (int) ($row['topic_id'] ?? 0) : 0;
+			if ($topic_id > 0)
+			{
+				$topic_ids[$topic_id] = true;
+			}
+		}
+
+		$first_post_net_dislike_scores = $this->get_first_post_net_dislike_score_map(array_keys($topic_ids));
+		if (empty($first_post_net_dislike_scores))
+		{
+			return;
+		}
+
+		foreach ($rowset as &$row)
+		{
+			if (is_array($row))
+			{
+				$topic_id = (int) ($row['topic_id'] ?? 0);
+				$row['TOPTOPICS_FIRST_POST_NET_DISLIKE_SCORE'] = $first_post_net_dislike_scores[$topic_id] ?? 0;
+			}
+		}
+		unset($row);
+
+		$event['rowset'] = $rowset;
+	}
+
+	public function viewforum_fade_first_post_disliked_topic($event): void
+	{
+		$row = $event['row'] ?? [];
+		$topic_row = $event['topic_row'] ?? [];
+		if (!is_array($row) || !is_array($topic_row))
+		{
+			return;
+		}
+
+		$topic_row['TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS'] = $this->get_topic_dislike_fade_class(
+			(int) ($row['TOPTOPICS_FIRST_POST_NET_DISLIKE_SCORE'] ?? 0)
+		);
+		$event['topic_row'] = $topic_row;
 	}
 
 	public function display_forums_modify_category_template_vars($event): void

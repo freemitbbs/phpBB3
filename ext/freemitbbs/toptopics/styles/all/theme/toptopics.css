@@ -67,7 +67,13 @@
 
 a.topictitle.toptopics-topic-dislike-fade,
 .toptopics-meta.toptopics-topic-dislike-fade,
-.toptopics-meta.toptopics-topic-dislike-fade a {
+.toptopics-meta.toptopics-topic-dislike-fade a,
+.topic-poster.toptopics-topic-dislike-fade,
+.topic-poster.toptopics-topic-dislike-fade a,
+.responsive-show.toptopics-topic-dislike-fade,
+.responsive-show.toptopics-topic-dislike-fade a,
+.lastpost .toptopics-topic-dislike-fade,
+.lastpost .toptopics-topic-dislike-fade a {
 	color: var(--toptopics-dislike-fade-color);
 }
 
