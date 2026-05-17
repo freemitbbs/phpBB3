@@ -190,6 +190,8 @@ const retryableCommandTypes = new Set([
   "seat.claim",
   "seat.release",
   "seat.remove",
+  "robot.add",
+  "robot.remove",
   "player.ready",
   "observer.watch",
   "tractor.start",
@@ -515,20 +517,6 @@ els.table.addEventListener("click", (event) => {
   if (actionButton && els.table.contains(actionButton)) {
     handleTableAction(actionButton.dataset.action, actionButton.dataset.seat, actionButton);
   }
-});
-els.table.addEventListener("dblclick", (event) => {
-  const target = event.target instanceof Element ? event.target : null;
-  if (!target) {
-    return;
-  }
-
-  const cardButton = target.closest(".hand-card[data-card-index]");
-  if (!cardButton || !els.table.contains(cardButton)) {
-    return;
-  }
-
-  event.preventDefault();
-  playSingleCardFromDoubleClick(Number(cardButton.dataset.cardIndex), cardButton);
 });
 els.table.addEventListener("error", (event) => {
   const image = event.target;
@@ -3861,7 +3849,9 @@ function seatControlsSignature(table, seat) {
 
   if (!seat.user) {
     parts.push(actionSignature(action(table, "seat.claim")));
+    parts.push(actionSignature(action(table, "robot.add")));
     parts.push(isActionPending("seat.claim", roomKey) ? "claiming" : "");
+    parts.push(isActionPending("robot.add", roomKey) ? "adding-robot" : "");
   }
   if (isViewerSeat) {
     parts.push(actionSignature(action(table, "player.ready")));
@@ -3876,6 +3866,10 @@ function seatControlsSignature(table, seat) {
   if (seat.user && !seat.connected && table.viewer?.owner) {
     parts.push(actionSignature(action(table, "seat.remove")));
     parts.push(isActionPending("seat.remove", roomKey) ? "removing" : "");
+  }
+  if (seat.user?.bot && table.viewer?.owner) {
+    parts.push(actionSignature(action(table, "robot.remove")));
+    parts.push(isActionPending("robot.remove", roomKey) ? "removing-robot" : "");
   }
 
   return parts.join(":");
@@ -5745,7 +5739,7 @@ function seatHtml(table, seat) {
   const baseMeta = replacementSeat
     ? "等待补位"
     : occupied
-    ? `${seat.connected ? "在线" : "离线"} · ${seat.ready ? "已准备" : "未准备"}${isOwner ? " · 房主" : ""}`
+    ? `${user.bot ? "机器人" : seat.connected ? "在线" : "离线"} · ${seat.ready ? "已准备" : "未准备"}${isOwner ? " · 房主" : ""}`
     : "空位";
   const meta = side ? `${side} · ${baseMeta}` : baseMeta;
   const actions = seatActionsHtml(table, seat, isViewerSeat);
@@ -5944,9 +5938,16 @@ function modulo(value, divisor) {
 function seatActionsHtml(table, seat, isViewerSeat) {
   const roomKey = table.room.roomKey;
   const disabled = isGameInteractionLocked() || Boolean(state.transitionRoomKey) || hasRoomTransitionPending() || isRoomMutationPending(roomKey);
-  if (!seat.user && isSeatClaimable(table, seat.seatIndex)) {
+  if (!seat.user) {
     const replacementSeat = isReplacementSeat(table, seat);
-    return `<button data-action="seat.claim" data-seat="${seat.seatIndex}" type="button" ${disabled || isActionPending("seat.claim", roomKey) ? "disabled" : ""} title="${replacementSeat ? "接替该座位继续本手牌" : ""}">${replacementSeat ? "补位" : "坐下"}</button>`;
+    const buttons = [];
+    if (isSeatClaimable(table, seat.seatIndex)) {
+      buttons.push(`<button data-action="seat.claim" data-seat="${seat.seatIndex}" type="button" ${disabled || isActionPending("seat.claim", roomKey) ? "disabled" : ""} title="${replacementSeat ? "接替该座位继续本手牌" : ""}">${replacementSeat ? "补位" : "坐下"}</button>`);
+    }
+    if (isRobotAddable(table, seat.seatIndex)) {
+      buttons.push(`<button data-action="robot.add" data-seat="${seat.seatIndex}" type="button" ${disabled || isActionPending("robot.add", roomKey) ? "disabled" : ""} title="添加机器人玩家">加机器人</button>`);
+    }
+    return buttons.join("");
   }
   if (isViewerSeat) {
     const readyAction = action(table, "player.ready");
@@ -5960,6 +5961,9 @@ function seatActionsHtml(table, seat, isViewerSeat) {
   }
   if (seat.user && !seat.connected && table.viewer?.owner && isSeatRemovable(table, seat.seatIndex)) {
     return `<button data-action="seat.remove" data-seat="${seat.seatIndex}" type="button" ${disabled || isActionPending("seat.remove", roomKey) ? "disabled" : ""} title="移除离线玩家，释放座位">移除</button>`;
+  }
+  if (seat.user?.bot && table.viewer?.owner && isRobotRemovable(table, seat.seatIndex)) {
+    return `<button data-action="robot.remove" data-seat="${seat.seatIndex}" type="button" ${disabled || isActionPending("robot.remove", roomKey) ? "disabled" : ""} title="移除机器人玩家">移除机器人</button>`;
   }
   return "";
 }
@@ -6051,6 +6055,28 @@ function isSeatRemovable(table, seatIndex) {
     return true;
   }
   return removeAction.seatIndexes.includes(seatIndex);
+}
+
+function isRobotAddable(table, seatIndex) {
+  const robotAction = action(table, "robot.add");
+  if (!robotAction.enabled) {
+    return false;
+  }
+  if (!Array.isArray(robotAction.seatIndexes)) {
+    return true;
+  }
+  return robotAction.seatIndexes.includes(seatIndex);
+}
+
+function isRobotRemovable(table, seatIndex) {
+  const robotAction = action(table, "robot.remove");
+  if (!robotAction.enabled) {
+    return false;
+  }
+  if (!Array.isArray(robotAction.seatIndexes)) {
+    return true;
+  }
+  return robotAction.seatIndexes.includes(seatIndex);
 }
 
 function isReplacementSeat(table, seat) {
@@ -7111,6 +7137,12 @@ function handleTableAction(type, seatValue, button = null) {
   } else if (type === "seat.remove") {
     markActionButtonPending(button);
     void sendCommand("seat.remove", { roomKey, payload: { seatIndex } }).catch((error) => reportActionError(error, button));
+  } else if (type === "robot.add") {
+    markActionButtonPending(button);
+    void sendCommand("robot.add", { roomKey, payload: { seatIndex } }).catch((error) => reportActionError(error, button));
+  } else if (type === "robot.remove") {
+    markActionButtonPending(button);
+    void sendCommand("robot.remove", { roomKey, payload: { seatIndex } }).catch((error) => reportActionError(error, button));
   } else if (type === "player.ready") {
     const seat = state.table.room.seats.find((candidate) => candidate.seatIndex === seatIndex);
     if (!seat) {
@@ -7263,85 +7295,6 @@ function clearPendingHandCards() {
   els.table.querySelectorAll(".hand-card-pending-play").forEach((button) => {
     button.classList.remove("hand-card-pending-play");
   });
-}
-
-function playSingleCardFromDoubleClick(cardIndex, cardButton) {
-  const roomKey = state.currentRoomKey;
-  const playType = isGuandanTable(state.table) ? "guandan.playCards" : "tractor.playCards";
-  const blockedReason = tableActionBlockedReason(playType, roomKey);
-  if (blockedReason) {
-    setStatus(blockedReason);
-    return;
-  }
-
-  const table = state.table;
-  const playAction = action(table, playType);
-  if (!playAction.enabled) {
-    setStatus(tableActionReasonText(table, playAction.reason || "play_not_open"));
-    return;
-  }
-
-  const card = table?.engine?.private?.cards?.[cardIndex];
-  if (!card) {
-    return;
-  }
-
-  if (isGuandanTable(table)) {
-    const preview = guandanSelectionPreview(table, [card]);
-    if (!preview.canSubmitPlay) {
-      setStatus(preview.text || "这张牌现在不能出");
-      return;
-    }
-  } else {
-    const blocked = tractorSingleCardPlayBlockedReason(table, card);
-    if (blocked) {
-      setStatus(blocked);
-      return;
-    }
-  }
-
-  state.selectedHandIndexes = [cardIndex];
-  refreshSelectionUi(cardIndex, cardButton);
-  setStatus("正在出牌...");
-  const playButton = viewerTableActionsElement()?.querySelector(`[data-action="${playType}"]`);
-  markActionButtonPending(playButton);
-  markPendingHandCards([cardIndex]);
-  void sendEngineCommand(playType, roomKey, { cards: [card.id] }, playButton);
-}
-
-function tractorSingleCardPlayBlockedReason(table, card) {
-  if (!table || isGuandanTable(table)) {
-    return "";
-  }
-
-  const trick = table.engine?.public?.currentTrick;
-  const plays = trick?.plays || [];
-  if (!plays.length) {
-    return "";
-  }
-
-  const leadingCount = Number(trick.leadingCount || plays[0]?.cards?.length || 0);
-  if (!Number.isFinite(leadingCount) || leadingCount < 1) {
-    return "当前墩不能双击单张出牌";
-  }
-  if (leadingCount !== 1) {
-    return `本墩要跟 ${leadingCount} 张牌，不能双击单张出牌`;
-  }
-
-  const leadingSuit = trick.leadingSuit || tractorEffectiveSuitForCard(table, plays[0]?.cards?.[0]);
-  const selectedSuit = tractorEffectiveSuitForCard(table, card);
-  if (!leadingSuit || selectedSuit === leadingSuit) {
-    return "";
-  }
-
-  const hasLeadingSuit = (table.engine?.private?.cards || [])
-    .some((candidate) => tractorEffectiveSuitForCard(table, candidate) === leadingSuit);
-  if (!hasLeadingSuit) {
-    return "";
-  }
-
-  const suitText = effectiveSuitText(leadingSuit, table.engine?.public?.trump?.suit) || "主牌";
-  return `手里还有${suitText}，不能双击垫其他花色`;
 }
 
 function tractorEffectiveSuitForCard(table, card) {

@@ -362,6 +362,13 @@ class server
 		}
 
 		$users = $this->load_users($user_ids);
+		foreach ($this->load_recovery_event_users($session_ids) as $user_id => $event_user)
+		{
+			if (empty($users[$user_id]))
+			{
+				$users[$user_id] = $event_user;
+			}
+		}
 		$recoveries = [];
 		foreach ($rows as $recovery)
 		{
@@ -1349,6 +1356,55 @@ class server
 		return $members;
 	}
 
+	protected function load_recovery_event_users(array $session_ids): array
+	{
+		$session_ids = array_values(array_unique(array_filter(array_map('intval', $session_ids), static function ($session_id) {
+			return $session_id > 0;
+		})));
+		if (empty($session_ids))
+		{
+			return [];
+		}
+
+		$sql = 'SELECT payload_json
+			FROM ' . $this->events_table . "
+			WHERE " . $this->db->sql_in_set('session_id', $session_ids) . "
+				AND " . $this->db->sql_in_set('event_type', ['room.joined', 'seat.claimed']) . '
+			ORDER BY session_id ASC, seq ASC, id ASC';
+		$result = $this->db->sql_query($sql);
+		$users = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$payload = $this->decode_json_field((string) ($row['payload_json'] ?? ''), []);
+			if (!is_array($payload) || empty($payload['user']) || !is_array($payload['user']))
+			{
+				continue;
+			}
+
+			$user = $payload['user'];
+			$is_bot = !empty($user['bot']) || !empty($user['isBot']) || !empty($user['is_bot']);
+			$user_id = (int) ($user['userId'] ?? $user['user_id'] ?? 0);
+			$username = (string) ($user['username'] ?? '');
+			if (!$is_bot || $user_id <= 0 || $username === '')
+			{
+				continue;
+			}
+
+			$users[$user_id] = [
+				'user_id' => $user_id,
+				'username' => $username,
+				'username_clean' => (string) ($user['usernameClean'] ?? $user['username_clean'] ?? $username),
+				'display_name' => (string) ($user['displayName'] ?? $user['display_name'] ?? $username),
+				'avatar_url' => (string) ($user['avatarUrl'] ?? $user['avatar_url'] ?? ''),
+				'selected_skin_id' => (string) ($user['selectedSkinId'] ?? $user['selected_skin_id'] ?? ''),
+				'bot' => true,
+			];
+		}
+		$this->db->sql_freeresult($result);
+
+		return $users;
+	}
+
 	protected function recovery_room_payload(array $session, array $snapshot, array $member_rows, array $users): array
 	{
 		$settings = $this->decode_json_field((string) ($session['settings_json'] ?? ''), []);
@@ -1540,6 +1596,19 @@ class server
 	{
 		$user_id = (int) ($user['user_id'] ?? 0);
 		$username = (string) ($user['username'] ?? '');
+		if (!empty($user['bot']))
+		{
+			return [
+				'userId' => $user_id,
+				'username' => $username,
+				'usernameClean' => (string) ($user['username_clean'] ?? $username),
+				'displayName' => (string) ($user['display_name'] ?? $username),
+				'nickname' => '',
+				'avatarUrl' => (string) ($user['avatar_url'] ?? ''),
+				'selectedSkinId' => (string) ($user['selected_skin_id'] ?? ''),
+				'bot' => true,
+			];
+		}
 		$nickname = $user_id > 0 ? $this->profile_nickname($user_id) : '';
 		$display_name = $nickname !== '' ? $username . '（' . $nickname . '）' : $username;
 
