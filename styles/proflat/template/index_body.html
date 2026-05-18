@@ -35,7 +35,6 @@
 		{% if U_VIEWONLINE %}<h3><a href="{{ U_VIEWONLINE }}">{{ lang('WHO_IS_ONLINE') }}</a></h3>{% else %}<h3>{{ lang('WHO_IS_ONLINE') }}</h3>{% endif %}
 		<p class="icon-online-list">
 			{% EVENT index_body_block_online_prepend %}
-			{% if S_USER_LOGGED_IN %}{{ CURRENT_TIME }}<br />{% endif %}
 			{{ TOTAL_USERS_ONLINE }} ({{ lang('ONLINE_EXPLAIN') }})<br />
 			{% if U_VIEWONLINE %}
 				<br />{{ LOGGED_IN_USER_LIST }}
@@ -63,7 +62,6 @@
 		<h3>{{ lang('STATISTICS') }}</h3>
 		<p class="icon-statistics">
 			{% EVENT index_body_block_stats_prepend %}
-			{% if S_USER_LOGGED_IN %}{{ LAST_VISIT_DATE }}<br />{% else %}{{ CURRENT_TIME }}<br />{% endif %}
 			{{ RECORD_USERS }}<br /><br />
 			{{ TOTAL_POSTS }} &bull; {{ TOTAL_TOPICS }} &bull; {{ TOTAL_USERS }} &bull; {{ NEWEST_USER }}
 			{% EVENT index_body_block_stats_append %}

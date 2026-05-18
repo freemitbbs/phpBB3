@@ -3479,7 +3479,7 @@ function renderTable() {
   const centerChanged = updateDirectTableSectionLazy(grid, "center", ":scope > .table-center", cardDeskSignature(table), () => `<div class="table-center">${cardDeskHtml(table)}</div>`);
   const seatBottomChanged = updateDirectTableSectionLazy(grid, "seat-bottom", ":scope > .seat-0", seatSectionSignature(table, seatBottom), () => seatHtmlByVisual(0));
   const leftSeatSlot = ensureTableChatStack(grid).querySelector('[data-table-seat-slot="left"]');
-  const seatLeftChanged = updateTableSectionHtml("seat-left", leftSeatSlot, seatHtmlByVisual(3), seatSectionSignature(table, seatLeft));
+  const seatLeftChanged = updateTableSectionHtml("seat-left", leftSeatSlot, seatHtmlByVisual(3), seatSectionSignature(table, seatLeft), { preserveSeatAvatar: true });
   const stackRightChanged = updateDirectTableSectionLazy(grid, "stack-right", ":scope > .table-side-stack-right", [seatSectionSignature(table, seatRight), statusInfoSignature].join("\u001e"), () => `
     <div class="table-side-stack table-side-stack-right">
       <div class="table-side-panel table-side-panel-right" data-table-panel="status">${tableStatusInfoHtml(table, tableStatusText, trumpDeclarer, bottomHolderTitle, bottomHolder)}</div>
@@ -3634,6 +3634,7 @@ function updateDirectTableSection(container, key, selector, html, signature = ht
   }
   if (existing) {
     preserveStablePrivateHand(existing, next);
+    preserveStableSeatAvatar(existing, next);
     existing.replaceWith(next);
   } else {
     container.appendChild(next);
@@ -3641,6 +3642,16 @@ function updateDirectTableSection(container, key, selector, html, signature = ht
   state.renderedTableSections.set(key, html);
   state.renderedTableSectionSignatures.set(key, signature);
   return true;
+}
+
+function preserveStableSeatAvatar(existing, next) {
+  const existingAvatar = existing.querySelector?.("[data-avatar-signature]");
+  const nextAvatar = next.querySelector?.("[data-avatar-signature]");
+  if (!existingAvatar || !nextAvatar || existingAvatar.dataset.avatarSignature !== nextAvatar.dataset.avatarSignature) {
+    return;
+  }
+
+  nextAvatar.replaceWith(existingAvatar);
 }
 
 function preserveStablePrivateHand(existing, next) {
@@ -3662,12 +3673,23 @@ function syncPreservedHandSelection(hand) {
   });
 }
 
-function updateTableSectionHtml(key, element, html, signature = html) {
+function updateTableSectionHtml(key, element, html, signature = html, options = {}) {
   if (!element || (state.renderedTableSections.get(key) === html && state.renderedTableSectionSignatures.get(key) === signature)) {
     return false;
   }
 
-  element.innerHTML = html;
+  if (options.preserveSeatAvatar) {
+    const template = document.createElement("template");
+    template.innerHTML = html.trim();
+    const next = template.content.firstElementChild;
+    const existing = element.firstElementChild;
+    if (existing && next) {
+      preserveStableSeatAvatar(existing, next);
+    }
+    element.replaceChildren(...template.content.childNodes);
+  } else {
+    element.innerHTML = html;
+  }
   state.renderedTableSections.set(key, html);
   state.renderedTableSectionSignatures.set(key, signature);
   return true;
@@ -5817,6 +5839,7 @@ function seatAvatarHtml(table, seat) {
   const user = seat.user;
   const seatIndex = seat.seatIndex;
   const fallback = skinUrlForSeat(user, seatIndex);
+  const signature = seatAvatarSignature(table, seat, fallback);
   const avatar = isForumAvatarUrl(user?.avatarUrl)
     ? `<img class="seat-avatar seat-forum-avatar" src="${escapeAttribute(user.avatarUrl)}" data-fallback-src="${escapeAttribute(fallback)}" alt="" loading="lazy" decoding="async" />`
     : `<img class="seat-avatar seat-skin" src="${escapeAttribute(fallback)}" alt="" loading="lazy" decoding="async" />`;
@@ -5824,21 +5847,36 @@ function seatAvatarHtml(table, seat) {
   const watched = Number(table.viewer?.watchedSeatIndex) === Number(seatIndex);
   if (watched) {
     return `
-      <span class="seat-avatar-frame" title="正在观看该玩家手牌" aria-label="正在观看该玩家手牌">
+      <span class="seat-avatar-frame" title="正在观看该玩家手牌" aria-label="正在观看该玩家手牌" data-avatar-signature="${escapeAttribute(signature)}">
         ${avatar}
       </span>
     `;
   }
 
   if (!canWatchSeat(table, seat)) {
-    return avatar;
+    return isForumAvatarUrl(user?.avatarUrl)
+      ? `<img class="seat-avatar seat-forum-avatar" src="${escapeAttribute(user.avatarUrl)}" data-fallback-src="${escapeAttribute(fallback)}" data-avatar-signature="${escapeAttribute(signature)}" alt="" loading="lazy" decoding="async" />`
+      : `<img class="seat-avatar seat-skin" src="${escapeAttribute(fallback)}" data-avatar-signature="${escapeAttribute(signature)}" alt="" loading="lazy" decoding="async" />`;
   }
 
   return `
-    <button class="seat-avatar-button" data-action="observer.watch" data-seat="${seatIndex}" type="button" title="点击观看该玩家手牌" aria-label="观看该玩家手牌">
+    <button class="seat-avatar-button" data-action="observer.watch" data-seat="${seatIndex}" type="button" title="点击观看该玩家手牌" aria-label="观看该玩家手牌" data-avatar-signature="${escapeAttribute(signature)}">
       ${avatar}
     </button>
   `;
+}
+
+function seatAvatarSignature(table, seat, fallback) {
+  const user = seat.user || {};
+  return [
+    table.room?.roomKey || "",
+    seat.seatIndex,
+    user.userId ?? "",
+    user.avatarUrl || "",
+    user.selectedSkinId || user.skinInUse || user.skin || "",
+    fallback || "",
+    Number(table.viewer?.watchedSeatIndex) === Number(seat.seatIndex) ? "watched" : canWatchSeat(table, seat) ? "watchable" : "static"
+  ].join("|");
 }
 
 function isForumAvatarUrl(url) {
