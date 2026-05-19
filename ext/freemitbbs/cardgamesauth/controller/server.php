@@ -457,6 +457,7 @@ class server
 			$session_payload = $this->optional_object($data, 'session', 'session');
 			$event_payload = $this->required_object($data, 'event', 'event');
 			$snapshot_payload = $this->required_object($data, 'snapshot', 'snapshot');
+			$rating_snapshot_payload = $this->snapshot_state_array($snapshot_payload);
 			$session_update_payload = $this->required_object($data, 'sessionUpdate', 'session_update');
 			$summary_payload = $this->optional_object($data, 'finishedSummary', 'finished_summary');
 			$lobby_events = $this->optional_rows($data, 'lobbyEvents', 'lobby_events');
@@ -485,7 +486,8 @@ class server
 						$existing_seq = (int) ($existing_event['seq'] ?? 0);
 						$this->assert_transition_event_replay($existing_event, $event_payload, $existing_seq, $game_type);
 						$seq = $this->existing_transition_final_seq($session_id, $game_type, $existing_seq, $lobby_events);
-						$rating_updates = $this->finished_summary_rating_updates($summary_payload, $snapshot_payload, $game_type);
+						$this->apply_finished_summary_rating($summary_payload ?? [], $rating_snapshot_payload, $session_id, $game_type, $now);
+						$rating_updates = $this->finished_summary_rating_updates($summary_payload, $rating_snapshot_payload, $game_type);
 						$this->db->sql_transaction('commit');
 						return $this->transition_success_response($session_id, $seq, $rating_updates);
 					}
@@ -523,7 +525,8 @@ class server
 					$existing_seq = (int) ($existing_event['seq'] ?? 0);
 					$this->assert_transition_event_replay($existing_event, $event_payload, $existing_seq, $game_type);
 					$seq = $this->existing_transition_final_seq($session_id, $game_type, $existing_seq, $lobby_events);
-					$rating_updates = $this->finished_summary_rating_updates($summary_payload, $snapshot_payload, $game_type);
+					$this->apply_finished_summary_rating($summary_payload ?? [], $rating_snapshot_payload, $session_id, $game_type, $now);
+					$rating_updates = $this->finished_summary_rating_updates($summary_payload, $rating_snapshot_payload, $game_type);
 					$this->db->sql_transaction('commit');
 					return $this->transition_success_response($session_id, $seq, $rating_updates);
 				}
@@ -545,7 +548,8 @@ class server
 
 					$this->assert_transition_event_replay($existing_event, $event_payload, $seq, $game_type);
 					$seq = $this->existing_transition_final_seq($session_id, $game_type, (int) $existing_event['seq'], $lobby_events);
-					$rating_updates = $this->finished_summary_rating_updates($summary_payload, $snapshot_payload, $game_type);
+					$this->apply_finished_summary_rating($summary_payload ?? [], $rating_snapshot_payload, $session_id, $game_type, $now);
+					$rating_updates = $this->finished_summary_rating_updates($summary_payload, $rating_snapshot_payload, $game_type);
 					$this->db->sql_transaction('commit');
 					return $this->transition_success_response($session_id, $seq, $rating_updates);
 				}
@@ -564,13 +568,9 @@ class server
 				$this->update_transition_session($session_id, $session_update_payload, $snapshot_payload, $seq, (int) $session['state_version'], $now);
 				if ($summary_payload !== null)
 				{
-					$summary_already_exists = $this->round_log_session_has_finished_summary($session_id);
 					$this->upsert_finished_summary($summary_payload, $session_id, $game_type, $now);
-					if (!$summary_already_exists)
-					{
-						$this->apply_finished_summary_rating($summary_payload, $snapshot_payload, $session_id, $game_type, $now);
-					}
-					$rating_updates = $this->finished_summary_rating_updates($summary_payload, $snapshot_payload, $game_type);
+					$this->apply_finished_summary_rating($summary_payload, $rating_snapshot_payload, $session_id, $game_type, $now);
+					$rating_updates = $this->finished_summary_rating_updates($summary_payload, $rating_snapshot_payload, $game_type);
 				}
 
 				$final_seq = $seq;
@@ -997,7 +997,26 @@ class server
 				'summary_json' => $this->json_value($data, 'summary', 'summary_json', new \stdClass()),
 				'finished_at' => $this->time_value($data, 'finishedAt', 'finished_at', time()),
 			];
-			$updated = $this->upsert_row($this->finished_summaries_table, ['session_id' => $session_id], $row);
+			$rating_updates = [];
+			$now = time();
+			$this->db->sql_transaction('begin');
+			try
+			{
+				$updated = $this->upsert_row($this->finished_summaries_table, ['session_id' => $session_id], $row);
+				$snapshot = $this->latest_session_snapshot($session_id, $game_type);
+				if (!empty($snapshot))
+				{
+					$this->apply_finished_summary_rating($data, $snapshot, $session_id, $game_type, $now);
+					$rating_updates = $this->finished_summary_rating_updates($data, $snapshot, $game_type);
+				}
+
+				$this->db->sql_transaction('commit');
+			}
+			catch (\Throwable $e)
+			{
+				$this->db->sql_transaction('rollback');
+				throw $e;
+			}
 		}
 		catch (\InvalidArgumentException $e)
 		{
@@ -1011,6 +1030,8 @@ class server
 		return $this->json([
 			'success' => true,
 			'updated' => $updated,
+			'ratingUpdates' => $this->json_object_payload($rating_updates),
+			'rating_updates' => $this->json_object_payload($rating_updates),
 		]);
 	}
 
@@ -2527,6 +2548,26 @@ class server
 		return $snapshots;
 	}
 
+	protected function latest_session_snapshot(int $session_id, string $game_type): array
+	{
+		if ($session_id <= 0 || $game_type === '')
+		{
+			return [];
+		}
+
+		$sql = 'SELECT state_json
+			FROM ' . $this->snapshots_table . '
+			WHERE session_id = ' . $session_id . "
+				AND game_type = '" . $this->db->sql_escape(substr($game_type, 0, 32)) . "'
+			ORDER BY seq DESC";
+		$result = $this->db->sql_query_limit($sql, 1);
+		$state_json = (string) ($this->db->sql_fetchfield('state_json') ?? '');
+		$this->db->sql_freeresult($result);
+
+		$snapshot = $this->decode_json_field($state_json, []);
+		return is_array($snapshot) && !$this->is_list_array($snapshot) ? $snapshot : [];
+	}
+
 	protected function load_event_export_finished_summaries(array $session_ids): array
 	{
 		$session_ids = array_values(array_unique(array_filter(array_map('intval', $session_ids), static function ($session_id) {
@@ -3193,6 +3234,17 @@ class server
 		return new \stdClass();
 	}
 
+	protected function snapshot_state_array(array $snapshot): array
+	{
+		$value = $this->snapshot_state_payload($snapshot);
+		if (is_string($value))
+		{
+			$value = $this->decode_json_field($value, []);
+		}
+
+		return is_array($value) && !$this->is_list_array($value) ? $value : [];
+	}
+
 	protected function snapshot_has_inline_state(array $snapshot): bool
 	{
 		return array_key_exists('schemaVersion', $snapshot)
@@ -3328,6 +3380,13 @@ class server
 		{
 			$stat_rows[$user_id] = $this->player_stat_row_for_update($game_type, $user_id, $now);
 			$ratings_by_user_id[$user_id] = $this->rating_from_stat_row($stat_rows[$user_id]);
+		}
+		foreach ($stat_rows as $stat_row)
+		{
+			if ($this->rating_row_has_session($stat_row, $session_id))
+			{
+				return;
+			}
 		}
 
 		$team_ratings = [];
@@ -3534,6 +3593,37 @@ class server
 		return is_array($row) ? $row : [];
 	}
 
+	protected function rating_row_has_session(array $row, int $session_id): bool
+	{
+		if ($session_id <= 0)
+		{
+			return false;
+		}
+
+		$stats = $this->rating_stats_from_row($row);
+		$elo = is_array($stats['elo'] ?? null) && !$this->is_list_array($stats['elo']) ? $stats['elo'] : [];
+		if ((int) ($elo['lastSessionId'] ?? 0) === $session_id)
+		{
+			return true;
+		}
+
+		$rated_session_ids = $elo['ratedSessionIds'] ?? [];
+		if (!is_array($rated_session_ids))
+		{
+			return false;
+		}
+
+		foreach ($rated_session_ids as $rated_session_id)
+		{
+			if ((int) $rated_session_id === $session_id)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	protected function update_player_rating_row(array $row, array $summary, int $session_id, int $now, int $delta, bool $won, bool $has_bots, float $k_factor): void
 	{
 		$stats = $this->rating_stats_from_row($row);
@@ -3552,6 +3642,7 @@ class server
 		$elo['lastKFactor'] = $k_factor;
 		$elo['lastSessionId'] = $session_id;
 		$elo['lastFinishedAt'] = $this->iso_time($finished_at);
+		$elo['ratedSessionIds'] = $this->rating_recent_session_ids($elo['ratedSessionIds'] ?? [], $session_id);
 		$stats['elo'] = $elo;
 		$stats['eloRating'] = $rating_after;
 
@@ -3563,6 +3654,35 @@ class server
 				'updated_at' => $now,
 			]) . '
 			WHERE id = ' . (int) $row['id']);
+	}
+
+	protected function rating_recent_session_ids($value, int $session_id): array
+	{
+		$session_ids = [];
+		if (is_array($value))
+		{
+			foreach ($value as $candidate)
+			{
+				$candidate = (int) $candidate;
+				if ($candidate > 0)
+				{
+					$session_ids[$candidate] = $candidate;
+				}
+			}
+		}
+		if ($session_id > 0)
+		{
+			$session_ids[$session_id] = $session_id;
+		}
+
+		$session_ids = array_values($session_ids);
+		sort($session_ids, SORT_NUMERIC);
+		if (count($session_ids) > 50)
+		{
+			$session_ids = array_slice($session_ids, -50);
+		}
+
+		return $session_ids;
 	}
 
 	protected function rating_stats_from_row(array $row): array
