@@ -461,6 +461,7 @@ class server
 			$summary_payload = $this->optional_object($data, 'finishedSummary', 'finished_summary');
 			$lobby_events = $this->optional_rows($data, 'lobbyEvents', 'lobby_events');
 			$now = time();
+			$rating_updates = [];
 			$release_transition_lock = false;
 			$transition_lock_key = $this->transition_lock_key_from_payloads($session_payload ?? [], $event_payload, $snapshot_payload, $session_update_payload, $summary_payload ?? []);
 
@@ -484,12 +485,9 @@ class server
 						$existing_seq = (int) ($existing_event['seq'] ?? 0);
 						$this->assert_transition_event_replay($existing_event, $event_payload, $existing_seq, $game_type);
 						$seq = $this->existing_transition_final_seq($session_id, $game_type, $existing_seq, $lobby_events);
+						$rating_updates = $this->finished_summary_rating_updates($summary_payload, $snapshot_payload, $game_type);
 						$this->db->sql_transaction('commit');
-						return $this->json([
-							'ok' => true,
-							'sessionId' => $session_id,
-							'seq' => $seq,
-						]);
+						return $this->transition_success_response($session_id, $seq, $rating_updates);
 					}
 				}
 
@@ -525,12 +523,9 @@ class server
 					$existing_seq = (int) ($existing_event['seq'] ?? 0);
 					$this->assert_transition_event_replay($existing_event, $event_payload, $existing_seq, $game_type);
 					$seq = $this->existing_transition_final_seq($session_id, $game_type, $existing_seq, $lobby_events);
+					$rating_updates = $this->finished_summary_rating_updates($summary_payload, $snapshot_payload, $game_type);
 					$this->db->sql_transaction('commit');
-					return $this->json([
-						'ok' => true,
-						'sessionId' => $session_id,
-						'seq' => $seq,
-					]);
+					return $this->transition_success_response($session_id, $seq, $rating_updates);
 				}
 
 				$this->assert_next_transition_seq($seq, (int) $session['state_version']);
@@ -550,12 +545,9 @@ class server
 
 					$this->assert_transition_event_replay($existing_event, $event_payload, $seq, $game_type);
 					$seq = $this->existing_transition_final_seq($session_id, $game_type, (int) $existing_event['seq'], $lobby_events);
+					$rating_updates = $this->finished_summary_rating_updates($summary_payload, $snapshot_payload, $game_type);
 					$this->db->sql_transaction('commit');
-					return $this->json([
-						'ok' => true,
-						'sessionId' => $session_id,
-						'seq' => $seq,
-					]);
+					return $this->transition_success_response($session_id, $seq, $rating_updates);
 				}
 
 				$snapshot_row = $this->game_snapshot_row($snapshot_payload, $session_id, $seq, $game_type);
@@ -578,6 +570,7 @@ class server
 					{
 						$this->apply_finished_summary_rating($summary_payload, $snapshot_payload, $session_id, $game_type, $now);
 					}
+					$rating_updates = $this->finished_summary_rating_updates($summary_payload, $snapshot_payload, $game_type);
 				}
 
 				$final_seq = $seq;
@@ -619,11 +612,24 @@ class server
 			return $this->json_error('transition_store_failed', 'Transition could not be stored.', 500);
 		}
 
-		return $this->json([
+		return $this->transition_success_response($session_id, $seq, $rating_updates);
+	}
+
+	protected function transition_success_response(int $session_id, int $seq, array $rating_updates = []): JsonResponse
+	{
+		$response = [
 			'ok' => true,
 			'sessionId' => $session_id,
 			'seq' => $seq,
-		]);
+		];
+		if (!empty($rating_updates))
+		{
+			$rating_updates_payload = $this->json_object_payload($rating_updates);
+			$response['ratingUpdates'] = $rating_updates_payload;
+			$response['rating_updates'] = $rating_updates_payload;
+		}
+
+		return $this->json($response);
 	}
 
 	public function update_session(int $id): JsonResponse
@@ -3364,6 +3370,63 @@ class server
 			$delta = (int) round($k_factor * (($won ? 1.0 : 0.0) - $expected_score));
 			$this->update_player_rating_row($stat_rows[$user_id], $summary, $session_id, $now, $delta, $won, $has_bots, $k_factor);
 		}
+	}
+
+	protected function finished_summary_rating_updates(?array $summary, array $snapshot, string $game_type): array
+	{
+		if ($summary === null || $game_type === '' || (string) ($snapshot['phase'] ?? '') !== 'finished')
+		{
+			return [];
+		}
+
+		$winner = $this->rating_winner_payload($summary);
+		if ((string) ($winner['reason'] ?? '') === 'cancelled')
+		{
+			return [];
+		}
+
+		$players = $this->rating_players_from_snapshot($snapshot);
+		if (count($players) < 2)
+		{
+			return [];
+		}
+
+		$winner_team = trim((string) ($winner['team'] ?? ''));
+		$winner_user_ids = $this->int_list_set($winner['userIds'] ?? $winner['user_ids'] ?? []);
+		$winner_seat_indexes = $this->int_list_set($winner['seatIndexes'] ?? $winner['seat_indexes'] ?? []);
+		if ($winner_team === '' && empty($winner_user_ids) && empty($winner_seat_indexes))
+		{
+			return [];
+		}
+
+		$teams = [];
+		$human_user_ids = [];
+		foreach ($players as $player)
+		{
+			$teams[(string) $player['team']] = true;
+			if (empty($player['bot']))
+			{
+				$human_user_ids[] = (int) $player['userId'];
+			}
+		}
+		$human_user_ids = array_values(array_unique($human_user_ids));
+		sort($human_user_ids, SORT_NUMERIC);
+		if (count($teams) < 2 || empty($human_user_ids))
+		{
+			return [];
+		}
+
+		$ratings = $this->player_ratings_for_users($human_user_ids);
+		$updates = [];
+		foreach ($human_user_ids as $user_id)
+		{
+			if (!empty($ratings[$user_id]))
+			{
+				$updates[(string) $user_id] = $ratings[$user_id];
+			}
+		}
+
+		return $updates;
 	}
 
 	protected function rating_winner_payload(array $summary): array
