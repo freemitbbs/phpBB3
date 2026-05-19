@@ -15,6 +15,10 @@ class server
 	private const MAX_EVENT_EXPORT_LIMIT = 5000;
 	private const TESTER_GROUP_NAME = 'CARD_GAME_TESTERS';
 	private const NICKNAME_PROFILE_FIELD_IDENT = 'nick_name';
+	private const BOT_USER_ID_MIN = 900000000;
+	private const DEFAULT_ELO_RATING = 1500;
+	private const ELO_K_FACTOR = 32;
+	private const ELO_BOT_DISCOUNT_MULTIPLIER = 0.5;
 
 	protected \phpbb\config\config $config;
 	protected \phpbb\auth\auth $auth;
@@ -568,7 +572,12 @@ class server
 				$this->update_transition_session($session_id, $session_update_payload, $snapshot_payload, $seq, (int) $session['state_version'], $now);
 				if ($summary_payload !== null)
 				{
+					$summary_already_exists = $this->round_log_session_has_finished_summary($session_id);
 					$this->upsert_finished_summary($summary_payload, $session_id, $game_type, $now);
+					if (!$summary_already_exists)
+					{
+						$this->apply_finished_summary_rating($summary_payload, $snapshot_payload, $session_id, $game_type, $now);
+					}
 				}
 
 				$final_seq = $seq;
@@ -1285,6 +1294,7 @@ class server
 			'nickname' => $nickname,
 			'avatarUrl' => $this->avatar_url($user),
 			'selectedSkinId' => $this->selected_skin_id($user_id),
+			'ratings' => $this->json_object_payload($this->player_ratings_payload($user_id)),
 			'groups' => $this->user_groups($user_id),
 			'permissions' => $permissions,
 			'isBanned' => $is_banned,
@@ -1312,6 +1322,14 @@ class server
 			$users[(int) $row['user_id']] = $row;
 		}
 		$this->db->sql_freeresult($result);
+
+		foreach ($this->player_ratings_for_users(array_keys($users)) as $user_id => $ratings)
+		{
+			if (!empty($users[$user_id]))
+			{
+				$users[$user_id]['ratings'] = $ratings;
+			}
+		}
 
 		return $users;
 	}
@@ -1620,7 +1638,71 @@ class server
 			'nickname' => $nickname,
 			'avatarUrl' => $this->avatar_url($user),
 			'selectedSkinId' => $this->selected_skin_id($user_id),
+			'ratings' => $this->json_object_payload(is_array($user['ratings'] ?? null) ? $user['ratings'] : $this->player_ratings_payload($user_id)),
 		];
+	}
+
+	protected function player_ratings_payload(int $user_id): array
+	{
+		$ratings = $this->player_ratings_for_users([$user_id]);
+		return $ratings[$user_id] ?? [];
+	}
+
+	protected function player_ratings_for_users(array $user_ids): array
+	{
+		$user_ids = array_values(array_unique(array_filter(array_map('intval', $user_ids), function ($user_id) {
+			return $user_id > ANONYMOUS && !$this->is_bot_user_id($user_id);
+		})));
+		if (empty($user_ids))
+		{
+			return [];
+		}
+
+		$sql = 'SELECT game_type, user_id, games_played, games_won, stats_json, updated_at
+			FROM ' . $this->player_stats_table . '
+			WHERE ' . $this->db->sql_in_set('user_id', $user_ids);
+		$result = $this->db->sql_query($sql);
+		$ratings = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$user_id = (int) ($row['user_id'] ?? 0);
+			$game_type = (string) ($row['game_type'] ?? '');
+			if ($user_id <= ANONYMOUS || $game_type === '')
+			{
+				continue;
+			}
+
+			$stats = $this->decode_json_field((string) ($row['stats_json'] ?? ''), []);
+			if (!is_array($stats) || $this->is_list_array($stats))
+			{
+				$stats = [];
+			}
+			$elo = is_array($stats['elo'] ?? null) && !$this->is_list_array($stats['elo']) ? $stats['elo'] : [];
+			$rating = (int) ($elo['rating'] ?? $stats['eloRating'] ?? self::DEFAULT_ELO_RATING);
+			$games_played = (int) ($row['games_played'] ?? 0);
+			$bot_games = (int) ($elo['botGames'] ?? 0);
+			$human_games = (int) ($elo['humanGames'] ?? max(0, $games_played - $bot_games));
+			$updated_at = (int) ($row['updated_at'] ?? 0);
+
+			$payload = [
+				'rating' => max(1, $rating),
+				'gamesPlayed' => $games_played,
+				'gamesWon' => (int) ($row['games_won'] ?? 0),
+				'humanGames' => max(0, $human_games),
+				'botGames' => max(0, $bot_games),
+				'provisional' => $games_played < 10,
+				'lastDelta' => (int) ($elo['lastDelta'] ?? 0),
+				'lastDiscounted' => !empty($elo['lastDiscounted']),
+			];
+			if ($updated_at > 0)
+			{
+				$payload['updatedAt'] = $this->iso_time($updated_at);
+			}
+			$ratings[$user_id][$game_type] = $payload;
+		}
+		$this->db->sql_freeresult($result);
+
+		return $ratings;
 	}
 
 	protected function json_object_payload(array $value)
@@ -3170,6 +3252,325 @@ class server
 		];
 
 		return $this->upsert_row($this->finished_summaries_table, ['session_id' => $session_id], $row);
+	}
+
+	protected function apply_finished_summary_rating(array $summary, array $snapshot, int $session_id, string $game_type, int $now): void
+	{
+		if ((string) ($snapshot['phase'] ?? '') !== 'finished')
+		{
+			return;
+		}
+
+		$winner = $this->rating_winner_payload($summary);
+		if ((string) ($winner['reason'] ?? '') === 'cancelled')
+		{
+			return;
+		}
+
+		$players = $this->rating_players_from_snapshot($snapshot);
+		if (count($players) < 2)
+		{
+			return;
+		}
+
+		$winner_team = trim((string) ($winner['team'] ?? ''));
+		$winner_user_ids = $this->int_list_set($winner['userIds'] ?? $winner['user_ids'] ?? []);
+		$winner_seat_indexes = $this->int_list_set($winner['seatIndexes'] ?? $winner['seat_indexes'] ?? []);
+		if ($winner_team === '')
+		{
+			foreach ($players as $player)
+			{
+				$user_id = (int) $player['userId'];
+				$seat_index = (int) $player['seatIndex'];
+				if (isset($winner_user_ids[$user_id]) || isset($winner_seat_indexes[$seat_index]))
+				{
+					$winner_team = (string) $player['team'];
+					break;
+				}
+			}
+		}
+		if ($winner_team === '' && empty($winner_user_ids) && empty($winner_seat_indexes))
+		{
+			return;
+		}
+
+		$teams = [];
+		$human_user_ids = [];
+		$has_bots = false;
+		foreach ($players as $player)
+		{
+			$team = (string) $player['team'];
+			$teams[$team][] = $player;
+			if (!empty($player['bot']))
+			{
+				$has_bots = true;
+				continue;
+			}
+
+			$human_user_ids[] = (int) $player['userId'];
+		}
+		$human_user_ids = array_values(array_unique($human_user_ids));
+		sort($human_user_ids, SORT_NUMERIC);
+		if (count($teams) < 2 || empty($human_user_ids))
+		{
+			return;
+		}
+
+		$stat_rows = [];
+		$ratings_by_user_id = [];
+		foreach ($human_user_ids as $user_id)
+		{
+			$stat_rows[$user_id] = $this->player_stat_row_for_update($game_type, $user_id, $now);
+			$ratings_by_user_id[$user_id] = $this->rating_from_stat_row($stat_rows[$user_id]);
+		}
+
+		$team_ratings = [];
+		foreach ($players as $player)
+		{
+			$team = (string) $player['team'];
+			$user_id = (int) $player['userId'];
+			$team_ratings[$team][] = !empty($player['bot'])
+				? self::DEFAULT_ELO_RATING
+				: ($ratings_by_user_id[$user_id] ?? self::DEFAULT_ELO_RATING);
+		}
+
+		$k_factor = self::ELO_K_FACTOR * ($has_bots ? self::ELO_BOT_DISCOUNT_MULTIPLIER : 1.0);
+		foreach ($players as $player)
+		{
+			$user_id = (int) $player['userId'];
+			if (!empty($player['bot']) || empty($stat_rows[$user_id]))
+			{
+				continue;
+			}
+
+			$team = (string) $player['team'];
+			$team_average = $this->average_rating($team_ratings[$team] ?? []);
+			$opponent_ratings = [];
+			foreach ($team_ratings as $candidate_team => $ratings)
+			{
+				if ((string) $candidate_team !== $team)
+				{
+					$opponent_ratings = array_merge($opponent_ratings, $ratings);
+				}
+			}
+			if (empty($opponent_ratings))
+			{
+				continue;
+			}
+
+			$opponent_average = $this->average_rating($opponent_ratings);
+			$expected_score = 1 / (1 + pow(10, ($opponent_average - $team_average) / 400));
+			$won = $this->rating_player_won($player, $winner_team, $winner_user_ids, $winner_seat_indexes);
+			$delta = (int) round($k_factor * (($won ? 1.0 : 0.0) - $expected_score));
+			$this->update_player_rating_row($stat_rows[$user_id], $summary, $session_id, $now, $delta, $won, $has_bots, $k_factor);
+		}
+	}
+
+	protected function rating_winner_payload(array $summary): array
+	{
+		$winner = $summary['winner'] ?? $summary['winner_json'] ?? [];
+		if (is_string($winner))
+		{
+			$winner = $this->decode_json_field($winner, []);
+		}
+
+		return is_array($winner) && !$this->is_list_array($winner) ? $winner : [];
+	}
+
+	protected function rating_players_from_snapshot(array $snapshot): array
+	{
+		$players = $snapshot['players'] ?? [];
+		if (!is_array($players))
+		{
+			return [];
+		}
+
+		$result = [];
+		foreach ($players as $player)
+		{
+			if (!is_array($player))
+			{
+				continue;
+			}
+			$user_id = (int) ($player['userId'] ?? $player['user_id'] ?? 0);
+			$seat_index = (int) ($player['seatIndex'] ?? $player['seat_index'] ?? -1);
+			$team = trim((string) ($player['team'] ?? ''));
+			if ($user_id <= ANONYMOUS || $seat_index < 0 || $team === '')
+			{
+				continue;
+			}
+
+			$result[] = [
+				'userId' => $user_id,
+				'seatIndex' => $seat_index,
+				'team' => $team,
+				'bot' => !empty($player['bot']) || !empty($player['isBot']) || !empty($player['is_bot']) || $this->is_bot_user_id($user_id),
+			];
+		}
+
+		return $result;
+	}
+
+	protected function player_stat_row_for_update(string $game_type, int $user_id, int $now): array
+	{
+		$row = $this->find_player_stat_row_for_update($game_type, $user_id);
+		if (!empty($row))
+		{
+			return $row;
+		}
+
+		$initial_stats = [
+			'eloRating' => self::DEFAULT_ELO_RATING,
+			'elo' => [
+				'rating' => self::DEFAULT_ELO_RATING,
+				'gamesRated' => 0,
+				'humanGames' => 0,
+				'botGames' => 0,
+			],
+		];
+		$insert_row = [
+			'game_type' => $game_type,
+			'user_id' => $user_id,
+			'games_played' => 0,
+			'games_won' => 0,
+			'stats_json' => $this->encode_json_value($initial_stats),
+			'updated_at' => $now,
+		];
+		$insert = $this->try_insert_row($this->player_stats_table, $insert_row);
+		if ($insert['inserted'])
+		{
+			$insert_row['id'] = (int) $insert['id'];
+			return $insert_row;
+		}
+		if (!$this->is_duplicate_insert($insert))
+		{
+			throw new \RuntimeException('player_rating_insert_failed');
+		}
+
+		$row = $this->find_player_stat_row_for_update($game_type, $user_id);
+		if (empty($row))
+		{
+			throw new \RuntimeException('player_rating_lock_failed');
+		}
+
+		return $row;
+	}
+
+	protected function find_player_stat_row_for_update(string $game_type, int $user_id): array
+	{
+		$sql = 'SELECT id, game_type, user_id, games_played, games_won, stats_json, updated_at
+			FROM ' . $this->player_stats_table . "
+			WHERE game_type = '" . $this->db->sql_escape(substr($game_type, 0, 32)) . "'
+				AND user_id = " . $user_id . '
+			LIMIT 1
+			FOR UPDATE';
+		$result = $this->db->sql_query($sql);
+		$row = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+
+		return is_array($row) ? $row : [];
+	}
+
+	protected function update_player_rating_row(array $row, array $summary, int $session_id, int $now, int $delta, bool $won, bool $has_bots, float $k_factor): void
+	{
+		$stats = $this->rating_stats_from_row($row);
+		$elo = is_array($stats['elo'] ?? null) && !$this->is_list_array($stats['elo']) ? $stats['elo'] : [];
+		$rating_before = $this->rating_from_stat_row($row);
+		$rating_after = max(1, $rating_before + $delta);
+		$finished_at = $this->time_value($summary, 'finishedAt', 'finished_at', $now);
+
+		$elo['rating'] = $rating_after;
+		$elo['ratingBefore'] = $rating_before;
+		$elo['lastDelta'] = $delta;
+		$elo['gamesRated'] = (int) ($elo['gamesRated'] ?? 0) + 1;
+		$elo['humanGames'] = (int) ($elo['humanGames'] ?? 0) + ($has_bots ? 0 : 1);
+		$elo['botGames'] = (int) ($elo['botGames'] ?? 0) + ($has_bots ? 1 : 0);
+		$elo['lastDiscounted'] = $has_bots;
+		$elo['lastKFactor'] = $k_factor;
+		$elo['lastSessionId'] = $session_id;
+		$elo['lastFinishedAt'] = $this->iso_time($finished_at);
+		$stats['elo'] = $elo;
+		$stats['eloRating'] = $rating_after;
+
+		$this->db->sql_query('UPDATE ' . $this->player_stats_table . '
+			SET ' . $this->db->sql_build_array('UPDATE', [
+				'games_played' => (int) ($row['games_played'] ?? 0) + 1,
+				'games_won' => (int) ($row['games_won'] ?? 0) + ($won ? 1 : 0),
+				'stats_json' => $this->encode_json_value($stats),
+				'updated_at' => $now,
+			]) . '
+			WHERE id = ' . (int) $row['id']);
+	}
+
+	protected function rating_stats_from_row(array $row): array
+	{
+		$stats = $this->decode_json_field((string) ($row['stats_json'] ?? ''), []);
+		if (!is_array($stats) || $this->is_list_array($stats))
+		{
+			return [];
+		}
+
+		return $stats;
+	}
+
+	protected function rating_from_stat_row(array $row): int
+	{
+		$stats = $this->rating_stats_from_row($row);
+		$elo = is_array($stats['elo'] ?? null) && !$this->is_list_array($stats['elo']) ? $stats['elo'] : [];
+
+		return max(1, (int) ($elo['rating'] ?? $stats['eloRating'] ?? self::DEFAULT_ELO_RATING));
+	}
+
+	protected function rating_player_won(array $player, string $winner_team, array $winner_user_ids, array $winner_seat_indexes): bool
+	{
+		if ($winner_team !== '')
+		{
+			return (string) $player['team'] === $winner_team;
+		}
+
+		return isset($winner_user_ids[(int) $player['userId']]) || isset($winner_seat_indexes[(int) $player['seatIndex']]);
+	}
+
+	protected function average_rating(array $ratings): float
+	{
+		$ratings = array_values(array_filter(array_map('intval', $ratings), static function ($rating) {
+			return $rating > 0;
+		}));
+		if (empty($ratings))
+		{
+			return (float) self::DEFAULT_ELO_RATING;
+		}
+
+		return array_sum($ratings) / count($ratings);
+	}
+
+	protected function int_list_set($value): array
+	{
+		if (is_string($value))
+		{
+			$value = $this->decode_json_field($value, []);
+		}
+		if (!is_array($value))
+		{
+			return [];
+		}
+
+		$result = [];
+		foreach ($value as $entry)
+		{
+			$number = (int) $entry;
+			if ($number >= 0)
+			{
+				$result[$number] = true;
+			}
+		}
+
+		return $result;
+	}
+
+	protected function is_bot_user_id(int $user_id): bool
+	{
+		return $user_id >= self::BOT_USER_ID_MIN;
 	}
 
 	protected function record_transition_lobby_event(array $event, int $session_id, string $transition_game_type, int $current_seq, int $now): int

@@ -595,6 +595,13 @@
   border-color: rgba(255, 249, 236, 0.48);
 }
 
+.app-shell .seat-guandan-out {
+  border-color: rgba(31, 111, 95, 0.72);
+  box-shadow:
+    inset 0 0 0 2px rgba(31, 111, 95, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.32);
+}
+
 .app-shell .seat-turn {
   box-shadow:
     inset 0 0 0 2px rgba(230, 180, 71, 0.62),
@@ -842,6 +849,22 @@
   white-space: nowrap;
 }
 
+.app-shell .seat-rating {
+  border: 1px solid rgba(47, 92, 154, 0.28);
+  border-radius: 999px;
+  background: rgba(226, 236, 250, 0.82);
+  color: #244f88;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
+.app-shell .seat-rating-provisional {
+  border-style: dashed;
+}
+
 .app-shell .seat-card-count {
   border: 1px solid rgba(31, 111, 95, 0.24);
   border-radius: 999px;
@@ -854,12 +877,46 @@
   white-space: nowrap;
 }
 
+.app-shell .seat-card-count-low {
+  border-color: rgba(165, 38, 45, 0.58);
+  background: #fff1d2;
+  color: #9a1f25;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.55;
+  padding: 1px 8px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.62),
+    0 1px 5px rgba(120, 40, 31, 0.22);
+}
+
+.app-shell .seat-card-count-out {
+  border-color: rgba(31, 111, 95, 0.62);
+  background: #e3f7e9;
+  color: #135946;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.55;
+  padding: 1px 8px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.66),
+    0 1px 5px rgba(19, 89, 70, 0.2);
+}
+
 .app-shell .seat-name {
   min-width: 0;
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
   font-weight: 700;
-  overflow-wrap: anywhere;
   line-height: 1.2;
+}
+
+.app-shell .seat-display-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .app-shell .seat-meta {
@@ -1817,6 +1874,56 @@
 
 .app-shell .hand-card + .hand-card {
   margin-left: calc(-1 * var(--hand-overlap));
+}
+
+.app-shell .seat-hand-private.seat-hand-guandan {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  justify-content: safe center;
+  gap: 0;
+  min-height: var(--guandan-hand-height);
+  overflow: visible;
+  padding-top: calc(var(--hand-lift) + 4px);
+}
+
+.app-shell .seat-0 .seat-hand-private.seat-hand-guandan {
+  overflow: visible;
+  scrollbar-width: none;
+}
+
+.app-shell .seat-0 .seat-hand-private.seat-hand-guandan::-webkit-scrollbar {
+  display: none;
+}
+
+.app-shell .hand-rank-stack {
+  position: relative;
+  flex: 0 1 var(--guandan-rank-width);
+  width: var(--guandan-rank-width);
+  max-width: var(--guandan-card-width);
+  height: var(--guandan-stack-height);
+  min-width: 0;
+}
+
+.app-shell .seat-hand-guandan .hand-card {
+  position: absolute;
+  z-index: var(--stack-z, 1);
+  bottom: var(--stack-offset, 0px);
+  left: 50%;
+  width: min(var(--guandan-card-width), 100%);
+  height: auto;
+  flex: 0 0 auto;
+  transform: translateX(-50%);
+}
+
+.app-shell .seat-hand-guandan .hand-card + .hand-card {
+  margin-top: 0;
+  margin-left: 0;
+}
+
+.app-shell .seat-hand-guandan .hand-card[aria-pressed="true"] {
+  z-index: 40;
+  transform: translate(-50%, calc(-1 * var(--hand-lift)));
 }
 
 .app-shell .hand-card:hover,
@@ -2995,6 +3102,13 @@
     padding: 0 4px;
   }
 
+  .app-shell .seat-card-count-low,
+  .app-shell .seat-card-count-out {
+    font-size: 12px;
+    line-height: 1.45;
+    padding: 0 6px;
+  }
+
   .app-shell .seat-meta {
     min-height: 18px;
     font-size: 12px;
@@ -3005,6 +3119,12 @@
     --hand-lift: 10px;
     --hand-card-width: 52px;
     --hand-overlap: 0px;
+  }
+
+  .app-shell .seat-hand-private.seat-hand-guandan {
+    justify-content: center;
+    justify-content: safe center;
+    gap: 0;
   }
 
   .app-shell .seat-0 .seat-hand-private {

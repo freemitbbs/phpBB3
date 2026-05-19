@@ -3807,6 +3807,7 @@ function seatSectionSignature(table, seat) {
     user.username || "",
     user.avatarUrl || "",
     user.selectedSkinId || user.skinInUse || user.skin || "",
+    seatRatingSignature(table, user),
     seat.ready ? "1" : "0",
     seat.connected ? "1" : "0",
     isActiveEngineSeat(table, seat.seatIndex) ? "1" : "0",
@@ -5770,7 +5771,9 @@ function seatHtml(table, seat) {
   const trick = seatTrickHtml(table, seat.seatIndex);
   const hand = seatHandHtml(table, seat.seatIndex);
   const rank = seatRankHtml(table, seat.seatIndex);
+  const rating = seatRatingHtml(table, user);
   const remainingCards = seatRemainingCardCountHtml(table, seat.seatIndex);
+  const guandanOut = isGuandanSeatOut(table, seat.seatIndex);
   const teamClass = seatTeamClass(table, seat.seatIndex);
   const tableActions = isViewerSeat ? tableActionsHtml(table) : "";
   const trumpRevealChoices = isViewerSeat ? trumpRevealChoicesHtml(table) : "";
@@ -5779,7 +5782,7 @@ function seatHtml(table, seat) {
     : "";
 
   return `
-    <div class="seat seat-${visualSeatIndex} ${teamClass} ${isViewerSeat ? "seat-viewer seat-has-table-actions" : ""} ${seat.connected ? "" : "seat-offline"} ${replacementSeat ? "seat-replacement" : ""} ${seatTurn ? "seat-turn" : ""} ${activeSeat ? "seat-active-hand" : ""}" data-seat-index="${seat.seatIndex}">
+    <div class="seat seat-${visualSeatIndex} ${teamClass} ${isViewerSeat ? "seat-viewer seat-has-table-actions" : ""} ${seat.connected ? "" : "seat-offline"} ${replacementSeat ? "seat-replacement" : ""} ${seatTurn ? "seat-turn" : ""} ${activeSeat ? "seat-active-hand" : ""} ${guandanOut ? "seat-guandan-out" : ""}" data-seat-index="${seat.seatIndex}">
       ${seatAvatarHtml(table, seat)}
       <div class="seat-info">
         <div class="seat-label-row">
@@ -5787,7 +5790,10 @@ function seatHtml(table, seat) {
           ${rank}
           ${remainingCards}
         </div>
-        <div class="seat-name">${occupied ? escapeHtml(user.displayName) : seatLabel(seat.seatIndex)}</div>
+        <div class="seat-name">
+          <span class="seat-display-name">${occupied ? escapeHtml(user.displayName) : seatLabel(seat.seatIndex)}</span>
+          ${rating}
+        </div>
       </div>
       <div class="seat-meta">${escapeHtml(meta)}</div>
       <div class="seat-actions">${actions}</div>
@@ -5808,6 +5814,63 @@ function seatRankHtml(table, seatIndex) {
   return `<span class="seat-rank" title="${escapeAttribute(`当前${label}`)}">${escapeHtml(label)}</span>`;
 }
 
+function seatRatingHtml(table, user) {
+  const rating = playerRatingForGame(table, user);
+  if (!rating) {
+    return "";
+  }
+
+  const delta = Number(rating.lastDelta);
+  const deltaText = Number.isInteger(delta) && delta !== 0 ? `，上局${delta > 0 ? "+" : ""}${delta}` : "";
+  const discountedText = rating.lastDiscounted ? "，含机器人局已折算" : "";
+  const title = `Elo 积分 ${rating.rating}${deltaText}${discountedText}`;
+  return `<span class="seat-rating ${rating.provisional ? "seat-rating-provisional" : ""}" title="${escapeAttribute(title)}">积分${escapeHtml(String(rating.rating))}</span>`;
+}
+
+function seatRatingSignature(table, user) {
+  const rating = playerRatingForGame(table, user);
+  if (!rating) {
+    return "";
+  }
+
+  return [
+    rating.rating,
+    rating.gamesPlayed ?? "",
+    rating.gamesWon ?? "",
+    rating.humanGames ?? "",
+    rating.botGames ?? "",
+    rating.lastDelta ?? "",
+    rating.lastDiscounted ? "1" : "0",
+    rating.provisional ? "1" : "0"
+  ].join(":");
+}
+
+function playerRatingForGame(table, user) {
+  if (!user || user.bot) {
+    return null;
+  }
+
+  const gameType = table?.gameType || table?.room?.gameType || "";
+  const ratings = user.ratings || user.gameRatings || {};
+  const raw = (gameType && ratings[gameType]) || {};
+  const rating = Number(raw.rating ?? raw.elo?.rating ?? user.eloRating ?? 1500);
+  if (!Number.isFinite(rating)) {
+    return null;
+  }
+
+  const gamesPlayed = Number(raw.gamesPlayed ?? raw.games_played ?? raw.elo?.gamesRated ?? 0);
+  return {
+    rating: Math.round(rating),
+    gamesPlayed: Number.isFinite(gamesPlayed) ? gamesPlayed : 0,
+    gamesWon: raw.gamesWon ?? raw.games_won,
+    humanGames: raw.humanGames ?? raw.human_games,
+    botGames: raw.botGames ?? raw.bot_games,
+    lastDelta: raw.lastDelta ?? raw.last_delta ?? raw.elo?.lastDelta,
+    lastDiscounted: Boolean(raw.lastDiscounted ?? raw.last_discounted ?? raw.elo?.lastDiscounted),
+    provisional: raw.provisional ?? gamesPlayed < 10
+  };
+}
+
 function seatPlayerRank(table, seatIndex) {
   const rank = playerForSeat(table.engine?.public || {}, seatIndex)?.rank;
   const numericRank = Number(rank);
@@ -5820,7 +5883,18 @@ function seatRemainingCardCountHtml(table, seatIndex) {
     return "";
   }
 
-  return `<span class="seat-card-count" title="${escapeAttribute(`剩余 ${count} 张牌`)}">${escapeHtml(`剩${count}张`)}</span>`;
+  if (count === 0) {
+    return `<span class="seat-card-count seat-card-count-out" title="${escapeAttribute("已走完牌")}">已走完</span>`;
+  }
+
+  const lowCount = count < 10;
+  const classes = ["seat-card-count", lowCount ? "seat-card-count-low" : ""].filter(Boolean).join(" ");
+  const label = lowCount ? `仅剩${count}张` : `剩${count}张`;
+  return `<span class="${classes}" title="${escapeAttribute(`剩余 ${count} 张牌`)}">${escapeHtml(label)}</span>`;
+}
+
+function isGuandanSeatOut(table, seatIndex) {
+  return seatRemainingCardCount(table, seatIndex) === 0;
 }
 
 function seatRemainingCardCount(table, seatIndex) {
@@ -6545,28 +6619,108 @@ function privateSeatHandHtml(table, cards) {
   const selected = new Set(state.selectedHandIndexes);
   const trumpCandidates = trumpCandidateIndexes(table, visibleCards);
   const guandanHintContext = guandanHandHintContext(table);
-  const nodes = visibleCards.map(({ card, index }) => {
-    const guandanHint = guandanHandCardHint(table, card, guandanHintContext);
-    const classes = [
-      "hand-card",
-      trumpCandidates.has(index) ? "hand-card-trump-candidate" : "",
-      guandanHint.classes
-    ].filter(Boolean).join(" ");
-    const title = guandanHint.title || (trumpCandidates.has(index) ? "可亮牌" : "");
-    return `
-      <button class="${classes}" data-card-index="${index}" aria-pressed="${selected.has(index) ? "true" : "false"}" type="button" ${title ? `title="${escapeAttribute(title)}"` : ""}>
-        ${cardFaceHtml(card, "hand-card-face")}
-        <span class="hand-card-label">${escapeHtml(cardLabelText(card))}</span>
-      </button>
-    `;
-  }).join("");
+  const handSignature = privateHandRenderSignature(table, visibleCards, trumpCandidates, guandanHintContext);
+
+  if (isGuandanTable(table)) {
+    return privateGuandanSeatHandHtml(table, visibleCards, selected, trumpCandidates, guandanHintContext, handSignature);
+  }
+
+  const nodes = visibleCards
+    .map(({ card, index }) => privateHandCardButtonHtml(table, card, index, selected, trumpCandidates, guandanHintContext))
+    .join("");
   const style = [
     `--hand-count: ${Math.max(visibleCards.length, 1)}`,
     `--hand-overlap: ${handCardOverlapPx(visibleCards.length)}px`
   ].join("; ");
-  const handSignature = privateHandRenderSignature(table, visibleCards, trumpCandidates, guandanHintContext);
 
   return `<div class="seat-hand seat-hand-private" data-hand-count="${visibleCards.length}" data-hand-signature="${escapeAttribute(handSignature)}" style="${style}">${nodes}</div>`;
+}
+
+function privateHandCardButtonHtml(table, card, index, selected, trumpCandidates, guandanHintContext, extraAttributes = "") {
+  const guandanHint = guandanHandCardHint(table, card, guandanHintContext);
+  const classes = [
+    "hand-card",
+    trumpCandidates.has(index) ? "hand-card-trump-candidate" : "",
+    guandanHint.classes
+  ].filter(Boolean).join(" ");
+  const title = guandanHint.title || (trumpCandidates.has(index) ? "可亮牌" : "");
+  return `
+    <button class="${classes}" data-card-index="${index}" aria-pressed="${selected.has(index) ? "true" : "false"}" type="button" ${title ? `title="${escapeAttribute(title)}"` : ""} ${extraAttributes}>
+      ${cardFaceHtml(card, "hand-card-face")}
+      <span class="hand-card-label">${escapeHtml(cardLabelText(card))}</span>
+    </button>
+  `;
+}
+
+function privateGuandanSeatHandHtml(table, visibleCards, selected, trumpCandidates, guandanHintContext, handSignature) {
+  const rankGroups = guandanPrivateHandRankGroups(visibleCards);
+  const metrics = guandanPrivateHandLayoutMetrics(rankGroups);
+  const nodes = rankGroups.map((group) => {
+    const cardsHtml = group.cards
+      .map(({ card, index }, stackIndex) => {
+        const offset = (stackIndex * metrics.stackStep).toFixed(2);
+        const zIndex = stackIndex + 1;
+        return privateHandCardButtonHtml(
+          table,
+          card,
+          index,
+          selected,
+          trumpCandidates,
+          guandanHintContext,
+          `style="--stack-offset: ${offset}px; --stack-z: ${zIndex};"`
+        );
+      })
+      .join("");
+    return `<div class="hand-rank-stack" data-rank="${escapeAttribute(group.rankKey)}">${cardsHtml}</div>`;
+  }).join("");
+  const style = [
+    `--hand-count: ${Math.max(visibleCards.length, 1)}`,
+    `--guandan-rank-width: ${metrics.rankWidthPercent.toFixed(4)}%`,
+    `--guandan-card-width: ${metrics.cardWidth.toFixed(2)}px`,
+    `--guandan-stack-step: ${metrics.stackStep.toFixed(2)}px`,
+    `--guandan-stack-height: ${metrics.stackHeight.toFixed(2)}px`,
+    `--guandan-hand-height: ${metrics.handHeight.toFixed(2)}px`,
+    "--hand-overlap: 0px"
+  ].join("; ");
+
+  return `<div class="seat-hand seat-hand-private seat-hand-guandan" data-hand-count="${visibleCards.length}" data-hand-signature="${escapeAttribute(handSignature)}" style="${style}">${nodes}</div>`;
+}
+
+function guandanPrivateHandRankGroups(visibleCards) {
+  const groups = [];
+  const groupsByRank = new Map();
+  for (const entry of visibleCards) {
+    const rankKey = String(guandanRankFromCard(entry.card));
+    let group = groupsByRank.get(rankKey);
+    if (!group) {
+      group = { rankKey, cards: [] };
+      groupsByRank.set(rankKey, group);
+      groups.push(group);
+    }
+    group.cards.push(entry);
+  }
+  return groups;
+}
+
+function guandanPrivateHandLayoutMetrics(rankGroups) {
+  const rankCount = Math.max(rankGroups.length, 1);
+  const maxStackSize = rankGroups.reduce((largest, group) => Math.max(largest, group.cards.length), 1);
+  const compact = isCompactLayout();
+  const maxCardWidth = compact ? 44 : Math.min(handCardWidthPx(), 64);
+  const minCardWidth = compact ? 20 : 34;
+  const availableWidth = Math.max(160, handAvailableWidthPx() - 8);
+  const cardWidth = clampNumber(availableWidth / rankCount, minCardWidth, maxCardWidth);
+  const stackStep = compact ? 13 : clampNumber(viewportWidthPx() * 0.0165, 14, 22);
+  const cardHeight = cardWidth * 1.42;
+  const stackHeight = cardHeight + (Math.max(maxStackSize, 1) - 1) * stackStep;
+  const handLift = compact ? 10 : 14;
+  return {
+    rankWidthPercent: 100 / rankCount,
+    cardWidth,
+    stackStep,
+    stackHeight,
+    handHeight: stackHeight + handLift + 12
+  };
 }
 
 function privateHandRenderSignature(table, visibleCards, trumpCandidates, guandanHintContext) {
