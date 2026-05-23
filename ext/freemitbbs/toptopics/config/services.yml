@@ -126,3 +126,14 @@ services:
             - [set_name, [cron.task.freemitbbs.toptopics.refresh_scopes]]
         tags:
             - { name: cron.task }
+
+    freemitbbs.toptopics.cron.refresh_reputation:
+        class: freemitbbs\toptopics\cron\refresh_reputation
+        arguments:
+            - '@cache'
+            - '@config'
+            - '@freemitbbs.toptopics.reputation'
+        calls:
+            - [set_name, [cron.task.freemitbbs.toptopics.refresh_reputation]]
+        tags:
+            - { name: cron.task }

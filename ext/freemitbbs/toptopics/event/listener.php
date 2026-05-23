@@ -942,7 +942,14 @@ class listener implements EventSubscriberInterface
 		$post_id = (int) ($data['post_id'] ?? 0);
 		if ($post_id > 0)
 		{
-			$this->reputation->sync_post($post_id);
+			try
+			{
+				$this->reputation->sync_post_quality($post_id);
+			}
+			catch (\Throwable $e)
+			{
+				error_log('TopTopics post quality sync failed after submit: post_id=' . $post_id . ' error=' . $e->getMessage());
+			}
 		}
 	}
 

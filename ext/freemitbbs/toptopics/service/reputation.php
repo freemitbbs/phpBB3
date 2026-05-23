@@ -24,6 +24,7 @@ class reputation
 	protected ?bool $has_post_reactions_table = null;
 	protected string $post_quality_table;
 	protected string $reputation_table;
+	protected string $reputation_queue_table;
 
 	public function __construct(
 		\phpbb\config\config $config,
@@ -41,6 +42,7 @@ class reputation
 		$this->post_reactions_table = $this->derive_post_reactions_table($likes_table);
 		$this->post_quality_table = $post_quality_table;
 		$this->reputation_table = $reputation_table;
+		$this->reputation_queue_table = $reputation_table . '_queue';
 	}
 
 	public function get_score(int $user_id): int
@@ -141,6 +143,53 @@ class reputation
 	public function sync_post(int $post_id): void
 	{
 		$this->sync_posts([$post_id]);
+	}
+
+	public function sync_post_quality(int $post_id): void
+	{
+		$this->sync_posts_quality([$post_id]);
+	}
+
+	public function sync_posts_quality(array $post_ids): void
+	{
+		$post_ids = $this->normalize_post_ids($post_ids);
+
+		if (empty($post_ids))
+		{
+			return;
+		}
+
+		if (count($post_ids) > self::POST_QUALITY_SYNC_BATCH_SIZE)
+		{
+			foreach (array_chunk($post_ids, self::POST_QUALITY_SYNC_BATCH_SIZE) as $post_id_batch)
+			{
+				$this->sync_posts_quality($post_id_batch);
+			}
+			return;
+		}
+
+		$old_rows = $this->get_post_quality_rows($post_ids);
+		$new_rows = $this->build_post_quality_rows($post_ids);
+		$affected_user_ids = [];
+
+		foreach ($old_rows as $row)
+		{
+			$affected_user_ids[] = (int) $row['poster_id'];
+		}
+
+		foreach ($new_rows as $row)
+		{
+			$affected_user_ids[] = (int) $row['poster_id'];
+		}
+
+		$this->delete_post_quality_rows($post_ids);
+
+		if (!empty($new_rows))
+		{
+			$this->db->sql_multi_insert($this->post_quality_table, array_values($new_rows));
+		}
+
+		$this->queue_reputation_refresh($affected_user_ids);
 	}
 
 	public function sync_posts(array $post_ids): void
@@ -275,6 +324,25 @@ class reputation
 		$this->db->sql_query($sql);
 	}
 
+	public function has_queued_reputation_refreshes(): bool
+	{
+		return !empty($this->get_queued_reputation_user_ids(1));
+	}
+
+	public function refresh_queued_reputations(int $batch_size): int
+	{
+		$user_ids = $this->get_queued_reputation_user_ids($batch_size);
+		if (empty($user_ids))
+		{
+			return 0;
+		}
+
+		$this->refresh_users($user_ids);
+		$this->delete_queued_reputation_users($user_ids);
+
+		return count($user_ids);
+	}
+
 	protected function ensure_users(array $user_ids): array
 	{
 		$existing_rows = $this->get_rows($user_ids);
@@ -380,6 +448,82 @@ class reputation
 
 		$this->invalidate_users(array_keys($rows));
 		$this->db->sql_multi_insert($this->reputation_table, array_values($rows));
+	}
+
+	protected function queue_reputation_refresh(array $user_ids): void
+	{
+		$user_ids = $this->normalize_user_ids($user_ids);
+		if (empty($user_ids))
+		{
+			return;
+		}
+
+		$queued_time = time();
+		$rows = [];
+		foreach ($user_ids as $user_id)
+		{
+			$rows[] = [
+				'user_id' => (int) $user_id,
+				'queued_time' => $queued_time,
+			];
+		}
+
+		$this->db->sql_return_on_error(true);
+		try
+		{
+			$sql = 'DELETE FROM ' . $this->reputation_queue_table . '
+				WHERE ' . $this->db->sql_in_set('user_id', $user_ids);
+			$this->db->sql_query($sql);
+			$this->db->sql_multi_insert($this->reputation_queue_table, $rows);
+		}
+		finally
+		{
+			$this->db->sql_return_on_error(false);
+		}
+	}
+
+	protected function get_queued_reputation_user_ids(int $limit): array
+	{
+		$limit = max(1, min(500, $limit));
+		$user_ids = [];
+
+		$this->db->sql_return_on_error(true);
+		try
+		{
+			$sql = 'SELECT user_id
+				FROM ' . $this->reputation_queue_table . '
+				ORDER BY queued_time ASC, user_id ASC';
+			$result = $this->db->sql_query_limit($sql, $limit);
+			if ($result === false)
+			{
+				return [];
+			}
+
+			while ($row = $this->db->sql_fetchrow($result))
+			{
+				$user_ids[] = (int) $row['user_id'];
+			}
+			$this->db->sql_freeresult($result);
+		}
+		finally
+		{
+			$this->db->sql_return_on_error(false);
+		}
+
+		return $this->normalize_user_ids($user_ids);
+	}
+
+	protected function delete_queued_reputation_users(array $user_ids): void
+	{
+		$user_ids = $this->normalize_user_ids($user_ids);
+		if (empty($user_ids))
+		{
+			return;
+		}
+
+		$sql = 'DELETE FROM ' . $this->reputation_queue_table . '
+			WHERE ' . $this->db->sql_in_set('user_id', $user_ids);
+		$this->db->sql_query($sql);
 	}
 
 	protected function collect_content_lengths(array $user_ids): array
