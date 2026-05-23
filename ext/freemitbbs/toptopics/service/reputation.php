@@ -8,11 +8,11 @@ class reputation
 	private const DEFAULT_MIN_REPUTATION_REPORT = 50;
 	private const DEFAULT_REACTION_WEIGHT = 0.3;
 	private const DEFAULT_DISLIKE_REPUTATION_WEIGHT = 0.35;
-	private const DEFAULT_FLAG_WEIGHT = 12.0;
-	private const BASE_CONTENT_WEIGHT_SCALE = 12.0;
-	private const DIRECT_FEEDBACK_WEIGHT_SCALE = 16.0;
+	private const DEFAULT_FLAG_WEIGHT = 20.0;
+	private const BASE_CONTENT_WEIGHT_SCALE = 1.0;
+	private const DIRECT_FEEDBACK_WEIGHT_SCALE = 4.0;
 	private const CONTENT_LENGTH_CAP = 40000;
-	private const CONTENT_LENGTH_SCALE = 500.0;
+	private const CONTENT_LENGTH_SCALE = 100.0;
 	private const PER_POST_CONTENT_CAP = 4000;
 	private const POST_QUALITY_SYNC_BATCH_SIZE = 500;
 
@@ -350,13 +350,13 @@ class reputation
 
 		foreach ($metrics as $user_id => $user_metrics)
 		{
-			$content_signal = log(1.0 + (min(self::CONTENT_LENGTH_CAP, $user_metrics['content_length_total']) / self::CONTENT_LENGTH_SCALE));
+			$content_signal = min(self::CONTENT_LENGTH_CAP, $user_metrics['content_length_total']) / self::CONTENT_LENGTH_SCALE;
 			$content_score = $content_signal * $options['content_weight'] * self::BASE_CONTENT_WEIGHT_SCALE;
 			$direct_feedback_signal = $user_metrics['likes_received']
 				- ($user_metrics['dislikes_received'] * $options['dislike_weight'])
-				+ (log(1.0 + (int) ($reaction_counts[$user_id] ?? 0)) * $options['reaction_weight']);
-			$direct_feedback_score = $this->signed_log_score($direct_feedback_signal, self::DIRECT_FEEDBACK_WEIGHT_SCALE);
-			$flag_penalty = log(1.0 + $user_metrics['open_flags_received']) * self::DEFAULT_FLAG_WEIGHT;
+				+ ((int) ($reaction_counts[$user_id] ?? 0) * $options['reaction_weight']);
+			$direct_feedback_score = $direct_feedback_signal * self::DIRECT_FEEDBACK_WEIGHT_SCALE;
+			$flag_penalty = $user_metrics['open_flags_received'] * self::DEFAULT_FLAG_WEIGHT;
 			$rows[$user_id] = [
 				'user_id' => (int) $user_id,
 				'reputation_score' => (int) round($content_score + $direct_feedback_score - $flag_penalty),
@@ -562,21 +562,6 @@ class reputation
 			'reaction_weight' => $this->get_float_config('toptopics_reaction_weight', self::DEFAULT_REACTION_WEIGHT, 0.0, 10.0),
 			'dislike_weight' => $this->get_float_config('toptopics_reputation_dislike_weight', self::DEFAULT_DISLIKE_REPUTATION_WEIGHT, 0.0, 1.0),
 		];
-	}
-
-	protected function signed_log_score(float $signal, float $scale): float
-	{
-		if ($signal > 0.0)
-		{
-			return log(1.0 + $signal) * $scale;
-		}
-
-		if ($signal < 0.0)
-		{
-			return -1.0 * log(1.0 + abs($signal)) * $scale;
-		}
-
-		return 0.0;
 	}
 
 	protected function collect_post_event_counts(string $event_table, string $alias, array $user_ids): array

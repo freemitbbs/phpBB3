@@ -41,19 +41,18 @@ Quality length is not raw database text length. For reputation, the extension re
 
 ```text
 base_content_score =
-    ln(1 + min(total_authored_quality_length, 40000) / 500)
+    min(total_authored_quality_length, 40000) / 100
   * toptopics_content_weight
-  * 12
 
 direct_feedback_signal =
     likes_received
   - dislikes_received * toptopics_reputation_dislike_weight
-  + ln(1 + reactions_received) * toptopics_reaction_weight
+  + reactions_received * toptopics_reaction_weight
 
 direct_feedback_score =
-    signed_ln(1 + abs(direct_feedback_signal)) * 16
+    direct_feedback_signal * 4
 
-flag_penalty = ln(1 + open_flags_received) * 12
+flag_penalty = open_flags_received * 20
 
 reputation =
     base_content_score
@@ -61,7 +60,7 @@ reputation =
   - flag_penalty
 ```
 
-The signed logarithm preserves direction: positive direct feedback raises reputation and negative direct feedback lowers it, while repeated feedback has diminishing returns. Dislikes are weighted below likes by default so controversy does not erase active contribution too quickly. Open reports remain a stronger direct penalty.
+The score is intentionally direct rather than logarithmic: normal new posts and feedback should move the displayed integer. Content still has a lifetime cap, reactions still use a smaller configurable weight, dislikes are weighted below likes by default so controversy does not erase active contribution too quickly, and open reports remain a stronger direct penalty.
 
 The configuration weights used here are:
 
@@ -123,7 +122,7 @@ The extension refreshes affected authors when reputation inputs change:
 
 Page reads only fetch the stored score. If a user has no row yet, the extension initializes it once on demand.
 
-`release_1_1_11` changes the reputation formula and clears `toptopics_user_reputation` so old materialized scores are not reused. `release_1_1_12` changes the interpretation of `content_length_total` from raw length to quality length and clears the same materialized table again. `release_1_1_13` creates `toptopics_post_quality`, backfills existing posts in batches, and clears materialized reputation so future scores are rebuilt from the incremental per-post aggregate. `release_1_1_24` switches reputation to the topic/reply contribution model and clears materialized reputation again. `release_1_1_25` switches reputation to direct post feedback and clears materialized reputation again. `release_1_1_26` adds the fractional dislike reputation penalty and clears materialized reputation again.
+`release_1_1_11` changes the reputation formula and clears `toptopics_user_reputation` so old materialized scores are not reused. `release_1_1_12` changes the interpretation of `content_length_total` from raw length to quality length and clears the same materialized table again. `release_1_1_13` creates `toptopics_post_quality`, backfills existing posts in batches, and clears materialized reputation so future scores are rebuilt from the incremental per-post aggregate. `release_1_1_24` switches reputation to the topic/reply contribution model and clears materialized reputation again. `release_1_1_25` switches reputation to direct post feedback and clears materialized reputation again. `release_1_1_26` adds the fractional dislike reputation penalty and clears materialized reputation again. `release_1_1_27` removes logarithmic compression from reputation scoring and clears materialized reputation again.
 
 ## Core formula
 

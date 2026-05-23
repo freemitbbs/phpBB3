@@ -229,13 +229,13 @@ $auth->acl($user->data);
 // Grab only parameters needed here
 $draft_id	= $request->variable('d', 0);
 
-$preview	= (isset($_POST['preview'])) ? true : false;
-$save		= (isset($_POST['save'])) ? true : false;
-$load		= (isset($_POST['load'])) ? true : false;
+$preview	= $request->is_set_post('preview');
+$save		= $request->is_set_post('save');
+$load		= $request->is_set_post('load');
 $confirm	= $request->is_set_post('confirm');
-$cancel		= (isset($_POST['cancel']) && !isset($_POST['save'])) ? true : false;
+$cancel		= ($request->is_set_post('cancel') && !$save) ? true : false;
 
-$refresh	= (isset($_POST['add_file']) || isset($_POST['delete_file']) || $save || $load || $preview);
+$refresh	= ($request->is_set_post('add_file') || $request->is_set_post('delete_file') || $save || $load || $preview);
 $submit = $request->is_set_post('post') && !$refresh && !$preview;
 $mode		= $request->variable('mode', '');
 
@@ -1061,7 +1061,7 @@ if ($save && $user->data['is_registered'] && $auth->acl_get('u_savedrafts') && (
 
 			foreach ($hidden_fields as $name => $default)
 			{
-				if (!isset($_POST[$name]))
+				if (!$request->is_set_post($name))
 				{
 					// Don't include it, if its not available
 					unset($hidden_fields[$name]);
@@ -1071,11 +1071,11 @@ if ($save && $user->data['is_registered'] && $auth->acl_get('u_savedrafts') && (
 				if (is_bool($default))
 				{
 					// Use the string representation
-					$hidden_fields[$name] = $request->variable($name, '');
+					$hidden_fields[$name] = $request->variable($name, '', false, \phpbb\request\request_interface::POST);
 				}
 				else
 				{
-					$hidden_fields[$name] = $request->variable($name, $default);
+					$hidden_fields[$name] = $request->variable($name, $default, false, \phpbb\request\request_interface::POST);
 				}
 			}
 
@@ -1150,23 +1150,23 @@ if ($submit || $preview || $refresh)
 		$post_data['icon_id'] = $request->variable('icon', (int) $post_data['icon_id']);
 	}
 
-	$post_data['enable_bbcode']		= (!$bbcode_status || isset($_POST['disable_bbcode'])) ? false : true;
-	$post_data['enable_smilies']	= (!$smilies_status || isset($_POST['disable_smilies'])) ? false : true;
-	$post_data['enable_urls']		= (isset($_POST['disable_magic_url'])) ? 0 : 1;
-	$post_data['enable_sig']		= (!$config['allow_sig'] || !$auth->acl_get('f_sigs', $forum_id) || !$auth->acl_get('u_sig')) ? false : ((isset($_POST['attach_sig']) && $user->data['is_registered']) ? true : false);
+	$post_data['enable_bbcode']		= (!$bbcode_status || $request->is_set_post('disable_bbcode')) ? false : true;
+	$post_data['enable_smilies']	= (!$smilies_status || $request->is_set_post('disable_smilies')) ? false : true;
+	$post_data['enable_urls']		= ($request->is_set_post('disable_magic_url')) ? 0 : 1;
+	$post_data['enable_sig']		= (!$config['allow_sig'] || !$auth->acl_get('f_sigs', $forum_id) || !$auth->acl_get('u_sig')) ? false : (($request->is_set_post('attach_sig') && $user->data['is_registered']) ? true : false);
 
 	if ($config['allow_topic_notify'] && $user->data['is_registered'])
 	{
-		$notify = (isset($_POST['notify'])) ? true : false;
+		$notify = $request->is_set_post('notify') ? true : false;
 	}
 	else
 	{
 		$notify = false;
 	}
 
-	$topic_lock			= (isset($_POST['lock_topic'])) ? true : false;
-	$post_lock			= (isset($_POST['lock_post'])) ? true : false;
-	$poll_delete		= (isset($_POST['poll_delete'])) ? true : false;
+	$topic_lock			= $request->is_set_post('lock_topic') ? true : false;
+	$post_lock			= $request->is_set_post('lock_post') ? true : false;
+	$poll_delete		= $request->is_set_post('poll_delete') ? true : false;
 
 	if ($submit)
 	{
@@ -1216,7 +1216,7 @@ if ($submit || $preview || $refresh)
 		$post_data['poll_length']		= $request->variable('poll_length', 0);
 		$post_data['poll_option_text']	= $request->variable('poll_option_text', '', true);
 		$post_data['poll_max_options']	= $request->variable('poll_max_options', 1);
-		$post_data['poll_vote_change']	= ($auth->acl_get('f_votechg', $forum_id) && $auth->acl_get('f_vote', $forum_id) && isset($_POST['poll_vote_change'])) ? 1 : 0;
+		$post_data['poll_vote_change']	= ($auth->acl_get('f_votechg', $forum_id) && $auth->acl_get('f_vote', $forum_id) && $request->is_set_post('poll_vote_change')) ? 1 : 0;
 	}
 
 	// If replying/quoting and last post id has changed
@@ -2151,7 +2151,7 @@ if ($config['enable_post_confirm'] && !$user->data['is_registered'] && (isset($c
 }
 
 $s_hidden_fields = ($mode == 'reply' || $mode == 'quote') ? '<input type="hidden" name="topic_cur_post_id" value="' . $post_data['topic_last_post_id'] . '" />' : '';
-$s_hidden_fields .= ($draft_id || isset($_REQUEST['draft_loaded'])) ? '<input type="hidden" name="draft_loaded" value="' . $request->variable('draft_loaded', $draft_id) . '" />' : '';
+$s_hidden_fields .= ($draft_id || $request->is_set('draft_loaded')) ? '<input type="hidden" name="draft_loaded" value="' . $request->variable('draft_loaded', $draft_id) . '" />' : '';
 
 if ($mode == 'edit')
 {
@@ -2206,7 +2206,7 @@ $page_data = array(
 	'UA_PROGRESS_BAR'		=> addslashes(append_sid("{$phpbb_root_path}posting.$phpEx", "f=$forum_id&amp;mode=popup")),
 
 	'S_PRIVMSGS'				=> false,
-	'S_CLOSE_PROGRESS_WINDOW'	=> (isset($_POST['add_file'])) ? true : false,
+	'S_CLOSE_PROGRESS_WINDOW'	=> $request->is_set_post('add_file') ? true : false,
 	'S_EDIT_POST'				=> ($mode == 'edit') ? true : false,
 	'S_EDIT_REASON'				=> ($mode == 'edit' && $auth->acl_get('m_edit', $forum_id)) ? true : false,
 	'S_DISPLAY_USERNAME'		=> (!$user->data['is_registered'] || ($mode == 'edit' && $post_data['poster_id'] == ANONYMOUS)) ? true : false,

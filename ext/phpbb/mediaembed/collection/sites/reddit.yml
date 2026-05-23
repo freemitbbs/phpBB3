@@ -1,0 +1,22 @@
+name: "Reddit threads and comments"
+homepage: "https://www.reddit.com/"
+host: reddit.com
+example:
+    - "https://www.reddit.com/r/pics/comments/9wp1qg/my_mom_recently_started_watercolor_painting_and/"
+    - "https://www.reddit.com/r/pics/comments/9wp1qg/my_mom_recently_started_watercolor_painting_and/e9m6pn9/"
+    - "https://www.reddit.com/r/pics/s/abcdef1234"
+extract:
+    - "!(?'id'\\w+/comments/\\w+(?:/\\w+/\\w+)?)!"
+    - "!(?'id'\\w+/s/[-\\w]+)!"
+iframe:
+    data-s9e-livepreview-ignore-attrs: style
+    height: 165
+    onload: "var c=new MessageChannel;c.port1.onmessage=function(e){style.height=e.data+'px'};contentWindow.postMessage('s9e:init','https://s9e.github.io',[c.port2])"
+    src: "https://s9e.github.io/iframe/2/reddit.min.html#{@id}{@path}#theme={$MEDIAEMBED_THEME}"
+    width: 800
+amp:
+    custom-element: amp-reddit
+    src: "https://cdn.ampproject.org/v0/amp-reddit-0.1.js"
+    template: '<amp-reddit layout="responsive" width="450" height="300" data-embedtype="post" data-src="https://www.reddit.com/r/{@id}/"/>'
+source: "https://www.reddit.com/wiki/embeds"
+tags: social
