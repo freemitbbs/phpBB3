@@ -23,7 +23,32 @@
 
 .post-buttons .toptopics-li {
 	display: inline-block;
-	float: right;
+	float: left;
+}
+
+.postbody .post-buttons {
+	display: flex;
+	align-items: center;
+	flex-wrap: nowrap;
+	max-width: none;
+	white-space: nowrap;
+}
+
+.postbody .post-buttons > li {
+	float: none;
+	margin-right: 3px;
+}
+
+.postbody .post-buttons .toptopics-li {
+	order: 0;
+}
+
+.postbody .post-buttons > li:not(.toptopics-li):not(.postlove-li) {
+	order: 1;
+}
+
+.postbody .post-buttons .postlove-li {
+	order: 2;
 }
 
 .dropdown-contents .toptopics-li {
