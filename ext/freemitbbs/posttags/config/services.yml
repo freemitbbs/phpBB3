@@ -1,0 +1,32 @@
+services:
+    freemitbbs.posttags.manager:
+        class: freemitbbs\posttags\service\manager
+        arguments:
+            - '@dbal.conn'
+            - '%core.table_prefix%'
+
+    freemitbbs.posttags.listener:
+        class: freemitbbs\posttags\event\listener
+        arguments:
+            - '@controller.helper'
+            - '@language'
+            - '@request'
+            - '@freemitbbs.posttags.manager'
+        tags:
+            - { name: event.listener }
+
+    freemitbbs.posttags.controller.search:
+        class: freemitbbs\posttags\controller\search
+        arguments:
+            - '@auth'
+            - '@content.visibility'
+            - '@dbal.conn'
+            - '@controller.helper'
+            - '@language'
+            - '@pagination'
+            - '@request'
+            - '@template'
+            - '@user'
+            - '@freemitbbs.posttags.manager'
+            - '%core.root_path%'
+            - '%core.php_ext%'

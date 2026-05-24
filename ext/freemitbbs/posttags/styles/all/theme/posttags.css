@@ -1,0 +1,137 @@
+.posttags-editor {
+	clear: left;
+	margin-top: 8px;
+}
+
+#postform input#subject.inputbox,
+#qr_postform input#subject.inputbox {
+	box-sizing: border-box;
+	width: 100% !important;
+	min-height: 32px;
+	max-width: 100%;
+	padding: 3px 5px;
+	border: 1px solid #b4bac0;
+	border-radius: 3px;
+	background: #ffffff;
+	line-height: 1.5;
+}
+
+.posttags-tokenbox {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 5px;
+	box-sizing: border-box;
+	min-height: 32px;
+	max-width: 100%;
+	padding: 3px 5px;
+	border: 1px solid #b4bac0;
+	border-radius: 3px;
+	background: #ffffff;
+}
+
+.posttags-token-list {
+	display: contents;
+}
+
+.posttags-token {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	max-width: 100%;
+	padding: 2px 6px;
+	border: 1px solid #c7d3e1;
+	border-radius: 999px;
+	background: #eef5fb;
+	color: #105289;
+	line-height: 1.5;
+}
+
+.posttags-token-remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: #536482;
+	font-size: 14px;
+	line-height: 16px;
+	cursor: pointer;
+}
+
+.posttags-token-remove:hover,
+.posttags-token-remove:focus {
+	background: #cadceb;
+	color: #bc2a4d;
+}
+
+.posttags-input {
+	flex: 1 1 150px;
+	min-width: 120px;
+	border: 0;
+	outline: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.posttags-post {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px;
+	margin-top: 8px;
+}
+
+.posttags-tag {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 7px;
+	border: 1px solid #d7e0ea;
+	border-radius: 999px;
+	background: #f4f8fb;
+	color: #105289;
+	font-size: 0.92em;
+	line-height: 1.5;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+a.posttags-tag:hover,
+a.posttags-tag:focus {
+	border-color: #a9bfd6;
+	background: #eef5fb;
+	text-decoration: none;
+}
+
+.posttags-search-summary {
+	margin: 8px 0 12px;
+}
+
+.posttags-search-panel {
+	clear: both;
+}
+
+.posttags-search-results {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.posttags-search-result {
+	padding: 10px 0;
+	border-top: 1px solid #d7d7d7;
+}
+
+.posttags-search-result:first-child {
+	border-top: 0;
+}
+
+.posttags-search-meta,
+.posttags-search-location {
+	margin-top: 3px;
+	color: #666666;
+	font-size: 0.92em;
+}

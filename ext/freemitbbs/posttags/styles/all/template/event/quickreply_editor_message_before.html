@@ -1,0 +1,12 @@
+{% if S_POSTTAGS_EDITOR_AVAILABLE %}
+<dl class="posttags-editor" data-max-tags="{{ POSTTAGS_MAX_TAGS }}" data-max-length="{{ POSTTAGS_MAX_LENGTH }}">
+	<dt><label for="posttags-qr-input">{{ lang('POSTTAGS_LABEL') }}{{ lang('COLON') }}</label></dt>
+	<dd>
+		<div class="posttags-tokenbox">
+			<span class="posttags-token-list"></span>
+			<input type="text" id="posttags-qr-input" class="posttags-input" autocomplete="off" spellcheck="false" placeholder="{{ lang('POSTTAGS_PLACEHOLDER')|e('html_attr') }}">
+		</div>
+		<input type="hidden" name="posttags_tags" value="">
+	</dd>
+</dl>
+{% endif %}

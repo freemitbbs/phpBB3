@@ -1,0 +1,56 @@
+<!-- INCLUDE overall_header.html -->
+
+<h2>{POSTTAGS_SEARCH_TITLE}</h2>
+
+<div class="posttags-search-summary">
+	<span class="posttags-tag">#{POSTTAGS_SEARCH_TAG}</span>
+</div>
+
+<!-- IF S_POSTTAGS_HAS_RESULTS -->
+	<div class="action-bar bar-top">
+		<div class="pagination">
+			{PAGE_NUMBER}
+			<!-- IF .pagination -->
+				<!-- INCLUDE pagination.html -->
+			<!-- ENDIF -->
+		</div>
+	</div>
+
+	<div class="panel posttags-search-panel">
+		<div class="inner">
+			<ul class="posttags-search-results">
+				<!-- BEGIN posttags_results -->
+					<li class="posttags-search-result">
+						<a class="topictitle" href="{posttags_results.U_POST}">{posttags_results.POST_SUBJECT}</a>
+						<div class="posttags-search-meta">
+							{L_POST_BY_AUTHOR} {posttags_results.POST_AUTHOR_FULL} &raquo;
+							<time datetime="{posttags_results.POST_DATE_RFC3339}">{posttags_results.POST_DATE}</time>
+						</div>
+						<div class="posttags-search-location">
+							{L_POSTTAGS_RESULT_IN}
+							<a href="{posttags_results.U_FORUM}">{posttags_results.FORUM_NAME}</a> /
+							<a href="{posttags_results.U_TOPIC}">{posttags_results.TOPIC_TITLE}</a>
+						</div>
+					</li>
+				<!-- END posttags_results -->
+			</ul>
+		</div>
+	</div>
+
+	<div class="action-bar bar-bottom">
+		<div class="pagination">
+			{PAGE_NUMBER}
+			<!-- IF .pagination -->
+				<!-- INCLUDE pagination.html -->
+			<!-- ENDIF -->
+		</div>
+	</div>
+<!-- ELSE -->
+	<div class="panel">
+		<div class="inner">
+			<p>{L_POSTTAGS_NO_RESULTS}</p>
+		</div>
+	</div>
+<!-- ENDIF -->
+
+<!-- INCLUDE overall_footer.html -->

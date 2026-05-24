@@ -1,0 +1,5 @@
+freemitbbs_posttags_search:
+    path: /tags/{tag}
+    defaults: { _controller: freemitbbs.posttags.controller.search:by_tag }
+    requirements:
+        tag: "[^/]+"
