@@ -25,9 +25,11 @@ class refresh_reputation extends \phpbb\cron\task\base
 
 	public function run()
 	{
-		$refreshed = $this->reputation->refresh_queued_reputations($this->get_batch_size());
+		$batch_size = $this->get_batch_size();
+		$synced_posts = $this->reputation->refresh_queued_post_quality($batch_size);
+		$refreshed = $this->reputation->refresh_queued_reputations($batch_size);
 		$this->cache->put(self::LAST_RUN_CACHE_KEY, time(), 86400);
-		$this->write_stdout('refreshed_users=' . $refreshed);
+		$this->write_stdout('synced_posts=' . $synced_posts . ' refreshed_users=' . $refreshed);
 	}
 
 	public function is_runnable()
@@ -43,7 +45,8 @@ class refresh_reputation extends \phpbb\cron\task\base
 			return false;
 		}
 
-		return $this->reputation->has_queued_reputation_refreshes();
+		return $this->reputation->has_queued_post_quality_syncs()
+			|| $this->reputation->has_queued_reputation_refreshes();
 	}
 
 	protected function get_batch_size(): int
