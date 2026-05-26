@@ -32,6 +32,7 @@ $lang = array_merge($lang, [
 	'VIDEOUPLOAD_ERR_NO_FILE' => '未选择文件。',
 	'VIDEOUPLOAD_ERR_INVALID_UPLOAD' => '上载文件无效。',
 	'VIDEOUPLOAD_ERR_INVALID_IMAGE' => '上载文件内容无效，或与文件扩展名不匹配。',
+	'VIDEOUPLOAD_ERR_UNSUPPORTED_VIDEO_CODEC' => '该视频使用 HEVC/H.265 编码，很多浏览器无法在这里播放。请上传兼容的 H.264 MP4。iPhone 可在“设置 > 相机 > 格式”中选择“兼容性最佳”。',
 	'VIDEOUPLOAD_ERR_FILE_TOO_LARGE_PHP' => '上载文件超过服务器限制。',
 	'VIDEOUPLOAD_ERR_PARTIAL' => '文件仅部分上载。',
 	'VIDEOUPLOAD_ERR_DISK' => '服务器无法保存上传文件。',

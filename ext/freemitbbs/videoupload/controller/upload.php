@@ -8,6 +8,8 @@ class upload
 {
 	private const LINK_HASH_NAME = 'freemitbbs_videoupload';
 	private const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+	private const BROWSER_VIDEO_CODEC_CHECK_EXTENSIONS = ['mp4', 'mov'];
+	private const UNSUPPORTED_BROWSER_VIDEO_CODECS = ['hvc1', 'hev1', 'dvh1', 'dvhe'];
 	private const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'ogg', 'webm', 'weba', 'mp3', 'm4a', 'aac', 'wav', 'oga', 'opus', 'flac'];
 	private const MEDIA_MIME_TYPES = [
 		'mp4' => ['video/mp4', 'application/mp4'],
@@ -135,6 +137,10 @@ class upload
 		{
 			return $this->json_error($this->language->lang('VIDEOUPLOAD_ERR_INVALID_IMAGE'), 400);
 		}
+		if ($this->has_unsupported_browser_video_codec($tmp_name, $extension))
+		{
+			return $this->json_error($this->language->lang('VIDEOUPLOAD_ERR_UNSUPPORTED_VIDEO_CODEC'), 400);
+		}
 
 		$object_key = $this->build_object_key($extension);
 
@@ -241,6 +247,132 @@ class upload
 		$mime_type = $this->detect_upload_mime_type($tmp_name);
 
 		return $mime_type !== '' && in_array($mime_type, self::MEDIA_MIME_TYPES[$extension] ?? [], true);
+	}
+
+	protected function has_unsupported_browser_video_codec(string $tmp_name, string $extension): bool
+	{
+		if (!in_array($extension, self::BROWSER_VIDEO_CODEC_CHECK_EXTENSIONS, true))
+		{
+			return false;
+		}
+
+		$metadata_result = $this->mp4_metadata_contains_any($tmp_name, self::UNSUPPORTED_BROWSER_VIDEO_CODECS);
+
+		return $metadata_result === true;
+	}
+
+	protected function mp4_metadata_contains_any(string $file_path, array $needles): ?bool
+	{
+		$file_size = @filesize($file_path);
+		if ($file_size === false || $file_size < 8)
+		{
+			return null;
+		}
+
+		$handle = @fopen($file_path, 'rb');
+		if ($handle === false)
+		{
+			return null;
+		}
+
+		try
+		{
+			$offset = 0;
+			while ($offset + 8 <= $file_size)
+			{
+				if (@fseek($handle, $offset) !== 0)
+				{
+					return null;
+				}
+
+				$header = fread($handle, 8);
+				if (!is_string($header) || strlen($header) !== 8)
+				{
+					return null;
+				}
+
+				$size = $this->uint32(substr($header, 0, 4));
+				$type = substr($header, 4, 4);
+				$header_size = 8;
+
+				if ($size === 1)
+				{
+					$extended_size = fread($handle, 8);
+					if (!is_string($extended_size) || strlen($extended_size) !== 8)
+					{
+						return null;
+					}
+					$size = $this->uint64($extended_size);
+					$header_size = 16;
+				}
+				else if ($size === 0)
+				{
+					$size = $file_size - $offset;
+				}
+
+				if ($size < $header_size || ($offset + $size) > $file_size)
+				{
+					return null;
+				}
+
+				if ($type === 'moov')
+				{
+					return $this->stream_contains_any($handle, $size - $header_size, $needles);
+				}
+
+				$offset += $size;
+			}
+		}
+		finally
+		{
+			fclose($handle);
+		}
+
+		return null;
+	}
+
+	protected function stream_contains_any($handle, int $bytes_to_read, array $needles): bool
+	{
+		$tail = '';
+		while ($bytes_to_read > 0 && !feof($handle))
+		{
+			$chunk_size = min(8192, $bytes_to_read);
+			$chunk = fread($handle, $chunk_size);
+			if (!is_string($chunk) || $chunk === '')
+			{
+				break;
+			}
+
+			$haystack = $tail . $chunk;
+			foreach ($needles as $needle)
+			{
+				if (strpos($haystack, $needle) !== false)
+				{
+					return true;
+				}
+			}
+
+			$tail = substr($haystack, -3);
+			$bytes_to_read -= strlen($chunk);
+		}
+
+		return false;
+	}
+
+	protected function uint32(string $bytes): int
+	{
+		$unpacked = unpack('Nvalue', $bytes);
+
+		return (int) ($unpacked['value'] ?? 0);
+	}
+
+	protected function uint64(string $bytes): int
+	{
+		$parts = unpack('Nhigh/Nlow', $bytes);
+		$high = (int) ($parts['high'] ?? 0);
+		$low = (int) ($parts['low'] ?? 0);
+
+		return (int) (($high * 4294967296) + $low);
 	}
 
 	protected function detect_upload_mime_type(string $tmp_name): string

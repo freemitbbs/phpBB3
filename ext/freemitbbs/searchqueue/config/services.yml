@@ -1,0 +1,33 @@
+parameters:
+    tables.freemitbbs.searchqueue.posts: '%core.table_prefix%searchqueue_posts'
+
+services:
+    freemitbbs.searchqueue.queue:
+        class: freemitbbs\searchqueue\service\queue
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@dbal.conn'
+            - '@user'
+            - '@dispatcher'
+            - '%tables.freemitbbs.searchqueue.posts%'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+
+    freemitbbs.searchqueue.listener:
+        class: freemitbbs\searchqueue\event\listener
+        arguments:
+            - '@freemitbbs.searchqueue.queue'
+        tags:
+            - { name: event.listener }
+
+    freemitbbs.searchqueue.cron.process:
+        class: freemitbbs\searchqueue\cron\process
+        arguments:
+            - '@cache'
+            - '@config'
+            - '@freemitbbs.searchqueue.queue'
+        calls:
+            - [set_name, [cron.task.freemitbbs.searchqueue.process]]
+        tags:
+            - { name: cron.task }

@@ -2,7 +2,7 @@
 	"name": "freemitbbs/videoupload",
 	"type": "phpbb-extension",
 	"description": "Upload images, video, and audio to S3-compatible storage and insert post-ready links into posts.",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"license": "GPL-2.0-only",
 	"authors": [
 		{

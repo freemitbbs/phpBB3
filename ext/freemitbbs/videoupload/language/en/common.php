@@ -32,6 +32,7 @@ $lang = array_merge($lang, [
 	'VIDEOUPLOAD_ERR_NO_FILE' => 'No file selected.',
 	'VIDEOUPLOAD_ERR_INVALID_UPLOAD' => 'Uploaded file is invalid.',
 	'VIDEOUPLOAD_ERR_INVALID_IMAGE' => 'Uploaded file content is invalid or does not match its file extension.',
+	'VIDEOUPLOAD_ERR_UNSUPPORTED_VIDEO_CODEC' => 'This video uses HEVC/H.265, which many browsers cannot play here. Please upload a compatible H.264 MP4 instead. On iPhone, use Settings > Camera > Formats > Most Compatible.',
 	'VIDEOUPLOAD_ERR_FILE_TOO_LARGE_PHP' => 'The uploaded file exceeds server upload limits.',
 	'VIDEOUPLOAD_ERR_PARTIAL' => 'The file was only partially uploaded.',
 	'VIDEOUPLOAD_ERR_DISK' => 'The server could not save the uploaded file.',

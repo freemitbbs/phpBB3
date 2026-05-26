@@ -1,0 +1,23 @@
+{
+	"name": "freemitbbs/searchqueue",
+	"type": "phpbb-extension",
+	"description": "Defers phpBB native search indexing during posting.",
+	"homepage": "https://www.phpbb.com",
+	"version": "1.0.0",
+	"license": "GPL-2.0-only",
+	"authors": [
+		{
+			"name": "freemitbbs"
+		}
+	],
+	"require": {
+		"php": ">=7.4",
+		"phpbb/phpbb": ">=3.3.0"
+	},
+	"extra": {
+		"display-name": "FreemitBBS Search Queue",
+		"soft-require": {
+			"phpbb/phpbb": ">=3.3.0"
+		}
+	}
+}
