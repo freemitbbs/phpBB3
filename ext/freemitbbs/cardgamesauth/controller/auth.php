@@ -53,7 +53,7 @@ class auth
 
 		if ($this->is_guest())
 		{
-			login_box($this->helper->route('freemitbbs_cardgamesauth_launch'), $this->language->lang('CARDGAMES_LOGIN_REQUIRED'));
+			login_box($this->route('freemitbbs_cardgamesauth_launch'), $this->language->lang('CARDGAMES_LOGIN_REQUIRED'));
 		}
 
 		$can_play = $this->can_play();
@@ -64,13 +64,13 @@ class auth
 			'S_CARDGAMES_TESTING_MODE' => $this->is_testing_mode(),
 			'S_CARDGAMES_MANAGE' => $this->can_manage(),
 			'U_CARDGAMES_CLIENT' => $client_url,
-			'U_CARDGAMES_ADMIN' => $this->helper->route('freemitbbs_cardgamesauth_admin'),
+			'U_CARDGAMES_ADMIN' => $this->route('freemitbbs_cardgamesauth_admin'),
 			'CARDGAMES_BOOTSTRAP_JSON' => $this->encode_json([
-				'tokenUrl' => $this->helper->route('freemitbbs_cardgamesauth_token', [], false),
-				'configUrl' => $this->helper->route('freemitbbs_cardgamesauth_config', [], false),
+				'tokenUrl' => $this->route('freemitbbs_cardgamesauth_token', [], false),
+				'configUrl' => $this->route('freemitbbs_cardgamesauth_config', [], false),
 				'tokenHash' => generate_link_hash(self::TOKEN_HASH_NAME),
 				'wsUrl' => $this->ws_url(),
-				'roundLogUrl' => $this->helper->route('freemitbbs_cardgamesauth_round_log', [], false),
+				'roundLogUrl' => $this->route('freemitbbs_cardgamesauth_round_log', [], false),
 				'assetBaseUrl' => $this->asset_base_url(),
 				'cardStyle' => 'cardsclassic',
 			]),
@@ -90,7 +90,7 @@ class auth
 
 		if ($this->is_guest())
 		{
-			login_box($this->helper->route('freemitbbs_cardgamesauth_client'), $this->language->lang('CARDGAMES_LOGIN_REQUIRED'));
+			login_box($this->route('freemitbbs_cardgamesauth_client'), $this->language->lang('CARDGAMES_LOGIN_REQUIRED'));
 		}
 
 		if (!$this->can_play())
@@ -100,11 +100,11 @@ class auth
 
 		$this->template->assign_vars([
 			'CARDGAMES_BOOTSTRAP_JSON' => $this->encode_json([
-				'tokenUrl' => $this->helper->route('freemitbbs_cardgamesauth_token', [], false),
-				'configUrl' => $this->helper->route('freemitbbs_cardgamesauth_config', [], false),
+				'tokenUrl' => $this->route('freemitbbs_cardgamesauth_token', [], false),
+				'configUrl' => $this->route('freemitbbs_cardgamesauth_config', [], false),
 				'tokenHash' => generate_link_hash(self::TOKEN_HASH_NAME),
 				'wsUrl' => $this->ws_url(),
-				'roundLogUrl' => $this->helper->route('freemitbbs_cardgamesauth_round_log', [], false),
+				'roundLogUrl' => $this->route('freemitbbs_cardgamesauth_round_log', [], false),
 				'assetBaseUrl' => $this->asset_base_url(),
 				'cardStyle' => 'cardsclassic',
 				'user' => $this->client_user_data(),
@@ -125,11 +125,11 @@ class auth
 			'testingMode' => $this->is_testing_mode(),
 			'isTester' => $this->is_tester(),
 			'canPlay' => $can_play,
-			'launchUrl' => $this->helper->route('freemitbbs_cardgamesauth_launch', [], false),
-			'tokenUrl' => $this->helper->route('freemitbbs_cardgamesauth_token', [], false),
+			'launchUrl' => $this->route('freemitbbs_cardgamesauth_launch', [], false),
+			'tokenUrl' => $this->route('freemitbbs_cardgamesauth_token', [], false),
 			'clientUrl' => $this->client_url(),
 			'wsUrl' => $this->ws_url(),
-			'roundLogUrl' => $this->helper->route('freemitbbs_cardgamesauth_round_log', [], false),
+			'roundLogUrl' => $this->route('freemitbbs_cardgamesauth_round_log', [], false),
 			'assetBaseUrl' => $this->asset_base_url(),
 			'cardStyle' => 'cardsclassic',
 			'tokenHash' => $can_play ? generate_link_hash(self::TOKEN_HASH_NAME) : '',
@@ -392,7 +392,7 @@ class auth
 	protected function client_url(): string
 	{
 		$configured = trim((string) ($this->config['cardgamesauth_client_url'] ?? ''));
-		return $configured !== '' ? $configured : $this->helper->route('freemitbbs_cardgamesauth_client', [], false);
+		return $configured !== '' ? $this->force_app_front_controller($configured) : $this->route('freemitbbs_cardgamesauth_client', [], false);
 	}
 
 	protected function ws_url(): string
@@ -424,6 +424,32 @@ class auth
 		}
 
 		return (string) $this->request->server('HTTP_X_CARDGAMES_HASH', '');
+	}
+
+	protected function route(string $route, array $params = [], bool $is_amp = true): string
+	{
+		return $this->force_app_front_controller($this->helper->route($route, $params, $is_amp));
+	}
+
+	protected function force_app_front_controller(string $url): string
+	{
+		if ($url === '' || preg_match('~(^|://[^/]+)(?:/[^?#]*)?/app\.php/card-games(?:[/?#]|$)~i', $url))
+		{
+			return $url;
+		}
+
+		if (str_starts_with($url, './card-games'))
+		{
+			return './app.php' . substr($url, 1);
+		}
+		if (str_starts_with($url, 'card-games'))
+		{
+			return 'app.php/' . $url;
+		}
+
+		$forced = preg_replace('~^((?:https?://[^/]+)?(?:/[^?#]*)?)/card-games(?=[/?#]|$)~i', '$1/app.php/card-games', $url, 1);
+
+		return is_string($forced) ? $forced : $url;
 	}
 
 	protected function json(array $data, int $status = 200): JsonResponse

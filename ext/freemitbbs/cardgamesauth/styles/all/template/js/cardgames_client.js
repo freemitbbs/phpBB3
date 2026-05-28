@@ -9077,11 +9077,11 @@ function defaultWsUrl() {
 }
 
 function defaultConfigUrl() {
-  return new URL("../config", window.location.href).toString();
+  return new URL("/app.php/card-games/config", window.location.origin).toString();
 }
 
 function defaultRoundLogUrl() {
-  return new URL("../replay/round-log", window.location.href).toString();
+  return new URL("/app.php/card-games/replay/round-log", window.location.origin).toString();
 }
 
 function queryParam(name) {

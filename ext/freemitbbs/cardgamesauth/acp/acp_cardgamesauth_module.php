@@ -94,7 +94,7 @@ class acp_cardgamesauth_module
 
 		$template->assign_vars([
 			'U_ACTION' => $this->u_action,
-			'U_CARDGAMES_ADMIN' => $helper->route('freemitbbs_cardgamesauth_admin'),
+			'U_CARDGAMES_ADMIN' => $this->force_app_front_controller($helper->route('freemitbbs_cardgamesauth_admin')),
 			'CARDGAMESAUTH_ENABLED' => (int) ($config['cardgamesauth_enabled'] ?? 1),
 			'CARDGAMESAUTH_NAV_ENABLED' => (int) ($config['cardgamesauth_nav_enabled'] ?? 1),
 			'CARDGAMESAUTH_TESTING_MODE' => (int) ($config['cardgamesauth_testing_mode'] ?? 1),
@@ -150,6 +150,27 @@ class acp_cardgamesauth_module
 		{
 			return sha1(uniqid((string) mt_rand(), true) . microtime(true));
 		}
+	}
+
+	protected function force_app_front_controller(string $url): string
+	{
+		if ($url === '' || preg_match('~(^|://[^/]+)(?:/[^?#]*)?/app\.php/card-games(?:[/?#]|$)~i', $url))
+		{
+			return $url;
+		}
+
+		if (str_starts_with($url, './card-games'))
+		{
+			return './app.php' . substr($url, 1);
+		}
+		if (str_starts_with($url, 'card-games'))
+		{
+			return 'app.php/' . $url;
+		}
+
+		$forced = preg_replace('~^((?:https?://[^/]+)?(?:/[^?#]*)?)/card-games(?=[/?#]|$)~i', '$1/app.php/card-games', $url, 1);
+
+		return is_string($forced) ? $forced : $url;
 	}
 
 	protected function ensure_tester_group(\phpbb\db\driver\driver_interface $db, \phpbb\config\config $config): int

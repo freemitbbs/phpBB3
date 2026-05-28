@@ -68,8 +68,34 @@ class listener implements EventSubscriberInterface
 		$this->template->assign_vars([
 			'S_CARDGAMES_NAV' => $enabled && $show_nav && (!$testing_mode || $is_tester),
 			'S_CARDGAMES_CAN_PLAY' => $can_play,
-			'U_CARDGAMES_LAUNCH' => $this->helper->route($can_play ? 'freemitbbs_cardgamesauth_client' : 'freemitbbs_cardgamesauth_launch'),
+			'U_CARDGAMES_LAUNCH' => $this->route($can_play ? 'freemitbbs_cardgamesauth_client' : 'freemitbbs_cardgamesauth_launch'),
 		]);
+	}
+
+	protected function route(string $route, array $params = [], bool $is_amp = true): string
+	{
+		return $this->force_app_front_controller($this->helper->route($route, $params, $is_amp));
+	}
+
+	protected function force_app_front_controller(string $url): string
+	{
+		if ($url === '' || preg_match('~(^|://[^/]+)(?:/[^?#]*)?/app\.php/card-games(?:[/?#]|$)~i', $url))
+		{
+			return $url;
+		}
+
+		if (str_starts_with($url, './card-games'))
+		{
+			return './app.php' . substr($url, 1);
+		}
+		if (str_starts_with($url, 'card-games'))
+		{
+			return 'app.php/' . $url;
+		}
+
+		$forced = preg_replace('~^((?:https?://[^/]+)?(?:/[^?#]*)?)/card-games(?=[/?#]|$)~i', '$1/app.php/card-games', $url, 1);
+
+		return is_string($forced) ? $forced : $url;
 	}
 
 	protected function is_testing_mode(): bool

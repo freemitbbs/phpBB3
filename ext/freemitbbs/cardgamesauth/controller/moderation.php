@@ -80,7 +80,7 @@ class moderation
 
 		if ($this->is_guest())
 		{
-			login_box($this->helper->route('freemitbbs_cardgamesauth_admin'), $this->language->lang('CARDGAMES_LOGIN_REQUIRED'));
+			login_box($this->route('freemitbbs_cardgamesauth_admin'), $this->language->lang('CARDGAMES_LOGIN_REQUIRED'));
 		}
 		if (!$this->can_manage())
 		{
@@ -358,8 +358,8 @@ class moderation
 	protected function assign_template_vars(): void
 	{
 		$this->template->assign_vars([
-			'U_ACTION' => $this->helper->route('freemitbbs_cardgamesauth_admin'),
-			'U_REPLAY_EXPORT' => $this->helper->route('freemitbbs_cardgamesauth_replay_export'),
+			'U_ACTION' => $this->route('freemitbbs_cardgamesauth_admin'),
+			'U_REPLAY_EXPORT' => $this->route('freemitbbs_cardgamesauth_replay_export'),
 			'S_CARDGAMES_RUNTIME_CONFIGURED' => $this->runtime_configured(),
 			'S_CARDGAMES_CAN_EXPORT_REPLAY' => $this->can_export_replay(),
 		]);
@@ -532,9 +532,35 @@ class moderation
 	{
 		return '<br /><br />' . sprintf(
 			$this->language->lang('RETURN_PAGE'),
-			'<a href="' . $this->helper->route('freemitbbs_cardgamesauth_admin') . '">',
+			'<a href="' . $this->route('freemitbbs_cardgamesauth_admin') . '">',
 			'</a>'
 		);
+	}
+
+	protected function route(string $route, array $params = [], bool $is_amp = true): string
+	{
+		return $this->force_app_front_controller($this->helper->route($route, $params, $is_amp));
+	}
+
+	protected function force_app_front_controller(string $url): string
+	{
+		if ($url === '' || preg_match('~(^|://[^/]+)(?:/[^?#]*)?/app\.php/card-games(?:[/?#]|$)~i', $url))
+		{
+			return $url;
+		}
+
+		if (str_starts_with($url, './card-games'))
+		{
+			return './app.php' . substr($url, 1);
+		}
+		if (str_starts_with($url, 'card-games'))
+		{
+			return 'app.php/' . $url;
+		}
+
+		$forced = preg_replace('~^((?:https?://[^/]+)?(?:/[^?#]*)?)/card-games(?=[/?#]|$)~i', '$1/app.php/card-games', $url, 1);
+
+		return is_string($forced) ? $forced : $url;
 	}
 
 	protected function encode_json(array $data): string
