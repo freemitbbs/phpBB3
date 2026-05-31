@@ -26,9 +26,13 @@
 		var maxLength = parseInt(editor.getAttribute('data-max-length'), 10) || 50;
 		var tags = [];
 		var isComposing = false;
+		var syncingHidden = false;
 
 		function syncHidden() {
 			hidden.value = tags.join(',');
+			syncingHidden = true;
+			hidden.dispatchEvent(new Event('change', { bubbles: true }));
+			syncingHidden = false;
 		}
 
 		function hasTag(tag) {
@@ -99,6 +103,16 @@
 
 		splitTags(hidden.value).forEach(addTag);
 		render();
+
+		hidden.addEventListener('change', function () {
+			if (syncingHidden || hidden.value === tags.join(',')) {
+				return;
+			}
+
+			tags = [];
+			splitTags(hidden.value).forEach(addTag);
+			render();
+		});
 
 		input.addEventListener('compositionstart', function () {
 			isComposing = true;

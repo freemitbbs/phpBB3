@@ -1,0 +1,30 @@
+services:
+    freemitbbs.topicmover.mover:
+        class: freemitbbs\topicmover\service\mover
+        arguments:
+            - '@config'
+            - '@dbal.conn'
+            - '@log'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+
+    freemitbbs.topicmover.cron.move_topics:
+        class: freemitbbs\topicmover\cron\move_topics
+        arguments:
+            - '@cache'
+            - '@config'
+            - '@freemitbbs.topicmover.mover'
+        calls:
+            - [set_name, [cron.task.freemitbbs.topicmover.move_topics]]
+        tags:
+            - { name: cron.task }
+
+    freemitbbs.topicmover.listener:
+        class: freemitbbs\topicmover\event\listener
+        arguments:
+            - '@language'
+            - '@request'
+            - '@template'
+            - '@user'
+        tags:
+            - { name: event.listener }

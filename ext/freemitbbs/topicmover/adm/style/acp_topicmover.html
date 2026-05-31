@@ -1,0 +1,84 @@
+<!-- INCLUDE overall_header.html -->
+
+<a name="maincontent"></a>
+<h1>{L_ACP_TOPICMOVER}</h1>
+<p>{L_TOPICMOVER_EXPLAIN}</p>
+
+<form id="acp_topicmover" method="post" action="{U_ACTION}">
+	<fieldset>
+		<legend>{L_TOPICMOVER_FIELDSET_GENERAL}</legend>
+		<dl>
+			<dt>
+				<label for="topicmover_threshold">{L_TOPICMOVER_THRESHOLD}</label><br />
+				<span>{L_TOPICMOVER_THRESHOLD_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="0" max="100000" id="topicmover_threshold" name="topicmover_threshold" value="{TOPICMOVER_THRESHOLD}" class="inputbox autowidth" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="topicmover_min_latest_reply_age_hours">{L_TOPICMOVER_MIN_LATEST_REPLY_AGE_HOURS}</label><br />
+				<span>{L_TOPICMOVER_MIN_LATEST_REPLY_AGE_HOURS_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="0" max="8760" id="topicmover_min_latest_reply_age_hours" name="topicmover_min_latest_reply_age_hours" value="{TOPICMOVER_MIN_LATEST_REPLY_AGE_HOURS}" class="inputbox autowidth" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="topicmover_interval_seconds">{L_TOPICMOVER_INTERVAL_SECONDS}</label><br />
+				<span>{L_TOPICMOVER_INTERVAL_SECONDS_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="300" max="86400" id="topicmover_interval_seconds" name="topicmover_interval_seconds" value="{TOPICMOVER_INTERVAL_SECONDS}" class="inputbox autowidth" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="topicmover_excluded_forum_ids">{L_TOPICMOVER_EXCLUDED_FORUM_IDS}</label><br />
+				<span>{L_TOPICMOVER_EXCLUDED_FORUM_IDS_EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="topicmover_excluded_forum_ids" name="topicmover_excluded_forum_ids" value="{TOPICMOVER_EXCLUDED_FORUM_IDS}" class="inputbox" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="topicmover_excluded_user_ids">{L_TOPICMOVER_EXCLUDED_USER_IDS}</label><br />
+				<span>{L_TOPICMOVER_EXCLUDED_USER_IDS_EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="topicmover_excluded_user_ids" name="topicmover_excluded_user_ids" value="{TOPICMOVER_EXCLUDED_USER_IDS}" class="inputbox" /></dd>
+		</dl>
+	</fieldset>
+
+	<fieldset>
+		<legend>{L_TOPICMOVER_FIELDSET_API}</legend>
+		<dl>
+			<dt>
+				<label for="topicmover_api_endpoint">{L_TOPICMOVER_API_ENDPOINT}</label><br />
+				<span>{L_TOPICMOVER_API_ENDPOINT_EXPLAIN}</span>
+			</dt>
+			<dd><input type="url" id="topicmover_api_endpoint" name="topicmover_api_endpoint" value="{TOPICMOVER_API_ENDPOINT}" class="inputbox" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="topicmover_model">{L_TOPICMOVER_MODEL}</label><br />
+				<span>{L_TOPICMOVER_MODEL_EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="topicmover_model" name="topicmover_model" value="{TOPICMOVER_MODEL}" class="inputbox" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="topicmover_api_key">{L_TOPICMOVER_API_KEY}</label><br />
+				<span>{L_TOPICMOVER_API_KEY_EXPLAIN}</span>
+			</dt>
+			<dd>
+				<input type="password" id="topicmover_api_key" name="topicmover_api_key" value="" class="inputbox" autocomplete="new-password" />
+				<!-- IF S_TOPICMOVER_API_KEY_CONFIGURED -->
+				<br /><label><input type="checkbox" name="topicmover_api_key_clear" value="1" /> {L_TOPICMOVER_API_KEY_CLEAR}</label>
+				<!-- ENDIF -->
+			</dd>
+		</dl>
+	</fieldset>
+
+	<fieldset class="submit-buttons">
+		{S_FORM_TOKEN}
+		<input class="button1" type="submit" id="submit" name="submit" value="{L_SUBMIT}" />
+		<input class="button2" type="reset" id="reset" name="reset" value="{L_RESET}" />
+	</fieldset>
+</form>
+
+<!-- INCLUDE overall_footer.html -->

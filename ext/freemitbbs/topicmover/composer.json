@@ -1,0 +1,23 @@
+{
+	"name": "freemitbbs/topicmover",
+	"type": "phpbb-extension",
+	"description": "Automatically moves busy topics from the Military forum to a better public forum using an OpenAI-compatible classifier API.",
+	"homepage": "https://freemitbbs.com",
+	"version": "1.0.2",
+	"license": "GPL-2.0-only",
+	"authors": [
+		{
+			"name": "FreeMITBBS"
+		}
+	],
+	"require": {
+		"php": ">=8.0",
+		"phpbb/phpbb": ">=3.3.0,<4.0.0"
+	},
+	"extra": {
+		"display-name": "Topic Mover",
+		"soft-require": {
+			"phpbb/phpbb": ">=3.3.0,<4.0.0"
+		}
+	}
+}

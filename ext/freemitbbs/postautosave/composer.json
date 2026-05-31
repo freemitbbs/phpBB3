@@ -1,0 +1,23 @@
+{
+	"name": "freemitbbs/postautosave",
+	"type": "phpbb-extension",
+	"description": "Keeps local browser drafts for phpBB posting forms so text survives submit/network failures.",
+	"homepage": "https://freemitbbs.com",
+	"version": "1.0.0",
+	"license": "GPL-2.0-only",
+	"authors": [
+		{
+			"name": "FreeMITBBS"
+		}
+	],
+	"require": {
+		"php": ">=7.4",
+		"phpbb/phpbb": ">=3.3.0,<4.0.0"
+	},
+	"extra": {
+		"display-name": "FreeMITBBS Post Autosave",
+		"soft-require": {
+			"phpbb/phpbb": ">=3.3.0,<4.0.0"
+		}
+	}
+}

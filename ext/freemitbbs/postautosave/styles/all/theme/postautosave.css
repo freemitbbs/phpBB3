@@ -1,0 +1,37 @@
+.postautosave-notice {
+	display: none;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin: 8px 0;
+	padding: 8px 10px;
+	border: 1px solid #c7d9ef;
+	border-radius: 4px;
+	background: #eef5ff;
+	color: #23415f;
+	font-size: 0.95em;
+}
+
+.postautosave-notice.is-visible {
+	display: flex;
+}
+
+.postautosave-notice.is-restored {
+	border-color: #b7dfb7;
+	background: #eef9ee;
+	color: #225022;
+}
+
+.postautosave-message {
+	flex: 1 1 220px;
+}
+
+.postautosave-actions {
+	display: inline-flex;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+
+.postautosave-action {
+	cursor: pointer;
+}
