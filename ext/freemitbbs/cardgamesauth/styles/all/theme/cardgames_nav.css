@@ -1,3 +1,16 @@
 .cardgames-nav-icon.fa-cards:before {
 	content: "\f24d";
 }
+
+.cardgames-nav-mobile-count {
+	display: none;
+	margin-left: 2px;
+	font-size: 0.9em;
+	font-weight: 600;
+}
+
+@media (max-width: 700px) {
+	.cardgames-nav-mobile-count {
+		display: inline;
+	}
+}

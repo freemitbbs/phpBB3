@@ -11,6 +11,7 @@ $lang = array_merge($lang, [
 	'ACL_M_CARDGAMES_REPLAY_EXPORT' => 'Can export card-game replays',
 	'CARDGAMES_TITLE' => 'Card Games',
 	'CARDGAMES_NAV' => 'Card Games',
+	'CARDGAMES_NAV_COUNTED' => '%1$s (%2$d)',
 	'CARDGAMES_TRACTOR_TITLE' => 'Tractor 80 Points',
 	'CARDGAMES_ADMIN_TITLE' => 'Card game administration',
 	'CARDGAMES_ADMIN_OPEN' => 'Manage card games',

@@ -11,6 +11,7 @@ $lang = array_merge($lang, [
 	'ACL_M_CARDGAMES_REPLAY_EXPORT' => '可以导出卡牌游戏回放',
 	'CARDGAMES_TITLE' => '卡牌游戏',
 	'CARDGAMES_NAV' => '未名游戏',
+	'CARDGAMES_NAV_COUNTED' => '%1$s（%2$d人）',
 	'CARDGAMES_CLIENT_TITLE' => '未名游戏大厅',
 	'CARDGAMES_TRACTOR_TITLE' => '升级80分',
 	'CARDGAMES_ADMIN_TITLE' => '卡牌游戏管理',

@@ -24,7 +24,8 @@ class fulltext_native extends \phpbb\search\base
 	const UTF8_CJK_LAST = "\xE9\xBE\xBB";
 	const UTF8_CJK_B_FIRST = "\xF0\xA0\x80\x80";
 	const UTF8_CJK_B_LAST = "\xF0\xAA\x9B\x96";
-	const CJK_SEQUENCE_PATTERN = '#[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]{2,}#u';
+	const CJK_SEQUENCE_PATTERN = '#[\x{3040}-\x{30FF}\x{3400}-\x{4DBF}\x{4E00}-\x{9FFF}\x{AC00}-\x{D7AF}\x{F900}-\x{FAFF}]{2,}#u';
+	const CJK_BIGRAM_PATTERN = '#^[\x{3040}-\x{30FF}\x{3400}-\x{4DBF}\x{4E00}-\x{9FFF}\x{AC00}-\x{D7AF}\x{F900}-\x{FAFF}]{2}$#u';
 
 	/**
 	 * Associative array holding index stats
@@ -1410,6 +1411,12 @@ class fulltext_native extends \phpbb\search\base
 				}
 			}
 
+			if (!$this->is_supported_word($word))
+			{
+				$word = strtok(' ');
+				continue;
+			}
+
 			$words[] = $word;
 			$word = strtok(' ');
 		}
@@ -1512,7 +1519,7 @@ class fulltext_native extends \phpbb\search\base
 			}
 		}
 
-		return $this->filter_cjk_stop_bigrams($bigrams);
+		return $this->filter_cjk_stop_bigrams($this->filter_supported_words($bigrams));
 	}
 
 	/**
@@ -1521,7 +1528,36 @@ class fulltext_native extends \phpbb\search\base
 	*/
 	protected function is_cjk_bigram($word)
 	{
-		return (bool) preg_match('#^[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]{2}$#u', $word);
+		return (bool) preg_match(self::CJK_BIGRAM_PATTERN, $word);
+	}
+
+	/**
+	* Keep native search words compatible with phpBB's MySQL utf8mb3 connection
+	* and the legacy utf8mb3 search_wordlist table.
+	*/
+	protected function filter_supported_words(array $words)
+	{
+		return array_values(array_filter($words, function ($word)
+		{
+			return $this->is_supported_word($word);
+		}));
+	}
+
+	/**
+	* Native MySQL search_wordlist is utf8mb3 in phpBB installations. Non-BMP
+	* codepoints such as emoji and CJK extension B cannot be compared or stored
+	* safely there and can trigger collation errors during indexing.
+	*/
+	protected function is_supported_word($word)
+	{
+		if (!is_string($word) || $word === '' || strlen($word) > 255)
+		{
+			return false;
+		}
+
+		$has_non_bmp = preg_match('#[\x{10000}-\x{10FFFF}]#u', $word);
+
+		return $has_non_bmp === 0;
 	}
 
 	/**
@@ -1684,6 +1720,11 @@ class fulltext_native extends \phpbb\search\base
 			'cur_words',
 		);
 		extract($this->phpbb_dispatcher->trigger_event('core.search_native_index_before', compact($vars)));
+
+		$words['add']['post'] = $this->filter_supported_words($words['add']['post']);
+		$words['add']['title'] = $this->filter_supported_words($words['add']['title']);
+		$words['del']['post'] = $this->filter_supported_words($words['del']['post']);
+		$words['del']['title'] = $this->filter_supported_words($words['del']['title']);
 
 		unset($split_text);
 		unset($split_title);

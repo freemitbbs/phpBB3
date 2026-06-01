@@ -82,11 +82,14 @@ services:
         class: freemitbbs\cardgamesauth\event\listener
         arguments:
             - '@auth'
+            - '@cache.driver'
             - '@config'
             - '@controller.helper'
             - '@dbal.conn'
             - '@language'
             - '@template'
             - '@user'
+            - '%tables.freemitbbs.cardgamesauth.sessions%'
+            - '%tables.freemitbbs.cardgamesauth.room_members%'
         tags:
             - { name: event.listener }

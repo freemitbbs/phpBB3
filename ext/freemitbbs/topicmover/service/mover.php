@@ -112,11 +112,17 @@ class mover
 	{
 		$threshold = max(0, min(100000, (int) ($this->config['topicmover_threshold'] ?? self::DEFAULT_THRESHOLD)));
 		$min_latest_reply_age_hours = $this->min_latest_reply_age_hours();
+		$non_author_reply_count_sql = '(SELECT COUNT(p.post_id)
+			FROM ' . POSTS_TABLE . ' p
+			WHERE p.topic_id = t.topic_id
+				AND p.post_visibility = ' . ITEM_APPROVED . '
+				AND p.post_id <> t.topic_first_post_id
+				AND p.poster_id <> t.topic_poster)';
 		$sql_where = [
 			't.forum_id = ' . self::SOURCE_FORUM_ID,
 			't.topic_moved_id = 0',
 			't.topic_visibility = ' . ITEM_APPROVED,
-			'(t.topic_posts_approved - 1) > ' . $threshold,
+			$non_author_reply_count_sql . ' > ' . $threshold,
 			't.topic_last_post_time <= ' . (time() - ($min_latest_reply_age_hours * 3600)),
 			'COALESCE(u.topicmover_no_move, 0) = 0',
 		];
@@ -126,7 +132,7 @@ class mover
 			$sql_where[] = $this->db->sql_in_set('t.topic_poster', array_map('intval', array_keys($excluded_user_ids)), true);
 		}
 
-		$sql = 'SELECT t.topic_id, t.forum_id, t.topic_title, t.topic_first_post_id, t.topic_last_post_time, (t.topic_posts_approved - 1) AS topic_replies, t.topic_posts_approved, t.topic_visibility, t.topic_moved_id, t.topic_poster
+		$sql = 'SELECT t.topic_id, t.forum_id, t.topic_title, t.topic_first_post_id, t.topic_last_post_time, ' . $non_author_reply_count_sql . ' AS topic_replies, t.topic_posts_approved, t.topic_visibility, t.topic_moved_id, t.topic_poster
 			FROM ' . TOPICS_TABLE . ' t
 			LEFT JOIN ' . USERS_TABLE . ' u ON u.user_id = t.topic_poster
 			WHERE ' . implode(' AND ', $sql_where) . '
