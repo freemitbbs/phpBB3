@@ -6,13 +6,14 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 
 class s3_uploader
 {
-	private const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'ogg', 'webm', 'weba', 'mp3', 'm4a', 'aac', 'wav', 'oga', 'opus', 'flac'];
+	private const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'mp4', 'mov', 'ogg', 'webm', 'weba', 'mp3', 'm4a', 'aac', 'wav', 'oga', 'opus', 'flac'];
 	private const CONTENT_TYPES = [
 		'jpg' => 'image/jpeg',
 		'jpeg' => 'image/jpeg',
 		'png' => 'image/png',
 		'gif' => 'image/gif',
 		'webp' => 'image/webp',
+		'avif' => 'image/avif',
 		'mp4' => 'video/mp4',
 		'mov' => 'video/quicktime',
 		'ogg' => 'video/ogg',

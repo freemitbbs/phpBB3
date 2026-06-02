@@ -258,7 +258,7 @@ class upload
 		}
 
 		$mime_type = $this->detect_upload_mime_type($tmp_name);
-		return in_array($mime_type, ['', 'application/octet-stream', 'image/avif', 'image/avif-sequence'], true);
+		return in_array($mime_type, ['', 'application/octet-stream', 'image/avif'], true);
 	}
 
 	protected function file_has_avif_brand(string $tmp_name): bool
@@ -284,7 +284,7 @@ class upload
 		}
 
 		$brands = substr($header, 8);
-		return strpos($brands, 'avif') !== false || strpos($brands, 'avis') !== false;
+		return strpos($brands, 'avif') !== false;
 	}
 
 	protected function has_unsupported_browser_video_codec(string $tmp_name, string $extension): bool

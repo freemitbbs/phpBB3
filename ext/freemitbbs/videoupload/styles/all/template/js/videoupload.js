@@ -2,7 +2,7 @@
 	'use strict';
 
 	function splitAllowedExts(rawValue) {
-		return (rawValue || '.jpg,.jpeg,.png,.gif,.webp,.mp4,.mov,.ogg,.webm,.weba,.mp3,.m4a,.aac,.wav,.oga,.opus,.flac')
+		return (rawValue || '.jpg,.jpeg,.png,.gif,.webp,.avif,.mp4,.mov,.ogg,.webm,.weba,.mp3,.m4a,.aac,.wav,.oga,.opus,.flac')
 			.split(',')
 			.map(function (item) { return item.trim().toLowerCase(); })
 			.filter(function (item) { return item.length > 0; });
@@ -66,7 +66,7 @@
 	}
 
 	function isImageUpload(file, url) {
-		var imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+		var imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif'];
 		var mimeType = file && typeof file.type === 'string' ? file.type.toLowerCase() : '';
 
 		if (hasAnyExtension(url, imageExtensions)) {
@@ -357,7 +357,7 @@
 			button: button,
 			input: input,
 			status: status,
-			imageExts: splitAllowedExts(control.dataset.imageExts || '.jpg,.jpeg,.png,.gif,.webp'),
+			imageExts: splitAllowedExts(control.dataset.imageExts || '.jpg,.jpeg,.png,.gif,.webp,.avif'),
 			maxBytes: parseInt(control.dataset.maxBytes || '0', 10) || 0,
 			uploadUrl: control.dataset.uploadUrl || '',
 			forumId: control.dataset.forumId || '',
