@@ -44,6 +44,7 @@ $lang = array_merge($lang, [
 
 	'RTNG_TITLE'			=> 'Recent Topics',
 	'RTNG_NON_JUNBAN_TITLE'	=> 'Recent Topics Outside Junban',
+	'RTNG_JUNBAN_TITLE'		=> 'Recent Topics in Junban',
 	'RTNG_UNREAD_TITLE'		=> 'Unread Topics',
 	'RTNG_READ_SEPARATE'	=> 'Reading “%s”',
 	'RTNG_READ_SIMPLE'		=> 'Reading “%s” (simplified page)',

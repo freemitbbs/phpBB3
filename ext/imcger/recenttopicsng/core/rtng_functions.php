@@ -17,6 +17,9 @@ class rtng_functions
 {
 	public const CACHE_RTNG_ENABLED_FORUM_IDS = '_imcger_recenttopicsng_enabled_forum_ids';
 	private const CACHE_SECONDS = 86400;
+	private const DEFAULT_TPL_LOOP = 'rtng_topics';
+	private const JUNBAN_TPL_LOOP = 'rtng_junban_topics';
+	private const JUNBAN_FORUM_ID = 2;
 
 	private array $user_setting;
 	private int $topics_start;
@@ -124,7 +127,7 @@ class rtng_functions
 			]
 		);
 
-		$forum_id_list = $this->getforumlist($this->should_apply_user_home_forum_exclusions($tpl_loopname));
+		$forum_id_list = $this->get_forum_id_list_for_loop($tpl_loopname);
 
 		// No forums to display
 		if (count($forum_id_list) == 0)
@@ -220,7 +223,9 @@ class rtng_functions
 		}
 
 		$this->template->assign_vars([
-				'RTNG_TOPICS_COUNT'		 => $this->language->lang('RTNG_TOPICS_COUNT', (int) $topics_count),
+				strtoupper($tpl_loopname) . '_COUNT' => $this->language->lang('RTNG_TOPICS_COUNT', (int) $topics_count),
+				strtoupper($tpl_loopname) . '_TITLE_DYN' => $this->get_title_for_loop($tpl_loopname),
+				strtoupper($tpl_loopname) . '_PAGE_URL' => $this->get_page_url_for_loop($tpl_loopname),
 				'RTNG_SORT_START_TIME'	 => $this->user_setting['user_rtng_sort_start_time'],
 			]
 		);
@@ -253,7 +258,7 @@ class rtng_functions
 			return $this->index_topic_ids_for_dedupe;
 		}
 
-		$forum_id_list = $this->getforumlist($this->should_apply_user_home_forum_exclusions($tpl_loopname));
+		$forum_id_list = $this->get_forum_id_list_for_loop($tpl_loopname);
 		if (empty($forum_id_list))
 		{
 			return $this->index_topic_ids_for_dedupe;
@@ -334,9 +339,58 @@ class rtng_functions
 	/**
 	 * Get the forums we take our topics from
 	 */
-	private function getforumlist(bool $exclude_home_forums = false): array
+	private function get_forum_id_list_for_loop(string $tpl_loopname): array
 	{
-		$cache_key = $exclude_home_forums ? 'home' : 'default';
+		if ($tpl_loopname === self::JUNBAN_TPL_LOOP)
+		{
+			return $this->getforumlist($this->should_apply_user_home_forum_exclusions($tpl_loopname), [self::JUNBAN_FORUM_ID]);
+		}
+
+		if ($tpl_loopname === self::DEFAULT_TPL_LOOP)
+		{
+			return $this->getforumlist($this->should_apply_user_home_forum_exclusions($tpl_loopname), null, [self::JUNBAN_FORUM_ID]);
+		}
+
+		return $this->getforumlist($this->should_apply_user_home_forum_exclusions($tpl_loopname));
+	}
+
+	private function get_title_for_loop(string $tpl_loopname): string
+	{
+		if ($tpl_loopname === self::JUNBAN_TPL_LOOP)
+		{
+			return $this->language->lang('RTNG_JUNBAN_TITLE');
+		}
+
+		if ($tpl_loopname === self::DEFAULT_TPL_LOOP)
+		{
+			return $this->language->lang('RTNG_NON_JUNBAN_TITLE');
+		}
+
+		return $this->language->lang('RTNG' . ($this->user_setting['user_rtng_unread_only'] ? '_UNREAD' : '') . '_TITLE');
+	}
+
+	private function get_page_url_for_loop(string $tpl_loopname): string
+	{
+		if ($tpl_loopname === self::JUNBAN_TPL_LOOP)
+		{
+			return append_sid("{$this->root_path}viewforum.$this->phpEx", 'f=' . self::JUNBAN_FORUM_ID);
+		}
+
+		return '';
+	}
+
+	/**
+	 * Get the forums we take our topics from
+	 */
+	private function getforumlist(bool $exclude_home_forums = false, ?array $include_forum_ids = null, array $exclude_forum_ids = []): array
+	{
+		$include_forum_ids = $include_forum_ids !== null ? $this->normalise_topic_ids($include_forum_ids) : null;
+		$exclude_forum_ids = $this->normalise_topic_ids($exclude_forum_ids);
+		$cache_key = md5(json_encode([
+			'exclude_home_forums' => $exclude_home_forums,
+			'include_forum_ids' => $include_forum_ids,
+			'exclude_forum_ids' => $exclude_forum_ids,
+		]));
 		if (isset($this->forum_id_list[$cache_key]))
 		{
 			return $this->forum_id_list[$cache_key];
@@ -356,17 +410,27 @@ class rtng_functions
 
 		$forum_ids = array_diff($forum_ary, $this->user->get_passworded_forums());
 
-		if (count($forum_ids) > 1)
+		if (count($forum_ids) > 0)
 		{
-			$enabled_forum_map = array_fill_keys($this->get_rtng_enabled_forum_ids(), true);
-			$forum_ids_disp = array_values(array_filter(array_map('intval', $forum_ids), static function ($forum_id) use ($enabled_forum_map) {
-				return isset($enabled_forum_map[$forum_id]);
-			}));
+			if ($include_forum_ids !== null)
+			{
+				$include_forum_map = array_fill_keys($include_forum_ids, true);
+				$forum_ids_disp = array_values(array_filter(array_map('intval', $forum_ids), static function ($forum_id) use ($include_forum_map) {
+					return isset($include_forum_map[$forum_id]);
+				}));
+			}
+			else
+			{
+				$enabled_forum_map = array_fill_keys($this->get_rtng_enabled_forum_ids(), true);
+				$forum_ids_disp = array_values(array_filter(array_map('intval', $forum_ids), static function ($forum_id) use ($enabled_forum_map) {
+					return isset($enabled_forum_map[$forum_id]);
+				}));
+			}
 			if ($exclude_home_forums)
 			{
 				$forum_ids_disp = $this->exclude_forum_ids_by_map($forum_ids_disp, $this->get_user_home_excluded_forum_id_map());
 			}
-			$forum_ids_disp = $this->exclude_forum_ids_by_map($forum_ids_disp, [2 => true]);
+			$forum_ids_disp = $this->exclude_forum_ids_by_map($forum_ids_disp, array_fill_keys($exclude_forum_ids, true));
 			$this->forum_id_list[$cache_key] = $forum_ids_disp;
 			return $this->forum_id_list[$cache_key];
 		}
@@ -408,7 +472,7 @@ class rtng_functions
 
 	private function should_apply_user_home_forum_exclusions(string $tpl_loopname): bool
 	{
-		return $tpl_loopname === 'rtng_topics'
+		return in_array($tpl_loopname, [self::DEFAULT_TPL_LOOP, self::JUNBAN_TPL_LOOP], true)
 			&& ((string) ($this->user->page['page_name'] ?? '')) === 'index.php';
 	}
 
@@ -704,7 +768,7 @@ class rtng_functions
 
 	private function should_exclude_index_toptopics_from_rtng(string $tpl_loopname, int $rtng_start): bool
 	{
-		if ($tpl_loopname !== 'rtng_topics')
+		if (!in_array($tpl_loopname, [self::DEFAULT_TPL_LOOP, self::JUNBAN_TPL_LOOP], true))
 		{
 			return false;
 		}
@@ -1207,7 +1271,8 @@ class rtng_functions
 			}
 
 			$pagination_url = append_sid($this->root_path . $this->user->page['page_name'], $append_params);
-			$this->pagination->generate_template_pagination($pagination_url, 'pagination',
+			$pagination_loop = $tpl_loopname === self::DEFAULT_TPL_LOOP ? 'pagination' : $tpl_loopname . '_pagination';
+			$this->pagination->generate_template_pagination($pagination_url, $pagination_loop,
 				$tpl_loopname . '_start', $topics_count, $this->topics_per_page, $this->topics_start);
 
 			$this->template->assign_vars([

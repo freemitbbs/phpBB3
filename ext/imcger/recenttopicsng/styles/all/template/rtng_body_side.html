@@ -48,7 +48,7 @@
 					rtng.S_TOPIC_REPORTED ? ' reported',
 				]|join }}">
 					<dl class="row-item {{ rtng.TOPIC_IMG_STYLE }}">
-						<dt{% if rtng.TOPIC_ICON_IMG && S_RTNG_TOPIC_ICONS %} style="background-image: url({{ T_ICONS_PATH }}{{ rtng.TOPIC_ICON_IMG }}); background-repeat: no-repeat;"{% endif %} title="{{ rtng.TOPIC_FOLDER_IMG_ALT }}">
+						<dt{% if rtng.TOPIC_ICON_IMG %} style="background-image: url({{ T_ICONS_PATH }}{{ rtng.TOPIC_ICON_IMG }}); background-repeat: no-repeat;"{% endif %} title="{{ rtng.TOPIC_FOLDER_IMG_ALT }}">
 							{% if rtng.S_UNREAD_TOPIC && !S_IS_BOT %}<a href="{{ rtng.U_NEWEST_POST }}" class="row-item-link"></a>{% endif %}
 							<div class="list-inner">
 								{% EVENT topiclist_row_prepend %}

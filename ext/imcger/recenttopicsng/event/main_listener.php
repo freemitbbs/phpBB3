@@ -72,6 +72,8 @@ class main_listener implements EventSubscriberInterface
 			'U_RTNG_PAGE_SEPARATE'  => $this->helper->route('imcger_recenttopicsng_page_controller', ['page' => 'separate']),
 			'S_RTNG_LINK_IN_NAVBAR' => $this->auth->acl_get('u_rtng_view') && $this->user_setting['user_rtng_enable'] && $this->user_setting['user_rtng_location'] == 'RTNG_SEPARATE',
 			'RTNG_TITLE_DYN'		=> $this->language->lang('RTNG_NON_JUNBAN_TITLE'),
+			'RTNG_TOPICS_TITLE_DYN' => $this->language->lang('RTNG_NON_JUNBAN_TITLE'),
+			'RTNG_JUNBAN_TOPICS_TITLE_DYN' => $this->language->lang('RTNG_JUNBAN_TITLE'),
 		]);
 	}
 
@@ -80,6 +82,7 @@ class main_listener implements EventSubscriberInterface
 		if ($this->user_setting['user_rtng_enable'] && $this->auth->acl_get('u_rtng_view'))
 		{
 			$this->rtng_functions->display_recent_topics();
+			$this->rtng_functions->display_recent_topics('rtng_junban_topics');
 		}
 	}
 
