@@ -240,28 +240,34 @@ class rtng_functions
 			return $this->get_displayed_index_topic_ids_for_dedupe($tpl_loopname);
 		}
 
-		if ($this->index_topic_ids_for_dedupe !== null && empty($additional_excluded_topic_ids))
+		if ($this->index_topic_ids_for_dedupe === null)
 		{
-			return $this->index_topic_ids_for_dedupe;
+			$this->index_topic_ids_for_dedupe = [];
 		}
 
-		$this->index_topic_ids_for_dedupe = [];
+		if (empty($additional_excluded_topic_ids)
+			&& isset($this->index_topic_ids_for_dedupe[$tpl_loopname])
+			&& is_array($this->index_topic_ids_for_dedupe[$tpl_loopname]))
+		{
+			return $this->index_topic_ids_for_dedupe[$tpl_loopname];
+		}
+
 		$this->user_setting = $this->ctrl_common->get_user_setting();
 
 		if (!($this->user_setting['user_rtng_enable'] && $this->auth->acl_get('u_rtng_view')))
 		{
-			return $this->index_topic_ids_for_dedupe;
+			return [];
 		}
 
 		if (!in_array((string) $this->user_setting['user_rtng_location'], ['RTNG_TOP', 'RTNG_BOTTOM', 'RTNG_SIDE'], true))
 		{
-			return $this->index_topic_ids_for_dedupe;
+			return [];
 		}
 
 		$forum_id_list = $this->get_forum_id_list_for_loop($tpl_loopname);
 		if (empty($forum_id_list))
 		{
-			return $this->index_topic_ids_for_dedupe;
+			return [];
 		}
 
 		$this->topics_per_page = max(1, (int) $this->user_setting['user_rtng_index_topics_qty']);
@@ -290,7 +296,7 @@ class rtng_functions
 
 		if ($total_topics_limit < 1)
 		{
-			return $this->index_topic_ids_for_dedupe;
+			return [];
 		}
 
 		$obtain_icons = false;
@@ -320,7 +326,7 @@ class rtng_functions
 
 		if (empty($additional_excluded_topic_ids))
 		{
-			$this->index_topic_ids_for_dedupe = $topic_list;
+			$this->index_topic_ids_for_dedupe[$tpl_loopname] = $topic_list;
 		}
 
 		return $topic_list;

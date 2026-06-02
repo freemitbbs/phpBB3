@@ -7,10 +7,10 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 class upload
 {
 	private const LINK_HASH_NAME = 'freemitbbs_videoupload';
-	private const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+	private const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif'];
 	private const BROWSER_VIDEO_CODEC_CHECK_EXTENSIONS = ['mp4', 'mov'];
 	private const UNSUPPORTED_BROWSER_VIDEO_CODECS = ['hvc1', 'hev1', 'dvh1', 'dvhe'];
-	private const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'ogg', 'webm', 'weba', 'mp3', 'm4a', 'aac', 'wav', 'oga', 'opus', 'flac'];
+	private const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'mp4', 'mov', 'ogg', 'webm', 'weba', 'mp3', 'm4a', 'aac', 'wav', 'oga', 'opus', 'flac'];
 	private const MEDIA_MIME_TYPES = [
 		'mp4' => ['video/mp4', 'application/mp4'],
 		'mov' => ['video/quicktime', 'video/mp4'],
@@ -227,26 +227,64 @@ class upload
 		if (in_array($extension, self::IMAGE_EXTENSIONS, true))
 		{
 			$image_info = @getimagesize($tmp_name);
-			if (!is_array($image_info) || !isset($image_info[2]))
+			if (is_array($image_info) && isset($image_info[2]))
 			{
-				return false;
+				$image_type = (int) $image_info[2];
+				$allowed_types = [
+					'jpg' => [IMAGETYPE_JPEG],
+					'jpeg' => [IMAGETYPE_JPEG],
+					'png' => [IMAGETYPE_PNG],
+					'gif' => [IMAGETYPE_GIF],
+					'webp' => defined('IMAGETYPE_WEBP') ? [IMAGETYPE_WEBP] : [],
+					'avif' => defined('IMAGETYPE_AVIF') ? [IMAGETYPE_AVIF] : [],
+				];
+
+				return in_array($image_type, $allowed_types[$extension] ?? [], true);
 			}
 
-			$image_type = (int) $image_info[2];
-			$allowed_types = [
-				'jpg' => [IMAGETYPE_JPEG],
-				'jpeg' => [IMAGETYPE_JPEG],
-				'png' => [IMAGETYPE_PNG],
-				'gif' => [IMAGETYPE_GIF],
-				'webp' => defined('IMAGETYPE_WEBP') ? [IMAGETYPE_WEBP] : [],
-			];
-
-			return in_array($image_type, $allowed_types[$extension] ?? [], true);
+			return $extension === 'avif' && $this->is_valid_avif_upload($tmp_name);
 		}
 
 		$mime_type = $this->detect_upload_mime_type($tmp_name);
 
 		return $mime_type !== '' && in_array($mime_type, self::MEDIA_MIME_TYPES[$extension] ?? [], true);
+	}
+
+	protected function is_valid_avif_upload(string $tmp_name): bool
+	{
+		if (!$this->file_has_avif_brand($tmp_name))
+		{
+			return false;
+		}
+
+		$mime_type = $this->detect_upload_mime_type($tmp_name);
+		return in_array($mime_type, ['', 'application/octet-stream', 'image/avif', 'image/avif-sequence'], true);
+	}
+
+	protected function file_has_avif_brand(string $tmp_name): bool
+	{
+		$handle = @fopen($tmp_name, 'rb');
+		if ($handle === false)
+		{
+			return false;
+		}
+
+		try
+		{
+			$header = fread($handle, 64);
+		}
+		finally
+		{
+			fclose($handle);
+		}
+
+		if (!is_string($header) || strlen($header) < 12 || substr($header, 4, 4) !== 'ftyp')
+		{
+			return false;
+		}
+
+		$brands = substr($header, 8);
+		return strpos($brands, 'avif') !== false || strpos($brands, 'avis') !== false;
 	}
 
 	protected function has_unsupported_browser_video_codec(string $tmp_name, string $extension): bool

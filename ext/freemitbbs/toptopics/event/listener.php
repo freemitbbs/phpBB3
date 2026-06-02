@@ -1843,22 +1843,31 @@ class listener implements EventSubscriberInterface
 			return $this->index_recenttopics_topic_id_map;
 		}
 
-		try
+		$topic_ids = [];
+		foreach (['rtng_topics', 'rtng_junban_topics'] as $tpl_loopname)
 		{
-			if (method_exists($recenttopicsng_functions, 'get_displayed_index_topic_ids_for_dedupe')
-				&& (!method_exists($recenttopicsng_functions, 'has_displayed_index_topic_ids_for_dedupe')
-					|| $recenttopicsng_functions->has_displayed_index_topic_ids_for_dedupe('rtng_topics')))
+			try
 			{
-				$topic_ids = $recenttopicsng_functions->get_displayed_index_topic_ids_for_dedupe('rtng_topics');
+				if (method_exists($recenttopicsng_functions, 'get_displayed_index_topic_ids_for_dedupe')
+					&& (!method_exists($recenttopicsng_functions, 'has_displayed_index_topic_ids_for_dedupe')
+						|| $recenttopicsng_functions->has_displayed_index_topic_ids_for_dedupe($tpl_loopname)))
+				{
+					$loop_topic_ids = $recenttopicsng_functions->get_displayed_index_topic_ids_for_dedupe($tpl_loopname);
+				}
+				else
+				{
+					$loop_topic_ids = $recenttopicsng_functions->get_index_topic_ids_for_dedupe($tpl_loopname);
+				}
+
+				if (is_array($loop_topic_ids))
+				{
+					$topic_ids = array_merge($topic_ids, $loop_topic_ids);
+				}
 			}
-			else
+			catch (\Throwable $exception)
 			{
-				$topic_ids = $recenttopicsng_functions->get_index_topic_ids_for_dedupe('rtng_topics');
+				continue;
 			}
-		}
-		catch (\Throwable $exception)
-		{
-			return $this->index_recenttopics_topic_id_map;
 		}
 
 		if (!is_array($topic_ids))
@@ -2090,7 +2099,7 @@ class listener implements EventSubscriberInterface
 			$topic_fade_class = $this->escape_attr($this->get_topic_dislike_fade_class((int) ($topic['first_post_net_dislike_score'] ?? 0)));
 			$topic_url = append_sid($this->root_path . 'viewtopic.' . $this->php_ext, 'f=' . (int) $topic['forum_id'] . '&t=' . (int) $topic['topic_id']);
 			$forum_url = append_sid($this->root_path . 'viewforum.' . $this->php_ext, 'f=' . (int) $topic['forum_id']);
-			$topic_title = $this->escape_text(censor_text((string) $topic['topic_title']));
+			$topic_title = $this->escape_display_text(censor_text((string) $topic['topic_title']));
 			$forum_name = $this->escape_text((string) $topic['forum_name']);
 			$meta = $this->escape_text($this->language->lang('POST_BY_AUTHOR')) . ' '
 				. get_username_string('full', (int) $topic['topic_poster'], $topic['topic_first_poster_name'], $topic['topic_first_poster_colour'])
@@ -2279,6 +2288,16 @@ class listener implements EventSubscriberInterface
 		return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 	}
 
+	protected function escape_display_text(string $text): string
+	{
+		return $this->escape_text($this->decode_display_text($text));
+	}
+
+	protected function decode_display_text(string $text): string
+	{
+		return html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+	}
+
 	protected function escape_attr(string $text): string
 	{
 		return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -2420,7 +2439,7 @@ class listener implements EventSubscriberInterface
 				'U_TOPIC' => append_sid($this->root_path . 'viewtopic.' . $this->php_ext, 'f=' . (int) $topic['forum_id'] . '&t=' . (int) $topic['topic_id']),
 				'U_FORUM' => append_sid($this->root_path . 'viewforum.' . $this->php_ext, 'f=' . (int) $topic['forum_id']),
 				'U_NEWEST_POST' => $topic['u_newest_post'],
-				'TOPIC_TITLE' => censor_text($topic['topic_title']),
+				'TOPIC_TITLE' => $this->escape_display_text(censor_text($topic['topic_title'])),
 				'TOPIC_IMG_STYLE' => $topic['topic_img_style'],
 					'TOPIC_FOLDER_IMG_ALT' => $topic['topic_folder_img_alt'],
 					'FORUM_NAME' => $topic['forum_name'],
