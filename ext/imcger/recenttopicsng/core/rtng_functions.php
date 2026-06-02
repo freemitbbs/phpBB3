@@ -366,6 +366,7 @@ class rtng_functions
 			{
 				$forum_ids_disp = $this->exclude_forum_ids_by_map($forum_ids_disp, $this->get_user_home_excluded_forum_id_map());
 			}
+			$forum_ids_disp = $this->exclude_forum_ids_by_map($forum_ids_disp, [2 => true]);
 			$this->forum_id_list[$cache_key] = $forum_ids_disp;
 			return $this->forum_id_list[$cache_key];
 		}

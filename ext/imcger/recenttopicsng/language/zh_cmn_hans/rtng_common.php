@@ -43,6 +43,7 @@ $lang = array_merge($lang, [
         'RTNG_TOPICS_COUNT'     => '最近更新主题分页',
 
         'RTNG_TITLE'            => '最近更新话题',
+        'RTNG_NON_JUNBAN_TITLE' => '非菌斑最近更新话题',
         'RTNG_UNREAD_TITLE'     => '未读主题',
         'RTNG_READ_SEPARATE'    => '正在阅读“%s”',
         'RTNG_READ_SIMPLE'      => '正在阅读“%s”（简化页面）',

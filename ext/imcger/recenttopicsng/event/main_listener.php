@@ -71,7 +71,7 @@ class main_listener implements EventSubscriberInterface
 		$this->template->assign_vars([
 			'U_RTNG_PAGE_SEPARATE'  => $this->helper->route('imcger_recenttopicsng_page_controller', ['page' => 'separate']),
 			'S_RTNG_LINK_IN_NAVBAR' => $this->auth->acl_get('u_rtng_view') && $this->user_setting['user_rtng_enable'] && $this->user_setting['user_rtng_location'] == 'RTNG_SEPARATE',
-			'RTNG_TITLE_DYN'		=> $this->language->lang('RTNG' . ($this->user_setting['user_rtng_unread_only'] ? '_UNREAD' : '') . '_TITLE'),
+			'RTNG_TITLE_DYN'		=> $this->language->lang('RTNG_NON_JUNBAN_TITLE'),
 		]);
 	}
 

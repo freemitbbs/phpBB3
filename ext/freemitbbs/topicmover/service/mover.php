@@ -76,6 +76,8 @@ class mover
 			{
 				$context = $this->topic_context($topic);
 				$decision = $this->classify_topic($context, $forums);
+				$this->record_topic_considered($topic_id);
+
 				$destination_forum_id = (int) ($decision['destination_forum_id'] ?? 0);
 				$confidence = (float) ($decision['confidence'] ?? 0);
 				$reason = trim((string) ($decision['reason'] ?? ''));
@@ -125,6 +127,11 @@ class mover
 			$non_author_reply_count_sql . ' > ' . $threshold,
 			't.topic_last_post_time <= ' . (time() - ($min_latest_reply_age_hours * 3600)),
 			'COALESCE(u.topicmover_no_move, 0) = 0',
+			'NOT EXISTS (
+				SELECT 1
+				FROM ' . $this->considered_topics_table() . ' tc
+				WHERE tc.topic_id = t.topic_id
+			)',
 		];
 		$excluded_user_ids = $this->excluded_user_ids();
 		if ($excluded_user_ids)
@@ -146,6 +153,40 @@ class mover
 		$this->db->sql_freeresult($result);
 
 		return $topics;
+	}
+
+	protected function record_topic_considered(int $topic_id): void
+	{
+		if ($topic_id <= 0)
+		{
+			return;
+		}
+
+		$sql = 'INSERT INTO ' . $this->considered_topics_table() . ' ' . $this->db->sql_build_array('INSERT', [
+			'topic_id' => $topic_id,
+			'considered_time' => time(),
+		]);
+
+		$this->db->sql_return_on_error(true);
+		try
+		{
+			$this->db->sql_query($sql);
+		}
+		finally
+		{
+			$this->db->sql_return_on_error(false);
+		}
+	}
+
+	protected function considered_topics_table(): string
+	{
+		$topics_suffix = 'topics';
+		if (substr(TOPICS_TABLE, -strlen($topics_suffix)) === $topics_suffix)
+		{
+			return substr(TOPICS_TABLE, 0, -strlen($topics_suffix)) . 'topicmover_considered_topics';
+		}
+
+		return TOPICS_TABLE . '_topicmover_considered_topics';
 	}
 
 	protected function destination_forums(): array
