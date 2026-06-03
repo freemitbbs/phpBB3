@@ -47,16 +47,14 @@
 		{% EVENT forumlist_body_category_header_before %}
 		<div id="{{ rtng_box_id|default('rtng-box') }}" class="forabg rtng">
 			<div class="inner">
-				<ul class="topiclist">
+				<ul class="topiclist freemitbbs-from-stats-list">
 					<li class="header">
 						{% EVENT forumlist_body_category_header_row_prepend %}
 						<dl class="row-item">
 							<dt><div class="list-inner">
 								<a href="{{ rtng_page_url|default(U_RTNG_PAGE_SEPARATE) }}" title="{{ rtng_title }}"><i class="icon fa-list fa-fw" aria-hidden="true"></i>{{ rtng_title }}</a></div>
 							</dt>
-							<dd class="posts">{{ lang('REPLIES') }}</dd>
-							<dd class="views">{{ lang('VIEWS') }}</dd>
-							<dd class="lastpost"><span>{{ lang('LAST_POST') }}</span></dd>
+							<dd class="lastpost"><span>{{ lang('TOPTOPICS_FROM_COLUMN') }}</span></dd>
 						</dl>
 
 						{# Loop is for better compatibility with Collapse Category, runs only one time -#}
@@ -67,7 +65,7 @@
 						{%- endfor %}
 					</li>
 				</ul>
-				<ul class="topiclist topics{% if !S_RTNG_LOCATION_BOTTOM || !S_RTNG_LOCATION_TOP %} collapsible{% endif %}">
+				<ul class="topiclist topics freemitbbs-from-stats-list{% if !S_RTNG_LOCATION_BOTTOM || !S_RTNG_LOCATION_TOP %} collapsible{% endif %}">
 	{% endif %}
 	{% EVENT viewforum_body_topicrow_row_before %}
 	<li class="row bg{{ loop.index % 2 + 1 }}{{ [
@@ -112,22 +110,22 @@
 					{% if !S_IS_BOT %}
 						<div class="responsive-show rtng-mobile-meta" style="display: none;">
 							{% if rtng.S_HAS_POLL %}<i class="icon fa-bar-chart fa-fw" aria-hidden="true"></i>{% endif %}
-							{{ lang('POST_BY_AUTHOR') }} {% EVENT viewforum_body_topic_author_username_prepend %}
+							{{ lang('TOPTOPICS_TOPIC_LABEL') }} {{ lang('POST_BY_AUTHOR') }} {% EVENT viewforum_body_topic_author_username_prepend %}
 							{{ rtng.TOPIC_AUTHOR_FULL }}
 							{% EVENT viewforum_body_topic_author_username_append %} &raquo; {{ rtng.FIRST_POST_TIME }}
 							{% if rtng.U_VIEW_FORUM && rtng.FORUM_NAME %} &raquo; {{ lang('IN') }} <a href="{{ rtng.U_VIEW_FORUM }}">{{ rtng.FORUM_NAME }}</a>
 							{% endif %}
 						</div>
-						<div class="responsive-show rtng-mobile-stats" style="display: none;">
-							<span class="rtng-mobile-stat">{{ lang('REPLIES') }}{{ lang('COLON') }} <strong>{{ rtng.REPLIES }}</strong></span>
-							<span class="rtng-mobile-stat">{{ lang('VIEWS') }}{{ lang('COLON') }} <strong>{{ rtng.VIEWS }}</strong></span>
-						</div>
-						<div class="responsive-show rtng-mobile-lastpost" style="display: none;">
-							{{ lang('LAST_POST') }} {{ lang('POST_BY_AUTHOR') }} {% EVENT viewforum_body_last_post_author_username_prepend %} {{ rtng.LAST_POST_AUTHOR_FULL }} {% EVENT viewforum_body_last_post_author_username_append %} &laquo; <a href="{{ rtng.U_LAST_POST }}" title="{{ lang('GOTO_LAST_POST') }}">{{ rtng.LAST_POST_TIME }}</a>
-							{% EVENT topiclist_row_topic_by_author_after %}
-							{% if rtng.S_POST_GLOBAL && FORUM_ID != rtng.FORUM_ID %}<br>{{ lang('POSTED') }} {{ lang('IN') }} <a href="{{ rtng.U_VIEW_FORUM }}">{{ rtng.FORUM_NAME }}</a>{% endif %}
-						</div>
-					{% endif %}
+							<div class="responsive-show rtng-mobile-lastpost" style="display: none;">
+								{{ lang('TOPTOPICS_LATEST') }} {{ lang('POST_BY_AUTHOR') }} {% EVENT viewforum_body_last_post_author_username_prepend %} {{ rtng.LAST_POST_AUTHOR_FULL }} {% EVENT viewforum_body_last_post_author_username_append %} &laquo; <a href="{{ rtng.U_LAST_POST }}" title="{{ lang('GOTO_LAST_POST') }}">{{ rtng.LAST_POST_TIME }}</a>
+								{% EVENT topiclist_row_topic_by_author_after %}
+								{% if rtng.S_POST_GLOBAL && FORUM_ID != rtng.FORUM_ID %}<br>{{ lang('POSTED') }} {{ lang('IN') }} <a href="{{ rtng.U_VIEW_FORUM }}">{{ rtng.FORUM_NAME }}</a>{% endif %}
+							</div>
+							<div class="responsive-show rtng-mobile-stats" style="display: none;">
+								<span class="rtng-mobile-stat">{{ lang('REPLIES') }}{{ lang('COLON') }} <strong>{{ rtng.REPLIES }}</strong></span>
+								<span class="rtng-mobile-stat">{{ lang('VIEWS') }}{{ lang('COLON') }} <strong>{{ rtng.VIEWS }}</strong></span>
+							</div>
+						{% endif %}
 
 					{% if rtng.pagination is defined %}
 						<div class="pagination">
@@ -145,37 +143,38 @@
 						</div>
 					{% endif %}
 					{% EVENT topiclist_row_prepend %}
-					<div class="responsive-hide">
-						{% if rtng.S_HAS_POLL %}<i class="icon fa-bar-chart fa-fw" aria-hidden="true"></i>{% endif %}
-						{% EVENT topiclist_row_topic_by_author_before %}
-						{{ lang('POST_BY_AUTHOR') }} {% EVENT viewforum_body_topic_author_username_prepend %}
-						{% if rtng.S_DISP_FIRST_UNREAD_POST %}
-							{{ rtng.FIRST_UNREAD_POST_AUTHOR_FULL }}
-						{% else %}
-							{{ rtng.S_DISP_LAST_POST ? rtng.LAST_POST_AUTHOR_FULL : rtng.TOPIC_AUTHOR_FULL }}
-						{% endif %}
-						{% EVENT viewforum_body_topic_author_username_append %} &raquo;
-						{% if rtng.S_DISP_FIRST_UNREAD_POST %}
-							{{ rtng.FIRST_UNREAD_POST_TIME }}
-						{% else %}
-							{{ rtng.S_DISP_LAST_POST ? rtng.LAST_POST_TIME : rtng.FIRST_POST_TIME }}
-						{% endif %}
-						{% if rtng.U_VIEW_FORUM && rtng.FORUM_NAME %} &raquo; {{ lang('IN') }} <a href="{{ rtng.U_VIEW_FORUM }}">{{ rtng.FORUM_NAME }}</a>
-						{% endif %}
-					</div>
 					{% EVENT topiclist_row_append %}
 				</div>
 			</dt>
-			<dd class="posts">{{ rtng.REPLIES }} <dfn>{{ lang('REPLIES') }}</dfn></dd>
-			<dd class="views">{{ rtng.VIEWS }} <dfn>{{ lang('VIEWS') }}</dfn></dd>
 			<dd class="lastpost">
 
-				<span><dfn>{{ lang('LAST_POST') }} </dfn>{{ lang('POST_BY_AUTHOR') }} {% EVENT viewforum_body_last_post_author_username_prepend %} {{ rtng.LAST_POST_AUTHOR_FULL }} {% EVENT viewforum_body_last_post_author_username_append %}
-				{% if !S_IS_BOT %}
-					<a href="{{ rtng.U_LAST_POST }}" title="{{ lang('GOTO_LAST_POST') }}">
-						<i class="icon fa-external-link-square fa-fw icon-lightgray icon-md" aria-hidden="true"></i>
-						<span class="sr-only">{{ VIEW_LATEST_POST }}</span>
-					</a> {% endif %}<br>{{ rtng.LAST_POST_TIME }}
+				<span>
+					<span class="topic-poster toptopics-lastpost-topic-author">
+						<span class="toptopics-info-label">{{ lang('TOPTOPICS_TOPIC_LABEL') }}</span>
+						<span class="toptopics-info-content">
+						{% if rtng.S_HAS_POLL %}<i class="icon fa-bar-chart fa-fw" aria-hidden="true"></i>{% endif %}
+						{% EVENT topiclist_row_topic_by_author_before %}
+						{{ lang('POST_BY_AUTHOR') }} {% EVENT viewforum_body_topic_author_username_prepend %} {{ rtng.TOPIC_AUTHOR_FULL }} {% EVENT viewforum_body_topic_author_username_append %} &raquo; {{ rtng.FIRST_POST_TIME }}
+						{% EVENT topiclist_row_topic_by_author_after %}
+						</span>
+					</span>
+					{% if rtng.U_VIEW_FORUM && rtng.FORUM_NAME %}
+					<span class="toptopics-lastpost-forum">
+						<span class="toptopics-info-label">{{ lang('TOPTOPICS_FORUM_LABEL') }}</span>
+						<span class="toptopics-info-content"><a href="{{ rtng.U_VIEW_FORUM }}">{{ rtng.FORUM_NAME }}</a></span>
+					</span>
+					{% endif %}
+					<span class="toptopics-lastpost-latest"><span class="toptopics-info-label"><dfn>{{ lang('TOPTOPICS_LATEST') }} </dfn>{{ lang('TOPTOPICS_LATEST') }}</span><span class="toptopics-info-content">{{ lang('POST_BY_AUTHOR') }} {% EVENT viewforum_body_last_post_author_username_prepend %} {{ rtng.LAST_POST_AUTHOR_FULL }} {% EVENT viewforum_body_last_post_author_username_append %} &raquo; {{ rtng.LAST_POST_TIME }}
+					{% if !S_IS_BOT %}
+						<a href="{{ rtng.U_LAST_POST }}" title="{{ lang('GOTO_LAST_POST') }}">
+							<i class="icon fa-external-link-square fa-fw icon-lightgray icon-md" aria-hidden="true"></i>
+							<span class="sr-only">{{ VIEW_LATEST_POST }}</span>
+						</a> {% endif %}
+					</span></span>
+					<span class="toptopics-lastpost-stats">
+						<span>{{ lang('REPLIES') }}{{ lang('COLON') }} <strong>{{ rtng.REPLIES }}</strong></span>
+						<span>{{ lang('VIEWS') }}{{ lang('COLON') }} <strong>{{ rtng.VIEWS }}</strong></span>
+					</span>
 				</span>
 			</dd>
 		</dl>
@@ -191,16 +190,14 @@
 	{% EVENT forumlist_body_category_header_before %}
 	<div id="{{ rtng_box_id|default('rtng-box') }}" class="forabg rtng">
 		<div class="inner">
-			<ul class="topiclist">
+			<ul class="topiclist freemitbbs-from-stats-list">
 				<li class="header">
 					{% EVENT forumlist_body_category_header_row_prepend %}
 					<dl class="row-item">
 						<dt><div class="list-inner">
 								<a href="{{ rtng_page_url|default(U_RTNG_PAGE_SEPARATE) }}" title="{{ rtng_title }}"><i class="icon fa-list fa-fw" aria-hidden="true"></i>{{ rtng_title }}</a></div>
 						</dt>
-						<dd class="posts">{{ lang('REPLIES') }}</dd>
-						<dd class="views">{{ lang('VIEWS') }}</dd>
-						<dd class="lastpost"><span>{{ lang('LAST_POST') }}</span></dd>
+						<dd class="lastpost"><span>{{ lang('TOPTOPICS_FROM_COLUMN') }}</span></dd>
 					</dl>
 					{# Loop is for better compatibility with Collapse Category, runs only one time -#}
 					{%- for forumrow in rtng_cc -%}

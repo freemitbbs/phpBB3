@@ -29,32 +29,26 @@
 	}
 }
 
-@media only screen and (max-width: 950px) {
-	#rtng-box .rtng-mobile-stats {
-		display: none !important;
-	}
-}
-
 @media only screen and (max-width: 700px) {
-	#rtng-box .panel {
+	.rtng .panel {
 		margin-left: unset;
 		margin-right: unset;
 	}
 
-	#rtng-box .rtng-mobile-meta,
-	#rtng-box .rtng-mobile-stats,
-	#rtng-box .rtng-mobile-lastpost {
+	.rtng .rtng-mobile-meta,
+	.rtng .rtng-mobile-stats,
+	.rtng .rtng-mobile-lastpost {
 		margin-top: 4px;
 		color: #666;
 		font-size: 0.9em;
 		line-height: 1.4;
 	}
 
-	#rtng-box .rtng-mobile-stat {
+	.rtng .rtng-mobile-stat {
 		display: inline-block;
 	}
 
-	#rtng-box .rtng-mobile-stat + .rtng-mobile-stat::before {
+	.rtng .rtng-mobile-stat + .rtng-mobile-stat::before {
 		content: "\2022";
 		color: #999;
 		margin: 0 8px 0 4px;

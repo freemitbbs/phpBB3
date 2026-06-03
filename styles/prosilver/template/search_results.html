@@ -62,18 +62,16 @@
 	<div class="forumbg">
 
 		<div class="inner">
-		<ul class="topiclist">
+		<ul class="topiclist freemitbbs-from-stats-list">
 			<li class="header">
 				<dl class="row-item">
 					<dt><div class="list-inner">{L_TOPICS}</div></dt>
-					<dd class="posts">{L_REPLIES}</dd>
-					<dd class="views">{L_VIEWS}</dd>
-					<dd class="lastpost"><span>{L_LAST_POST}</span></dd>
+					<dd class="lastpost"><span>{L_TOPTOPICS_FROM_COLUMN}</span></dd>
 					{% EVENT search_results_topic_header_lastpost_after %}
 				</dl>
 			</li>
 		</ul>
-		<ul class="topiclist topics">
+		<ul class="topiclist topics freemitbbs-from-stats-list">
 
 		<!-- BEGIN searchresults -->
 			<!-- EVENT search_results_topic_before -->
@@ -107,13 +105,20 @@
 							<br />
 							<!-- EVENT topiclist_row_topic_title_after -->
 
-							<!-- IF not S_IS_BOT -->
-								<div class="responsive-show" style="display: none;">
-									{L_LAST_POST} {L_POST_BY_AUTHOR} <!-- EVENT search_results_last_post_author_username_prepend -->{searchresults.LAST_POST_AUTHOR_FULL}<!-- EVENT search_results_last_post_author_username_append --> &laquo; <a href="{searchresults.U_LAST_POST}" title="{L_GOTO_LAST_POST}"><time datetime="{searchresults.LAST_POST_TIME_RFC3339}">{searchresults.LAST_POST_TIME}</time></a>
-									<br />{L_POSTED} {L_IN} <a href="{searchresults.U_VIEW_FORUM}">{searchresults.FORUM_TITLE}</a>
-								</div>
-							<!-- IF searchresults.TOPIC_REPLIES --><span class="responsive-show left-box" style="display: none;">{L_REPLIES}{L_COLON} <strong>{searchresults.TOPIC_REPLIES}</strong></span><!-- ENDIF -->
-							<!-- ENDIF -->
+								<!-- IF not S_IS_BOT -->
+									<div class="responsive-show freemitbbs-mobile-topic-author {searchresults.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}" style="display: none;">
+										<!-- IF searchresults.S_HAS_POLL --><i class="icon fa-bar-chart fa-fw" aria-hidden="true"></i><!-- ENDIF -->
+										<!-- IF searchresults.ATTACH_ICON_IMG --><i class="icon fa-paperclip fa-fw" aria-hidden="true"></i><!-- ENDIF -->
+										{L_TOPTOPICS_TOPIC_LABEL} {L_POST_BY_AUTHOR} <!-- EVENT search_results_topic_author_username_prepend -->{searchresults.TOPIC_AUTHOR_FULL}<!-- EVENT search_results_topic_author_username_append --> &raquo; <time datetime="{searchresults.FIRST_POST_TIME_RFC3339}">{searchresults.FIRST_POST_TIME}</time> &raquo; {L_IN} <a href="{searchresults.U_VIEW_FORUM}">{searchresults.FORUM_TITLE}</a>
+									</div>
+									<div class="responsive-show freemitbbs-mobile-lastpost {searchresults.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}" style="display: none;">
+										{L_TOPTOPICS_LATEST} {L_POST_BY_AUTHOR} <!-- EVENT search_results_last_post_author_username_prepend -->{searchresults.LAST_POST_AUTHOR_FULL}<!-- EVENT search_results_last_post_author_username_append --> &laquo; <a href="{searchresults.U_LAST_POST}" title="{L_GOTO_LAST_POST}"><time datetime="{searchresults.LAST_POST_TIME_RFC3339}">{searchresults.LAST_POST_TIME}</time></a>
+									</div>
+									<div class="responsive-show freemitbbs-mobile-topic-stats" style="display: none;">
+										<span>{L_REPLIES}{L_COLON} <strong>{searchresults.TOPIC_REPLIES}</strong></span>
+										<span>{L_VIEWS}{L_COLON} <strong>{searchresults.TOPIC_VIEWS}</strong></span>
+									</div>
+								<!-- ENDIF -->
 
 							<div class="responsive-hide left-box">
 								<!-- IF searchresults.S_HAS_POLL --><i class="icon fa-bar-chart fa-fw" aria-hidden="true"></i><!-- ENDIF -->
@@ -142,16 +147,33 @@
 							<!-- EVENT topiclist_row_append -->
 						</div>
 					</dt>
-					<dd class="posts">{searchresults.TOPIC_REPLIES} <dfn>{L_REPLIES}</dfn></dd>
-					<dd class="views">{searchresults.TOPIC_VIEWS} <dfn>{L_VIEWS}</dfn></dd>
 					<dd class="lastpost">
-						<span><dfn>{L_LAST_POST} </dfn>{L_POST_BY_AUTHOR} <!-- EVENT search_results_last_post_author_username_prepend -->{searchresults.LAST_POST_AUTHOR_FULL}<!-- EVENT search_results_last_post_author_username_append -->
-							{% if not S_IS_BOT and searchresults.U_LAST_POST %}
-								<a href="{searchresults.U_LAST_POST}" title="{L_GOTO_LAST_POST}">
-									<i class="icon fa-external-link-square fa-fw icon-lightgray icon-md" aria-hidden="true"></i><span class="sr-only">{VIEW_LATEST_POST}</span>
-								</a>
-							{% endif %}
-							<br /><time datetime="{searchresults.LAST_POST_TIME_RFC3339}">{searchresults.LAST_POST_TIME}</time>
+						<span>
+							<span class="topic-poster toptopics-lastpost-topic-author<!-- IF searchresults.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS --> {searchresults.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}<!-- ENDIF -->">
+								<span class="toptopics-info-label">{L_TOPTOPICS_TOPIC_LABEL}</span>
+								<span class="toptopics-info-content">
+								<!-- IF searchresults.S_HAS_POLL --><i class="icon fa-bar-chart fa-fw" aria-hidden="true"></i><!-- ENDIF -->
+								<!-- IF searchresults.ATTACH_ICON_IMG --><i class="icon fa-paperclip fa-fw" aria-hidden="true"></i><!-- ENDIF -->
+								{% EVENT topiclist_row_topic_by_author_before %}
+								{L_POST_BY_AUTHOR} <!-- EVENT search_results_topic_author_username_prepend -->{searchresults.TOPIC_AUTHOR_FULL}<!-- EVENT search_results_topic_author_username_append --> &raquo; <time datetime="{searchresults.FIRST_POST_TIME_RFC3339}">{searchresults.FIRST_POST_TIME}</time>
+								{% EVENT topiclist_row_topic_by_author_after %}
+								</span>
+							</span>
+							<span class="toptopics-lastpost-forum">
+								<span class="toptopics-info-label">{L_TOPTOPICS_FORUM_LABEL}</span>
+								<span class="toptopics-info-content"><a href="{searchresults.U_VIEW_FORUM}">{searchresults.FORUM_TITLE}</a></span>
+							</span>
+							<span class="toptopics-lastpost-latest"><span class="toptopics-info-label"><dfn>{L_TOPTOPICS_LATEST} </dfn>{L_TOPTOPICS_LATEST}</span><span class="toptopics-info-content">{L_POST_BY_AUTHOR} <!-- EVENT search_results_last_post_author_username_prepend -->{searchresults.LAST_POST_AUTHOR_FULL}<!-- EVENT search_results_last_post_author_username_append --> &raquo; <time datetime="{searchresults.LAST_POST_TIME_RFC3339}">{searchresults.LAST_POST_TIME}</time>
+								{% if not S_IS_BOT and searchresults.U_LAST_POST %}
+									<a href="{searchresults.U_LAST_POST}" title="{L_GOTO_LAST_POST}">
+										<i class="icon fa-external-link-square fa-fw icon-lightgray icon-md" aria-hidden="true"></i><span class="sr-only">{VIEW_LATEST_POST}</span>
+									</a>
+								{% endif %}
+							</span></span>
+							<span class="toptopics-lastpost-stats">
+								<span>{L_REPLIES}{L_COLON} <strong>{searchresults.TOPIC_REPLIES}</strong></span>
+								<span>{L_VIEWS}{L_COLON} <strong>{searchresults.TOPIC_VIEWS}</strong></span>
+							</span>
 						</span>
 					</dd>
 					{% EVENT search_results_topic_row_lastpost_after %}

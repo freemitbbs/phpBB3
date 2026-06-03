@@ -1,6 +1,6 @@
 @media only screen and (max-width: 700px) {
 	.freemitbbs-mobile-topic-stats,
-	#rtng-box .rtng-mobile-stats,
+	.rtng .rtng-mobile-stats,
 	.toptopics-mobile-stats {
 		display: block !important;
 	}
@@ -9,6 +9,8 @@
 		display: none !important;
 	}
 
+	.freemitbbs-mobile-topic-author,
+	.freemitbbs-mobile-lastpost,
 	.freemitbbs-mobile-topic-stats {
 		margin-top: 4px;
 		color: #666666;

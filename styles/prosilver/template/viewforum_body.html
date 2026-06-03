@@ -217,17 +217,15 @@ function toggleWidget(id, isHidden) {
 	<!-- IF topicrow.S_FIRST_ROW or not topicrow.S_TOPIC_TYPE_SWITCH -->
 		<div class="forumbg<!-- IF topicrow.S_TOPIC_TYPE_SWITCH and (topicrow.S_POST_ANNOUNCE or topicrow.S_POST_GLOBAL) --> announcement<!-- ENDIF -->">
 		<div class="inner">
-		<ul class="topiclist">
+		<ul class="topiclist freemitbbs-from-stats-list">
 			<li class="header">
 				<dl class="row-item">
 					<dt<!-- IF S_DISPLAY_ACTIVE --> id="active_topics"<!-- ENDIF -->><div class="list-inner"><!-- IF S_DISPLAY_ACTIVE -->{L_ACTIVE_TOPICS}<!-- ELSEIF topicrow.S_TOPIC_TYPE_SWITCH and (topicrow.S_POST_ANNOUNCE or topicrow.S_POST_GLOBAL) -->{L_ANNOUNCEMENTS}<!-- ELSE -->{L_TOPICS}<!-- ENDIF --></div></dt>
-					<dd class="posts">{L_REPLIES}</dd>
-					<dd class="views">{L_VIEWS}</dd>
-					<dd class="lastpost"><span>{L_LAST_POST}</span></dd>
+					<dd class="lastpost"><span>{L_TOPTOPICS_FROM_COLUMN}</span></dd>
 				</dl>
 			</li>
 		</ul>
-		<ul class="topiclist topics">
+		<ul class="topiclist topics freemitbbs-from-stats-list">
 	<!-- ENDIF -->
 
 		<!-- EVENT viewforum_body_topicrow_row_before -->
@@ -262,21 +260,22 @@ function toggleWidget(id, isHidden) {
 						<br />
 						<!-- EVENT topiclist_row_topic_title_after -->
 
-						<div class="topic-poster responsive-hide left-box {topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}">
-							<!-- IF topicrow.S_HAS_POLL --><i class="icon fa-bar-chart fa-fw" aria-hidden="true"></i><!-- ENDIF -->
-							<!-- IF topicrow.ATTACH_ICON_IMG --><i class="icon fa-paperclip fa-fw" aria-hidden="true"></i><!-- ENDIF -->
-							{% EVENT topiclist_row_topic_by_author_before %}
-							{L_POST_BY_AUTHOR} <!-- EVENT viewforum_body_topic_author_username_prepend -->{topicrow.TOPIC_AUTHOR_FULL}<!-- EVENT viewforum_body_topic_author_username_append --> &raquo; <time datetime="{topicrow.FIRST_POST_TIME_RFC3339}">{topicrow.FIRST_POST_TIME}</time>
-							{% EVENT topiclist_row_topic_by_author_after %}
-							<!-- IF topicrow.S_POST_GLOBAL and FORUM_ID != topicrow.FORUM_ID --> &raquo; {L_IN} <a href="{topicrow.U_VIEW_FORUM}">{topicrow.FORUM_NAME}</a><!-- ENDIF -->
-						</div>
-
-						<!-- IF not S_IS_BOT -->
-						<div class="responsive-show {topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}" style="display: none;">
-							{L_LAST_POST} {L_POST_BY_AUTHOR} <!-- EVENT viewforum_body_last_post_author_username_prepend -->{topicrow.LAST_POST_AUTHOR_FULL}<!-- EVENT viewforum_body_last_post_author_username_append --> &laquo; <a href="{topicrow.U_LAST_POST}" title="{L_GOTO_LAST_POST}"><time datetime="{topicrow.LAST_POST_TIME_RFC3339}">{topicrow.LAST_POST_TIME}</time></a>
-							<!-- IF topicrow.S_POST_GLOBAL and FORUM_ID != topicrow.FORUM_ID --><br />{L_POSTED} {L_IN} <a href="{topicrow.U_VIEW_FORUM}">{topicrow.FORUM_NAME}</a><!-- ENDIF -->
-						</div>
-						<!-- ENDIF -->
+							<!-- IF not S_IS_BOT -->
+								<div class="responsive-show freemitbbs-mobile-topic-author {topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}" style="display: none;">
+									<!-- IF topicrow.S_HAS_POLL --><i class="icon fa-bar-chart fa-fw" aria-hidden="true"></i><!-- ENDIF -->
+									<!-- IF topicrow.ATTACH_ICON_IMG --><i class="icon fa-paperclip fa-fw" aria-hidden="true"></i><!-- ENDIF -->
+									{L_TOPTOPICS_TOPIC_LABEL} {L_POST_BY_AUTHOR} <!-- EVENT viewforum_body_topic_author_username_prepend -->{topicrow.TOPIC_AUTHOR_FULL}<!-- EVENT viewforum_body_topic_author_username_append --> &raquo; <time datetime="{topicrow.FIRST_POST_TIME_RFC3339}">{topicrow.FIRST_POST_TIME}</time>
+									<!-- IF topicrow.S_POST_GLOBAL and FORUM_ID != topicrow.FORUM_ID --> &raquo; {L_IN} <a href="{topicrow.U_VIEW_FORUM}">{topicrow.FORUM_NAME}</a><!-- ENDIF -->
+								</div>
+								<div class="responsive-show freemitbbs-mobile-lastpost {topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}" style="display: none;">
+									{L_TOPTOPICS_LATEST} {L_POST_BY_AUTHOR} <!-- EVENT viewforum_body_last_post_author_username_prepend -->{topicrow.LAST_POST_AUTHOR_FULL}<!-- EVENT viewforum_body_last_post_author_username_append --> &laquo; <a href="{topicrow.U_LAST_POST}" title="{L_GOTO_LAST_POST}"><time datetime="{topicrow.LAST_POST_TIME_RFC3339}">{topicrow.LAST_POST_TIME}</time></a>
+									<!-- IF topicrow.S_POST_GLOBAL and FORUM_ID != topicrow.FORUM_ID --><br />{L_POSTED} {L_IN} <a href="{topicrow.U_VIEW_FORUM}">{topicrow.FORUM_NAME}</a><!-- ENDIF -->
+								</div>
+								<div class="responsive-show freemitbbs-mobile-topic-stats" style="display: none;">
+									<span>{L_REPLIES}{L_COLON} <strong>{topicrow.REPLIES}</strong></span>
+									<span>{L_VIEWS}{L_COLON} <strong>{topicrow.VIEWS}</strong></span>
+								</div>
+							<!-- ENDIF -->
 
 						<!-- IF .topicrow.pagination -->
 						<div class="pagination">
@@ -297,16 +296,35 @@ function toggleWidget(id, isHidden) {
 						<!-- EVENT topiclist_row_append -->
 					</div>
 				</dt>
-				<dd class="posts">{topicrow.REPLIES} <dfn>{L_REPLIES}</dfn></dd>
-				<dd class="views">{topicrow.VIEWS} <dfn>{L_VIEWS}</dfn></dd>
 				<dd class="lastpost">
-					<span class="{topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}"><dfn>{L_LAST_POST} </dfn>{L_POST_BY_AUTHOR} <!-- EVENT viewforum_body_last_post_author_username_prepend -->{topicrow.LAST_POST_AUTHOR_FULL}<!-- EVENT viewforum_body_last_post_author_username_append -->
+						<span class="{topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}">
+							<span class="topic-poster toptopics-lastpost-topic-author">
+								<span class="toptopics-info-label">{L_TOPTOPICS_TOPIC_LABEL}</span>
+								<span class="toptopics-info-content">
+								<!-- IF topicrow.S_HAS_POLL --><i class="icon fa-bar-chart fa-fw" aria-hidden="true"></i><!-- ENDIF -->
+								<!-- IF topicrow.ATTACH_ICON_IMG --><i class="icon fa-paperclip fa-fw" aria-hidden="true"></i><!-- ENDIF -->
+								{% EVENT topiclist_row_topic_by_author_before %}
+								{L_POST_BY_AUTHOR} <!-- EVENT viewforum_body_topic_author_username_prepend -->{topicrow.TOPIC_AUTHOR_FULL}<!-- EVENT viewforum_body_topic_author_username_append --> &raquo; <time datetime="{topicrow.FIRST_POST_TIME_RFC3339}">{topicrow.FIRST_POST_TIME}</time>
+								{% EVENT topiclist_row_topic_by_author_after %}
+								</span>
+							</span>
+							<!-- IF topicrow.S_POST_GLOBAL and FORUM_ID != topicrow.FORUM_ID -->
+							<span class="toptopics-lastpost-forum">
+								<span class="toptopics-info-label">{L_TOPTOPICS_FORUM_LABEL}</span>
+								<span class="toptopics-info-content"><a href="{topicrow.U_VIEW_FORUM}">{topicrow.FORUM_NAME}</a></span>
+							</span>
+							<!-- ENDIF -->
+							<span class="toptopics-lastpost-latest"><span class="toptopics-info-label"><dfn>{L_TOPTOPICS_LATEST} </dfn>{L_TOPTOPICS_LATEST}</span><span class="toptopics-info-content">{L_POST_BY_AUTHOR} <!-- EVENT viewforum_body_last_post_author_username_prepend -->{topicrow.LAST_POST_AUTHOR_FULL}<!-- EVENT viewforum_body_last_post_author_username_append --> &raquo; <time datetime="{topicrow.LAST_POST_TIME_RFC3339}">{topicrow.LAST_POST_TIME}</time>
 						<!-- IF not S_IS_BOT and topicrow.U_LAST_POST -->
 							<a href="{topicrow.U_LAST_POST}" title="{L_GOTO_LAST_POST}">
 								<i class="icon fa-external-link-square fa-fw icon-lightgray icon-md" aria-hidden="true"></i><span class="sr-only">{VIEW_LATEST_POST}</span>
 							</a>
 						<!-- ENDIF -->
-						<br /><time datetime="{topicrow.LAST_POST_TIME_RFC3339}">{topicrow.LAST_POST_TIME}</time>
+						</span></span>
+						<span class="toptopics-lastpost-stats">
+							<span>{L_REPLIES}{L_COLON} <strong>{topicrow.REPLIES}</strong></span>
+							<span>{L_VIEWS}{L_COLON} <strong>{topicrow.VIEWS}</strong></span>
+						</span>
 					</span>
 				</dd>
 			</dl>

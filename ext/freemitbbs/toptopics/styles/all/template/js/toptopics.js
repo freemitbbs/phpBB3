@@ -369,6 +369,421 @@
 		window.addEventListener('pageshow', resetAllPostSubmitGuards);
 	}
 
+		var inlinePreviewCache = {};
+		var inlinePreviewRequests = {};
+		var inlinePreviewMaxImages = 8;
+		var inlinePreviewRichMediaSelector = '[data-s9e-mediaembed], iframe, video, audio, object, embed, .inline-attachment, .attachbox, blockquote.twitter-tweet, .twitter-tweet, .twitter-tweet-rendered';
+
+	function getInlinePreviewUrl($placeholder) {
+		return $placeholder.attr('data-toptopics-inline-preview-url') || '';
+	}
+
+	function getInlineTopicUrl($placeholder) {
+		return $placeholder.attr('data-toptopics-topic-url') ||
+			$placeholder.closest('li, tr').find('a.topictitle').first().attr('href') ||
+			'#';
+	}
+
+	function getInlinePreviewFadeClass($placeholder) {
+		var classes = ($placeholder.attr('class') || '').split(/\s+/);
+		var fadeClasses = [];
+
+		$.each(classes, function(index, className) {
+			if (className.indexOf('toptopics-topic-dislike-fade') === 0) {
+				fadeClasses.push(className);
+			}
+		});
+
+		return fadeClasses.join(' ');
+	}
+
+	function isIgnoredInlinePreviewImage(url) {
+		return /(?:^https?:\/\/fonts\.gstatic\.com\/s\/e\/notoemoji\/|\/(?:images\/)?smilies\/)/i.test(url || '');
+	}
+
+	function getFirstPreviewContent(html) {
+		var $parsed = $('<div></div>').append($.parseHTML(html || '', document, true));
+		var $content = $parsed.find('.topic_preview_first').first();
+
+		if (!$content.length) {
+			$content = $parsed.find('.topic_preview_content').first();
+		}
+
+		return $content;
+	}
+
+		function getInlinePreviewImageSrc(image) {
+			return image.getAttribute('src') ||
+				image.getAttribute('data-src') ||
+				image.getAttribute('data-original') ||
+				image.getAttribute('data-lazy-src') ||
+				image.getAttribute('data-url') ||
+				getFirstInlinePreviewSrcsetUrl(image.getAttribute('srcset') || image.getAttribute('data-srcset') || '') ||
+				'';
+		}
+
+		function getFirstInlinePreviewSrcsetUrl(srcset) {
+			var firstCandidate = $.trim((srcset || '').split(',')[0] || '');
+			return firstCandidate ? firstCandidate.split(/\s+/)[0] : '';
+		}
+
+		function findInlinePreviewImages($content) {
+			var images = [];
+			var seen = {};
+
+		$content.find('img').each(function() {
+			var src = getInlinePreviewImageSrc(this);
+			if (src && !isIgnoredInlinePreviewImage(src) && !seen[src]) {
+				seen[src] = true;
+				images.push($(this));
+			}
+
+			if (images.length >= inlinePreviewMaxImages) {
+				return false;
+			}
+		});
+
+			return images;
+		}
+
+		function findInlinePreviewRichMedia($content, includeImages) {
+			var selector = (includeImages ? 'img, ' : '') + inlinePreviewRichMediaSelector;
+
+			return $content.find(selector).filter(function() {
+				if (this.tagName && this.tagName.toLowerCase() === 'img') {
+					return !isIgnoredInlinePreviewImage(getInlinePreviewImageSrc(this));
+				}
+
+				return true;
+			}).first();
+		}
+
+	function buildInlinePreviewImageElement($image, deferred) {
+		var src = getInlinePreviewImageSrc($image.get(0));
+		var attrs = {
+			alt: $image.attr('alt') || '',
+			loading: 'lazy'
+		};
+		var $previewImage;
+
+		if (deferred) {
+			attrs['data-toptopics-src'] = src;
+		} else {
+			attrs.src = src;
+		}
+
+		if ($image.attr('srcset')) {
+			attrs[deferred ? 'data-toptopics-srcset' : 'srcset'] = $image.attr('srcset');
+		}
+		if ($image.attr('sizes')) {
+			attrs[deferred ? 'data-toptopics-sizes' : 'sizes'] = $image.attr('sizes');
+		}
+
+		$previewImage = $('<img/>', attrs);
+
+		return $previewImage;
+	}
+
+		function buildInlineImagePreview($placeholder, images) {
+		var fadeClass = getInlinePreviewFadeClass($placeholder);
+		var topicUrl = getInlineTopicUrl($placeholder);
+		var previewClass = 'toptopics-inline-preview toptopics-inline-preview-image toptopics-inline-preview-carousel' +
+			(images.length === 1 ? ' toptopics-inline-preview-single-image' : '');
+		var $preview;
+		var $track;
+		var $controls;
+
+		$preview = $('<div/>', {
+			'class': previewClass + (fadeClass ? ' ' + fadeClass : ''),
+			'data-toptopics-carousel-index': '0'
+		});
+		$track = $('<div/>', {
+			'class': 'toptopics-inline-preview-carousel-track'
+		});
+
+		$.each(images, function(index, $image) {
+			var $slide = $('<a/>', {
+				'class': 'toptopics-inline-preview-carousel-slide' + (index === 0 ? ' toptopics-inline-preview-carousel-slide-active' : ''),
+				href: topicUrl,
+				'aria-hidden': index === 0 ? 'false' : 'true'
+			});
+			$track.append($slide.append(buildInlinePreviewImageElement($image, index !== 0)));
+		});
+
+		$preview.append($track);
+
+		if (images.length > 1) {
+			$controls = $('<div/>', {
+				'class': 'toptopics-inline-preview-carousel-controls'
+			}).append(
+				$('<button/>', {
+					type: 'button',
+					'class': 'toptopics-inline-preview-carousel-button toptopics-inline-preview-carousel-button-prev',
+					'data-toptopics-carousel-step': '-1',
+					title: 'Previous image',
+					'aria-label': 'Previous image'
+				}).html('&#8249;'),
+				$('<span/>', {
+					'class': 'toptopics-inline-preview-carousel-count',
+					text: '1 / ' + images.length
+				}),
+				$('<button/>', {
+					type: 'button',
+					'class': 'toptopics-inline-preview-carousel-button toptopics-inline-preview-carousel-button-next',
+					'data-toptopics-carousel-step': '1',
+					title: 'Next image',
+					'aria-label': 'Next image'
+				}).html('&#8250;')
+			);
+
+			$preview.append($controls);
+		}
+
+			return $preview;
+		}
+
+		function buildInlineRichMediaPreview($placeholder, $media) {
+			var fadeClass = getInlinePreviewFadeClass($placeholder);
+			var className = 'toptopics-inline-preview toptopics-inline-preview-media-box';
+			var $preview;
+			var $mediaNode;
+
+			if (!$media.length) {
+				return $();
+			}
+
+			if ($media.is('img')) {
+				return buildInlineImagePreview($placeholder, [$media]);
+			}
+
+			if (fadeClass) {
+				className += ' ' + fadeClass;
+			}
+
+			$preview = $('<div/>', {
+				'class': className
+			});
+			$mediaNode = $media.detach().removeAttr('width').removeAttr('height');
+			$mediaNode.find('script').remove();
+
+			return $preview.append($mediaNode);
+		}
+
+	function buildInlineTextPreview($placeholder, $content, rich) {
+		var fadeClass = getInlinePreviewFadeClass($placeholder);
+		var className = 'toptopics-inline-preview toptopics-inline-preview-text' + (rich ? ' toptopics-inline-preview-rich' : '');
+		var $preview;
+
+		if (fadeClass) {
+			className += ' ' + fadeClass;
+		}
+
+		$preview = $('<div/>', {
+			'class': className
+		});
+		$preview.html($content.html());
+
+		return $preview;
+	}
+
+	function buildInlinePreview($placeholder, html) {
+			var $content = getFirstPreviewContent(html);
+			var images;
+			var $richMedia;
+
+			if (!$content.length || !$.trim($content.text()) && !$content.find('img, ' + inlinePreviewRichMediaSelector).length) {
+				return $();
+			}
+
+		images = findInlinePreviewImages($content);
+		if (images.length) {
+			return buildInlineImagePreview($placeholder, images);
+		}
+
+			$richMedia = findInlinePreviewRichMedia($content, false);
+			if ($richMedia.length) {
+				return buildInlineRichMediaPreview($placeholder, $richMedia);
+			}
+
+			return buildInlineTextPreview($placeholder, $content, false);
+		}
+
+		function normalizeInlineRichPreviews() {
+			$('.toptopics-inline-preview-rich').not('.toptopics-inline-preview-media-box').each(function() {
+				var $preview = $(this);
+				var images = findInlinePreviewImages($preview);
+				var $replacement;
+				var $richMedia;
+
+				if (images.length) {
+					$replacement = buildInlineImagePreview($preview, images);
+				} else {
+					$richMedia = findInlinePreviewRichMedia($preview, false);
+					$replacement = buildInlineRichMediaPreview($preview, $richMedia);
+				}
+
+				if ($replacement && $replacement.length) {
+					$preview.replaceWith($replacement);
+				}
+			});
+		}
+
+		function normalizePostContentMediaBoxes() {
+			var selector = 'img.postimage, ' + inlinePreviewRichMediaSelector;
+
+			$('.postbody .content').find(selector).each(function() {
+				var $media = $(this);
+				var $target = $media;
+				var $link = $media.closest('a');
+				var wrapperTag;
+
+				if ($media.closest('.toptopics-inline-preview, .toptopics-post-media-box, .signature').length) {
+					return;
+				}
+
+				if ($media.is('img') && isIgnoredInlinePreviewImage(getInlinePreviewImageSrc(this))) {
+					return;
+				}
+
+				if ($link.length && $.trim($link.text()) === '' && $link.find(selector).length === 1) {
+					$target = $link;
+				}
+
+				wrapperTag = $target.parent().is('p') ? 'span' : 'div';
+				$target.wrap('<' + wrapperTag + ' class="toptopics-post-media-box"></' + wrapperTag + '>');
+			});
+		}
+
+	function setInlinePreviewCarouselIndex($carousel, index) {
+		var $slides = $carousel.find('.toptopics-inline-preview-carousel-slide');
+		var count = $slides.length;
+		var $activeSlide;
+
+		if (!count) {
+			return;
+		}
+
+		index = ((index % count) + count) % count;
+		$activeSlide = $slides.eq(index);
+		loadInlinePreviewCarouselImage($activeSlide);
+
+		$carousel.attr('data-toptopics-carousel-index', index);
+		$slides
+			.removeClass('toptopics-inline-preview-carousel-slide-active')
+			.attr('aria-hidden', 'true')
+			.eq(index)
+			.addClass('toptopics-inline-preview-carousel-slide-active')
+			.attr('aria-hidden', 'false');
+		$carousel.find('.toptopics-inline-preview-carousel-count').text((index + 1) + ' / ' + count);
+	}
+
+	function loadInlinePreviewCarouselImage($slide) {
+		var $image = $slide.find('img').first();
+		var src = $image.attr('data-toptopics-src');
+		var srcset = $image.attr('data-toptopics-srcset');
+		var sizes = $image.attr('data-toptopics-sizes');
+
+		if (!src) {
+			return;
+		}
+
+		$image.attr('src', src).removeAttr('data-toptopics-src');
+
+		if (srcset) {
+			$image.attr('srcset', srcset).removeAttr('data-toptopics-srcset');
+		}
+		if (sizes) {
+			$image.attr('sizes', sizes).removeAttr('data-toptopics-sizes');
+		}
+	}
+
+	function moveInlinePreviewCarousel(button, step) {
+		var $carousel = $(button).closest('.toptopics-inline-preview-carousel');
+		var current = parseInt($carousel.attr('data-toptopics-carousel-index'), 10) || 0;
+		setInlinePreviewCarouselIndex($carousel, current + step);
+	}
+
+	function fetchInlinePreview(url) {
+		if (Object.prototype.hasOwnProperty.call(inlinePreviewCache, url)) {
+			return $.Deferred().resolve(inlinePreviewCache[url]).promise();
+		}
+
+		if (inlinePreviewRequests[url]) {
+			return inlinePreviewRequests[url];
+		}
+
+		inlinePreviewRequests[url] = $.ajax({
+			url: url,
+			method: 'GET',
+			dataType: 'html',
+			cache: true
+		}).done(function(response) {
+			inlinePreviewCache[url] = response || '';
+		}).fail(function() {
+			inlinePreviewCache[url] = '';
+		}).always(function() {
+			delete inlinePreviewRequests[url];
+		});
+
+		return inlinePreviewRequests[url];
+	}
+
+	function loadInlineTopicPreview(placeholder) {
+		var $placeholder = $(placeholder);
+		var url = getInlinePreviewUrl($placeholder);
+
+		if (!url || $placeholder.attr('data-toptopics-inline-preview-loaded') === '1') {
+			return;
+		}
+
+		$placeholder.attr('data-toptopics-inline-preview-loaded', '1');
+		fetchInlinePreview(url).always(function() {
+			var $preview = buildInlinePreview($placeholder, inlinePreviewCache[url] || '');
+
+			if ($preview.length) {
+				$placeholder.replaceWith($preview);
+				return;
+			}
+
+			$placeholder.remove();
+		});
+	}
+
+	function initInlineTopicPreviews() {
+		var placeholders = $('.toptopics-inline-preview-lazy').not('[data-toptopics-inline-preview-loaded="1"]');
+		var observer;
+
+		if (!placeholders.length) {
+			return;
+		}
+
+		if (!('IntersectionObserver' in window)) {
+			placeholders.each(function() {
+				loadInlineTopicPreview(this);
+			});
+			return;
+		}
+
+		observer = new IntersectionObserver(function(entries) {
+			$.each(entries, function(index, entry) {
+				if (!entry.isIntersecting) {
+					return;
+				}
+
+				observer.unobserve(entry.target);
+				loadInlineTopicPreview(entry.target);
+			});
+		}, {
+			root: null,
+			rootMargin: '450px 0px',
+			threshold: 0
+		});
+
+		placeholders.each(function() {
+			observer.observe(this);
+		});
+	}
+
 	phpbb.addAjaxCallback('toggle_toptopics_dislike', function(data) {
 		if (!data || data.error) {
 			if (data && data.message && !data.MESSAGE_TITLE && typeof phpbb.alert === 'function') {
@@ -392,7 +807,15 @@
 	}, true);
 
 	document.addEventListener('click', function(event) {
+		var carouselButton = event.target.closest('.toptopics-inline-preview-carousel-button');
 		var displayLink = event.target.closest('a.toptopics-display-post');
+		if (carouselButton) {
+			event.preventDefault();
+			event.stopPropagation();
+			moveInlinePreviewCarousel(carouselButton, parseInt(carouselButton.getAttribute('data-toptopics-carousel-step'), 10) || 1);
+			return;
+		}
+
 		if (displayLink) {
 			event.preventDefault();
 			displayCollapsedPost(displayLink.getAttribute('data-post-id'));
@@ -401,9 +824,15 @@
 
 	document.addEventListener('keydown', function(event) {
 		var blockedButton = event.target.closest('a.toptopics-blocked');
+		var carousel = event.target.closest('.toptopics-inline-preview-carousel');
 		if (blockedButton && (event.key === 'Enter' || event.key === ' ')) {
 			event.preventDefault();
 			event.stopImmediatePropagation();
+		}
+
+		if (carousel && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+			event.preventDefault();
+			moveInlinePreviewCarousel(carousel, event.key === 'ArrowLeft' ? -1 : 1);
 		}
 	}, true);
 
@@ -416,9 +845,12 @@
 			}
 		});
 
-		syncAllReactionButtons();
-		syncCategoryForumMenus();
-		installPostSubmitGuard();
-		$(window).on('resize', syncCategoryForumMenus);
-	});
+			syncAllReactionButtons();
+			syncCategoryForumMenus();
+			installPostSubmitGuard();
+			normalizeInlineRichPreviews();
+			normalizePostContentMediaBoxes();
+			initInlineTopicPreviews();
+			$(window).on('resize', syncCategoryForumMenus);
+		});
 })(jQuery);
