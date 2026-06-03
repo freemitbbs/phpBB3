@@ -18,7 +18,9 @@ services:
         class: vse\topicpreview\controller\preview_controller
         arguments:
             - '@auth'
+            - '@cache.driver'
             - '@content.visibility'
+            - '@request'
             - '@vse.topicpreview.data'
             - '@vse.topicpreview.display'
 

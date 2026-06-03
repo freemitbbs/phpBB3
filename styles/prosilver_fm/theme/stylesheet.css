@@ -92,14 +92,21 @@ li.row.bg3:hover {
 	background-color: #FFF6E0;
 }
 
+li.row.bg1,
 .bg1,
 table.zebra-list tr:nth-child(odd) td,
 ul.zebra-list li:nth-child(odd) {
 	background-color: #F7F4EA;
 }
 
+li.row.bg2,
 .bg2 {
 	background-color: #F1ECDE;
+}
+
+li.row.bg1:hover,
+li.row.bg2:hover {
+	background-color: #FFF6E0;
 }
 
 .fieldsbg {

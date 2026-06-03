@@ -99,6 +99,17 @@ services:
             - '%core.root_path%'
             - '%core.php_ext%'
 
+    freemitbbs.toptopics.inline_preview:
+        class: freemitbbs\toptopics\controller\inline_preview
+        arguments:
+            - '@auth'
+            - '@cache'
+            - '@content.visibility'
+            - '@dbal.conn'
+            - '@request'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+
     freemitbbs.toptopics.reaction_records:
         class: freemitbbs\toptopics\controller\reaction_records
         arguments:

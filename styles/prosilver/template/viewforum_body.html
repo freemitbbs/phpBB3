@@ -217,15 +217,21 @@ function toggleWidget(id, isHidden) {
 	<!-- IF topicrow.S_FIRST_ROW or not topicrow.S_TOPIC_TYPE_SWITCH -->
 		<div class="forumbg<!-- IF topicrow.S_TOPIC_TYPE_SWITCH and (topicrow.S_POST_ANNOUNCE or topicrow.S_POST_GLOBAL) --> announcement<!-- ENDIF -->">
 		<div class="inner">
-		<ul class="topiclist freemitbbs-from-stats-list">
+		<ul class="topiclist<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW --> freemitbbs-from-stats-list<!-- ENDIF -->">
 			<li class="header">
 				<dl class="row-item">
 					<dt<!-- IF S_DISPLAY_ACTIVE --> id="active_topics"<!-- ENDIF -->><div class="list-inner"><!-- IF S_DISPLAY_ACTIVE -->{L_ACTIVE_TOPICS}<!-- ELSEIF topicrow.S_TOPIC_TYPE_SWITCH and (topicrow.S_POST_ANNOUNCE or topicrow.S_POST_GLOBAL) -->{L_ANNOUNCEMENTS}<!-- ELSE -->{L_TOPICS}<!-- ENDIF --></div></dt>
-					<dd class="lastpost"><span>{L_TOPTOPICS_FROM_COLUMN}</span></dd>
+					<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW -->
+						<dd class="lastpost"><span>{L_TOPTOPICS_FROM_COLUMN}</span></dd>
+					<!-- ELSE -->
+						<dd class="posts">{L_REPLIES}</dd>
+						<dd class="views">{L_VIEWS}</dd>
+						<dd class="lastpost"><span>{L_LAST_POST}</span></dd>
+					<!-- ENDIF -->
 				</dl>
 			</li>
 		</ul>
-		<ul class="topiclist topics freemitbbs-from-stats-list">
+		<ul class="topiclist topics<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW --> freemitbbs-from-stats-list<!-- ENDIF -->">
 	<!-- ENDIF -->
 
 		<!-- EVENT viewforum_body_topicrow_row_before -->
@@ -276,6 +282,16 @@ function toggleWidget(id, isHidden) {
 									<span>{L_VIEWS}{L_COLON} <strong>{topicrow.VIEWS}</strong></span>
 								</div>
 							<!-- ENDIF -->
+							<!-- IF not S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW -->
+								<div class="responsive-hide left-box">
+									<!-- IF topicrow.S_HAS_POLL --><i class="icon fa-bar-chart fa-fw" aria-hidden="true"></i><!-- ENDIF -->
+									<!-- IF topicrow.ATTACH_ICON_IMG --><i class="icon fa-paperclip fa-fw" aria-hidden="true"></i><!-- ENDIF -->
+									{% EVENT topiclist_row_topic_by_author_before %}
+									{L_POST_BY_AUTHOR} <!-- EVENT viewforum_body_topic_author_username_prepend -->{topicrow.TOPIC_AUTHOR_FULL}<!-- EVENT viewforum_body_topic_author_username_append --> &raquo; <time datetime="{topicrow.FIRST_POST_TIME_RFC3339}">{topicrow.FIRST_POST_TIME}</time>
+									<!-- IF topicrow.S_POST_GLOBAL and FORUM_ID != topicrow.FORUM_ID --> &raquo; {L_IN} <a href="{topicrow.U_VIEW_FORUM}">{topicrow.FORUM_NAME}</a><!-- ENDIF -->
+									{% EVENT topiclist_row_topic_by_author_after %}
+								</div>
+							<!-- ENDIF -->
 
 						<!-- IF .topicrow.pagination -->
 						<div class="pagination">
@@ -296,6 +312,7 @@ function toggleWidget(id, isHidden) {
 						<!-- EVENT topiclist_row_append -->
 					</div>
 				</dt>
+				<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW -->
 				<dd class="lastpost">
 						<span class="{topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}">
 							<span class="topic-poster toptopics-lastpost-topic-author">
@@ -327,6 +344,21 @@ function toggleWidget(id, isHidden) {
 						</span>
 					</span>
 				</dd>
+				<!-- ELSE -->
+				<dd class="posts">{topicrow.REPLIES} <dfn>{L_REPLIES}</dfn></dd>
+				<dd class="views">{topicrow.VIEWS} <dfn>{L_VIEWS}</dfn></dd>
+				<dd class="lastpost">
+					<span class="{topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}"><dfn>{L_LAST_POST} </dfn>{L_POST_BY_AUTHOR} <!-- EVENT viewforum_body_last_post_author_username_prepend -->{topicrow.LAST_POST_AUTHOR_FULL}<!-- EVENT viewforum_body_last_post_author_username_append -->
+						<!-- IF not S_IS_BOT and topicrow.U_LAST_POST -->
+							<a href="{topicrow.U_LAST_POST}" title="{L_GOTO_LAST_POST}">
+								<i class="icon fa-external-link-square fa-fw icon-lightgray icon-md" aria-hidden="true"></i><span class="sr-only">{VIEW_LATEST_POST}</span>
+							</a>
+						<!-- ENDIF -->
+						<br /><time datetime="{topicrow.LAST_POST_TIME_RFC3339}">{topicrow.LAST_POST_TIME}</time>
+						<!-- IF topicrow.S_POST_GLOBAL and FORUM_ID != topicrow.FORUM_ID --><br />{L_POSTED} {L_IN} <a href="{topicrow.U_VIEW_FORUM}">{topicrow.FORUM_NAME}</a><!-- ENDIF -->
+					</span>
+				</dd>
+				<!-- ENDIF -->
 			</dl>
 			<!-- EVENT viewforum_body_topic_row_append -->
 		</li>

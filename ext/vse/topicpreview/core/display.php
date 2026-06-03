@@ -129,10 +129,11 @@ class display extends base
 	 *
 	 * @param array $row Topic row data
 	 * @param array $block Template vars array
+	 * @param int   $limit_multiplier Preview text length multiplier
 	 *
 	 * @return array Template vars array
 	 */
-	public function build_topic_preview_content($row, $block = [])
+	public function build_topic_preview_content($row, $block = [], $limit_multiplier = 1)
 	{
 		if (!$this->is_enabled())
 		{
@@ -147,8 +148,8 @@ class display extends base
 		}
 
 		$block = array_merge($block, array(
-			'TOPIC_PREVIEW_FIRST_POST'		=> $this->get_text_helper($row, 'first_post_text'),
-			'TOPIC_PREVIEW_LAST_POST'		=> $this->get_text_helper($row, 'last_post_text'),
+			'TOPIC_PREVIEW_FIRST_POST'		=> $this->get_text_helper($row, 'first_post_text', $limit_multiplier),
+			'TOPIC_PREVIEW_LAST_POST'		=> $this->get_text_helper($row, 'last_post_text', $limit_multiplier),
 			'TOPIC_PREVIEW_FIRST_AVATAR'	=> $this->get_user_avatar_helper($row, 'fp'),
 			'TOPIC_PREVIEW_LAST_AVATAR'		=> $this->get_user_avatar_helper($row, 'lp'),
 		));
@@ -174,12 +175,13 @@ class display extends base
 	 * Render a single topic preview as HTML for AJAX responses.
 	 *
 	 * @param array $row Topic row data
+	 * @param int   $limit_multiplier Preview text length multiplier
 	 *
 	 * @return string
 	 */
-	public function render_topic_preview_html($row)
+	public function render_topic_preview_html($row, $limit_multiplier = 1)
 	{
-		$block = $this->build_topic_preview_content($row);
+		$block = $this->build_topic_preview_content($row, [], $limit_multiplier);
 		$first_post = $block['TOPIC_PREVIEW_FIRST_POST'] ?? '';
 		$last_post = $block['TOPIC_PREVIEW_LAST_POST'] ?? '';
 
@@ -219,10 +221,11 @@ class display extends base
 	 *
 	 * @param array  $row  User row data
 	 * @param string $post The first or last post-text column key
+	 * @param int    $limit_multiplier Preview text length multiplier
 	 *
 	 * @return string The trimmed and censored topic preview text
 	 */
-	protected function get_text_helper($row, $post)
+	protected function get_text_helper($row, $post, $limit_multiplier = 1)
 	{
 		// Ignore empty/unset text or when the last post is also the first (and only) post
 		if (empty($row[$post]) || ($post === 'last_post_text' && $row['topic_first_post_id'] === $row['topic_last_post_id']))
@@ -237,10 +240,13 @@ class display extends base
 			$attachments = $this->attachments_cache[$post_id] ?? [];
 		}
 
+		$limit_multiplier = max(1, min(4, (int) $limit_multiplier));
+		$limit = (int) $this->config['topic_preview_limit'] * $limit_multiplier;
+
 		return censor_text(
 			$this->renderer->render_text(
 				$row[$post],
-				(int) $this->config['topic_preview_limit'],
+				$limit,
 				$this->config['topic_preview_strip_bbcodes'],
 				(bool) $this->config['topic_preview_rich_text'],
 				(bool) $this->topic_preview_theme,
@@ -318,6 +324,109 @@ class display extends base
 	public function set_attachments_cache($attachments)
 	{
 		$this->attachments_cache = $attachments;
+	}
+
+	/**
+	 * Build a cache key for rendered AJAX preview HTML.
+	 *
+	 * @param array  $row             Topic row data
+	 * @param int    $limit_multiplier Preview text length multiplier
+	 * @param string $permission_vary Permission-sensitive cache vary segment
+	 *
+	 * @return string
+	 */
+	public function get_topic_preview_cache_key($row, $limit_multiplier = 1, $permission_vary = '')
+	{
+		$limit_multiplier = max(1, min(4, (int) $limit_multiplier));
+		$last_post_enabled = $this->last_post_enabled();
+		$avatars_enabled = $this->avatars_enabled();
+
+		$key_parts = array(
+			'version'				=> 1,
+			'topic_id'				=> (int) ($row['topic_id'] ?? 0),
+			'forum_id'				=> (int) ($row['forum_id'] ?? 0),
+			'topic_attachment'		=> (int) ($row['topic_attachment'] ?? 0),
+			'first_post'			=> $this->get_post_cache_key_part($row, 'first'),
+			'last_post'				=> $last_post_enabled ? $this->get_post_cache_key_part($row, 'last') : array(),
+			'limit_multiplier'		=> $limit_multiplier,
+			'permission_vary'		=> $permission_vary,
+			'config'				=> array(
+				'limit'				=> (int) ($this->config['topic_preview_limit'] ?? 0),
+				'strip_bbcodes'		=> (string) ($this->config['topic_preview_strip_bbcodes'] ?? ''),
+				'rich_text'			=> (int) (bool) ($this->config['topic_preview_rich_text'] ?? false),
+				'rich_attachments'	=> (int) $this->attachments_enabled(),
+				'last_post'			=> (int) $last_post_enabled,
+				'avatars'			=> (int) $avatars_enabled,
+				'theme'				=> (string) $this->topic_preview_theme,
+			),
+			'user'					=> array(
+				'lang'				=> (string) ($this->user->data['user_lang'] ?? ''),
+				'style_id'			=> (int) ($this->user->style['style_id'] ?? 0),
+			),
+			'avatars'				=> $avatars_enabled ? $this->get_avatar_cache_key_parts($row, $last_post_enabled) : array(),
+		);
+
+		return '_vse_topicpreview_html_' . sha1(serialize($key_parts));
+	}
+
+	/**
+	 * Build the post version part of a rendered preview cache key.
+	 *
+	 * @param array  $row
+	 * @param string $prefix first|last
+	 *
+	 * @return array
+	 */
+	protected function get_post_cache_key_part($row, $prefix)
+	{
+		return array(
+			'post_id'		=> (int) ($row['topic_' . $prefix . '_post_id'] ?? 0),
+			'post_time'		=> (int) ($row[$prefix . '_post_time'] ?? 0),
+			'edit_time'		=> (int) ($row[$prefix . '_post_edit_time'] ?? 0),
+			'checksum'		=> (string) ($row[$prefix . '_post_checksum'] ?? ''),
+		);
+	}
+
+	/**
+	 * Build avatar-sensitive parts of a rendered preview cache key.
+	 *
+	 * @param array $row
+	 * @param bool  $include_last_post
+	 *
+	 * @return array
+	 */
+	protected function get_avatar_cache_key_parts($row, $include_last_post)
+	{
+		$parts = array(
+			'first' => $this->get_avatar_cache_key_part($row, 'fp'),
+		);
+
+		if ($include_last_post)
+		{
+			$parts['last'] = $this->get_avatar_cache_key_part($row, 'lp');
+		}
+
+		return $parts;
+	}
+
+	/**
+	 * Build one poster avatar part of a rendered preview cache key.
+	 *
+	 * @param array  $row
+	 * @param string $prefix fp|lp
+	 *
+	 * @return array
+	 */
+	protected function get_avatar_cache_key_part($row, $prefix)
+	{
+		return array(
+			'user_id'		=> (int) ($row[$prefix . '_user_id'] ?? 0),
+			'username'		=> (string) ($row[$prefix . '_username'] ?? ''),
+			'avatar'		=> (string) ($row[$prefix . '_user_avatar'] ?? ''),
+			'avatar_type'	=> (string) ($row[$prefix . '_user_avatar_type'] ?? ''),
+			'avatar_width'	=> (int) ($row[$prefix . '_user_avatar_width'] ?? 0),
+			'avatar_height'	=> (int) ($row[$prefix . '_user_avatar_height'] ?? 0),
+		);
 	}
 
 	/**

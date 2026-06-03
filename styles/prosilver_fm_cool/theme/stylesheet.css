@@ -147,14 +147,21 @@ li.header dt, li.header dd {
 	color: #FFFFFF;
 }
 
+li.row.bg1,
 .bg1,
 table.zebra-list tr:nth-child(odd) td,
 ul.zebra-list li:nth-child(odd) {
 	background-color: #FAFBFC;
 }
 
+li.row.bg2,
 .bg2 {
 	background-color: #F1F5F9;
+}
+
+li.row.bg1:hover,
+li.row.bg2:hover {
+	background-color: #EBF3FA;
 }
 
 .bg3 {

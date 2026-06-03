@@ -287,12 +287,12 @@ class similar_topics
 				$base_url = append_sid("{$this->root_path}viewtopic.$this->php_ext", $view_topic_url_params);
 
 				$topic_row = array(
-					'TOPIC_AUTHOR_FULL'			=> get_username_string('full', $row['topic_poster'], $row['topic_first_poster_name'], $row['topic_first_poster_colour']),
+					'TOPIC_AUTHOR_FULL'			=> get_topic_list_username_string('full', $row['topic_poster'], $row['topic_first_poster_name'], $row['topic_first_poster_colour']),
 					'FIRST_POST_TIME'			=> $this->user->format_date($row['topic_time']),
 					'FIRST_POST_TIME_RFC3339'	=> gmdate(DATE_RFC3339, $row['topic_time']),
 					'LAST_POST_TIME'			=> $this->user->format_date($row['topic_last_post_time']),
 					'LAST_POST_TIME_RFC3339'	=> gmdate(DATE_RFC3339, $row['topic_last_post_time']),
-					'LAST_POST_AUTHOR_FULL'		=> get_username_string('full', $row['topic_last_poster_id'], $row['topic_last_poster_name'], $row['topic_last_poster_colour']),
+					'LAST_POST_AUTHOR_FULL'		=> get_topic_list_username_string('full', $row['topic_last_poster_id'], $row['topic_last_poster_name'], $row['topic_last_poster_colour']),
 
 					'TOPIC_REPLIES'			=> $replies,
 					'TOPIC_VIEWS'			=> $row['topic_views'],

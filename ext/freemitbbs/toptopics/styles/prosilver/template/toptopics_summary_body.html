@@ -3,11 +3,17 @@
 {% endif %}
 <div class="forabg toptopics-summary">
 	<div class="inner">
-		<ul class="topiclist freemitbbs-from-stats-list">
+		<ul class="topiclist<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW --> freemitbbs-from-stats-list<!-- ENDIF -->">
 			<li class="header">
 				<dl class="row-item">
 					<dt><div class="list-inner"><i class="icon fa-line-chart fa-fw" aria-hidden="true"></i> {{ TOPTOPICS_BLOCK_TITLE }}</div></dt>
-					<dd class="lastpost"><span>{{ lang('TOPTOPICS_FROM_COLUMN') }}</span></dd>
+					<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW -->
+						<dd class="lastpost"><span>{{ lang('TOPTOPICS_FROM_COLUMN') }}</span></dd>
+					<!-- ELSE -->
+						<dd class="posts">{{ lang('REPLIES') }}</dd>
+						<dd class="views">{{ lang('VIEWS') }}</dd>
+						<dd class="lastpost"><span>{{ lang('LAST_POST') }}</span></dd>
+					<!-- ENDIF -->
 				</dl>
 				{% if S_TOPTOPICS_COLLAPSIBLE %}
 				<a href="{{ U_TOPTOPICS_COLLAPSE_URL }}"
@@ -23,7 +29,7 @@
 				{% endif %}
 			</li>
 		</ul>
-		<ul class="topiclist topics collapsible freemitbbs-from-stats-list">
+		<ul class="topiclist topics collapsible<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW --> freemitbbs-from-stats-list<!-- ENDIF -->">
 			<!-- BEGIN top_topics -->
 			<li class="row <!-- IF top_topics.S_ROW_COUNT is odd -->bg1<!-- ELSE -->bg2<!-- ENDIF -->">
 				<dl class="row-item {top_topics.TOPIC_IMG_STYLE}">
@@ -40,6 +46,7 @@
 									<div class="toptopics-inline-preview toptopics-inline-preview-lazy {top_topics.TOPIC_DISLIKE_FADE_CLASS}"
 										data-toptopics-inline-preview-url="{{ top_topics.U_TOPTOPICS_INLINE_PREVIEW|e('html_attr') }}"
 										data-toptopics-topic-url="{{ top_topics.U_TOPIC|e('html_attr') }}"
+										data-toptopics-inline-media-preview="{% if top_topics.S_TOPTOPICS_INLINE_MEDIA_PREVIEW %}1{% else %}0{% endif %}"
 										aria-busy="true"></div>
 								{% elseif top_topics.S_TOPTOPICS_INLINE_IMAGE_PREVIEW and top_topics.TOPTOPICS_INLINE_IMAGE_URL %}
 									<a class="toptopics-inline-preview toptopics-inline-preview-image" href="{top_topics.U_TOPIC}">
@@ -50,6 +57,7 @@
 										{{ top_topics.TOPTOPICS_INLINE_EXCERPT|raw }}
 									</div>
 								{% endif %}
+								<!-- IF not S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW --><br><!-- ENDIF -->
 								<div class="responsive-show toptopics-mobile-meta" style="display: none;">
 									{L_TOPTOPICS_TOPIC_LABEL} {L_POST_BY_AUTHOR} {top_topics.USERNAME_FULL} &raquo; {top_topics.POST_TIME}
 									<!-- IF S_TOPTOPICS_INCLUDE_FORUM_NAME --> &raquo; <a href="{top_topics.U_FORUM}">{top_topics.FORUM_NAME}</a><!-- ENDIF -->
@@ -61,21 +69,28 @@
 									<span class="toptopics-mobile-stat">{L_REPLIES}{L_COLON} <strong>{top_topics.REPLIES}</strong></span>
 									<span class="toptopics-mobile-stat">{L_VIEWS}{L_COLON} <strong>{top_topics.VIEWS}</strong></span>
 								</div>
+								<!-- IF not S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW -->
+									<div class="responsive-hide left-box">
+										{L_POST_BY_AUTHOR} {top_topics.USERNAME_FULL} &raquo; {top_topics.POST_TIME}
+										<!-- IF S_TOPTOPICS_INCLUDE_FORUM_NAME --> &raquo; {L_IN} <a href="{top_topics.U_FORUM}">{top_topics.FORUM_NAME}</a><!-- ENDIF -->
+									</div>
+								<!-- ENDIF -->
 								</div>
 						</dt>
+						<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW -->
 						<dd class="lastpost">
 							<span>
-								<span class="topic-poster toptopics-lastpost-topic-author<!-- IF top_topics.TOPIC_DISLIKE_FADE_CLASS --> {top_topics.TOPIC_DISLIKE_FADE_CLASS}<!-- ENDIF -->">
-									<span class="toptopics-info-label">{L_TOPTOPICS_TOPIC_LABEL}</span>
-									<span class="toptopics-info-content">{L_POST_BY_AUTHOR} {top_topics.USERNAME_FULL} &raquo; {top_topics.POST_TIME}
-									</span>
-								</span>
 								<!-- IF S_TOPTOPICS_INCLUDE_FORUM_NAME -->
 								<span class="toptopics-lastpost-forum">
 									<span class="toptopics-info-label">{L_TOPTOPICS_FORUM_LABEL}</span>
 									<span class="toptopics-info-content"><a href="{top_topics.U_FORUM}">{top_topics.FORUM_NAME}</a></span>
 								</span>
 								<!-- ENDIF -->
+								<span class="topic-poster toptopics-lastpost-topic-author<!-- IF top_topics.TOPIC_DISLIKE_FADE_CLASS --> {top_topics.TOPIC_DISLIKE_FADE_CLASS}<!-- ENDIF -->">
+									<span class="toptopics-info-label">{L_TOPTOPICS_TOPIC_LABEL}</span>
+									<span class="toptopics-info-content">{L_POST_BY_AUTHOR} {top_topics.USERNAME_FULL} &raquo; {top_topics.POST_TIME}
+									</span>
+								</span>
 								<span class="toptopics-lastpost-latest"><span class="toptopics-info-label"><dfn>{L_TOPTOPICS_LATEST} </dfn>{L_TOPTOPICS_LATEST}</span><span class="toptopics-info-content">{L_POST_BY_AUTHOR} {top_topics.LAST_POST_AUTHOR_FULL} &raquo; <time datetime="{top_topics.LAST_POST_TIME_RFC3339}">{top_topics.LAST_POST_TIME}</time>
 								<!-- IF not S_IS_BOT and top_topics.U_LAST_POST -->
 									<a href="{top_topics.U_LAST_POST}" title="{L_GOTO_LAST_POST}">
@@ -89,6 +104,21 @@
 								</span>
 							</span>
 						</dd>
+						<!-- ELSE -->
+						<dd class="posts">{top_topics.REPLIES} <dfn>{L_REPLIES}</dfn></dd>
+						<dd class="views">{top_topics.VIEWS} <dfn>{L_VIEWS}</dfn></dd>
+						<dd class="lastpost">
+							<span><dfn>{L_LAST_POST} </dfn>{L_POST_BY_AUTHOR} {top_topics.LAST_POST_AUTHOR_FULL}
+								<!-- IF not S_IS_BOT and top_topics.U_LAST_POST -->
+									<a href="{top_topics.U_LAST_POST}" title="{L_GOTO_LAST_POST}">
+										<i class="icon fa-external-link-square fa-fw icon-lightgray icon-md" aria-hidden="true"></i><span class="sr-only">{VIEW_LATEST_POST}</span>
+									</a>
+								<!-- ENDIF -->
+								<br><time datetime="{top_topics.LAST_POST_TIME_RFC3339}">{top_topics.LAST_POST_TIME}</time>
+								<!-- IF S_TOPTOPICS_INCLUDE_FORUM_NAME --><br>{L_POSTED} {L_IN} <a href="{top_topics.U_FORUM}">{top_topics.FORUM_NAME}</a><!-- ENDIF -->
+							</span>
+						</dd>
+						<!-- ENDIF -->
 				</dl>
 			</li>
 			<!-- END top_topics -->

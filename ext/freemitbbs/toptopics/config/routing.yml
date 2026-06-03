@@ -2,6 +2,7 @@ freemitbbs_toptopics_vote:
     path: /toptopics/{action}/{post}
     defaults: { _controller: freemitbbs.toptopics.ajaxify:base }
     requirements:
+        action: add|remove|toggle
         post: \d+
 
 freemitbbs_toptopics_reaction_records:
@@ -20,3 +21,13 @@ freemitbbs_toptopics_override:
     requirements:
         topic: \d+
         state: normal|boost|demote|kill
+
+freemitbbs_toptopics_inline_preview:
+    path: /toptopics/inline-preview/{topic}
+    defaults: { _controller: freemitbbs.toptopics.inline_preview:base }
+    requirements:
+        topic: \d+
+
+freemitbbs_toptopics_inline_preview_batch:
+    path: /toptopics/inline-preview/batch
+    defaults: { _controller: freemitbbs.toptopics.inline_preview:batch }

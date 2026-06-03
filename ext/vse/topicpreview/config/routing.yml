@@ -1,3 +1,7 @@
+vse_topicpreview_preview_batch:
+    path: /topicpreview/batch
+    defaults: { _controller: vse.topicpreview.controller.preview:batch }
+
 vse_topicpreview_preview:
     path: /topicpreview/{topic_id}
     defaults: { _controller: vse.topicpreview.controller.preview:show }

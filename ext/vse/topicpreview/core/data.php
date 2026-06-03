@@ -140,25 +140,53 @@ class data extends base
 	 */
 	public function get_topic_preview_row($topic_id)
 	{
-		$topic_id = (int) $topic_id;
-		if (!$this->is_enabled() || $topic_id <= 0)
+		$rows = $this->get_topic_preview_rows([(int) $topic_id]);
+
+		return $rows[(int) $topic_id] ?? false;
+	}
+
+	/**
+	 * Fetch the data needed to render multiple topic previews on demand.
+	 *
+	 * @param array $topic_ids Topic IDs
+	 *
+	 * @return array Topic preview rows keyed by topic_id
+	 */
+	public function get_topic_preview_rows(array $topic_ids)
+	{
+		$topic_ids = array_values(array_unique(array_filter(array_map('intval', $topic_ids), static function ($topic_id) {
+			return $topic_id > 0;
+		})));
+
+		if (!$this->is_enabled() || empty($topic_ids))
 		{
-			return false;
+			return [];
+		}
+
+		$select = 't.topic_id, t.forum_id, t.topic_visibility, t.topic_attachment, t.topic_first_post_id, t.topic_last_post_id, t.topic_poster, t.topic_last_poster_id,
+			fp.post_time AS first_post_time, fp.post_edit_time AS first_post_edit_time, fp.post_checksum AS first_post_checksum';
+		if ($this->last_post_enabled())
+		{
+			$select .= ', lp.post_time AS last_post_time, lp.post_edit_time AS last_post_edit_time, lp.post_checksum AS last_post_checksum';
 		}
 
 		$sql_array = array(
-			'SELECT'	=> 't.topic_id, t.forum_id, t.topic_visibility, t.topic_attachment, t.topic_first_post_id, t.topic_last_post_id, t.topic_poster, t.topic_last_poster_id' . $this->tp_sql_select(),
+			'SELECT'	=> $select . $this->tp_sql_select(),
 			'FROM'		=> array(TOPICS_TABLE => 't'),
 			'LEFT_JOIN'	=> $this->tp_sql_join()['LEFT_JOIN'],
-			'WHERE'		=> 't.topic_id = ' . $topic_id,
+			'WHERE'		=> $this->db->sql_in_set('t.topic_id', $topic_ids),
 		);
 
 		$sql = $this->db->sql_build_query('SELECT', $sql_array);
 		$result = $this->db->sql_query($sql);
-		$row = $this->db->sql_fetchrow($result);
+		$rows = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$rows[(int) $row['topic_id']] = $row;
+		}
 		$this->db->sql_freeresult($result);
 
-		return $row;
+		return $rows;
 	}
 
 	/**

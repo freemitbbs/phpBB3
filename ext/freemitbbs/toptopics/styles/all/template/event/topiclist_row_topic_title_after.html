@@ -1,8 +1,12 @@
+{% if S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW %}
 {% for context in [topicrow, rtng] %}
 	{% if context.S_TOPTOPICS_INLINE_LAZY_PREVIEW and context.U_TOPTOPICS_INLINE_PREVIEW %}
 		<div class="toptopics-inline-preview toptopics-inline-preview-lazy {{ context.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS }}"
 			data-toptopics-inline-preview-url="{{ context.U_TOPTOPICS_INLINE_PREVIEW|e('html_attr') }}"
+			data-toptopics-inline-preview-batch-url="{{ context.U_TOPTOPICS_INLINE_PREVIEW_BATCH|default('')|e('html_attr') }}"
+			data-toptopics-inline-preview-topic-id="{{ context.TOPTOPICS_INLINE_PREVIEW_TOPIC_ID|default(0)|e('html_attr') }}"
 			data-toptopics-topic-url="{{ context.U_VIEW_TOPIC|e('html_attr') }}"
+			data-toptopics-inline-media-preview="{% if context.S_TOPTOPICS_INLINE_MEDIA_PREVIEW %}1{% else %}0{% endif %}"
 			aria-busy="true"></div>
 	{% elseif context.S_TOPTOPICS_INLINE_IMAGE_PREVIEW and context.TOPTOPICS_INLINE_IMAGE_URL %}
 		<a class="toptopics-inline-preview toptopics-inline-preview-image" href="{{ context.U_VIEW_TOPIC }}">
@@ -14,6 +18,7 @@
 		</div>
 	{% endif %}
 {% endfor %}
+{% endif %}
 
 {% if not S_IS_BOT %}
 	{% if similar is defined and similar.TOPIC_VIEWS is defined %}

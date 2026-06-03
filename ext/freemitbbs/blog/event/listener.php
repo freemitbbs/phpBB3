@@ -84,6 +84,11 @@ class listener implements EventSubscriberInterface
 
 	public function append_profile_nickname_to_username($event): void
 	{
+		if (\function_exists('topic_list_username_nickname_suppression') && \topic_list_username_nickname_suppression())
+		{
+			return;
+		}
+
 		$mode = (string) ($event['mode'] ?? '');
 		$user_id = (int) ($event['user_id'] ?? 0);
 		if (!in_array($mode, ['full', 'no_profile'], true) || $user_id <= 0 || $user_id === ANONYMOUS)

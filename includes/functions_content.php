@@ -1656,6 +1656,45 @@ function get_username_string($mode, $user_id, $username, $username_colour = '', 
 }
 
 /**
+ * Build a username string for compact topic-list contexts.
+ *
+ * Topic lists are easier to scan when profile nicknames appended as a
+ * trailing parenthetical are omitted, while profile links and colours remain
+ * unchanged.
+ */
+function get_topic_list_username_string($mode, $user_id, $username, $username_colour = '', $guest_username = false, $custom_profile_url = false)
+{
+	topic_list_username_nickname_suppression(true);
+	try
+	{
+		return get_username_string($mode, $user_id, $username, $username_colour, $guest_username, $custom_profile_url);
+	}
+	finally
+	{
+		topic_list_username_nickname_suppression(false);
+	}
+}
+
+/**
+ * Track whether the current username render is for a topic-list context.
+ */
+function topic_list_username_nickname_suppression($state = null): bool
+{
+	static $suppression_depth = 0;
+
+	if ($state === true)
+	{
+		$suppression_depth++;
+	}
+	else if ($state === false && $suppression_depth > 0)
+	{
+		$suppression_depth--;
+	}
+
+	return $suppression_depth > 0;
+}
+
+/**
  * Add an option to the quick-mod tools.
  *
  * @param string $url The recepting URL for the quickmod actions.
