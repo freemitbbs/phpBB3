@@ -661,7 +661,7 @@ a.topictitle.toptopics-topic-dislike-fade,
 .toptopics-inline-preview-single-image img {
 	width: auto;
 	height: auto;
-	max-height: none;
+	max-height: var(--toptopics-inline-preview-media-height);
 }
 
 .toptopics-inline-preview-carousel-controls {
