@@ -129,10 +129,7 @@
 	margin-left: 2px;
 }
 
-#rtng-stop .action-bar {
-	margin-bottom: 0.5em;
-}
-
+#rtng-stop .forabg + .action-bar,
 #rtng-side .forabg + .action-bar,
 #rtng-bottom .forabg + .action-bar,
 #rtng-separate .forabg + .action-bar {

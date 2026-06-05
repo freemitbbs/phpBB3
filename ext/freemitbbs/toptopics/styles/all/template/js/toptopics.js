@@ -379,6 +379,11 @@
 		var inlinePreviewTextJoiner = '\u3000';
 		var inlinePreviewRichMediaSelector = '[data-s9e-mediaembed], iframe, video, audio, object, embed, .inline-attachment, .attachbox, blockquote.twitter-tweet, .twitter-tweet, .twitter-tweet-rendered';
 
+	function isInlinePreviewTwitterMedia($media) {
+		return $media.is('[data-s9e-mediaembed="twitter"]')
+			|| $media.is('iframe[src*="platform.twitter.com/embed/Tweet"]');
+	}
+
 	function getInlinePreviewMediaHeight($media) {
 		var media = $media.get(0);
 		var height = 0;
@@ -387,13 +392,13 @@
 			height = parseFloat(media.style.height);
 		}
 
-		if (!height && $media.is('iframe[data-s9e-mediaembed="youtube"]')) {
+		if (!height && $media.is('iframe[data-s9e-mediaembed="youtube"], iframe[data-s9e-mediaembed="bilibili"]')) {
 			height = $media.outerHeight(true) || ((parseFloat($media.outerWidth()) || 0) * 9 / 16) || 0;
 		}
 
 		height = height || parseFloat($media.attr('height')) || $media.outerHeight(true) || 0;
 
-		if (!height && $media.is('[data-s9e-mediaembed="twitter"]')) {
+		if (!height && isInlinePreviewTwitterMedia($media)) {
 			height = 350;
 		} else if (!height && $media.is('video')) {
 			height = 240;
@@ -402,12 +407,30 @@
 		return height;
 	}
 
+	function getInlinePreviewMediaWidth($media) {
+		var media = $media.get(0);
+		var width = 0;
+
+		if (media && media.style && media.style.width) {
+			width = parseFloat(media.style.width);
+		}
+
+		width = width || parseFloat($media.attr('width')) || 0;
+		if (!width && isInlinePreviewTwitterMedia($media)) {
+			width = 550;
+		}
+
+		return width || $media.outerWidth(true) || 0;
+	}
+
 	function fitInlinePreviewMedia($preview) {
 		$preview.find('.toptopics-inline-preview-media-frame').each(function() {
 			var $frame = $(this);
 			var $media = $frame.children().first();
 			var maxHeight = parseFloat($frame.css('max-height')) || 220;
+			var maxWidth = $frame.innerWidth() || parseFloat($frame.css('width')) || 0;
 			var mediaHeight = getInlinePreviewMediaHeight($media);
+			var mediaWidth = getInlinePreviewMediaWidth($media);
 			var fitKey;
 			var ratio;
 
@@ -415,8 +438,8 @@
 				return;
 			}
 
-			ratio = Math.max(0.1, Math.min(1, maxHeight / mediaHeight));
-			fitKey = maxHeight + ':' + mediaHeight + ':' + ratio;
+			ratio = Math.max(0.1, Math.min(1, maxHeight / mediaHeight, maxWidth && mediaWidth ? maxWidth / mediaWidth : 1));
+			fitKey = maxWidth + ':' + mediaWidth + ':' + maxHeight + ':' + mediaHeight + ':' + ratio;
 
 			if ($frame.data('toptopicsInlinePreviewMediaFitKey') === fitKey) {
 				return;
@@ -432,7 +455,8 @@
 				'max-height': 'none',
 				transform: ratio < 1 ? 'scale(' + ratio + ')' : '',
 				'transform-origin': ratio < 1 ? 'top center' : '',
-				width: ''
+				width: ratio < 1 && mediaWidth ? mediaWidth + 'px' : '',
+				'max-width': ratio < 1 && mediaWidth ? 'none' : ''
 			});
 		});
 	}
@@ -945,7 +969,7 @@
 				'class': className
 			});
 			$mediaNode = $media.detach().removeAttr('width').removeAttr('height');
-			if ($mediaNode.is('[data-s9e-mediaembed="youtube"]')) {
+			if ($mediaNode.is('[data-s9e-mediaembed="youtube"], [data-s9e-mediaembed="bilibili"]')) {
 				frameClass += ' toptopics-inline-preview-media-frame-youtube';
 			}
 			$mediaNode.find('script').remove();
@@ -967,7 +991,7 @@
 			return $();
 		}
 
-		if ($mediaNode.is('[data-s9e-mediaembed="youtube"], .toptopics-inline-preview-youtube-thumb')) {
+		if ($mediaNode.is('[data-s9e-mediaembed="youtube"], [data-s9e-mediaembed="bilibili"], .toptopics-inline-preview-youtube-thumb')) {
 			frameClass += ' toptopics-inline-preview-media-frame-youtube';
 		}
 
@@ -1027,6 +1051,25 @@
 		return buildInlineStructuredMediaPreview($placeholder, $thumbnail);
 	}
 
+	function buildInlineBilibiliPreview($placeholder, mediaId) {
+		mediaId = String(mediaId || '');
+		if (!/^BV[0-9A-Za-z]+$/.test(mediaId)) {
+			return $();
+		}
+
+		return buildInlineStructuredMediaPreview($placeholder, $('<iframe/>', {
+			src: 'https://player.bilibili.com/player.html?bvid=' + encodeURIComponent(mediaId) + '&autoplay=0',
+			loading: 'lazy',
+			frameborder: '0',
+			scrolling: 'no',
+			allowfullscreen: 'allowfullscreen',
+			title: 'Bilibili video',
+			width: 640,
+			height: 360,
+			'data-s9e-mediaembed': 'bilibili'
+		}));
+	}
+
 	function getInlineTweetId(url) {
 		var match = String(url || '').match(/\/status(?:es)?\/(\d+)/i);
 
@@ -1046,7 +1089,8 @@
 			scrolling: 'no',
 			title: 'Tweet',
 			width: 550,
-			height: 350
+			height: 350,
+			'data-s9e-mediaembed': 'twitter'
 		}));
 	}
 
@@ -1183,6 +1227,8 @@
 				$mediaPreview = buildInlineVideoPreview($placeholder, mediaUrl);
 			} else if (mediaType === 'youtube') {
 				$mediaPreview = buildInlineYoutubePreview($placeholder, String(data.media_id || ''));
+			} else if (mediaType === 'bilibili') {
+				$mediaPreview = buildInlineBilibiliPreview($placeholder, String(data.media_id || ''));
 			} else if (mediaType === 'tweet') {
 				$mediaPreview = buildInlineTweetPreview($placeholder, mediaUrl, String(data.media_id || ''));
 			}
@@ -1230,20 +1276,61 @@
 
 	function syncInlinePreviewSideMediaState($placeholder, $preview) {
 		var $listInner = $placeholder.closest('.list-inner');
+		var hasSideMedia;
 
 		if (!$listInner.length) {
 			return;
 		}
 
-		$listInner.toggleClass('toptopics-inline-preview-side-media', isInlinePreviewSideMedia($preview));
+		hasSideMedia = isInlinePreviewSideMedia($preview);
+		$listInner
+			.toggleClass('toptopics-inline-preview-side-media', hasSideMedia)
+			.toggleClass('toptopics-inline-preview-has-mixed-media', hasSideMedia && $preview.is('.toptopics-inline-preview-mixed'));
+
+		syncInlinePreviewMixedExcerptState($listInner);
+	}
+
+	function syncInlinePreviewMixedExcerptState($listInner) {
+		var $title;
+		var title;
+		var styles;
+		var lineHeight;
+		var titleHeight;
+
+		if (!$listInner || !$listInner.length || !$listInner.hasClass('toptopics-inline-preview-has-mixed-media')) {
+			if ($listInner && $listInner.length) {
+				$listInner.removeClass('toptopics-inline-preview-omit-excerpt');
+			}
+			return;
+		}
+
+		$listInner.removeClass('toptopics-inline-preview-omit-excerpt');
+		$title = $listInner.children('a.topictitle').first();
+		if (!$title.length) {
+			return;
+		}
+
+		title = $title.get(0);
+		styles = window.getComputedStyle ? window.getComputedStyle(title) : null;
+		lineHeight = parseFloat(styles && styles.lineHeight) || parseFloat($title.css('line-height')) || 0;
+		titleHeight = title && title.getBoundingClientRect ? title.getBoundingClientRect().height : $title.outerHeight();
+		if (!lineHeight || !titleHeight) {
+			return;
+		}
+
+		$listInner.toggleClass('toptopics-inline-preview-omit-excerpt', titleHeight / lineHeight > 1.35);
 	}
 
 	function syncExistingInlinePreviewSideMediaStates() {
 		$('.list-inner').each(function() {
 			var $listInner = $(this);
 			var $preview = $listInner.children('.toptopics-inline-preview-image, .toptopics-inline-preview-media-box, .toptopics-inline-preview-mixed').first();
+			var hasSideMedia = $preview.length > 0;
 
-			$listInner.toggleClass('toptopics-inline-preview-side-media', $preview.length > 0);
+			$listInner
+				.toggleClass('toptopics-inline-preview-side-media', hasSideMedia)
+				.toggleClass('toptopics-inline-preview-has-mixed-media', hasSideMedia && $preview.is('.toptopics-inline-preview-mixed'));
+			syncInlinePreviewMixedExcerptState($listInner);
 		});
 	}
 
@@ -1362,7 +1449,7 @@
 			return;
 		}
 
-		$placeholder.closest('.list-inner').removeClass('toptopics-inline-preview-side-media');
+		$placeholder.closest('.list-inner').removeClass('toptopics-inline-preview-side-media toptopics-inline-preview-has-mixed-media toptopics-inline-preview-omit-excerpt');
 		$placeholder.remove();
 	}
 
@@ -1589,6 +1676,9 @@
 			normalizeInlineTextPreviews();
 			syncExistingInlinePreviewSideMediaStates();
 			initInlineTopicPreviews();
-			$(window).on('resize', syncCategoryForumMenus);
+			$(window).on('resize', function() {
+				syncCategoryForumMenus();
+				syncExistingInlinePreviewSideMediaStates();
+			});
 		});
 })(jQuery);

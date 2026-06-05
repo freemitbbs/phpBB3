@@ -13,29 +13,6 @@
 {% set rtng_loop = rtng_loop|default([]) %}
 {% set rtng_pagination = rtng_pagination|default([]) %}
 
-{% if rtng_pagination|length && S_RTNG_LOCATION_TOP %}
-	<div class="action-bar bar-top">
-		<div class="pagination">
-			{{ rtng_count }}
-			<ul>
-				{% for rtng_page in rtng_pagination %}
-					{% if rtng_page.S_IS_PREV %}
-						<li class="arrow previous"><a class="button button-icon-only" href="{{ rtng_page.PAGE_URL }}" rel="prev" role="button"><i class="icon fa-chevron-{{ S_CONTENT_FLOW_BEGIN }} fa-fw" aria-hidden="true"></i><span class="sr-only">{{ lang('PREVIOUS') }}</span></a></li>
-					{% elseif rtng_page.S_IS_CURRENT %}
-						<li class="active"><span>{{ rtng_page.PAGE_NUMBER }}</span></li>
-					{% elseif rtng_page.S_IS_ELLIPSIS %}
-						<li class="ellipsis" role="separator"><span>{{ lang('ELLIPSIS') }}</span></li>
-					{% elseif rtng_page.S_IS_NEXT %}
-						<li class="arrow next"><a class="button button-icon-only" href="{{ rtng_page.PAGE_URL }}" rel="next" role="button"><i class="icon fa-chevron-{{ S_CONTENT_FLOW_END }} fa-fw" aria-hidden="true"></i><span class="sr-only">{{ lang('NEXT') }}</span></a></li>
-					{% else %}
-						<li><a class="button" href="{{ rtng_page.PAGE_URL }}" role="button">{{ rtng_page.PAGE_NUMBER }}</a></li>
-					{% endif %}
-				{% endfor %}
-			</ul>
-		</div>
-	</div>
-{% endif %}
-
 {% for rtng in rtng_loop %}
 	{% if !rtng.S_TOPIC_TYPE_SWITCH && !loop.first %}
 				</ul>
@@ -255,7 +232,7 @@
 	</div>
 {% endfor %}
 
-{% if rtng_pagination|length && S_RTNG_LOCATION_BOTTOM %}
+{% if rtng_pagination|length && (S_RTNG_LOCATION_TOP || S_RTNG_LOCATION_BOTTOM) %}
 	<div class="action-bar bar-bottom">
 		<div class="pagination">
 			{{ rtng_count }}

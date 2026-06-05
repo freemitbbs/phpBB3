@@ -7,7 +7,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 class inline_preview
 {
 	private const CACHE_PREFIX = '_freemitbbs_toptopics_inline_preview_';
-	private const CACHE_REVISION = 3;
+	private const CACHE_REVISION = 5;
 	private const CACHE_SECONDS = 600;
 	private const MAX_BATCH_TOPICS = 40;
 	private const MAX_IMAGES = 8;
@@ -46,10 +46,10 @@ class inline_preview
 		$preview = $this->get_preview_for_topic($topic_id);
 		if (!$preview)
 		{
-			return new JsonResponse(['status' => 404], 404);
+			return $this->json_response(['status' => 404], 404);
 		}
 
-		return new JsonResponse($preview);
+		return $this->json_response($preview);
 	}
 
 	public function batch(): JsonResponse
@@ -57,7 +57,7 @@ class inline_preview
 		$topic_ids = $this->parse_topic_ids($this->request->variable('topic_ids', ''));
 		if (empty($topic_ids))
 		{
-			return new JsonResponse([]);
+			return $this->json_response([]);
 		}
 
 		$rows = $this->get_preview_rows($topic_ids);
@@ -75,7 +75,18 @@ class inline_preview
 			}
 		}
 
-		return new JsonResponse($response);
+		return $this->json_response($response);
+	}
+
+	protected function json_response($data, int $status = 200): JsonResponse
+	{
+		$response = new JsonResponse(null, $status);
+		if (\defined('JSON_INVALID_UTF8_SUBSTITUTE'))
+		{
+			$response->setEncodingOptions($response->getEncodingOptions() | \JSON_INVALID_UTF8_SUBSTITUTE);
+		}
+
+		return $response->setData($data);
 	}
 
 	protected function get_preview_for_topic(int $topic_id): array|false
@@ -270,6 +281,12 @@ class inline_preview
 			return $youtube;
 		}
 
+		$bilibili = $this->extract_bilibili_media($post_text);
+		if ($bilibili['media_url'] !== '')
+		{
+			return $bilibili;
+		}
+
 		$tweet = $this->extract_tweet_media($post_text);
 		if ($tweet['media_url'] !== '')
 		{
@@ -392,6 +409,107 @@ class inline_preview
 		}
 
 		return preg_match('/^[A-Za-z0-9_-]{11}$/', $youtube_id) ? $youtube_id : '';
+	}
+
+	protected function extract_bilibili_media(string $post_text): array
+	{
+		$empty = [
+			'media_type' => '',
+			'media_url' => '',
+			'media_id' => '',
+		];
+
+		if ($post_text === '')
+		{
+			return $empty;
+		}
+
+		$post_text = $this->remove_quoted_content($post_text);
+		if (preg_match('#<BILIBILI\b[^>]*\bid=(["\'])(BV[0-9A-Za-z]+)\1#i', $post_text, $match))
+		{
+			return $this->build_bilibili_media((string) $match[2]);
+		}
+
+		foreach ([
+			'#(?:https?:)?//(?:www\.|m\.)?bilibili\.com/video/[^\s\[\]<>"\']+#i',
+			'#(?:https?:)?//player\.bilibili\.com/player\.html\?[^\s\[\]<>"\']+#i',
+		] as $pattern)
+		{
+			if (!preg_match_all($pattern, $post_text, $matches))
+			{
+				continue;
+			}
+
+			foreach ($matches[0] as $url)
+			{
+				$bvid = $this->extract_bilibili_id_from_url($url);
+				if ($bvid !== '')
+				{
+					return $this->build_bilibili_media($bvid);
+				}
+			}
+		}
+
+		return $empty;
+	}
+
+	protected function build_bilibili_media(string $bvid): array
+	{
+		$bvid = $this->normalize_bilibili_bvid($bvid);
+		if ($bvid === '')
+		{
+			return [
+				'media_type' => '',
+				'media_url' => '',
+				'media_id' => '',
+			];
+		}
+
+		return [
+			'media_type' => 'bilibili',
+			'media_url' => 'https://www.bilibili.com/video/' . $bvid,
+			'media_id' => $bvid,
+		];
+	}
+
+	protected function extract_bilibili_id_from_url(string $url): string
+	{
+		$url = htmlspecialchars_decode(trim($url), ENT_QUOTES | ENT_HTML5);
+		$url = trim($url, "\"' \t\n\r\0\x0B");
+		$parts = parse_url($url);
+		if (empty($parts['host']))
+		{
+			return '';
+		}
+
+		$host = strtolower((string) $parts['host']);
+		$path = (string) ($parts['path'] ?? '');
+
+		if (preg_match('#(?:^|\.)bilibili\.com$#i', $host)
+			&& preg_match('#^/video/(BV[0-9A-Za-z]+)#i', $path, $match))
+		{
+			return $this->normalize_bilibili_bvid((string) $match[1]);
+		}
+
+		if ($host === 'player.bilibili.com' && $path === '/player.html')
+		{
+			parse_str((string) ($parts['query'] ?? ''), $query);
+
+			return $this->normalize_bilibili_bvid((string) ($query['bvid'] ?? ''));
+		}
+
+		return '';
+	}
+
+	protected function normalize_bilibili_bvid(string $bvid): string
+	{
+		$bvid = trim($bvid);
+		if (preg_match('/^BV[0-9A-Za-z]+$/i', $bvid))
+		{
+			return 'BV' . substr($bvid, 2);
+		}
+
+		return '';
 	}
 
 	protected function extract_tweet_media(string $post_text): array
@@ -603,9 +721,12 @@ class inline_preview
 			'#<VIDEO\b[^>]*>.*?</VIDEO>#si',
 			'#<VIDEO\b[^>]*>#si',
 			'#<YOUTUBE\b[^>]*>.*?</YOUTUBE>#si',
+			'#<BILIBILI\b[^>]*>.*?</BILIBILI>#si',
 			'#<TWITTER\b[^>]*>.*?</TWITTER>#si',
 			'#https?://[^\s\[\]<>"\']+\.(?:jpe?g|png|gif|webp|avif|mp4|m4v|mov|webm)(?:[?\#][^\s\[\]<>"\']*)?#i',
 			'#https?://(?:www\.|m\.)?(?:youtube\.com|youtu\.be)/[^\s\[\]<>"\']+#i',
+			'#(?:https?:)?//(?:www\.|m\.)?bilibili\.com/video/[^\s\[\]<>"\']+#i',
+			'#(?:https?:)?//player\.bilibili\.com/player\.html\?[^\s\[\]<>"\']+#i',
 			'#https?://(?:www\.)?(?:twitter\.com|x\.com)/[^\s\[\]<>"\']+/status(?:es)?/\d+(?:[?\#][^\s\[\]<>"\']*)?#i',
 			'#<br\s*/?>#i',
 			'#</(?:p|div|li|blockquote|pre|tr|table|h[1-6])>#i',
@@ -613,9 +734,16 @@ class inline_preview
 		$text = strip_tags($text);
 		$text = preg_replace('#\[(?:/?[a-z][a-z0-9_-]*|\*)(?:=[^\]]*)?\]#i', ' ', $text) ?? $text;
 		$text = preg_replace('/[\s\p{Zs}]+/u', "\u{3000}", $text) ?? $text;
-		$text = trim($text, " \t\n\r\0\x0B" . "\u{3000}");
+		$text = $this->trim_unicode_whitespace($text);
 
 		return $this->truncate_text($text, self::MAX_TEXT_CHARS);
+	}
+
+	protected function trim_unicode_whitespace(string $text): string
+	{
+		$trimmed = preg_replace('/^[\s\p{Zs}]+|[\s\p{Zs}]+$/u', '', $text);
+
+		return is_string($trimmed) ? $trimmed : trim($text);
 	}
 
 	protected function remove_quoted_content(string $text): string
