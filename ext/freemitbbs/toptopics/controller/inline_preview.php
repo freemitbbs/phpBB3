@@ -7,8 +7,9 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 class inline_preview
 {
 	private const CACHE_PREFIX = '_freemitbbs_toptopics_inline_preview_';
-	private const CACHE_REVISION = 5;
+	private const CACHE_REVISION = 8;
 	private const CACHE_SECONDS = 600;
+	private const MEDIA_SITE_TAGS_CACHE_KEY = '_freemitbbs_toptopics_inline_preview_media_site_tags';
 	private const MAX_BATCH_TOPICS = 40;
 	private const MAX_IMAGES = 8;
 	private const MAX_TEXT_CHARS = 420;
@@ -20,6 +21,7 @@ class inline_preview
 	protected \phpbb\request\request_interface $request;
 	protected string $root_path;
 	protected string $php_ext;
+	protected ?array $media_site_tags = null;
 
 	public function __construct(
 		\phpbb\auth\auth $auth,
@@ -62,17 +64,33 @@ class inline_preview
 
 		$rows = $this->get_preview_rows($topic_ids);
 		$response = [];
+		$pending_rows = [];
 		foreach ($topic_ids as $topic_id)
 		{
 			if (isset($rows[$topic_id]))
 			{
-				$preview = $this->build_preview_for_row($rows[$topic_id]);
-				$response[(string) $topic_id] = $preview ?: ['status' => 404];
+				$cached = $this->get_cached_preview_for_row($rows[$topic_id]);
+				if ($cached)
+				{
+					$response[(string) $topic_id] = $cached;
+				}
+				else
+				{
+					$pending_rows[$topic_id] = $rows[$topic_id];
+				}
 			}
 			else
 			{
 				$response[(string) $topic_id] = ['status' => 404];
 			}
+		}
+
+		$attachment_media_by_post_id = $this->get_attachment_media_for_rows($pending_rows);
+		foreach ($pending_rows as $topic_id => $row)
+		{
+			$post_id = (int) $row['post_id'];
+			$preview = $this->build_preview_for_row($row, $attachment_media_by_post_id[$post_id] ?? null, true);
+			$response[(string) $topic_id] = $preview ?: ['status' => 404];
 		}
 
 		return $this->json_response($response);
@@ -112,7 +130,8 @@ class inline_preview
 		}
 
 		$sql = 'SELECT t.topic_id, t.forum_id, t.topic_first_post_id, t.topic_visibility, t.topic_poster,
-				p.post_id, p.poster_id, p.post_visibility, p.post_text, p.bbcode_uid, p.post_attachment,
+				p.post_id, p.poster_id, p.post_visibility, p.post_text, p.bbcode_uid, p.bbcode_bitfield,
+				p.enable_bbcode, p.enable_smilies, p.enable_magic_url, p.post_attachment,
 				p.post_time, p.post_edit_time
 			FROM ' . TOPICS_TABLE . ' t
 			INNER JOIN ' . POSTS_TABLE . ' p
@@ -144,20 +163,29 @@ class inline_preview
 			&& $this->content_visibility->is_visible('post', $forum_id, $row);
 	}
 
-	protected function build_preview_for_row(array $row): array|false
+	protected function get_cached_preview_for_row(array $row): array|false
 	{
-		$cache_key = $this->build_cache_key($row);
-		$cached = $this->cache->get($cache_key);
-		if (is_array($cached))
+		$cached = $this->cache->get($this->build_cache_key($row));
+
+		return is_array($cached) ? $cached : false;
+	}
+
+	protected function build_preview_for_row(array $row, ?array $prefetched_attachment_media = null, bool $skip_cache_lookup = false): array|false
+	{
+		if (!$skip_cache_lookup)
 		{
-			return $cached;
+			$cached = $this->get_cached_preview_for_row($row);
+			if ($cached)
+			{
+				return $cached;
+			}
 		}
 
 		$image_urls = $this->extract_image_urls((string) $row['post_text']);
 		$embedded_media = $this->extract_embedded_media((string) $row['post_text']);
 		if (!empty($row['post_attachment']))
 		{
-			$attachment_media = $this->get_attachment_media((int) $row['post_id']);
+			$attachment_media = $prefetched_attachment_media ?? $this->get_attachment_media((int) $row['post_id']);
 			$image_urls = $this->merge_image_urls($image_urls, $attachment_media['image_urls']);
 			if ($embedded_media['media_type'] === '' && $attachment_media['video_url'] !== '')
 			{
@@ -171,10 +199,14 @@ class inline_preview
 
 		$media_type = empty($image_urls) ? $embedded_media['media_type'] : 'image';
 		$media_url = empty($image_urls) ? $embedded_media['media_url'] : ($image_urls[0] ?? '');
+		$rendered_html = $this->should_build_rendered_preview_html($row, $image_urls, $embedded_media)
+			? $this->build_rendered_preview_html($row)
+			: '';
 		$preview = [
 			'status' => 200,
 			'topic_id' => (int) $row['topic_id'],
 			'plain_text' => $this->extract_plain_text((string) $row['post_text'], (string) $row['bbcode_uid']),
+			'rendered_html' => $rendered_html,
 			'image_urls' => $image_urls,
 			'media_type' => $media_type,
 			'media_url' => $media_url,
@@ -182,14 +214,161 @@ class inline_preview
 			'media_urls' => $image_urls,
 		];
 
-		if ($preview['plain_text'] === '' && empty($preview['image_urls']) && $preview['media_url'] === '')
+		if ($preview['plain_text'] === '' && empty($preview['image_urls']) && $preview['media_url'] === '' && $preview['rendered_html'] === '')
 		{
 			return false;
 		}
 
-		$this->cache->put($cache_key, $preview, self::CACHE_SECONDS);
+		$this->cache->put($this->build_cache_key($row), $preview, self::CACHE_SECONDS);
 
 		return $preview;
+	}
+
+	protected function should_build_rendered_preview_html(array $row, array $image_urls, array $embedded_media): bool
+	{
+		return empty($image_urls)
+			&& ($embedded_media['media_type'] ?? '') === ''
+			&& $this->has_rendered_media_candidate((string) ($row['post_text'] ?? ''));
+	}
+
+	protected function has_rendered_media_candidate(string $post_text): bool
+	{
+		if ($post_text === '')
+		{
+			return false;
+		}
+
+		$post_text = $this->remove_quoted_content($post_text);
+		if (preg_match('#<MEDIA\b#i', $post_text))
+		{
+			return true;
+		}
+
+		if (!preg_match_all('#<([A-Z][A-Z0-9_]*)\b#', $post_text, $matches))
+		{
+			return false;
+		}
+
+		$media_site_tags = $this->get_media_site_tags();
+		foreach ($matches[1] as $tag_name)
+		{
+			if (isset($media_site_tags[strtoupper((string) $tag_name)]))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	protected function get_media_site_tags(): array
+	{
+		if ($this->media_site_tags !== null)
+		{
+			return $this->media_site_tags;
+		}
+
+		$cached = $this->cache->get(self::MEDIA_SITE_TAGS_CACHE_KEY);
+		if (is_array($cached))
+		{
+			$this->media_site_tags = $cached;
+
+			return $this->media_site_tags;
+		}
+
+		$site_ids = $this->get_configured_media_site_ids();
+		$media_site_tags = [];
+		foreach ($site_ids as $site_id)
+		{
+			$site_id = (string) $site_id;
+			if (preg_match('/^[a-z0-9_]+$/i', $site_id))
+			{
+				$media_site_tags[strtoupper($site_id)] = true;
+			}
+		}
+
+		$this->media_site_tags = $media_site_tags;
+		$this->cache->put(self::MEDIA_SITE_TAGS_CACHE_KEY, $this->media_site_tags, self::CACHE_SECONDS);
+
+		return $this->media_site_tags;
+	}
+
+	protected function get_configured_media_site_ids(): array
+	{
+		if (!defined('CONFIG_TEXT_TABLE'))
+		{
+			return [];
+		}
+
+		$sql = 'SELECT config_value
+			FROM ' . CONFIG_TEXT_TABLE . "
+			WHERE config_name = 'media_embed_sites'";
+		$result = $this->db->sql_query($sql);
+		$row = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+		if (!$row || empty($row['config_value']))
+		{
+			return [];
+		}
+
+		$site_ids = json_decode((string) $row['config_value'], true);
+
+		return is_array($site_ids) ? $site_ids : [];
+	}
+
+	protected function build_rendered_preview_html(array $row): string
+	{
+		$post_text = (string) ($row['post_text'] ?? '');
+		if ($post_text === '')
+		{
+			return '';
+		}
+
+		if (!function_exists('generate_text_for_display'))
+		{
+			include_once($this->root_path . 'includes/functions_content.' . $this->php_ext);
+		}
+		if (!function_exists('generate_text_for_display'))
+		{
+			return '';
+		}
+
+		$parse_flags = ((int) ($row['enable_bbcode'] ?? 1) ? OPTION_FLAG_BBCODE : 0)
+			| ((int) ($row['enable_smilies'] ?? 1) ? OPTION_FLAG_SMILIES : 0)
+			| ((int) ($row['enable_magic_url'] ?? 1) ? OPTION_FLAG_LINKS : 0);
+		$rendered_html = generate_text_for_display(
+			$post_text,
+			(string) ($row['bbcode_uid'] ?? ''),
+			(string) ($row['bbcode_bitfield'] ?? ''),
+			$parse_flags,
+			true
+		);
+		$rendered_html = $this->remove_rendered_quoted_content($rendered_html);
+		$rendered_html = trim($rendered_html);
+
+		return $rendered_html === '' ? '' : '<div class="topic_preview_content">' . $rendered_html . '</div>';
+	}
+
+	protected function remove_rendered_quoted_content(string $html): string
+	{
+		foreach ([
+			'#<blockquote\b[^>]*>.*?</blockquote>#si',
+			'#<div\b[^>]*class=(["\'])(?:(?!\1).)*\bimcger-quote\b(?:(?!\1).)*\1[^>]*>.*?</div>#si',
+		] as $pattern)
+		{
+			do
+			{
+				$previous = $html;
+				$html = preg_replace($pattern, '', $html);
+				if ($html === null)
+				{
+					return $previous;
+				}
+			}
+			while ($html !== $previous);
+		}
+
+		return $html;
 	}
 
 	protected function build_cache_key(array $row): string
@@ -285,6 +464,12 @@ class inline_preview
 		if ($bilibili['media_url'] !== '')
 		{
 			return $bilibili;
+		}
+
+		$tiktok = $this->extract_tiktok_media($post_text);
+		if ($tiktok['media_url'] !== '')
+		{
+			return $tiktok;
 		}
 
 		$tweet = $this->extract_tweet_media($post_text);
@@ -512,6 +697,99 @@ class inline_preview
 		return '';
 	}
 
+	protected function extract_tiktok_media(string $post_text): array
+	{
+		$empty = [
+			'media_type' => '',
+			'media_url' => '',
+			'media_id' => '',
+		];
+
+		if ($post_text === '')
+		{
+			return $empty;
+		}
+
+		$post_text = $this->remove_quoted_content($post_text);
+		if (preg_match('#<TIKTOK\b[^>]*\bid=(["\'])(\d+)\1#i', $post_text, $match))
+		{
+			return $this->build_tiktok_media((string) $match[2]);
+		}
+
+		foreach ([
+			'#(?:https?:)?//(?:www\.|m\.)?tiktok\.com/[^\s\[\]<>"\']+#i',
+			'#(?:https?:)?//(?:vm\.|vt\.)tiktok\.com/[^\s\[\]<>"\']+#i',
+		] as $pattern)
+		{
+			if (!preg_match_all($pattern, $post_text, $matches))
+			{
+				continue;
+			}
+
+			foreach ($matches[0] as $url)
+			{
+				$tiktok_id = $this->extract_tiktok_id_from_url($url);
+				if ($tiktok_id !== '')
+				{
+					return $this->build_tiktok_media($tiktok_id);
+				}
+			}
+		}
+
+		return $empty;
+	}
+
+	protected function build_tiktok_media(string $tiktok_id): array
+	{
+		$tiktok_id = $this->normalize_tiktok_id($tiktok_id);
+		if ($tiktok_id === '')
+		{
+			return [
+				'media_type' => '',
+				'media_url' => '',
+				'media_id' => '',
+			];
+		}
+
+		return [
+			'media_type' => 'tiktok',
+			'media_url' => 'https://www.tiktok.com/video/' . $tiktok_id,
+			'media_id' => $tiktok_id,
+		];
+	}
+
+	protected function extract_tiktok_id_from_url(string $url): string
+	{
+		$url = htmlspecialchars_decode(trim($url), ENT_QUOTES | ENT_HTML5);
+		$url = trim($url, "\"' \t\n\r\0\x0B");
+		$parts = parse_url($url);
+		if (empty($parts['host']))
+		{
+			return '';
+		}
+
+		$host = strtolower((string) $parts['host']);
+		$path = (string) ($parts['path'] ?? '');
+		if (!preg_match('#(?:^|\.)tiktok\.com$#i', $host))
+		{
+			return '';
+		}
+
+		if (preg_match('#^/(?:@[^/]+/video|v|i18n/share/video|embed(?:/v2)?)/(\d+)#i', $path, $match))
+		{
+			return $this->normalize_tiktok_id((string) $match[1]);
+		}
+
+		return '';
+	}
+
+	protected function normalize_tiktok_id(string $tiktok_id): string
+	{
+		$tiktok_id = trim($tiktok_id);
+
+		return preg_match('/^\d{6,}$/', $tiktok_id) ? $tiktok_id : '';
+	}
+
 	protected function extract_tweet_media(string $post_text): array
 	{
 		$empty = [
@@ -534,44 +812,78 @@ class inline_preview
 
 	protected function get_attachment_media(int $post_id): array
 	{
-		$media = [
-			'image_urls' => [],
-			'video_url' => '',
-		];
+		$media_by_post_id = $this->get_attachment_media_for_posts([$post_id]);
 
-		if ($post_id <= 0 || !defined('ATTACHMENTS_TABLE'))
+		return $media_by_post_id[$post_id] ?? $this->empty_attachment_media();
+	}
+
+	protected function get_attachment_media_for_rows(array $rows): array
+	{
+		$post_ids = [];
+		foreach ($rows as $row)
 		{
-			return $media;
+			if (!empty($row['post_attachment']))
+			{
+				$post_ids[] = (int) $row['post_id'];
+			}
 		}
 
-		$sql = 'SELECT attach_id, mimetype, extension
+		return $this->get_attachment_media_for_posts($post_ids);
+	}
+
+	protected function get_attachment_media_for_posts(array $post_ids): array
+	{
+		$post_ids = array_values(array_unique(array_filter(array_map('intval', $post_ids), static function ($post_id) {
+			return $post_id > 0;
+		})));
+		$media_by_post_id = [];
+		foreach ($post_ids as $post_id)
+		{
+			$media_by_post_id[$post_id] = $this->empty_attachment_media();
+		}
+
+		if (empty($post_ids) || !defined('ATTACHMENTS_TABLE'))
+		{
+			return $media_by_post_id;
+		}
+
+		$sql = 'SELECT post_msg_id, attach_id, mimetype, extension
 			FROM ' . ATTACHMENTS_TABLE . '
-			WHERE post_msg_id = ' . $post_id . '
+			WHERE ' . $this->db->sql_in_set('post_msg_id', $post_ids) . '
 				AND in_message = 0
 				AND is_orphan = 0
-			ORDER BY filetime DESC, attach_id ASC';
+			ORDER BY post_msg_id ASC, filetime DESC, attach_id ASC';
 		$result = $this->db->sql_query($sql);
 
 		while ($row = $this->db->sql_fetchrow($result))
 		{
-			$url = append_sid($this->root_path . 'download/file.' . $this->php_ext, 'id=' . (int) $row['attach_id']);
-			if ($this->is_attachment_image($row))
+			$post_id = (int) $row['post_msg_id'];
+			if (!isset($media_by_post_id[$post_id]))
 			{
-				$media['image_urls'][] = $url;
-			}
-			else if ($media['video_url'] === '' && $this->is_attachment_video($row))
-			{
-				$media['video_url'] = $url;
+				continue;
 			}
 
-			if (count($media['image_urls']) >= self::MAX_IMAGES && $media['video_url'] !== '')
+			$url = append_sid($this->root_path . 'download/file.' . $this->php_ext, 'id=' . (int) $row['attach_id']);
+			if ($this->is_attachment_image($row) && count($media_by_post_id[$post_id]['image_urls']) < self::MAX_IMAGES)
 			{
-				break;
+				$media_by_post_id[$post_id]['image_urls'][] = $url;
+			}
+			else if ($media_by_post_id[$post_id]['video_url'] === '' && $this->is_attachment_video($row))
+			{
+				$media_by_post_id[$post_id]['video_url'] = $url;
 			}
 		}
 		$this->db->sql_freeresult($result);
 
-		return $media;
+		return $media_by_post_id;
+	}
+
+	protected function empty_attachment_media(): array
+	{
+		return [
+			'image_urls' => [],
+			'video_url' => '',
+		];
 	}
 
 	protected function is_attachment_image(array $row): bool
@@ -722,11 +1034,13 @@ class inline_preview
 			'#<VIDEO\b[^>]*>#si',
 			'#<YOUTUBE\b[^>]*>.*?</YOUTUBE>#si',
 			'#<BILIBILI\b[^>]*>.*?</BILIBILI>#si',
+			'#<TIKTOK\b[^>]*>.*?</TIKTOK>#si',
 			'#<TWITTER\b[^>]*>.*?</TWITTER>#si',
 			'#https?://[^\s\[\]<>"\']+\.(?:jpe?g|png|gif|webp|avif|mp4|m4v|mov|webm)(?:[?\#][^\s\[\]<>"\']*)?#i',
 			'#https?://(?:www\.|m\.)?(?:youtube\.com|youtu\.be)/[^\s\[\]<>"\']+#i',
 			'#(?:https?:)?//(?:www\.|m\.)?bilibili\.com/video/[^\s\[\]<>"\']+#i',
 			'#(?:https?:)?//player\.bilibili\.com/player\.html\?[^\s\[\]<>"\']+#i',
+			'#(?:https?:)?//(?:www\.|m\.|vm\.|vt\.)?tiktok\.com/[^\s\[\]<>"\']+#i',
 			'#https?://(?:www\.)?(?:twitter\.com|x\.com)/[^\s\[\]<>"\']+/status(?:es)?/\d+(?:[?\#][^\s\[\]<>"\']*)?#i',
 			'#<br\s*/?>#i',
 			'#</(?:p|div|li|blockquote|pre|tr|table|h[1-6])>#i',

@@ -384,6 +384,10 @@
 			|| $media.is('iframe[src*="platform.twitter.com/embed/Tweet"]');
 	}
 
+	function isInlinePreviewTikTokMedia($media) {
+		return $media.is('[data-s9e-mediaembed="tiktok"]');
+	}
+
 	function getInlinePreviewMediaHeight($media) {
 		var media = $media.get(0);
 		var height = 0;
@@ -400,6 +404,8 @@
 
 		if (!height && isInlinePreviewTwitterMedia($media)) {
 			height = 350;
+		} else if (!height && isInlinePreviewTikTokMedia($media)) {
+			height = 700;
 		} else if (!height && $media.is('video')) {
 			height = 240;
 		}
@@ -418,6 +424,8 @@
 		width = width || parseFloat($media.attr('width')) || 0;
 		if (!width && isInlinePreviewTwitterMedia($media)) {
 			width = 550;
+		} else if (!width && isInlinePreviewTikTokMedia($media)) {
+			width = 340;
 		}
 
 		return width || $media.outerWidth(true) || 0;
@@ -768,7 +776,7 @@
 	}
 
 	function getFirstPreviewContent(html) {
-		var $parsed = $('<div></div>').append($.parseHTML(html || '', document, true));
+		var $parsed = $('<div></div>').append($.parseHTML(html || '', document, false));
 		var $content = $parsed.find('.topic_preview_first').first();
 
 		if (!$content.length) {
@@ -1094,6 +1102,25 @@
 		}));
 	}
 
+	function buildInlineTikTokPreview($placeholder, mediaId) {
+		mediaId = String(mediaId || '');
+		if (!/^\d{6,}$/.test(mediaId)) {
+			return $();
+		}
+
+		return buildInlineStructuredMediaPreview($placeholder, $('<iframe/>', {
+			src: 'https://www.tiktok.com/embed/' + encodeURIComponent(mediaId),
+			loading: 'lazy',
+			frameborder: '0',
+			scrolling: 'no',
+			allowfullscreen: 'allowfullscreen',
+			title: 'TikTok video',
+			width: 340,
+			height: 700,
+			'data-s9e-mediaembed': 'tiktok'
+		}));
+	}
+
 	function getInlinePreviewPlainText($content) {
 		var $clone = $content.clone();
 
@@ -1193,6 +1220,36 @@
 		return buildInlineTextPreview($placeholder, $content, false);
 	}
 
+	function getInlinePreviewContentFromHtml(html) {
+		var $content = getFirstPreviewContent(html);
+
+		if (!$content.length) {
+			$content = $('<div/>', {
+				'class': 'topic_preview_content'
+			}).append($.parseHTML(html || '', document, false));
+		}
+
+		return $content;
+	}
+
+	function buildInlineMediaPreviewFromContent($placeholder, $content) {
+		var images;
+		var $richMedia;
+
+		if (!$content.length) {
+			return $();
+		}
+
+		normalizeUploadedImageLinks($content);
+		images = findInlinePreviewImages($content);
+		if (images.length) {
+			return buildInlineImagePreview($placeholder, images);
+		}
+
+		$richMedia = findInlinePreviewRichMedia($content, false);
+		return $richMedia.length ? buildInlineRichMediaPreview($placeholder, $richMedia) : $();
+	}
+
 	function buildInlinePreviewFromData($placeholder, data) {
 		var allowMedia = isInlinePreviewMediaEnabled($placeholder);
 		var plainText;
@@ -1201,6 +1258,7 @@
 		var $mediaPreview = $();
 		var mediaType;
 		var mediaUrl;
+		var renderedHtml;
 
 		if (!data || parseInt(data.status, 10) !== 200) {
 			return $();
@@ -1220,6 +1278,14 @@
 			}
 		}
 
+		renderedHtml = String(data.rendered_html || '');
+		if (allowMedia && renderedHtml) {
+			$mediaPreview = buildInlineMediaPreviewFromContent($placeholder, getInlinePreviewContentFromHtml(renderedHtml));
+			if ($mediaPreview.length) {
+				return buildInlineMixedPreview($placeholder, plainText, $mediaPreview);
+			}
+		}
+
 		mediaType = String(data.media_type || '');
 		mediaUrl = String(data.media_url || '');
 		if (allowMedia && mediaUrl) {
@@ -1229,6 +1295,8 @@
 				$mediaPreview = buildInlineYoutubePreview($placeholder, String(data.media_id || ''));
 			} else if (mediaType === 'bilibili') {
 				$mediaPreview = buildInlineBilibiliPreview($placeholder, String(data.media_id || ''));
+			} else if (mediaType === 'tiktok') {
+				$mediaPreview = buildInlineTikTokPreview($placeholder, String(data.media_id || ''));
 			} else if (mediaType === 'tweet') {
 				$mediaPreview = buildInlineTweetPreview($placeholder, mediaUrl, String(data.media_id || ''));
 			}
@@ -1445,7 +1513,9 @@
 		if ($preview.length) {
 			syncInlinePreviewSideMediaState($placeholder, $preview);
 			$placeholder.replaceWith($preview);
-			scheduleInlinePreviewMediaFit($preview);
+			if ($preview.find('.toptopics-inline-preview-media-frame').length) {
+				scheduleInlinePreviewMediaFit($preview);
+			}
 			return;
 		}
 

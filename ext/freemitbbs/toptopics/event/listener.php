@@ -51,6 +51,10 @@ class listener implements EventSubscriberInterface
 	protected array $post_dislikers = [];
 	protected array $user_disliked_posts = [];
 	protected array $user_reputation_scores = [];
+	protected array $local_viewtopic_link_titles = [
+		'p' => [],
+		't' => [],
+	];
 	protected ?int $current_user_reputation = null;
 	protected array $index_category_blocks = [];
 	protected ?array $index_summary_topics = null;
@@ -300,7 +304,9 @@ class listener implements EventSubscriberInterface
 
 	public function prefetch_dislikes($event)
 	{
-		$post_list = array_map('intval', $event['post_list']);
+		$this->prefetch_local_viewtopic_link_titles((array) ($event['rowset'] ?? []));
+
+		$post_list = array_map('intval', (array) ($event['post_list'] ?? []));
 		if (empty($post_list))
 		{
 			return;
@@ -457,8 +463,405 @@ class listener implements EventSubscriberInterface
 		{
 			$post_row['U_REPORT'] = '';
 		}
+		if (!empty($post_row['MESSAGE']))
+		{
+			$message = (string) $post_row['MESSAGE'];
+			$message = $this->rewrite_unparsed_media_embed_links($message);
+			$post_row['MESSAGE'] = $this->rewrite_local_viewtopic_link_texts($message);
+		}
 
 		$event['post_row'] = $post_row;
+	}
+
+	protected function rewrite_unparsed_media_embed_links(string $message): string
+	{
+		if ($message === '' || stripos($message, '[media]') === false)
+		{
+			return $message;
+		}
+
+		$rewritten = preg_replace_callback(
+			'#\[media\]\s*<a\b[^>]*\bhref=(["\'])(.*?)\1[^>]*>.*?</a>\s*\[/media\]#is',
+			function ($match) {
+				$params = $this->extract_youtube_embed_params((string) ($match[2] ?? ''));
+
+				return $params === null ? (string) $match[0] : $this->build_youtube_embed_html($params);
+			},
+			$message
+		);
+
+		return $rewritten ?? $message;
+	}
+
+	protected function extract_youtube_embed_params(string $url): ?array
+	{
+		$url = trim(htmlspecialchars_decode($url, ENT_QUOTES | ENT_HTML5));
+		if ($url === '')
+		{
+			return null;
+		}
+
+		$parts = parse_url($url);
+		if ($parts === false || empty($parts['host']))
+		{
+			return null;
+		}
+
+		$host = strtolower((string) $parts['host']);
+		$path = (string) ($parts['path'] ?? '');
+		$query = [];
+		parse_str((string) ($parts['query'] ?? ''), $query);
+		$id = '';
+
+		if ($host === 'youtu.be' || $host === 'www.youtu.be' || $host === 'm.youtu.be')
+		{
+			$id = strtok(ltrim($path, '/'), '/') ?: '';
+		}
+		else if (preg_match('#(?:^|\.)youtube\.com$#i', $host))
+		{
+			if ($path === '/watch')
+			{
+				$id = (string) ($query['v'] ?? '');
+			}
+			else if (preg_match('#^/(?:embed|shorts|live|v)/([-A-Za-z0-9_]+)#', $path, $id_match))
+			{
+				$id = (string) $id_match[1];
+			}
+		}
+
+		if (!preg_match('/^[-A-Za-z0-9_]{6,}$/', $id))
+		{
+			return null;
+		}
+
+		$params = ['id' => $id];
+		if (!empty($query['list']) && preg_match('/^[-A-Za-z0-9_]+$/', (string) $query['list']))
+		{
+			$params['list'] = (string) $query['list'];
+		}
+		if (!empty($query['t']) && preg_match('/^\d[\dhms]*$/', (string) $query['t']))
+		{
+			$params['t'] = (string) $query['t'];
+		}
+
+		return $params;
+	}
+
+	protected function build_youtube_embed_html(array $params): string
+	{
+		$id = $this->escape_attr((string) $params['id']);
+		$src = 'https://www.youtube-nocookie.com/embed/' . rawurlencode((string) $params['id']);
+		$separator = '?';
+		if (!empty($params['list']))
+		{
+			$src .= $separator . 'list=' . rawurlencode((string) $params['list']);
+			$separator = '&';
+		}
+		if (!empty($params['t']))
+		{
+			$src .= $separator . 'start=' . rawurlencode((string) $params['t']);
+		}
+
+		return '<span data-s9e-mediaembed="youtube" style="display:inline-block;width:100%;max-width:640px"><span style="display:block;overflow:hidden;position:relative;padding-bottom:56.25%"><iframe referrerpolicy="origin" allowfullscreen="" loading="lazy" scrolling="no" style="background:url(https://i.ytimg.com/vi/' . $id . '/hqdefault.jpg) 50% 50% / cover;border:0;height:100%;left:0;position:absolute;width:100%" src="' . $this->escape_attr($src) . '"></iframe></span></span>';
+	}
+
+	protected function prefetch_local_viewtopic_link_titles(array $rowset): void
+	{
+		$this->local_viewtopic_link_titles = [
+			'p' => [],
+			't' => [],
+		];
+
+		if (empty($rowset))
+		{
+			return;
+		}
+
+		$post_ids = [];
+		$topic_ids = [];
+		$pattern = '#(?:(?:https?:)?//[^\s<>"\'\]]+|(?:\./|\.\./|/)?viewtopic\.' . preg_quote($this->php_ext, '#') . '\?[^\s<>"\'\]]+)#i';
+		foreach ($rowset as $row)
+		{
+			$post_text = (string) ($row['post_text'] ?? '');
+			if ($post_text === '' || stripos($post_text, 'viewtopic.') === false)
+			{
+				continue;
+			}
+
+			if (!preg_match_all($pattern, $post_text, $matches))
+			{
+				continue;
+			}
+
+			foreach ($matches[0] as $url)
+			{
+				$ref = $this->extract_local_viewtopic_link_ref((string) $url);
+				if ($ref === null)
+				{
+					continue;
+				}
+
+				if (!empty($ref['post_id']))
+				{
+					$post_ids[(int) $ref['post_id']] = (int) $ref['post_id'];
+				}
+				else if (!empty($ref['topic_id']))
+				{
+					$topic_ids[(int) $ref['topic_id']] = (int) $ref['topic_id'];
+				}
+			}
+		}
+
+		$this->load_local_viewtopic_post_titles(array_values($post_ids));
+		$this->load_local_viewtopic_topic_titles(array_values($topic_ids));
+	}
+
+	protected function load_local_viewtopic_post_titles(array $post_ids): void
+	{
+		$post_ids = array_values(array_unique(array_map('intval', $post_ids)));
+		if (empty($post_ids))
+		{
+			return;
+		}
+
+		$sql = 'SELECT p.post_id, p.post_visibility, t.topic_id, t.forum_id, t.topic_title, t.topic_visibility
+			FROM ' . POSTS_TABLE . ' p
+			INNER JOIN ' . TOPICS_TABLE . ' t
+				ON t.topic_id = p.topic_id
+			WHERE ' . $this->db->sql_in_set('p.post_id', $post_ids);
+		$result = $this->db->sql_query($sql);
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$post_id = (int) $row['post_id'];
+			$topic_id = (int) $row['topic_id'];
+			$forum_id = (int) $row['forum_id'];
+			if ((int) $row['post_visibility'] !== ITEM_APPROVED
+				|| (int) $row['topic_visibility'] !== ITEM_APPROVED
+				|| !$this->auth->acl_get('f_read', $forum_id))
+			{
+				continue;
+			}
+
+			$title = $this->format_local_viewtopic_link_title((string) $row['topic_title']);
+			if ($title !== '')
+			{
+				$this->local_viewtopic_link_titles['p'][$post_id] = $title;
+				$this->local_viewtopic_link_titles['t'][$topic_id] = $title;
+			}
+		}
+		$this->db->sql_freeresult($result);
+	}
+
+	protected function load_local_viewtopic_topic_titles(array $topic_ids): void
+	{
+		$topic_ids = array_values(array_unique(array_map('intval', $topic_ids)));
+		$missing_topic_ids = [];
+		foreach ($topic_ids as $topic_id)
+		{
+			if ($topic_id > 0 && empty($this->local_viewtopic_link_titles['t'][$topic_id]))
+			{
+				$missing_topic_ids[] = $topic_id;
+			}
+		}
+
+		if (empty($missing_topic_ids))
+		{
+			return;
+		}
+
+		$sql = 'SELECT topic_id, forum_id, topic_title, topic_visibility
+			FROM ' . TOPICS_TABLE . '
+			WHERE ' . $this->db->sql_in_set('topic_id', $missing_topic_ids);
+		$result = $this->db->sql_query($sql);
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$topic_id = (int) $row['topic_id'];
+			$forum_id = (int) $row['forum_id'];
+			if ((int) $row['topic_visibility'] !== ITEM_APPROVED
+				|| !$this->auth->acl_get('f_read', $forum_id))
+			{
+				continue;
+			}
+
+			$title = $this->format_local_viewtopic_link_title((string) $row['topic_title']);
+			if ($title !== '')
+			{
+				$this->local_viewtopic_link_titles['t'][$topic_id] = $title;
+			}
+		}
+		$this->db->sql_freeresult($result);
+	}
+
+	protected function rewrite_local_viewtopic_link_texts(string $message): string
+	{
+		if ($message === ''
+			|| stripos($message, 'viewtopic.') === false
+			|| (empty($this->local_viewtopic_link_titles['p']) && empty($this->local_viewtopic_link_titles['t'])))
+		{
+			return $message;
+		}
+
+		$rewritten = preg_replace_callback('#<a\b(?=[^>]*\bhref=)([^>]*)>(.*?)</a>#is', function ($matches)
+		{
+			$attributes = (string) $matches[1];
+			$inner_html = (string) $matches[2];
+			if (!preg_match('#\bhref\s*=\s*(["\'])(.*?)\1#is', $attributes, $href_match))
+			{
+				return $matches[0];
+			}
+
+			$href_ref = $this->extract_local_viewtopic_link_ref((string) $href_match[2]);
+			if ($href_ref === null)
+			{
+				return $matches[0];
+			}
+
+			$title = $this->get_local_viewtopic_link_title($href_ref);
+			if ($title === '' || !$this->is_bare_local_viewtopic_link_text($inner_html, $href_ref))
+			{
+				return $matches[0];
+			}
+
+			return '<a' . $attributes . '>' . $title . '</a>';
+		}, $message);
+
+		return $rewritten === null ? $message : $rewritten;
+	}
+
+	protected function is_bare_local_viewtopic_link_text(string $inner_html, array $href_ref): bool
+	{
+		if (preg_match('#<(?:img|svg|i)\b#i', $inner_html))
+		{
+			return false;
+		}
+
+		$visible_text = trim($this->decode_display_text(strip_tags($inner_html)));
+		if ($visible_text === '')
+		{
+			return false;
+		}
+
+		$text_ref = $this->extract_local_viewtopic_link_ref($visible_text);
+		return $text_ref !== null && $this->same_local_viewtopic_link_ref($href_ref, $text_ref);
+	}
+
+	protected function same_local_viewtopic_link_ref(array $left, array $right): bool
+	{
+		$left_post_id = (int) ($left['post_id'] ?? 0);
+		$right_post_id = (int) ($right['post_id'] ?? 0);
+		if ($left_post_id > 0 || $right_post_id > 0)
+		{
+			return $left_post_id > 0 && $left_post_id === $right_post_id;
+		}
+
+		$left_topic_id = (int) ($left['topic_id'] ?? 0);
+		$right_topic_id = (int) ($right['topic_id'] ?? 0);
+		return $left_topic_id > 0 && $left_topic_id === $right_topic_id;
+	}
+
+	protected function get_local_viewtopic_link_title(array $ref): string
+	{
+		$post_id = (int) ($ref['post_id'] ?? 0);
+		if ($post_id > 0)
+		{
+			return $this->local_viewtopic_link_titles['p'][$post_id] ?? '';
+		}
+
+		$topic_id = (int) ($ref['topic_id'] ?? 0);
+		return $topic_id > 0 ? ($this->local_viewtopic_link_titles['t'][$topic_id] ?? '') : '';
+	}
+
+	protected function format_local_viewtopic_link_title(string $title): string
+	{
+		$title = function_exists('censor_text') ? censor_text($title) : $title;
+
+		return $this->escape_display_text($title);
+	}
+
+	protected function extract_local_viewtopic_link_ref(string $url): ?array
+	{
+		$url = trim($this->decode_display_text($url));
+		$url = trim($url, "\"' \t\n\r\0\x0B");
+		if ($url === '' || stripos($url, 'viewtopic.') === false)
+		{
+			return null;
+		}
+
+		$parts = parse_url($url);
+		if ($parts === false || empty($parts['path']))
+		{
+			return null;
+		}
+
+		$path = str_replace('\\', '/', (string) $parts['path']);
+		$expected_script = 'viewtopic.' . strtolower($this->php_ext);
+		if (strtolower(basename($path)) !== $expected_script)
+		{
+			return null;
+		}
+
+		$host = (string) ($parts['host'] ?? '');
+		if ($host !== '' && !$this->is_local_board_host($host))
+		{
+			return null;
+		}
+
+		$params = [];
+		parse_str((string) ($parts['query'] ?? ''), $params);
+		$post_id = (int) ($params['p'] ?? 0);
+		if ($post_id > 0)
+		{
+			return ['post_id' => $post_id];
+		}
+
+		$topic_id = (int) ($params['t'] ?? 0);
+		return $topic_id > 0 ? ['topic_id' => $topic_id] : null;
+	}
+
+	protected function is_local_board_host(string $host): bool
+	{
+		$host = $this->normalize_board_host($host);
+		if ($host === '')
+		{
+			return true;
+		}
+
+		$local_hosts = [
+			$this->request->server('HTTP_HOST', ''),
+			$this->request->server('SERVER_NAME', ''),
+			(string) ($this->config['server_name'] ?? ''),
+			'freemitbbs.com',
+			'www.freemitbbs.com',
+			'themitbbs.com',
+			'www.themitbbs.com',
+		];
+		foreach ($local_hosts as $local_host)
+		{
+			if ($host === $this->normalize_board_host((string) $local_host))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	protected function normalize_board_host(string $host): string
+	{
+		$host = strtolower(trim($host));
+		if ($host === '')
+		{
+			return '';
+		}
+
+		if ($host[0] === '[')
+		{
+			$end = strpos($host, ']');
+			return $end === false ? $host : substr($host, 1, $end - 1);
+		}
+
+		$host = preg_replace('#:\d+$#', '', $host) ?? $host;
+		return strpos($host, 'www.') === 0 ? substr($host, 4) : $host;
 	}
 
 	protected function get_post_dislikers_title(int $post_id, int $dislike_count): string

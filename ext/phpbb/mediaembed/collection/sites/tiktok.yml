@@ -1,0 +1,24 @@
+name: TikTok
+host: tiktok.com
+example:
+    - https://www.tiktok.com/@lauren.feagans/video/6789430799839104261
+    - https://www.tiktok.com/t/ZTkBQKPAt/
+    - https://vm.tiktok.com/TTPdrc3YBJ/
+extract:
+    - "#tiktok\\.com/(?:@[.\\w]+/video|v|i18n/share/video|embed(?:/v2)?)/(?'id'\\d+)#"
+oembed:
+    endpoint: https://www.tiktok.com/oembed?url=
+    scheme: https://www.tiktok.com/video/{@id}
+scrape:
+    match:
+        - "#//(?:www\\.)?tiktok\\.com/t/[-\\w]+/?#"
+        - "#//(?:vm\\.|vt\\.)tiktok\\.com/[-\\w]+/?#"
+    extract:
+        - "#Location:\\s*https://(?:www\\.)?tiktok\\.com/(?:@[.\\w]+/video|v|i18n/share/video)/(?'id'\\d+)#i"
+        - "#https://(?:www\\.)?tiktok\\.com/(?:@[.\\w]+/video|v|i18n/share/video)/(?'id'\\d+)#i"
+iframe:
+    height: 700
+    src: //www.tiktok.com/embed/{@id}
+    width: 340
+tags:
+    - videos

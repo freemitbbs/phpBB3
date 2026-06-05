@@ -1,0 +1,32 @@
+name: YouTube
+host:
+    - youtube.com
+    - youtu.be
+example:
+    - https://www.youtube.com/watch?v=-cEzsCAzTak
+    - https://youtu.be/-cEzsCAzTak
+    - https://www.youtube.com/shorts/-cEzsCAzTak
+    - https://www.youtube.com/live/-cEzsCAzTak
+extract:
+    - "!youtube\\.com/(?:watch.*?v=|shorts/|live/|v/|attribution_link.*?v%3D)(?'id'[-\\w]+)!"
+    - "!youtu\\.be/(?'id'[-\\w]+)!"
+    - "@[#&?]t=(?'t'\\d[\\dhms]*)@"
+    - "![&?]list=(?'list'[-\\w]+)!"
+attributes:
+    id:
+        filterChain:
+            - "#identifier"
+        required: false
+    t:
+        filterChain:
+            - "#timestamp"
+iframe:
+    src: "https://www.youtube.com/embed/<xsl:value-of select=\"@id\"/><xsl:if test=\"@list\">?list=<xsl:value-of select=\"@list\"/></xsl:if><xsl:if test=\"@t\"><xsl:choose><xsl:when test=\"@list\">&amp;</xsl:when><xsl:otherwise>?</xsl:otherwise></xsl:choose>start=<xsl:value-of select=\"@t\"/></xsl:if>"
+    style:
+        background: "url(https://i.ytimg.com/vi/{@id}/hqdefault.jpg) 50% 50% / cover"
+oembed:
+    endpoint: https://www.youtube.com/oembed
+    scheme: https://www.youtube.com/watch?v={@id}
+tags:
+    - livestreaming
+    - videos

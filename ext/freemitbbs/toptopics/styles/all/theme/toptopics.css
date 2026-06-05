@@ -639,6 +639,12 @@ ul.topiclist.forums > li.toptopics-category-row.toptopics-enhanced-topic-list-ro
 	max-width: none !important;
 }
 
+.toptopics-inline-preview-media-frame > [data-s9e-mediaembed="tiktok"],
+.toptopics-inline-preview-media-frame > iframe[data-s9e-mediaembed="tiktok"] {
+	width: 340px !important;
+	max-width: none !important;
+}
+
 .toptopics-inline-preview-media-frame > iframe:not([data-s9e-mediaembed="twitter"]) {
 	width: min(100%, 640px) !important;
 	max-width: 640px !important;
@@ -721,6 +727,12 @@ ul.topiclist.forums > li.toptopics-category-row.toptopics-enhanced-topic-list-ro
 .toptopics-inline-preview-media-box > iframe[data-s9e-mediaembed="twitter"] {
 	width: min(100%, 550px) !important;
 	max-width: 550px !important;
+}
+
+.toptopics-inline-preview-media-box > [data-s9e-mediaembed="tiktok"],
+.toptopics-inline-preview-media-box > iframe[data-s9e-mediaembed="tiktok"] {
+	width: min(100%, 340px) !important;
+	max-width: 340px !important;
 }
 
 .toptopics-inline-preview-media-box > iframe:not([data-s9e-mediaembed="twitter"]),
@@ -1120,6 +1132,12 @@ ul.topiclist.forums > li.toptopics-category-row.toptopics-enhanced-topic-list-ro
 .toptopics-inline-preview-rich iframe[data-s9e-mediaembed="twitter"] {
 	width: min(100%, 550px) !important;
 	max-width: 550px !important;
+}
+
+.toptopics-inline-preview-rich [data-s9e-mediaembed="tiktok"],
+.toptopics-inline-preview-rich iframe[data-s9e-mediaembed="tiktok"] {
+	width: min(100%, 340px) !important;
+	max-width: 340px !important;
 }
 
 .toptopics-inline-preview-rich blockquote.twitter-tweet,
