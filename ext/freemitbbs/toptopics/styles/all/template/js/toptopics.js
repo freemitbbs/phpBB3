@@ -375,6 +375,8 @@
 		var inlinePreviewBatchTimer = null;
 		var inlinePreviewBatchDelay = 25;
 		var inlinePreviewBatchMaxTopics = 40;
+		var inlinePreviewInitIdleTimeout = 700;
+		var inlinePreviewObserverRootMargin = '160px 0px';
 		var inlinePreviewMaxImages = 8;
 		var inlinePreviewTextJoiner = '\u3000';
 		var inlinePreviewRichMediaSelector = '[data-s9e-mediaembed], iframe, video, audio, object, embed, .inline-attachment, .attachbox, blockquote.twitter-tweet, .twitter-tweet, .twitter-tweet-rendered';
@@ -1668,13 +1670,24 @@
 			});
 		}, {
 			root: null,
-			rootMargin: '450px 0px',
+			rootMargin: inlinePreviewObserverRootMargin,
 			threshold: 0
 		});
 
 		placeholders.each(function() {
 			observer.observe(this);
 		});
+	}
+
+	function scheduleInlineTopicPreviewsInit() {
+		if ('requestIdleCallback' in window) {
+			window.requestIdleCallback(initInlineTopicPreviews, {
+				timeout: inlinePreviewInitIdleTimeout
+			});
+			return;
+		}
+
+		setTimeout(initInlineTopicPreviews, 150);
 	}
 
 	phpbb.addAjaxCallback('toggle_toptopics_dislike', function(data) {
@@ -1745,7 +1758,7 @@
 			normalizeInlineRichPreviews();
 			normalizeInlineTextPreviews();
 			syncExistingInlinePreviewSideMediaStates();
-			initInlineTopicPreviews();
+			scheduleInlineTopicPreviewsInit();
 			$(window).on('resize', function() {
 				syncCategoryForumMenus();
 				syncExistingInlinePreviewSideMediaStates();

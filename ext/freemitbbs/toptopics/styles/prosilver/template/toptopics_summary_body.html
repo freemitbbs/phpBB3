@@ -45,6 +45,8 @@
 								{% if top_topics.S_TOPTOPICS_INLINE_LAZY_PREVIEW and top_topics.U_TOPTOPICS_INLINE_PREVIEW %}
 									<div class="toptopics-inline-preview toptopics-inline-preview-lazy {top_topics.TOPIC_DISLIKE_FADE_CLASS}"
 										data-toptopics-inline-preview-url="{{ top_topics.U_TOPTOPICS_INLINE_PREVIEW|e('html_attr') }}"
+										data-toptopics-inline-preview-batch-url="{{ top_topics.U_TOPTOPICS_INLINE_PREVIEW_BATCH|default('')|e('html_attr') }}"
+										data-toptopics-inline-preview-topic-id="{{ top_topics.TOPTOPICS_INLINE_PREVIEW_TOPIC_ID|default(0)|e('html_attr') }}"
 										data-toptopics-topic-url="{{ top_topics.U_TOPIC|e('html_attr') }}"
 										data-toptopics-inline-media-preview="{% if top_topics.S_TOPTOPICS_INLINE_MEDIA_PREVIEW %}1{% else %}0{% endif %}"
 										aria-busy="true"></div>

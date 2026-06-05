@@ -7,12 +7,12 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 class inline_preview
 {
 	private const CACHE_PREFIX = '_freemitbbs_toptopics_inline_preview_';
-	private const CACHE_REVISION = 8;
+	private const CACHE_REVISION = 9;
 	private const CACHE_SECONDS = 600;
 	private const MEDIA_SITE_TAGS_CACHE_KEY = '_freemitbbs_toptopics_inline_preview_media_site_tags';
 	private const MAX_BATCH_TOPICS = 40;
 	private const MAX_IMAGES = 8;
-	private const MAX_TEXT_CHARS = 420;
+	private const MAX_TEXT_CHARS = 300;
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\cache\service $cache;
@@ -22,6 +22,8 @@ class inline_preview
 	protected string $root_path;
 	protected string $php_ext;
 	protected ?array $media_site_tags = null;
+	protected ?\phpbb\auth\auth $anonymous_auth = null;
+	protected array $anonymous_forum_read_cache = [];
 
 	public function __construct(
 		\phpbb\auth\auth $auth,
@@ -45,13 +47,24 @@ class inline_preview
 	public function base($topic): JsonResponse
 	{
 		$topic_id = (int) $topic;
-		$preview = $this->get_preview_for_topic($topic_id);
+		if ($topic_id <= 0)
+		{
+			return $this->json_response(['status' => 404], 404);
+		}
+
+		$rows = $this->get_preview_rows([$topic_id]);
+		if (!isset($rows[$topic_id]))
+		{
+			return $this->json_response(['status' => 404], 404);
+		}
+
+		$preview = $this->build_preview_for_row($rows[$topic_id]);
 		if (!$preview)
 		{
 			return $this->json_response(['status' => 404], 404);
 		}
 
-		return $this->json_response($preview);
+		return $this->json_response($preview, 200, $this->is_public_cacheable_row($rows[$topic_id]));
 	}
 
 	public function batch(): JsonResponse
@@ -65,10 +78,16 @@ class inline_preview
 		$rows = $this->get_preview_rows($topic_ids);
 		$response = [];
 		$pending_rows = [];
+		$public_cacheable = true;
 		foreach ($topic_ids as $topic_id)
 		{
 			if (isset($rows[$topic_id]))
 			{
+				if (!$this->is_public_cacheable_row($rows[$topic_id]))
+				{
+					$public_cacheable = false;
+				}
+
 				$cached = $this->get_cached_preview_for_row($rows[$topic_id]);
 				if ($cached)
 				{
@@ -82,6 +101,7 @@ class inline_preview
 			else
 			{
 				$response[(string) $topic_id] = ['status' => 404];
+				$public_cacheable = false;
 			}
 		}
 
@@ -91,12 +111,16 @@ class inline_preview
 			$post_id = (int) $row['post_id'];
 			$preview = $this->build_preview_for_row($row, $attachment_media_by_post_id[$post_id] ?? null, true);
 			$response[(string) $topic_id] = $preview ?: ['status' => 404];
+			if (!$preview)
+			{
+				$public_cacheable = false;
+			}
 		}
 
-		return $this->json_response($response);
+		return $this->json_response($response, 200, $public_cacheable);
 	}
 
-	protected function json_response($data, int $status = 200): JsonResponse
+	protected function json_response($data, int $status = 200, bool $public_cacheable = false): JsonResponse
 	{
 		$response = new JsonResponse(null, $status);
 		if (\defined('JSON_INVALID_UTF8_SUBSTITUTE'))
@@ -104,19 +128,30 @@ class inline_preview
 			$response->setEncodingOptions($response->getEncodingOptions() | \JSON_INVALID_UTF8_SUBSTITUTE);
 		}
 
-		return $response->setData($data);
+		$response->setData($data);
+
+		return $this->apply_cache_headers($response, $status, $public_cacheable);
 	}
 
-	protected function get_preview_for_topic(int $topic_id): array|false
+	protected function apply_cache_headers(JsonResponse $response, int $status, bool $public_cacheable): JsonResponse
 	{
-		if ($topic_id <= 0)
+		if ($status !== 200 || !$public_cacheable)
 		{
-			return false;
+			return $response;
 		}
 
-		$rows = $this->get_preview_rows([$topic_id]);
+		$response->headers->remove('Set-Cookie');
+		if (!\headers_sent())
+		{
+			\header_remove('Set-Cookie');
+		}
 
-		return isset($rows[$topic_id]) ? $this->build_preview_for_row($rows[$topic_id]) : false;
+		$response->headers->set('Cache-Control', 'public, max-age=60, s-maxage=' . self::CACHE_SECONDS);
+		$response->headers->set('CDN-Cache-Control', 'public, max-age=' . self::CACHE_SECONDS);
+		$response->headers->set('Cloudflare-CDN-Cache-Control', 'public, max-age=' . self::CACHE_SECONDS);
+		$response->headers->set('Vary', 'Accept-Encoding');
+
+		return $response;
 	}
 
 	protected function get_preview_rows(array $topic_ids): array
@@ -132,10 +167,12 @@ class inline_preview
 		$sql = 'SELECT t.topic_id, t.forum_id, t.topic_first_post_id, t.topic_visibility, t.topic_poster,
 				p.post_id, p.poster_id, p.post_visibility, p.post_text, p.bbcode_uid, p.bbcode_bitfield,
 				p.enable_bbcode, p.enable_smilies, p.enable_magic_url, p.post_attachment,
-				p.post_time, p.post_edit_time
+				p.post_time, p.post_edit_time, f.forum_password
 			FROM ' . TOPICS_TABLE . ' t
 			INNER JOIN ' . POSTS_TABLE . ' p
 				ON p.post_id = t.topic_first_post_id
+			INNER JOIN ' . FORUMS_TABLE . ' f
+				ON f.forum_id = t.forum_id
 			WHERE ' . $this->db->sql_in_set('t.topic_id', $topic_ids);
 		$result = $this->db->sql_query($sql);
 
@@ -161,6 +198,51 @@ class inline_preview
 			&& $this->auth->acl_get('f_read', $forum_id)
 			&& $this->content_visibility->is_visible('topic', $forum_id, $row)
 			&& $this->content_visibility->is_visible('post', $forum_id, $row);
+	}
+
+	protected function is_public_cacheable_row(array $row): bool
+	{
+		return \defined('ITEM_APPROVED')
+			&& (int) ($row['topic_visibility'] ?? 0) === ITEM_APPROVED
+			&& (int) ($row['post_visibility'] ?? 0) === ITEM_APPROVED
+			&& (string) ($row['forum_password'] ?? '') === ''
+			&& $this->anonymous_can_read_forum((int) ($row['forum_id'] ?? 0));
+	}
+
+	protected function anonymous_can_read_forum(int $forum_id): bool
+	{
+		if ($forum_id <= 0 || !\defined('ANONYMOUS'))
+		{
+			return false;
+		}
+
+		if (!array_key_exists($forum_id, $this->anonymous_forum_read_cache))
+		{
+			$anonymous_auth = $this->get_anonymous_auth();
+			$this->anonymous_forum_read_cache[$forum_id] = $anonymous_auth !== null
+				&& (bool) $anonymous_auth->acl_get('f_read', $forum_id);
+		}
+
+		return $this->anonymous_forum_read_cache[$forum_id];
+	}
+
+	protected function get_anonymous_auth(): ?\phpbb\auth\auth
+	{
+		if ($this->anonymous_auth !== null)
+		{
+			return $this->anonymous_auth;
+		}
+
+		$anonymous_data = $this->auth->obtain_user_data(ANONYMOUS);
+		if (!is_array($anonymous_data))
+		{
+			return null;
+		}
+
+		$this->anonymous_auth = clone $this->auth;
+		$this->anonymous_auth->acl($anonymous_data);
+
+		return $this->anonymous_auth;
 	}
 
 	protected function get_cached_preview_for_row(array $row): array|false
