@@ -378,6 +378,7 @@
 		var inlinePreviewInitIdleTimeout = 700;
 		var inlinePreviewObserverRootMargin = '160px 0px';
 		var inlinePreviewMaxImages = 8;
+		var inlinePreviewTikTokFitHeight = 360;
 		var inlinePreviewTextJoiner = '\u3000';
 		var inlinePreviewRichMediaSelector = '[data-s9e-mediaembed], iframe, video, audio, object, embed, .inline-attachment, .attachbox, blockquote.twitter-tweet, .twitter-tweet, .twitter-tweet-rendered';
 
@@ -393,6 +394,10 @@
 	function getInlinePreviewMediaHeight($media) {
 		var media = $media.get(0);
 		var height = 0;
+
+		if (isInlinePreviewTikTokMedia($media)) {
+			return inlinePreviewTikTokFitHeight;
+		}
 
 		if (media && media.style && media.style.height) {
 			height = parseFloat(media.style.height);
@@ -981,6 +986,8 @@
 			$mediaNode = $media.detach().removeAttr('width').removeAttr('height');
 			if ($mediaNode.is('[data-s9e-mediaembed="youtube"], [data-s9e-mediaembed="bilibili"]')) {
 				frameClass += ' toptopics-inline-preview-media-frame-youtube';
+			} else if (isInlinePreviewTikTokMedia($mediaNode)) {
+				frameClass += ' toptopics-inline-preview-media-frame-tiktok';
 			}
 			$mediaNode.find('script').remove();
 			$frame = $('<div/>', {
@@ -1003,6 +1010,8 @@
 
 		if ($mediaNode.is('[data-s9e-mediaembed="youtube"], [data-s9e-mediaembed="bilibili"], .toptopics-inline-preview-youtube-thumb')) {
 			frameClass += ' toptopics-inline-preview-media-frame-youtube';
+		} else if (isInlinePreviewTikTokMedia($mediaNode)) {
+			frameClass += ' toptopics-inline-preview-media-frame-tiktok';
 		}
 
 		if (fadeClass) {
