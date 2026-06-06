@@ -1,23 +1,25 @@
 {% if S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW %}
-{% for context in [topicrow, rtng] %}
-	{% if context.S_TOPTOPICS_INLINE_LAZY_PREVIEW and context.U_TOPTOPICS_INLINE_PREVIEW %}
-		<div class="toptopics-inline-preview toptopics-inline-preview-lazy {{ context.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS }}"
-			data-toptopics-inline-preview-url="{{ context.U_TOPTOPICS_INLINE_PREVIEW|e('html_attr') }}"
-			data-toptopics-inline-preview-batch-url="{{ context.U_TOPTOPICS_INLINE_PREVIEW_BATCH|default('')|e('html_attr') }}"
-			data-toptopics-inline-preview-topic-id="{{ context.TOPTOPICS_INLINE_PREVIEW_TOPIC_ID|default(0)|e('html_attr') }}"
-			data-toptopics-topic-url="{{ context.U_VIEW_TOPIC|e('html_attr') }}"
-			data-toptopics-inline-media-preview="{% if context.S_TOPTOPICS_INLINE_MEDIA_PREVIEW %}1{% else %}0{% endif %}"
-			aria-busy="true"></div>
-	{% elseif context.S_TOPTOPICS_INLINE_IMAGE_PREVIEW and context.TOPTOPICS_INLINE_IMAGE_URL %}
-		<a class="toptopics-inline-preview toptopics-inline-preview-image" href="{{ context.U_VIEW_TOPIC }}">
-			<img src="{{ context.TOPTOPICS_INLINE_IMAGE_URL|e('html_attr') }}" alt="" loading="lazy">
-		</a>
-	{% elseif context.S_TOPTOPICS_INLINE_EXCERPT_PREVIEW and context.TOPTOPICS_INLINE_EXCERPT %}
-		<div class="toptopics-inline-preview toptopics-inline-preview-text{% if context.S_TOPTOPICS_INLINE_RICH_PREVIEW %} toptopics-inline-preview-rich{% endif %} {{ context.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS }}">
-			{{ context.TOPTOPICS_INLINE_EXCERPT|raw }}
-		</div>
-	{% endif %}
-{% endfor %}
+	{% for context in [topicrow, rtng] %}
+		{% if context.S_TOPTOPICS_INLINE_SERVER_PREVIEW and context.TOPTOPICS_INLINE_PREVIEW_HTML %}
+			{{ context.TOPTOPICS_INLINE_PREVIEW_HTML|raw }}
+		{% elseif context.S_TOPTOPICS_INLINE_LAZY_PREVIEW and context.U_TOPTOPICS_INLINE_PREVIEW %}
+			<div class="toptopics-inline-preview toptopics-inline-preview-lazy {{ context.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS }}"
+				data-toptopics-inline-preview-url="{{ context.U_TOPTOPICS_INLINE_PREVIEW|e('html_attr') }}"
+				data-toptopics-inline-preview-batch-url="{{ context.U_TOPTOPICS_INLINE_PREVIEW_BATCH|default('')|e('html_attr') }}"
+				data-toptopics-inline-preview-topic-id="{{ context.TOPTOPICS_INLINE_PREVIEW_TOPIC_ID|default(0)|e('html_attr') }}"
+				data-toptopics-topic-url="{{ context.U_VIEW_TOPIC|replace({'&amp;': '&'})|e('html_attr') }}"
+				data-toptopics-inline-media-preview="{% if context.S_TOPTOPICS_INLINE_MEDIA_PREVIEW %}1{% else %}0{% endif %}"
+				aria-busy="true"></div>
+		{% elseif context.S_TOPTOPICS_INLINE_IMAGE_PREVIEW and context.TOPTOPICS_INLINE_IMAGE_URL %}
+			<a class="toptopics-inline-preview toptopics-inline-preview-image" href="{{ context.U_VIEW_TOPIC }}">
+				<img src="{{ context.TOPTOPICS_INLINE_IMAGE_URL|e('html_attr') }}" alt="" loading="lazy">
+			</a>
+		{% elseif context.S_TOPTOPICS_INLINE_EXCERPT_PREVIEW and context.TOPTOPICS_INLINE_EXCERPT %}
+			<div class="toptopics-inline-preview toptopics-inline-preview-text{% if context.S_TOPTOPICS_INLINE_RICH_PREVIEW %} toptopics-inline-preview-rich{% endif %} {{ context.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS }}">
+				{{ context.TOPTOPICS_INLINE_EXCERPT|raw }}
+			</div>
+		{% endif %}
+	{% endfor %}
 {% endif %}
 
 {% if not S_IS_BOT %}

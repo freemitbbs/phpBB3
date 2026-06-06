@@ -7,7 +7,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 class inline_preview
 {
 	private const CACHE_PREFIX = '_freemitbbs_toptopics_inline_preview_';
-	private const CACHE_REVISION = 9;
+	private const CACHE_REVISION = 10;
 	private const CACHE_SECONDS = 600;
 	private const MEDIA_SITE_TAGS_CACHE_KEY = '_freemitbbs_toptopics_inline_preview_media_site_tags';
 	private const MAX_BATCH_TOPICS = 40;
@@ -118,6 +118,51 @@ class inline_preview
 		}
 
 		return $this->json_response($response, 200, $public_cacheable);
+	}
+
+	public function previews_for_topic_ids(array $topic_ids): array
+	{
+		$topic_ids = array_values(array_unique(array_filter(array_map('intval', $topic_ids), static function ($topic_id) {
+			return $topic_id > 0;
+		})));
+		if (empty($topic_ids))
+		{
+			return [];
+		}
+
+		$rows = $this->get_preview_rows($topic_ids);
+		$response = [];
+		$pending_rows = [];
+		foreach ($topic_ids as $topic_id)
+		{
+			if (!isset($rows[$topic_id]))
+			{
+				continue;
+			}
+
+			$cached = $this->get_cached_preview_for_row($rows[$topic_id]);
+			if ($cached)
+			{
+				$response[$topic_id] = $cached;
+			}
+			else
+			{
+				$pending_rows[$topic_id] = $rows[$topic_id];
+			}
+		}
+
+		$attachment_media_by_post_id = $this->get_attachment_media_for_rows($pending_rows);
+		foreach ($pending_rows as $topic_id => $row)
+		{
+			$post_id = (int) $row['post_id'];
+			$preview = $this->build_preview_for_row($row, $attachment_media_by_post_id[$post_id] ?? null, true);
+			if ($preview)
+			{
+				$response[$topic_id] = $preview;
+			}
+		}
+
+		return $response;
 	}
 
 	protected function json_response($data, int $status = 200, bool $public_cacheable = false): JsonResponse
@@ -1193,6 +1238,11 @@ class inline_preview
 		if (function_exists('mb_strlen') && function_exists('mb_substr'))
 		{
 			return mb_strlen($text, 'UTF-8') > $max_chars ? mb_substr($text, 0, $max_chars, 'UTF-8') : $text;
+		}
+
+		if (preg_match('/^.{0,' . $max_chars . '}/us', $text, $matches) === 1)
+		{
+			return $matches[0];
 		}
 
 		return strlen($text) > $max_chars ? substr($text, 0, $max_chars) : $text;

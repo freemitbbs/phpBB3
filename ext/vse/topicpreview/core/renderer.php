@@ -202,13 +202,12 @@ class renderer
 		// Normalize line breaks
 		$plain_text = preg_replace('/(?:(?:\r\n|\r|\n)\s*){2}/', "\n\n", $plain_text);
 
-		if (utf8_strlen($plain_text) <= $limit)
+		if ($this->unicode_strlen($plain_text) <= $limit)
 		{
 			return nl2br(utf8_htmlspecialchars($plain_text));
 		}
 
-		// Trim and remove partial words
-		$trimmed = preg_replace('/\s+?(\S+)?$/', '', utf8_substr($plain_text, 0, $limit));
+		$trimmed = $this->trim_plain_text_to_limit($plain_text, $limit);
 
 		return nl2br(utf8_htmlspecialchars($trimmed)) . '...';
 	}
@@ -305,7 +304,7 @@ class renderer
 			}
 		}
 
-		if (utf8_strlen($plain_text) <= $limit)
+		if ($this->unicode_strlen($plain_text) <= $limit)
 		{
 			return $rendered_text;
 		}
@@ -326,7 +325,7 @@ class renderer
 	{
 		// Count text + images for proper length calculation
 		$text_content = strip_tags($html);
-		$total_length = utf8_strlen($text_content) + substr_count($html, '<img');
+		$total_length = $this->unicode_strlen($text_content) + substr_count($html, '<img');
 
 		if ($total_length <= $limit)
 		{
@@ -337,7 +336,7 @@ class renderer
 		$cut_pos = $limit;
 		if ($limit > 20)
 		{
-			$last_space = utf8_strrpos(utf8_substr($text_content, 0, $limit), ' ');
+			$last_space = $this->unicode_strrpos($this->unicode_substr($text_content, 0, $limit), ' ');
 			if ($last_space !== false && $last_space > $limit * 0.7)
 			{
 				$cut_pos = $last_space;
@@ -351,7 +350,7 @@ class renderer
 		}
 
 		// Fallback: simple text truncation
-		return utf8_htmlspecialchars(utf8_substr($text_content, 0, $cut_pos)) . '...';
+		return utf8_htmlspecialchars($this->unicode_substr($text_content, 0, $cut_pos)) . '...';
 	}
 
 	/**
@@ -417,12 +416,12 @@ class renderer
 			if ($child->nodeType === XML_TEXT_NODE)
 			{
 				$text = $child->nodeValue;
-				$text_len = utf8_strlen($text);
+				$text_len = $this->unicode_strlen($text);
 
 				if ($count + $text_len > $limit)
 				{
 					$remaining = $limit - $count;
-					$child->nodeValue = utf8_substr($text, 0, $remaining) . '...';
+					$child->nodeValue = $this->unicode_substr($text, 0, $remaining) . '...';
 					$count = $limit;
 				}
 				else
@@ -450,5 +449,111 @@ class renderer
 		}
 
 		return $count;
+	}
+
+	/**
+	 * Trim plain text without splitting UTF-8 characters.
+	 *
+	 * @param string $text  Plain text
+	 * @param int    $limit Character limit
+	 *
+	 * @return string
+	 */
+	protected function trim_plain_text_to_limit($text, $limit)
+	{
+		$trimmed = $this->unicode_substr($text, 0, $limit);
+		$word_trimmed = preg_replace('/\s+?(\S+)?$/u', '', $trimmed);
+		if (is_string($word_trimmed) && $word_trimmed !== '' && $this->unicode_strlen($word_trimmed) >= (int) ($limit * 0.7))
+		{
+			return $word_trimmed;
+		}
+
+		return $trimmed;
+	}
+
+	/**
+	 * Get UTF-8 character length with phpBB, mbstring, then PCRE fallbacks.
+	 *
+	 * @param string $text Text to measure
+	 *
+	 * @return int
+	 */
+	protected function unicode_strlen($text)
+	{
+		if (function_exists('utf8_strlen'))
+		{
+			return utf8_strlen($text);
+		}
+
+		if (function_exists('mb_strlen'))
+		{
+			return mb_strlen($text, 'UTF-8');
+		}
+
+		if (preg_match_all('/./us', $text, $matches) !== false)
+		{
+			return count($matches[0]);
+		}
+
+		return strlen($text);
+	}
+
+	/**
+	 * Return a UTF-8 substring with phpBB, mbstring, then PCRE fallbacks.
+	 *
+	 * @param string   $text   Text to slice
+	 * @param int      $offset Character offset
+	 * @param int|null $length Character length
+	 *
+	 * @return string
+	 */
+	protected function unicode_substr($text, $offset, $length = null)
+	{
+		if (function_exists('utf8_substr'))
+		{
+			return $length === null ? utf8_substr($text, $offset) : utf8_substr($text, $offset, $length);
+		}
+
+		if (function_exists('mb_substr'))
+		{
+			return $length === null ? mb_substr($text, $offset, null, 'UTF-8') : mb_substr($text, $offset, $length, 'UTF-8');
+		}
+
+		if (preg_match_all('/./us', $text, $matches) !== false)
+		{
+			$chars = array_slice($matches[0], $offset, $length);
+			return implode('', $chars);
+		}
+
+		return $length === null ? substr($text, $offset) : substr($text, $offset, $length);
+	}
+
+	/**
+	 * Find the last UTF-8 position of a substring.
+	 *
+	 * @param string $text   Haystack
+	 * @param string $needle Needle
+	 *
+	 * @return int|false
+	 */
+	protected function unicode_strrpos($text, $needle)
+	{
+		if (function_exists('utf8_strrpos'))
+		{
+			return utf8_strrpos($text, $needle);
+		}
+
+		if (function_exists('mb_strrpos'))
+		{
+			return mb_strrpos($text, $needle, 0, 'UTF-8');
+		}
+
+		$byte_pos = strrpos($text, $needle);
+		if ($byte_pos === false)
+		{
+			return false;
+		}
+
+		return $this->unicode_strlen(substr($text, 0, $byte_pos));
 	}
 }

@@ -508,6 +508,30 @@ ul.topiclist.forums > li.toptopics-category-row.toptopics-enhanced-topic-list-ro
 	gap: 3px;
 }
 
+.toptopics-topic-like-stat {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 3px;
+}
+
+.toptopics-topic-like-stat .liked {
+	float: none;
+	display: inline-flex;
+	align-items: center;
+	width: auto;
+	height: auto;
+	margin: 0;
+	line-height: 1;
+}
+
+.toptopics-topic-like-stat .liked::before {
+	position: static;
+	left: auto;
+	padding-right: 0;
+	font-size: 1em;
+	color: #d94b5f;
+}
+
 .lastpost .toptopics-lastpost-stats > span + span::before {
 	content: "\2022";
 	margin: 0 8px 0 4px;

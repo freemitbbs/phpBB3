@@ -155,7 +155,7 @@ const heartbeatTimeoutMs = 10000;
 const heartbeatMaxMisses = 2;
 const syncRetryBaseMs = 500;
 const syncRetryMaxMs = 5000;
-const dealingCardIntervalMs = 450;
+const dealingCardIntervalMs = 500;
 const tableNoticeIgnoredMessages = new Set([
   "",
   "正在连接",

@@ -17,6 +17,7 @@ class listener implements EventSubscriberInterface
 	private const DUPLICATE_POST_WINDOW_SECONDS = 60;
 	private const DUPLICATE_POST_LOCK_TIMEOUT_SECONDS = 0.5;
 	private const INLINE_PREVIEW_MAX_IMAGES = 8;
+	private const INLINE_PREVIEW_SERVER_RENDER_LIMIT = 5;
 	private const REPUTATION_TIER_STEADY = 100;
 	private const REPUTATION_TIER_TRUSTED = 500;
 	private const REPUTATION_TIER_ELITE = 2000;
@@ -37,6 +38,8 @@ class listener implements EventSubscriberInterface
 	protected $recenttopicsng_functions = null;
 	protected $topicpreview_data;
 	protected $topicpreview_renderer;
+	protected ?\freemitbbs\toptopics\controller\inline_preview $inline_preview;
+	protected $topic_likes;
 	protected $collapsible_operator;
 	protected string $dislikes_table;
 	protected string $likes_table;
@@ -55,6 +58,7 @@ class listener implements EventSubscriberInterface
 		'p' => [],
 		't' => [],
 	];
+	protected array $inline_preview_visible_server_render_counts = [];
 	protected ?int $current_user_reputation = null;
 	protected array $index_category_blocks = [];
 	protected ?array $index_summary_topics = null;
@@ -90,7 +94,9 @@ class listener implements EventSubscriberInterface
 		string $topic_overrides_table,
 		string $user_reputation_table,
 		string $root_path,
-		string $php_ext
+		string $php_ext,
+		?\freemitbbs\toptopics\controller\inline_preview $inline_preview = null,
+		$topic_likes = null
 	)
 	{
 		$this->auth = $auth;
@@ -107,6 +113,8 @@ class listener implements EventSubscriberInterface
 		$this->reputation = $reputation;
 		$this->topicpreview_data = $topicpreview_data;
 		$this->topicpreview_renderer = $topicpreview_renderer;
+		$this->inline_preview = $inline_preview;
+		$this->topic_likes = $topic_likes;
 		$this->collapsible_operator = $collapsible_operator;
 		$this->dislikes_table = $dislikes_table;
 		$this->likes_table = $this->derive_likes_table($dislikes_table);
@@ -1176,13 +1184,15 @@ class listener implements EventSubscriberInterface
 			}
 			unset($row);
 
-			$event['rowset'] = $this->add_inline_topic_previews($rowset);
+			$rowset = $this->add_topic_like_counts($rowset);
+			$event['rowset'] = $this->add_inline_topic_previews($rowset, $topic_list, false);
 			return;
 		}
 
-		$event['topic_list'] = array_values(array_filter($topic_list, static function ($topic_id) use ($excluded_topic_ids) {
+		$filtered_topic_list = array_values(array_filter($topic_list, static function ($topic_id) use ($excluded_topic_ids) {
 			return !isset($excluded_topic_ids[(int) $topic_id]);
 		}));
+		$event['topic_list'] = $filtered_topic_list;
 
 		$filtered_rowset = [];
 		foreach ($rowset as $row)
@@ -1199,7 +1209,8 @@ class listener implements EventSubscriberInterface
 			}
 			$filtered_rowset[] = $row;
 		}
-		$event['rowset'] = $this->add_inline_topic_previews($filtered_rowset);
+		$filtered_rowset = $this->add_topic_like_counts($filtered_rowset);
+		$event['rowset'] = $this->add_inline_topic_previews($filtered_rowset, $filtered_topic_list, false);
 	}
 
 	public function recenttopics_fade_first_post_disliked_topic($event): void
@@ -1214,7 +1225,8 @@ class listener implements EventSubscriberInterface
 		$tpl_ary['TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS'] = $this->get_topic_dislike_fade_class(
 			(int) ($row['TOPTOPICS_FIRST_POST_NET_DISLIKE_SCORE'] ?? 0)
 		);
-		$tpl_ary = $this->copy_inline_topic_preview_vars($tpl_ary, $row);
+		$tpl_ary['TOPIC_LIKE_COUNT'] = $this->get_topic_like_count_from_row($row);
+		$tpl_ary = $this->copy_inline_topic_preview_vars($tpl_ary, $row, true);
 		$event['tpl_ary'] = $tpl_ary;
 	}
 
@@ -1261,7 +1273,7 @@ class listener implements EventSubscriberInterface
 		}
 		unset($row);
 
-		$event['rowset'] = $this->add_inline_topic_previews($rowset);
+		$event['rowset'] = $this->add_inline_topic_previews($rowset, $topic_list, false);
 	}
 
 	public function viewforum_fade_first_post_disliked_topic($event): void
@@ -1276,7 +1288,7 @@ class listener implements EventSubscriberInterface
 		$topic_row['TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS'] = $this->get_topic_dislike_fade_class(
 			(int) ($row['TOPTOPICS_FIRST_POST_NET_DISLIKE_SCORE'] ?? 0)
 		);
-		$topic_row = $this->copy_inline_topic_preview_vars($topic_row, $row);
+		$topic_row = $this->copy_inline_topic_preview_vars($topic_row, $row, true);
 		$event['topic_row'] = $topic_row;
 	}
 
@@ -2883,6 +2895,7 @@ class listener implements EventSubscriberInterface
 			$this->language->lang('REPLIES') => (int) ($topic['replies'] ?? 0),
 			$this->language->lang('VIEWS') => (int) ($topic['views'] ?? 0),
 		];
+		$like_count = $this->get_topic_like_count_from_row($topic);
 
 		$html = '<div class="responsive-show toptopics-mobile-stats" style="display: none;">';
 		foreach ($stats as $label => $value)
@@ -2891,6 +2904,10 @@ class listener implements EventSubscriberInterface
 				. $this->escape_text($label)
 				. $this->escape_text($this->language->lang('COLON'))
 				. ' <strong>' . $value . '</strong></span>';
+		}
+		if ($like_count > 0)
+		{
+			$html .= $this->build_topic_like_stat_html($like_count, 'toptopics-mobile-stat');
 		}
 		$html .= '</div>';
 
@@ -2903,6 +2920,7 @@ class listener implements EventSubscriberInterface
 			$this->language->lang('REPLIES') => (int) ($topic['replies'] ?? 0),
 			$this->language->lang('VIEWS') => (int) ($topic['views'] ?? 0),
 		];
+		$like_count = $this->get_topic_like_count_from_row($topic);
 
 		$html = '<span class="toptopics-lastpost-stats">';
 		foreach ($stats as $label => $value)
@@ -2912,9 +2930,25 @@ class listener implements EventSubscriberInterface
 				. $this->escape_text($this->language->lang('COLON'))
 				. ' <strong>' . $value . '</strong></span>';
 		}
+		if ($like_count > 0)
+		{
+			$html .= $this->build_topic_like_stat_html($like_count);
+		}
 		$html .= '</span>';
 
 		return $html;
+	}
+
+	protected function build_topic_like_stat_html(int $like_count, string $extra_class = ''): string
+	{
+		if ($like_count <= 0)
+		{
+			return '';
+		}
+
+		return '<span class="toptopics-topic-like-stat' . ($extra_class !== '' ? ' ' . $this->escape_attr($extra_class) : '') . '" title="'
+			. $this->escape_attr($this->language->lang('LIKED_BY'))
+			. '"><i class="liked" aria-hidden="true"></i><strong>' . $like_count . '</strong></span>';
 	}
 
 	protected function build_topic_stats_columns_html(array $topic): string
@@ -3080,6 +3114,11 @@ class listener implements EventSubscriberInterface
 			return '';
 		}
 
+		if (!empty($topic['S_TOPTOPICS_INLINE_SERVER_PREVIEW']) && !empty($topic['TOPTOPICS_INLINE_PREVIEW_HTML']))
+		{
+			return (string) $topic['TOPTOPICS_INLINE_PREVIEW_HTML'];
+		}
+
 		if (empty($topic['S_TOPTOPICS_INLINE_LAZY_PREVIEW'])
 			|| empty($topic['U_TOPTOPICS_INLINE_PREVIEW']))
 		{
@@ -3088,12 +3127,276 @@ class listener implements EventSubscriberInterface
 
 		return '<div class="toptopics-inline-preview toptopics-inline-preview-lazy'
 			. ($topic_fade_class !== '' ? ' ' . $topic_fade_class : '')
-			. '" data-toptopics-inline-preview-url="' . $this->escape_attr((string) $topic['U_TOPTOPICS_INLINE_PREVIEW']) . '"'
-			. ' data-toptopics-inline-preview-batch-url="' . $this->escape_attr((string) ($topic['U_TOPTOPICS_INLINE_PREVIEW_BATCH'] ?? '')) . '"'
-			. ' data-toptopics-inline-preview-topic-id="' . (int) ($topic['TOPTOPICS_INLINE_PREVIEW_TOPIC_ID'] ?? 0) . '"'
-			. ' data-toptopics-topic-url="' . $this->escape_attr($topic_url) . '"'
-			. ' data-toptopics-inline-media-preview="' . (!empty($topic['S_TOPTOPICS_INLINE_MEDIA_PREVIEW']) ? '1' : '0') . '"'
-			. ' aria-busy="true"></div>';
+				. '" data-toptopics-inline-preview-url="' . $this->escape_attr((string) $topic['U_TOPTOPICS_INLINE_PREVIEW']) . '"'
+				. ' data-toptopics-inline-preview-batch-url="' . $this->escape_attr((string) ($topic['U_TOPTOPICS_INLINE_PREVIEW_BATCH'] ?? '')) . '"'
+				. ' data-toptopics-inline-preview-topic-id="' . (int) ($topic['TOPTOPICS_INLINE_PREVIEW_TOPIC_ID'] ?? 0) . '"'
+				. ' data-toptopics-topic-url="' . $this->escape_attr($this->decode_html_url($topic_url)) . '"'
+				. ' data-toptopics-inline-media-preview="' . (!empty($topic['S_TOPTOPICS_INLINE_MEDIA_PREVIEW']) ? '1' : '0') . '"'
+				. ' aria-busy="true"></div>';
+	}
+
+	protected function build_inline_preview_topic_url(array $topic): string
+	{
+		return $this->decode_html_url(append_sid(
+			$this->root_path . 'viewtopic.' . $this->php_ext,
+			'f=' . (int) ($topic['forum_id'] ?? 0) . '&t=' . (int) ($topic['topic_id'] ?? 0)
+		));
+	}
+
+	protected function decode_html_url(string $url): string
+	{
+		return html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+	}
+
+	protected function build_server_inline_topic_preview_html(array $preview, string $topic_url, string $topic_fade_class, bool $media_enabled): string
+	{
+		if ((int) ($preview['status'] ?? 0) !== 200)
+		{
+			return '';
+		}
+
+		$plain_text = $this->normalize_server_inline_preview_plain_text((string) ($preview['plain_text'] ?? ''));
+		$image_urls = $this->get_server_inline_preview_image_urls($preview);
+		if ($media_enabled && !empty($image_urls))
+		{
+			return $this->build_server_inline_mixed_preview_html(
+				$plain_text,
+				$this->build_server_inline_image_preview_html($image_urls, $topic_url, $topic_fade_class),
+				$topic_fade_class
+			);
+		}
+
+		$rendered_html = trim((string) ($preview['rendered_html'] ?? ''));
+		if ($media_enabled && $rendered_html !== '')
+		{
+			return '<div class="' . $this->build_server_inline_preview_class('toptopics-inline-preview toptopics-inline-preview-text toptopics-inline-preview-rich', $topic_fade_class) . '">'
+				. $rendered_html
+				. '</div>';
+		}
+
+		if ($media_enabled && !empty($preview['media_url']))
+		{
+			$media_html = $this->build_server_inline_media_preview_html($preview, $topic_url, $topic_fade_class);
+			if ($media_html !== '')
+			{
+				return $this->build_server_inline_mixed_preview_html($plain_text, $media_html, $topic_fade_class);
+			}
+		}
+
+		return $this->build_server_inline_text_preview_html($plain_text, $topic_fade_class);
+	}
+
+	protected function get_server_inline_preview_image_urls(array $preview): array
+	{
+		$image_urls = $preview['image_urls'] ?? [];
+		if (empty($image_urls) && !empty($preview['media_urls']))
+		{
+			$image_urls = $preview['media_urls'];
+		}
+
+		if (!is_array($image_urls))
+		{
+			return [];
+		}
+
+		$urls = [];
+		$seen = [];
+		foreach ($image_urls as $url)
+		{
+			$url = (string) $url;
+			if ($url === ''
+				|| isset($seen[$url])
+				|| !$this->is_allowed_inline_preview_image_url($url)
+				|| $this->is_ignored_inline_preview_image_url($url))
+			{
+				continue;
+			}
+
+			$seen[$url] = true;
+			$urls[] = $url;
+			if (count($urls) >= self::INLINE_PREVIEW_MAX_IMAGES)
+			{
+				break;
+			}
+		}
+
+		return $urls;
+	}
+
+	protected function normalize_server_inline_preview_plain_text(string $plain_text): string
+	{
+		$plain_text = trim($plain_text);
+		if ($plain_text === '')
+		{
+			return '';
+		}
+
+		$normalized = preg_replace('/\s+/u', "\xE3\x80\x80", $plain_text);
+		if ($normalized !== null)
+		{
+			return trim($normalized, "\xE3\x80\x80 \t\n\r\0\x0B");
+		}
+
+		$normalized = preg_replace('/\s+/', ' ', $plain_text);
+		return trim((string) $normalized);
+	}
+
+	protected function build_server_inline_preview_class(string $base_class, string $topic_fade_class): string
+	{
+		return $this->escape_attr($base_class . ($topic_fade_class !== '' ? ' ' . $topic_fade_class : ''));
+	}
+
+	protected function build_server_inline_text_preview_html(string $plain_text, string $topic_fade_class): string
+	{
+		if ($plain_text === '')
+		{
+			return '';
+		}
+
+		return '<div class="' . $this->build_server_inline_preview_class('toptopics-inline-preview toptopics-inline-preview-text', $topic_fade_class) . '">'
+			. $this->escape_text($plain_text)
+			. '</div>';
+	}
+
+	protected function build_server_inline_mixed_preview_html(string $plain_text, string $media_html, string $topic_fade_class): string
+	{
+		if ($media_html === '')
+		{
+			return $this->build_server_inline_text_preview_html($plain_text, $topic_fade_class);
+		}
+
+		if ($plain_text === '')
+		{
+			return $media_html;
+		}
+
+		return '<div class="' . $this->build_server_inline_preview_class('toptopics-inline-preview toptopics-inline-preview-mixed', $topic_fade_class) . '">'
+			. '<div class="toptopics-inline-preview-text toptopics-inline-preview-mixed-text">' . $this->escape_text($plain_text) . '</div>'
+			. '<div class="toptopics-inline-preview-mixed-media">' . $media_html . '</div>'
+			. '</div>';
+	}
+
+	protected function build_server_inline_image_preview_html(array $image_urls, string $topic_url, string $topic_fade_class): string
+	{
+		if (empty($image_urls))
+		{
+			return '';
+		}
+
+		$image_count = count($image_urls);
+		$html = '<div class="' . $this->build_server_inline_preview_class(
+			'toptopics-inline-preview toptopics-inline-preview-image toptopics-inline-preview-carousel '
+				. ($image_count === 1 ? 'toptopics-inline-preview-single-image' : 'toptopics-inline-preview-multi-image'),
+			$topic_fade_class
+		) . '" data-toptopics-carousel-index="0">';
+		$html .= '<div class="toptopics-inline-preview-carousel-track">';
+		foreach ($image_urls as $index => $url)
+		{
+			$html .= '<a class="toptopics-inline-preview-carousel-slide' . ($index === 0 ? ' toptopics-inline-preview-carousel-slide-active' : '') . '"'
+				. ' href="' . $this->escape_attr($topic_url) . '"'
+				. ' aria-hidden="' . ($index === 0 ? 'false' : 'true') . '">';
+			$html .= '<img '
+				. ($index === 0 ? 'src="' : 'data-toptopics-src="') . $this->escape_attr($url) . '"'
+				. ' alt="" loading="lazy">';
+			$html .= '</a>';
+		}
+		$html .= '</div>';
+
+		if ($image_count > 1)
+		{
+			$html .= '<div class="toptopics-inline-preview-carousel-controls">'
+				. '<button type="button" class="toptopics-inline-preview-carousel-button toptopics-inline-preview-carousel-button-prev" data-toptopics-carousel-step="-1" title="Previous image" aria-label="Previous image">&#8249;</button>'
+				. '<span class="toptopics-inline-preview-carousel-count">1 / ' . $image_count . '</span>'
+				. '<button type="button" class="toptopics-inline-preview-carousel-button toptopics-inline-preview-carousel-button-next" data-toptopics-carousel-step="1" title="Next image" aria-label="Next image">&#8250;</button>'
+				. '</div>';
+		}
+
+		return $html . '</div>';
+	}
+
+	protected function build_server_inline_media_preview_html(array $preview, string $topic_url, string $topic_fade_class): string
+	{
+		$media_type = (string) ($preview['media_type'] ?? '');
+		$media_url = (string) ($preview['media_url'] ?? '');
+		$media_id = (string) ($preview['media_id'] ?? '');
+		if ($media_url === '')
+		{
+			return '';
+		}
+
+		if ($media_type === 'video')
+		{
+			return $this->build_server_inline_structured_media_preview_html(
+				'<video src="' . $this->escape_attr($media_url) . '" preload="metadata" controls playsinline="playsinline" height="220"></video>',
+				'',
+				$topic_fade_class
+			);
+		}
+
+		if ($media_type === 'youtube' && preg_match('/^[A-Za-z0-9_-]{11}$/', $media_id))
+		{
+			$thumb_url = 'https://i.ytimg.com/vi/' . rawurlencode($media_id) . '/mqdefault.jpg';
+			return $this->build_server_inline_structured_media_preview_html(
+				'<a class="toptopics-inline-preview-youtube-thumb" href="' . $this->escape_attr($topic_url) . '" aria-label="YouTube video">'
+					. '<img src="' . $this->escape_attr($thumb_url) . '" alt="" loading="lazy">'
+					. '<span class="toptopics-inline-preview-youtube-play" aria-hidden="true"></span>'
+					. '</a>',
+				' toptopics-inline-preview-media-frame-youtube',
+				$topic_fade_class
+			);
+		}
+
+		if ($media_type === 'bilibili' && preg_match('/^BV[0-9A-Za-z]+$/', $media_id))
+		{
+			return $this->build_server_inline_structured_media_preview_html(
+				'<iframe src="https://player.bilibili.com/player.html?bvid=' . rawurlencode($media_id) . '&amp;autoplay=0" loading="lazy" frameborder="0" scrolling="no" allowfullscreen="allowfullscreen" title="Bilibili video" width="640" height="360" data-s9e-mediaembed="bilibili"></iframe>',
+				' toptopics-inline-preview-media-frame-youtube',
+				$topic_fade_class
+			);
+		}
+
+		if ($media_type === 'tiktok' && preg_match('/^\d{6,}$/', $media_id))
+		{
+			return $this->build_server_inline_structured_media_preview_html(
+				'<iframe src="https://www.tiktok.com/embed/' . rawurlencode($media_id) . '" loading="lazy" frameborder="0" scrolling="no" allowfullscreen="allowfullscreen" title="TikTok video" width="340" height="700" data-s9e-mediaembed="tiktok"></iframe>',
+				' toptopics-inline-preview-media-frame-tiktok',
+				$topic_fade_class
+			);
+		}
+
+		if ($media_type === 'tweet')
+		{
+			$tweet_id = $media_id !== '' ? $media_id : $this->extract_tweet_id_from_url($media_url);
+			if ($tweet_id !== '')
+			{
+				return $this->build_server_inline_structured_media_preview_html(
+					'<iframe src="https://platform.twitter.com/embed/Tweet.html?id=' . rawurlencode($tweet_id) . '&amp;conversation=none&amp;cards=hidden" loading="lazy" frameborder="0" scrolling="no" title="Tweet" width="550" height="350" data-s9e-mediaembed="twitter"></iframe>',
+					'',
+					$topic_fade_class
+				);
+			}
+		}
+
+		return '';
+	}
+
+	protected function build_server_inline_structured_media_preview_html(string $media_html, string $frame_extra_class, string $topic_fade_class): string
+	{
+		return '<div class="' . $this->build_server_inline_preview_class('toptopics-inline-preview toptopics-inline-preview-media-box', $topic_fade_class) . '">'
+			. '<div class="' . $this->escape_attr('toptopics-inline-preview-media-frame' . $frame_extra_class) . '">'
+			. $media_html
+			. '</div>'
+			. '</div>';
+	}
+
+	protected function extract_tweet_id_from_url(string $url): string
+	{
+		if (preg_match('#/status(?:es)?/(\d+)#i', $url, $match))
+		{
+			return (string) $match[1];
+		}
+
+		return '';
 	}
 
 	protected function assign_summary(array $topics, string $template_flag, string $title, bool $include_forum_name, string $collapse_id, ?array $forum_ids = null, ?int $display_limit = null): void
@@ -3144,6 +3447,7 @@ class listener implements EventSubscriberInterface
 				'LAST_POST_TIME_RFC3339' => $this->get_last_post_time_rfc3339($topic),
 				'REPLIES' => (int) $topic['replies'],
 				'VIEWS' => (int) $topic['views'],
+				'TOPIC_LIKE_COUNT' => $this->get_topic_like_count_from_row($topic),
 				'LIKES' => (int) $topic['like_count'],
 				'DISLIKES' => (int) $topic['dislike_count'],
 				'FLAGS' => (int) $topic['flag_count'],
@@ -3366,7 +3670,69 @@ class listener implements EventSubscriberInterface
 		return $disliked_topic_ids;
 	}
 
-	protected function add_inline_topic_previews(array $topics): array
+	protected function add_topic_like_counts(array $topics): array
+	{
+		if (empty($topics))
+		{
+			return $topics;
+		}
+
+		$topic_ids = [];
+		$needs_lookup = false;
+		foreach ($topics as $topic)
+		{
+			if (!is_array($topic))
+			{
+				continue;
+			}
+
+			$topic_id = (int) ($topic['topic_id'] ?? $topic['TOPIC_ID'] ?? 0);
+			if ($topic_id > 0)
+			{
+				$topic_ids[$topic_id] = true;
+				if (!array_key_exists('TOPIC_LIKE_COUNT', $topic)
+					&& !array_key_exists('topic_like_count', $topic)
+					&& !array_key_exists('like_count', $topic))
+				{
+					$needs_lookup = true;
+				}
+			}
+		}
+
+		if (empty($topic_ids))
+		{
+			return $topics;
+		}
+
+		$like_counts = [];
+		if ($needs_lookup && $this->topic_likes !== null && method_exists($this->topic_likes, 'get_topic_like_counts'))
+		{
+			$like_counts = $this->topic_likes->get_topic_like_counts(array_keys($topic_ids));
+		}
+
+		foreach ($topics as &$topic)
+		{
+			if (!is_array($topic))
+			{
+				continue;
+			}
+
+			$topic_id = (int) ($topic['topic_id'] ?? $topic['TOPIC_ID'] ?? 0);
+			$topic['TOPIC_LIKE_COUNT'] = $topic_id > 0
+				? (int) ($like_counts[$topic_id] ?? $topic['TOPIC_LIKE_COUNT'] ?? $topic['topic_like_count'] ?? $topic['like_count'] ?? 0)
+				: 0;
+		}
+		unset($topic);
+
+		return $topics;
+	}
+
+	protected function get_topic_like_count_from_row(array $row): int
+	{
+		return (int) ($row['TOPIC_LIKE_COUNT'] ?? $row['topic_like_count'] ?? $row['like_count'] ?? 0);
+	}
+
+	protected function add_inline_topic_previews(array $topics, array $topic_order = [], bool $server_render = true): array
 	{
 		if (empty($topics))
 		{
@@ -3384,6 +3750,7 @@ class listener implements EventSubscriberInterface
 			return $topics;
 		}
 
+		$topic_id_map = [];
 		foreach ($topics as &$topic)
 		{
 			if (!is_array($topic))
@@ -3393,10 +3760,88 @@ class listener implements EventSubscriberInterface
 
 			$topic_id = (int) ($topic['topic_id'] ?? 0);
 			$topic = array_merge($topic, $this->build_inline_topic_preview_vars($topic_id, $topicpreview['media_enabled']));
+			if ($topic_id > 0)
+			{
+				$topic_id_map[$topic_id] = true;
+			}
 		}
 		unset($topic);
 
+		$server_preview_topic_ids = $server_render ? $this->get_server_inline_preview_topic_ids($topics, $topic_order, $topic_id_map) : [];
+		if (!empty($server_preview_topic_ids) && $this->inline_preview !== null)
+		{
+			$server_preview_topic_id_map = array_fill_keys($server_preview_topic_ids, true);
+			$previews = $this->inline_preview->previews_for_topic_ids($server_preview_topic_ids);
+			foreach ($topics as &$topic)
+			{
+				if (!is_array($topic))
+				{
+					continue;
+				}
+
+				$topic_id = (int) ($topic['topic_id'] ?? 0);
+				if ($topic_id <= 0 || !isset($server_preview_topic_id_map[$topic_id]))
+				{
+					continue;
+				}
+
+				$topic['S_TOPTOPICS_INLINE_LAZY_PREVIEW'] = false;
+				if (empty($previews[$topic_id]))
+				{
+					continue;
+				}
+
+				$topic_url = $this->build_inline_preview_topic_url($topic);
+				$preview_html = $this->build_server_inline_topic_preview_html(
+					$previews[$topic_id],
+					$topic_url,
+					$this->get_topic_dislike_fade_class((int) ($topic['TOPTOPICS_FIRST_POST_NET_DISLIKE_SCORE'] ?? $topic['first_post_net_dislike_score'] ?? 0)),
+					$topicpreview['media_enabled']
+				);
+				if ($preview_html === '')
+				{
+					continue;
+				}
+
+				$topic['S_TOPTOPICS_INLINE_SERVER_PREVIEW'] = true;
+				$topic['TOPTOPICS_INLINE_PREVIEW_HTML'] = $preview_html;
+			}
+			unset($topic);
+		}
+
 		return $topics;
+	}
+
+	protected function get_server_inline_preview_topic_ids(array $topics, array $topic_order, array $topic_id_map): array
+	{
+		if ($this->inline_preview === null)
+		{
+			return [];
+		}
+
+		$topic_ids = [];
+		$seen = [];
+		$ordered_ids = !empty($topic_order) ? $topic_order : array_map(static function ($topic) {
+			return is_array($topic) ? (int) ($topic['topic_id'] ?? 0) : 0;
+		}, $topics);
+
+		foreach ($ordered_ids as $topic_id)
+		{
+			$topic_id = (int) $topic_id;
+			if ($topic_id <= 0 || isset($seen[$topic_id]) || !isset($topic_id_map[$topic_id]))
+			{
+				continue;
+			}
+
+			$seen[$topic_id] = true;
+			$topic_ids[] = $topic_id;
+			if (count($topic_ids) >= self::INLINE_PREVIEW_SERVER_RENDER_LIMIT)
+			{
+				break;
+			}
+		}
+
+		return $topic_ids;
 	}
 
 	protected function build_inline_topic_preview_vars(int $topic_id, bool $media_enabled = true): array
@@ -3412,11 +3857,13 @@ class listener implements EventSubscriberInterface
 			'S_TOPTOPICS_INLINE_EXCERPT_PREVIEW' => false,
 			'S_TOPTOPICS_INLINE_RICH_PREVIEW' => false,
 			'S_TOPTOPICS_INLINE_MEDIA_PREVIEW' => $media_enabled,
+			'S_TOPTOPICS_INLINE_SERVER_PREVIEW' => false,
 			'U_TOPTOPICS_INLINE_PREVIEW' => $this->helper->route('freemitbbs_toptopics_inline_preview', ['topic' => $topic_id]),
 			'U_TOPTOPICS_INLINE_PREVIEW_BATCH' => $this->helper->route('freemitbbs_toptopics_inline_preview_batch'),
 			'TOPTOPICS_INLINE_PREVIEW_TOPIC_ID' => $topic_id,
 			'TOPTOPICS_INLINE_IMAGE_URL' => '',
 			'TOPTOPICS_INLINE_EXCERPT' => '',
+			'TOPTOPICS_INLINE_PREVIEW_HTML' => '',
 		];
 	}
 
@@ -3428,15 +3875,17 @@ class listener implements EventSubscriberInterface
 			'S_TOPTOPICS_INLINE_EXCERPT_PREVIEW' => false,
 			'S_TOPTOPICS_INLINE_RICH_PREVIEW' => false,
 			'S_TOPTOPICS_INLINE_MEDIA_PREVIEW' => false,
+			'S_TOPTOPICS_INLINE_SERVER_PREVIEW' => false,
 			'U_TOPTOPICS_INLINE_PREVIEW' => '',
 			'U_TOPTOPICS_INLINE_PREVIEW_BATCH' => '',
 			'TOPTOPICS_INLINE_PREVIEW_TOPIC_ID' => 0,
 			'TOPTOPICS_INLINE_IMAGE_URL' => '',
 			'TOPTOPICS_INLINE_EXCERPT' => '',
+			'TOPTOPICS_INLINE_PREVIEW_HTML' => '',
 		];
 	}
 
-	protected function copy_inline_topic_preview_vars(array $target, array $source): array
+	protected function copy_inline_topic_preview_vars(array $target, array $source, bool $server_render_visible = false): array
 	{
 		foreach (array_keys($this->empty_inline_topic_preview_vars()) as $key)
 		{
@@ -3446,7 +3895,111 @@ class listener implements EventSubscriberInterface
 			}
 		}
 
+		if ($server_render_visible)
+		{
+			$target = $this->server_render_visible_inline_topic_preview($target, $source);
+		}
+
 		return $target;
+	}
+
+	protected function server_render_visible_inline_topic_preview(array $target, array $source): array
+	{
+		$topic_id = (int) ($target['TOPTOPICS_INLINE_PREVIEW_TOPIC_ID'] ?? $source['topic_id'] ?? 0);
+		if ($topic_id <= 0)
+		{
+			return $target;
+		}
+
+		$surface_key = $this->get_visible_inline_preview_surface_key($source, $target);
+		if (!empty($target['S_TOPTOPICS_INLINE_SERVER_PREVIEW']))
+		{
+			$this->increment_visible_inline_preview_count($surface_key);
+			return $target;
+		}
+
+		if (empty($target['S_TOPTOPICS_INLINE_LAZY_PREVIEW']))
+		{
+			$topicpreview = $this->get_topicpreview_context();
+			if (!$topicpreview['enabled'])
+			{
+				return $target;
+			}
+
+			$target = array_merge(
+				$target,
+				$this->build_inline_topic_preview_vars($topic_id, $topicpreview['media_enabled'])
+			);
+		}
+
+		if ($this->inline_preview === null
+			|| $this->get_visible_inline_preview_count($surface_key) >= self::INLINE_PREVIEW_SERVER_RENDER_LIMIT
+			|| empty($target['S_TOPTOPICS_INLINE_LAZY_PREVIEW']))
+		{
+			return $target;
+		}
+
+		$this->increment_visible_inline_preview_count($surface_key);
+		$target['S_TOPTOPICS_INLINE_LAZY_PREVIEW'] = false;
+		$previews = $this->inline_preview->previews_for_topic_ids([$topic_id]);
+		if (empty($previews[$topic_id]))
+		{
+			return $target;
+		}
+
+		$topic_url = (string) ($target['U_VIEW_TOPIC'] ?? $target['U_TOPIC'] ?? '');
+		if ($topic_url === '')
+		{
+			$topic_url = $this->build_inline_preview_topic_url($source);
+		}
+		else
+		{
+			$topic_url = $this->decode_html_url($topic_url);
+		}
+
+		$preview_html = $this->build_server_inline_topic_preview_html(
+			$previews[$topic_id],
+			$topic_url,
+			(string) ($target['TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS'] ?? $target['TOPIC_DISLIKE_FADE_CLASS'] ?? ''),
+			!empty($target['S_TOPTOPICS_INLINE_MEDIA_PREVIEW'])
+		);
+		if ($preview_html === '')
+		{
+			return $target;
+		}
+
+		$target['S_TOPTOPICS_INLINE_SERVER_PREVIEW'] = true;
+		$target['TOPTOPICS_INLINE_PREVIEW_HTML'] = $preview_html;
+
+		return $target;
+	}
+
+	protected function get_visible_inline_preview_surface_key(array $source, array $target): string
+	{
+		$page_name = (string) ($this->user->page['page_name'] ?? '');
+		$forum_id = (int) ($source['forum_id'] ?? $target['FORUM_ID'] ?? 0);
+
+		if ($page_name === 'index.php')
+		{
+			return $forum_id === 2 ? 'index:rtng-junban' : 'index:rtng-default';
+		}
+
+		if ($page_name === 'viewforum.php')
+		{
+			return 'viewforum:' . $forum_id;
+		}
+
+		return ($page_name !== '' ? $page_name : 'page') . ':' . $forum_id;
+	}
+
+	protected function get_visible_inline_preview_count(string $surface_key): int
+	{
+		return (int) ($this->inline_preview_visible_server_render_counts[$surface_key] ?? 0);
+	}
+
+	protected function increment_visible_inline_preview_count(string $surface_key): void
+	{
+		$this->inline_preview_visible_server_render_counts[$surface_key] = $this->get_visible_inline_preview_count($surface_key) + 1;
 	}
 
 	protected function add_topic_tracking(array $topics): array
@@ -3552,6 +4105,7 @@ class listener implements EventSubscriberInterface
 			return $topics;
 		}
 
+		$topics = $this->add_topic_like_counts($topics);
 		$topics = $this->add_topic_tracking($topics);
 		$topics = $this->add_topic_display_state($topics);
 		if ($with_previews)

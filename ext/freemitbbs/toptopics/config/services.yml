@@ -65,6 +65,8 @@ services:
             - '%tables.freemitbbs.toptopics.user_reputation%'
             - '%core.root_path%'
             - '%core.php_ext%'
+            - '@?freemitbbs.toptopics.inline_preview'
+            - '@?avathar.postlove.topic_likes'
         tags:
             - { name: event.listener }
 

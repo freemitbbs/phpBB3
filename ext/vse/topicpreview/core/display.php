@@ -342,7 +342,7 @@ class display extends base
 		$avatars_enabled = $this->avatars_enabled();
 
 		$key_parts = array(
-			'version'				=> 1,
+			'version'				=> 2,
 			'topic_id'				=> (int) ($row['topic_id'] ?? 0),
 			'forum_id'				=> (int) ($row['forum_id'] ?? 0),
 			'topic_attachment'		=> (int) ($row['topic_attachment'] ?? 0),

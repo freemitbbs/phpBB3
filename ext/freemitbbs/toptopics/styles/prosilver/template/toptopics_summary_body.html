@@ -42,12 +42,14 @@
 								</a>
 							<!-- ENDIF -->
 								<a href="{top_topics.U_TOPIC}" class="topictitle {top_topics.TOPIC_DISLIKE_FADE_CLASS}">{top_topics.TOPIC_TITLE}</a>
-								{% if top_topics.S_TOPTOPICS_INLINE_LAZY_PREVIEW and top_topics.U_TOPTOPICS_INLINE_PREVIEW %}
+								{% if top_topics.S_TOPTOPICS_INLINE_SERVER_PREVIEW and top_topics.TOPTOPICS_INLINE_PREVIEW_HTML %}
+									{{ top_topics.TOPTOPICS_INLINE_PREVIEW_HTML|raw }}
+								{% elseif top_topics.S_TOPTOPICS_INLINE_LAZY_PREVIEW and top_topics.U_TOPTOPICS_INLINE_PREVIEW %}
 									<div class="toptopics-inline-preview toptopics-inline-preview-lazy {top_topics.TOPIC_DISLIKE_FADE_CLASS}"
 										data-toptopics-inline-preview-url="{{ top_topics.U_TOPTOPICS_INLINE_PREVIEW|e('html_attr') }}"
 										data-toptopics-inline-preview-batch-url="{{ top_topics.U_TOPTOPICS_INLINE_PREVIEW_BATCH|default('')|e('html_attr') }}"
 										data-toptopics-inline-preview-topic-id="{{ top_topics.TOPTOPICS_INLINE_PREVIEW_TOPIC_ID|default(0)|e('html_attr') }}"
-										data-toptopics-topic-url="{{ top_topics.U_TOPIC|e('html_attr') }}"
+										data-toptopics-topic-url="{{ top_topics.U_TOPIC|replace({'&amp;': '&'})|e('html_attr') }}"
 										data-toptopics-inline-media-preview="{% if top_topics.S_TOPTOPICS_INLINE_MEDIA_PREVIEW %}1{% else %}0{% endif %}"
 										aria-busy="true"></div>
 								{% elseif top_topics.S_TOPTOPICS_INLINE_IMAGE_PREVIEW and top_topics.TOPTOPICS_INLINE_IMAGE_URL %}
@@ -70,6 +72,7 @@
 								<div class="responsive-show toptopics-mobile-stats" style="display: none;">
 									<span class="toptopics-mobile-stat">{L_REPLIES}{L_COLON} <strong>{top_topics.REPLIES}</strong></span>
 									<span class="toptopics-mobile-stat">{L_VIEWS}{L_COLON} <strong>{top_topics.VIEWS}</strong></span>
+									<!-- IF top_topics.TOPIC_LIKE_COUNT --><span class="toptopics-mobile-stat toptopics-topic-like-stat" title="{L_LIKED_BY}"><i class="liked" aria-hidden="true"></i><strong>{top_topics.TOPIC_LIKE_COUNT}</strong></span><!-- ENDIF -->
 								</div>
 								<!-- IF not S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW -->
 									<div class="responsive-hide left-box">
@@ -103,6 +106,7 @@
 								<span class="toptopics-lastpost-stats">
 									<span>{L_REPLIES}{L_COLON} <strong>{top_topics.REPLIES}</strong></span>
 									<span>{L_VIEWS}{L_COLON} <strong>{top_topics.VIEWS}</strong></span>
+									<!-- IF top_topics.TOPIC_LIKE_COUNT --><span class="toptopics-topic-like-stat" title="{L_LIKED_BY}"><i class="liked" aria-hidden="true"></i><strong>{top_topics.TOPIC_LIKE_COUNT}</strong></span><!-- ENDIF -->
 								</span>
 							</span>
 						</dd>

@@ -280,6 +280,7 @@ function toggleWidget(id, isHidden) {
 								<div class="responsive-show freemitbbs-mobile-topic-stats" style="display: none;">
 									<span>{L_REPLIES}{L_COLON} <strong>{topicrow.REPLIES}</strong></span>
 									<span>{L_VIEWS}{L_COLON} <strong>{topicrow.VIEWS}</strong></span>
+									<!-- IF topicrow.TOPIC_LIKE_COUNT --><span class="toptopics-topic-like-stat" title="{L_LIKED_BY}"><i class="liked" aria-hidden="true"></i><strong>{topicrow.TOPIC_LIKE_COUNT}</strong></span><!-- ENDIF -->
 								</div>
 							<!-- ENDIF -->
 							<!-- IF not S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW -->
@@ -341,6 +342,7 @@ function toggleWidget(id, isHidden) {
 						<span class="toptopics-lastpost-stats">
 							<span>{L_REPLIES}{L_COLON} <strong>{topicrow.REPLIES}</strong></span>
 							<span>{L_VIEWS}{L_COLON} <strong>{topicrow.VIEWS}</strong></span>
+							<!-- IF topicrow.TOPIC_LIKE_COUNT --><span class="toptopics-topic-like-stat" title="{L_LIKED_BY}"><i class="liked" aria-hidden="true"></i><strong>{topicrow.TOPIC_LIKE_COUNT}</strong></span><!-- ENDIF -->
 						</span>
 					</span>
 				</dd>

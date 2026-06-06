@@ -1413,36 +1413,42 @@
 		});
 	}
 
-		function normalizeInlineRichPreviews() {
-			$('.toptopics-inline-preview-rich').not('.toptopics-inline-preview-media-box').each(function() {
-				var $preview = $(this);
-				var $replacement;
+	function scheduleExistingInlinePreviewMediaFits() {
+		$('.toptopics-inline-preview-media-box').each(function() {
+			scheduleInlinePreviewMediaFit($(this));
+		});
+	}
 
-				$replacement = buildInlinePreviewFromContent($preview, $preview);
+	function normalizeInlineRichPreviews() {
+		$('.toptopics-inline-preview-rich').not('.toptopics-inline-preview-media-box').each(function() {
+			var $preview = $(this);
+			var $replacement;
 
-				if ($replacement && $replacement.length) {
-					$preview.replaceWith($replacement);
-					scheduleInlinePreviewMediaFit($replacement);
-				}
-			});
-		}
+			$replacement = buildInlinePreviewFromContent($preview, $preview);
 
-		function normalizeInlineTextPreviews() {
-			$('.toptopics-inline-preview-text').not('.toptopics-inline-preview-media-box').each(function() {
-				var $preview = $(this);
-				var plainText;
+			if ($replacement && $replacement.length) {
+				$preview.replaceWith($replacement);
+				scheduleInlinePreviewMediaFit($replacement);
+			}
+		});
+	}
 
-				plainText = getInlinePreviewPlainText($preview);
-				if (!plainText) {
-					$preview.remove();
-					return;
-				}
+	function normalizeInlineTextPreviews() {
+		$('.toptopics-inline-preview-text').not('.toptopics-inline-preview-media-box').each(function() {
+			var $preview = $(this);
+			var plainText;
 
-				$preview
-					.removeClass('toptopics-inline-preview-rich')
-					.text(plainText);
-			});
-		}
+			plainText = getInlinePreviewPlainText($preview);
+			if (!plainText) {
+				$preview.remove();
+				return;
+			}
+
+			$preview
+				.removeClass('toptopics-inline-preview-rich')
+				.text(plainText);
+		});
+	}
 
 	function setInlinePreviewCarouselIndex($carousel, index) {
 		var $slides = $carousel.find('.toptopics-inline-preview-carousel-slide');
@@ -1766,6 +1772,7 @@
 			normalizeUploadedImageLinks($('.postbody .content, .topic_preview_first, .topic_preview_content, .toptopics-inline-preview-rich'));
 			normalizeInlineRichPreviews();
 			normalizeInlineTextPreviews();
+			scheduleExistingInlinePreviewMediaFits();
 			syncExistingInlinePreviewSideMediaStates();
 			scheduleInlineTopicPreviewsInit();
 			$(window).on('resize', function() {
