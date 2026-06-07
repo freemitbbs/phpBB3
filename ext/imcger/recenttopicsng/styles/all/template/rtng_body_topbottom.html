@@ -24,7 +24,8 @@
 			rtng_per_page: RTNG_JUNBAN_TOPICS_PAGINATION_PER_PAGE|default(0),
 			rtng_total_pages: RTNG_JUNBAN_TOPICS_PAGINATION_TOTAL_PAGES|default(0),
 			rtng_current_page: RTNG_JUNBAN_TOPICS_PAGINATION_CURRENT_PAGE|default(1),
-			rtng_page_number: RTNG_JUNBAN_TOPICS_PAGINATION_PAGE_NUMBER|default('')
+			rtng_page_number: RTNG_JUNBAN_TOPICS_PAGINATION_PAGE_NUMBER|default(''),
+			rtng_show_forum: false
 		} %}
 	{% endif %}
 
@@ -40,6 +41,7 @@
 		rtng_per_page: PER_PAGE|default(0),
 		rtng_total_pages: TOTAL_PAGES|default(0),
 		rtng_current_page: CURRENT_PAGE|default(1),
-		rtng_page_number: PAGE_NUMBER|default('')
+		rtng_page_number: PAGE_NUMBER|default(''),
+		rtng_show_forum: true
 	} %}
 {% endif %}

@@ -3225,7 +3225,7 @@ class listener implements EventSubscriberInterface
 
 	protected function normalize_server_inline_preview_plain_text(string $plain_text): string
 	{
-		$plain_text = trim($plain_text);
+		$plain_text = $this->trim_server_inline_preview_plain_text($plain_text);
 		if ($plain_text === '')
 		{
 			return '';
@@ -3234,11 +3234,18 @@ class listener implements EventSubscriberInterface
 		$normalized = preg_replace('/\s+/u', "\xE3\x80\x80", $plain_text);
 		if ($normalized !== null)
 		{
-			return trim($normalized, "\xE3\x80\x80 \t\n\r\0\x0B");
+			return $this->trim_server_inline_preview_plain_text($normalized);
 		}
 
 		$normalized = preg_replace('/\s+/', ' ', $plain_text);
 		return trim((string) $normalized);
+	}
+
+	protected function trim_server_inline_preview_plain_text(string $plain_text): string
+	{
+		$trimmed = preg_replace('/^[\s\p{Zs}]+|[\s\p{Zs}]+$/u', '', $plain_text);
+
+		return is_string($trimmed) ? $trimmed : trim($plain_text);
 	}
 
 	protected function build_server_inline_preview_class(string $base_class, string $topic_fade_class): string
@@ -3859,7 +3866,7 @@ class listener implements EventSubscriberInterface
 			'S_TOPTOPICS_INLINE_MEDIA_PREVIEW' => $media_enabled,
 			'S_TOPTOPICS_INLINE_SERVER_PREVIEW' => false,
 			'U_TOPTOPICS_INLINE_PREVIEW' => $this->helper->route('freemitbbs_toptopics_inline_preview', ['topic' => $topic_id]),
-			'U_TOPTOPICS_INLINE_PREVIEW_BATCH' => $this->helper->route('freemitbbs_toptopics_inline_preview_batch'),
+			'U_TOPTOPICS_INLINE_PREVIEW_BATCH' => $this->helper->route('freemitbbs_toptopics_inline_preview_batch', [], true, ''),
 			'TOPTOPICS_INLINE_PREVIEW_TOPIC_ID' => $topic_id,
 			'TOPTOPICS_INLINE_IMAGE_URL' => '',
 			'TOPTOPICS_INLINE_EXCERPT' => '',

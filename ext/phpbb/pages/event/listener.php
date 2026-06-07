@@ -17,6 +17,9 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 */
 class listener implements EventSubscriberInterface
 {
+	/** Page routes that should be linked without a URL session id. */
+	protected const SESSIONLESS_PAGE_LINK_ROUTES = array('junban');
+
 	/** @var \phpbb\auth\auth */
 	protected $auth;
 
@@ -112,7 +115,7 @@ class listener implements EventSubscriberInterface
 
 			// Assign template var data
 			$this->template->assign_block_vars($row['page_link_event_name'] . '_links', array(
-				'U_LINK_URL' => $this->helper->route('phpbb_pages_dynamic_route_' . $row['page_id']),
+				'U_LINK_URL' => $this->get_page_link_url($row),
 				'LINK_ROUTE' => $row['page_route'],
 				'LINK_TITLE' => $row['page_title'],
 				'LINK_DESC'  => $row['page_description'] && $row['page_description_display'] ? $row['page_description'] : '',
@@ -123,6 +126,18 @@ class listener implements EventSubscriberInterface
 			// Set a boolean switch to enable the chosen template event
 			$this->template->assign_var('S_' . strtoupper($row['page_link_event_name']), true);
 		}
+	}
+
+	protected function get_page_link_url(array $row): string
+	{
+		$route = 'phpbb_pages_dynamic_route_' . $row['page_id'];
+
+		if (in_array($row['page_route'], self::SESSIONLESS_PAGE_LINK_ROUTES, true))
+		{
+			return $this->helper->route($route, array(), true, '');
+		}
+
+		return $this->helper->route($route);
 	}
 
 	/**

@@ -136,7 +136,7 @@ class listener implements EventSubscriberInterface
 		$this->template->assign_vars([
 			'S_FREEMITBBS_BLOG_NAV' => true,
 			'S_BLOG_CAN_CREATE' => $can_create,
-			'U_BLOG_INDEX' => $this->helper->route('freemitbbs_blog_index'),
+			'U_BLOG_INDEX' => $this->public_blog_route('freemitbbs_blog_index'),
 			'U_BLOG_MANAGE' => $can_create ? $this->helper->route('freemitbbs_blog_manage') : '',
 			'U_BLOG_NEW' => $can_create ? $this->helper->route('freemitbbs_blog_new') : '',
 		]);
@@ -173,7 +173,7 @@ class listener implements EventSubscriberInterface
 		{
 			$post_row = $this->append_postrow_blog_profile_link(
 				$post_row,
-				$this->helper->route('freemitbbs_blog_user', ['user_id' => $poster_id])
+				$this->public_blog_route('freemitbbs_blog_user', ['user_id' => $poster_id])
 			);
 		}
 
@@ -236,7 +236,7 @@ class listener implements EventSubscriberInterface
 
 		if ($topic_id > 0 && $this->is_blog_forum($forum_id))
 		{
-			redirect($this->helper->route('freemitbbs_blog_entry', ['entry_id' => $topic_id]));
+			redirect($this->public_blog_route('freemitbbs_blog_entry', ['entry_id' => $topic_id]));
 		}
 	}
 
@@ -244,7 +244,7 @@ class listener implements EventSubscriberInterface
 	{
 		if ($this->is_blog_forum((int) ($event['forum_id'] ?? 0)))
 		{
-			redirect($this->helper->route('freemitbbs_blog_index'));
+			redirect($this->public_blog_route('freemitbbs_blog_index'));
 		}
 	}
 
@@ -394,7 +394,7 @@ class listener implements EventSubscriberInterface
 			return;
 		}
 
-		$blog_url = $this->helper->route('freemitbbs_blog_user', ['user_id' => $user_id]);
+		$blog_url = $this->public_blog_route('freemitbbs_blog_user', ['user_id' => $user_id]);
 		$member['user_posts'] = $this->append_blog_profile_link((string) (($member['user_posts'] ?? 0) ?: 0), $blog_url, true);
 		$event['member'] = $member;
 	}
@@ -433,6 +433,11 @@ class listener implements EventSubscriberInterface
 	protected function html_attribute(string $value): string
 	{
 		return htmlspecialchars(htmlspecialchars_decode($value, ENT_QUOTES), ENT_QUOTES, 'UTF-8');
+	}
+
+	protected function public_blog_route(string $route, array $params = []): string
+	{
+		return $this->helper->route($route, $params, true, '');
 	}
 
 	public function customise_blog_posting_title($event): void
@@ -500,7 +505,7 @@ class listener implements EventSubscriberInterface
 		$topic_id = (int) ($data['topic_id'] ?? 0);
 		if ($topic_id > 0 && (int) ($event['post_visibility'] ?? ITEM_UNAPPROVED) === ITEM_APPROVED)
 		{
-			$event['url'] = $this->helper->route('freemitbbs_blog_entry', ['entry_id' => $topic_id]);
+			$event['url'] = $this->public_blog_route('freemitbbs_blog_entry', ['entry_id' => $topic_id]);
 		}
 	}
 

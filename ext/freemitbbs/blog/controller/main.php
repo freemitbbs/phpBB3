@@ -107,7 +107,7 @@ class main
 		$this->assign_top_blog_list($forum_id);
 
 		$this->pagination->generate_template_pagination(
-			$this->helper->route('freemitbbs_blog_index'),
+			$this->public_blog_route('freemitbbs_blog_index'),
 			'pagination',
 			'start',
 			$total,
@@ -146,7 +146,7 @@ class main
 		$this->assign_common_vars($forum);
 
 		$this->pagination->generate_template_pagination(
-			$this->helper->route('freemitbbs_blog_user', ['user_id' => $user_id]),
+			$this->public_blog_route('freemitbbs_blog_user', ['user_id' => $user_id]),
 			'pagination',
 			'start',
 			$total,
@@ -228,11 +228,12 @@ class main
 			throw new \phpbb\exception\http_exception(404, 'BLOG_ENTRY_NOT_FOUND');
 		}
 
-		$this->increment_blog_topic_views($entry);
-		$this->assign_entry($entry);
-		$this->assign_common_vars($forum);
+		if ($this->is_public_cacheable_blog_entry($entry))
+		{
+			return $this->render_public_cacheable_blog_entry($entry, $forum);
+		}
 
-		return $this->helper->render('@freemitbbs_blog/blog_entry.html', censor_text($entry['topic_title']));
+		return $this->render_blog_entry($entry, $forum);
 	}
 
 	public function share_image(int $entry_id): \Symfony\Component\HttpFoundation\Response
@@ -282,6 +283,91 @@ class main
 		]);
 	}
 
+	protected function render_blog_entry(array $entry, array $forum): \Symfony\Component\HttpFoundation\Response
+	{
+		$this->increment_blog_topic_views($entry);
+		$this->assign_entry($entry);
+		$this->assign_common_vars($forum);
+
+		return $this->helper->render('@freemitbbs_blog/blog_entry.html', censor_text($entry['topic_title']));
+	}
+
+	protected function render_public_cacheable_blog_entry(array $entry, array $forum): \Symfony\Component\HttpFoundation\Response
+	{
+		return $this->without_url_session_id(function () use ($entry, $forum): \Symfony\Component\HttpFoundation\Response {
+			$response = $this->render_blog_entry($entry, $forum);
+			$this->apply_public_blog_entry_cache_headers($response);
+
+			return $response;
+		});
+	}
+
+	protected function is_public_cacheable_blog_entry(array $entry): bool
+	{
+		$method = strtoupper((string) $this->request->server('REQUEST_METHOD', 'GET'));
+		if (!in_array($method, ['GET', 'HEAD'], true))
+		{
+			return false;
+		}
+
+		if ((int) $this->user->data['user_id'] !== ANONYMOUS
+			|| !empty($this->user->data['is_registered'])
+			|| !empty($this->user->data['is_bot']))
+		{
+			return false;
+		}
+
+		if (trim((string) $this->request->header('Cookie', '')) !== '')
+		{
+			return false;
+		}
+
+		$query_string = (string) $this->request->server('QUERY_STRING', '');
+		if ($query_string !== '' && !preg_match('/^comment_start=\d+$/', $query_string))
+		{
+			return false;
+		}
+
+		return empty($entry['is_draft'])
+			&& (int) ($entry['topic_visibility'] ?? ITEM_UNAPPROVED) === ITEM_APPROVED
+			&& !$this->can_edit_topic($entry);
+	}
+
+	protected function without_url_session_id(callable $callback): \Symfony\Component\HttpFoundation\Response
+	{
+		global $SID, $_SID;
+
+		$previous_sid = $SID ?? '';
+		$previous_underscore_sid = $_SID ?? '';
+		$SID = '';
+		$_SID = '';
+
+		try
+		{
+			return $callback();
+		}
+		finally
+		{
+			$SID = $previous_sid;
+			$_SID = $previous_underscore_sid;
+		}
+	}
+
+	protected function apply_public_blog_entry_cache_headers(\Symfony\Component\HttpFoundation\Response $response): void
+	{
+		if (!headers_sent())
+		{
+			header_remove('Set-Cookie');
+		}
+
+		$response->headers->remove('Set-Cookie');
+		$response->headers->remove('Pragma');
+		$response->headers->set('Cache-Control', 'public, max-age=60, s-maxage=300');
+		$response->headers->set('CDN-Cache-Control', 'public, max-age=300');
+		$response->headers->set('Cloudflare-CDN-Cache-Control', 'public, max-age=300');
+		$response->headers->set('Vary', 'Accept-Encoding');
+	}
+
 	public function manage()
 	{
 		$this->boot();
@@ -308,7 +394,7 @@ class main
 		$this->template->assign_vars([
 			'BLOG_PAGE_TITLE' => $this->language->lang('BLOG_MANAGE'),
 			'U_BLOG_NEW' => $this->posting_new_url((int) $forum['forum_id']),
-			'U_BLOG_PUBLIC' => $this->helper->route('freemitbbs_blog_user', ['user_id' => $user_id]),
+			'U_BLOG_PUBLIC' => $this->public_blog_route('freemitbbs_blog_user', ['user_id' => $user_id]),
 			'PAGE_NUMBER' => $this->pagination->on_page($total, self::PAGE_SIZE, $start),
 			'S_BLOG_MANAGE' => true,
 		]);
@@ -385,7 +471,7 @@ class main
 		}
 
 		redirect($return === 'entry'
-			? $this->helper->route('freemitbbs_blog_entry', ['entry_id' => $topic_id])
+			? $this->public_blog_entry_url($topic_id)
 			: $this->helper->route('freemitbbs_blog_manage', $start > 0 ? ['start' => $start] : [])
 		);
 	}
@@ -526,7 +612,7 @@ class main
 			'U_ACTION' => $u_action,
 			'U_BLOG_NEW' => $this->posting_new_url((int) $forum['forum_id']),
 			'U_BLOG_MANAGE' => $this->helper->route('freemitbbs_blog_manage'),
-			'U_BLOG_PUBLIC' => $this->helper->route('freemitbbs_blog_user', ['user_id' => $user_id]),
+			'U_BLOG_PUBLIC' => $this->public_blog_route('freemitbbs_blog_user', ['user_id' => $user_id]),
 			'U_BLOG_HEADER_IMAGE' => $this->get_blog_header_image_url($this->user->data),
 			'BLOG_CUSTOM_TITLE' => (string) ($this->user->data['user_blog_title'] ?? ''),
 			'BLOG_CUSTOM_SUBTITLE' => (string) ($this->user->data['user_blog_subtitle'] ?? ''),
@@ -810,7 +896,7 @@ class main
 		}
 
 		return !empty($blog_user['user_blog_header_attachment_id'])
-			? $this->helper->route('freemitbbs_blog_header_image', ['user_id' => (int) ($blog_user['user_id'] ?? 0)])
+			? $this->public_blog_route('freemitbbs_blog_header_image', ['user_id' => (int) ($blog_user['user_id'] ?? 0)])
 			: '';
 	}
 
@@ -1661,8 +1747,8 @@ class main
 			: (int) ($topic['topic_views'] ?? 0);
 
 		return [
-			'U_ENTRY' => $this->helper->route('freemitbbs_blog_entry', ['entry_id' => $topic_id]),
-			'U_LAST_POST' => $this->helper->route('freemitbbs_blog_entry', ['entry_id' => $topic_id]),
+			'U_ENTRY' => $this->public_blog_entry_url($topic_id),
+			'U_LAST_POST' => $this->public_blog_entry_url($topic_id),
 			'TOPIC_TITLE' => censor_text((string) $topic['topic_title']),
 			'USERNAME_FULL' => get_username_string(
 				'full',
@@ -1832,7 +1918,7 @@ class main
 		$this->assign_blog_comments($entry, $comments);
 
 		$this->pagination->generate_template_pagination(
-			$this->helper->route('freemitbbs_blog_entry', ['entry_id' => (int) $entry['topic_id']]),
+			$this->public_blog_entry_url((int) $entry['topic_id']),
 			'pagination',
 			'comment_start',
 			$comment_total,
@@ -1885,9 +1971,9 @@ class main
 			'ENTRY_TIME' => $this->user->format_date($time),
 			'ENTRY_TIME_RFC3339' => gmdate(DATE_RFC3339, $time),
 			'ENTRY_AUTHOR_FULL' => get_username_string('full', (int) $row['topic_poster'], $row['username'], $row['user_colour']),
-			'U_ENTRY' => $this->helper->route('freemitbbs_blog_entry', ['entry_id' => $topic_id]),
+			'U_ENTRY' => $manage ? $this->helper->route('freemitbbs_blog_entry', ['entry_id' => $topic_id]) : $this->public_blog_entry_url($topic_id),
 			'U_VIEW_TOPIC' => $this->view_topic_url($topic_id),
-			'U_AUTHOR_BLOG' => $this->helper->route('freemitbbs_blog_user', ['user_id' => (int) $row['topic_poster']]),
+			'U_AUTHOR_BLOG' => $this->public_blog_route('freemitbbs_blog_user', ['user_id' => (int) $row['topic_poster']]),
 			'U_EDIT' => $manage ? $this->posting_edit_url((int) $row['topic_first_post_id']) : '',
 			'U_TOGGLE' => $manage ? $this->helper->route('freemitbbs_blog_toggle', array_filter([
 				'entry_id' => $topic_id,
@@ -1925,7 +2011,7 @@ class main
 			'BLOG_SHARE_IMAGE_URL' => $this->escape_attribute($share_image_url),
 			'BLOG_META_TITLE' => $this->escape_attribute($title),
 			'BLOG_META_DESCRIPTION' => $this->escape_attribute($description),
-			'U_BLOG_SHARE_IMAGE' => $this->escape_attribute($this->helper->route('freemitbbs_blog_share_image', ['entry_id' => $topic_id])),
+			'U_BLOG_SHARE_IMAGE' => $this->escape_attribute($this->public_blog_route('freemitbbs_blog_share_image', ['entry_id' => $topic_id])),
 			'U_BLOG_SHARE_REDDIT' => $this->escape_attribute($reddit_url),
 			'U_CANONICAL' => $this->escape_attribute($share_url),
 		];
@@ -3252,7 +3338,7 @@ class main
 			'S_FREEMITBBS_BLOG_NAV' => true,
 			'S_BLOG_CAN_CREATE' => $can_create,
 			'S_BLOG_CONFIGURED' => $forum_id > 0,
-			'U_BLOG_INDEX' => $this->helper->route('freemitbbs_blog_index'),
+			'U_BLOG_INDEX' => $this->public_blog_route('freemitbbs_blog_index'),
 			'U_BLOG_MANAGE' => $can_create ? $this->helper->route('freemitbbs_blog_manage') : '',
 			'U_BLOG_NEW' => $can_create ? $this->posting_new_url($forum_id) : '',
 			'U_BLOG_FORUM' => $forum_id > 0 ? $this->view_forum_url($forum_id) : '',
@@ -3300,6 +3386,16 @@ class main
 	protected function posting_new_url(int $forum_id): string
 	{
 		return append_sid($this->root_path . 'posting.' . $this->php_ext, 'mode=post&amp;f=' . $forum_id);
+	}
+
+	protected function public_blog_route(string $route, array $params = []): string
+	{
+		return $this->helper->route($route, $params, true, '');
+	}
+
+	protected function public_blog_entry_url(int $topic_id): string
+	{
+		return $this->public_blog_route('freemitbbs_blog_entry', ['entry_id' => $topic_id]);
 	}
 
 	protected function posting_edit_url(int $post_id): string

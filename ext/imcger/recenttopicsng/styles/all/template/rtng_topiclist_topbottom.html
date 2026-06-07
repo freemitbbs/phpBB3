@@ -13,6 +13,7 @@
 {% set rtng_loop = rtng_loop|default([]) %}
 {% set rtng_pagination = rtng_pagination|default([]) %}
 {% set rtng_box_id = rtng_box_id|default('rtng-box') %}
+{% set rtng_show_forum = rtng_show_forum is defined ? rtng_show_forum : true %}
 
 {% for rtng in rtng_loop %}
 	{% if !rtng.S_TOPIC_TYPE_SWITCH && !loop.first %}
@@ -97,13 +98,13 @@
 							{{ lang('TOPTOPICS_TOPIC_LABEL') }} {{ lang('POST_BY_AUTHOR') }} {% EVENT viewforum_body_topic_author_username_prepend %}
 							{{ rtng.TOPIC_AUTHOR_FULL }}
 							{% EVENT viewforum_body_topic_author_username_append %} &raquo; {{ rtng.FIRST_POST_TIME }}
-							{% if rtng.U_VIEW_FORUM && rtng.FORUM_NAME %} &raquo; {{ lang('IN') }} <a href="{{ rtng.U_VIEW_FORUM }}">{{ rtng.FORUM_NAME }}</a>
+							{% if rtng_show_forum && rtng.U_VIEW_FORUM && rtng.FORUM_NAME %} &raquo; {{ lang('IN') }} <a href="{{ rtng.U_VIEW_FORUM }}">{{ rtng.FORUM_NAME }}</a>
 							{% endif %}
 						</div>
 							<div class="responsive-show rtng-mobile-lastpost" style="display: none;">
 								{{ lang('TOPTOPICS_LATEST') }} {{ lang('POST_BY_AUTHOR') }} {% EVENT viewforum_body_last_post_author_username_prepend %} {{ rtng.LAST_POST_AUTHOR_FULL }} {% EVENT viewforum_body_last_post_author_username_append %} &laquo; <a href="{{ rtng.U_LAST_POST }}" title="{{ lang('GOTO_LAST_POST') }}">{{ rtng.LAST_POST_TIME }}</a>
 								{% EVENT topiclist_row_topic_by_author_after %}
-								{% if rtng.S_POST_GLOBAL && FORUM_ID != rtng.FORUM_ID %}<br>{{ lang('POSTED') }} {{ lang('IN') }} <a href="{{ rtng.U_VIEW_FORUM }}">{{ rtng.FORUM_NAME }}</a>{% endif %}
+								{% if rtng_show_forum && rtng.S_POST_GLOBAL && FORUM_ID != rtng.FORUM_ID %}<br>{{ lang('POSTED') }} {{ lang('IN') }} <a href="{{ rtng.U_VIEW_FORUM }}">{{ rtng.FORUM_NAME }}</a>{% endif %}
 							</div>
 							<div class="responsive-show rtng-mobile-stats" style="display: none;">
 								<span class="rtng-mobile-stat">{{ lang('REPLIES') }}{{ lang('COLON') }} <strong>{{ rtng.REPLIES }}</strong></span>
@@ -118,7 +119,7 @@
 							{% EVENT topiclist_row_topic_by_author_before %}
 							{{ lang('POST_BY_AUTHOR') }} {% EVENT viewforum_body_topic_author_username_prepend %} {{ rtng.TOPIC_AUTHOR_FULL }} {% EVENT viewforum_body_topic_author_username_append %} &raquo; {{ rtng.FIRST_POST_TIME }}
 							{% EVENT topiclist_row_topic_by_author_after %}
-							{% if rtng.U_VIEW_FORUM && rtng.FORUM_NAME %} &raquo; {{ lang('IN') }} <a href="{{ rtng.U_VIEW_FORUM }}">{{ rtng.FORUM_NAME }}</a>{% endif %}
+							{% if rtng_show_forum && rtng.U_VIEW_FORUM && rtng.FORUM_NAME %} &raquo; {{ lang('IN') }} <a href="{{ rtng.U_VIEW_FORUM }}">{{ rtng.FORUM_NAME }}</a>{% endif %}
 						</div>
 					{% endif %}
 
@@ -145,7 +146,7 @@
 			<dd class="lastpost">
 
 				<span>
-					{% if rtng.U_VIEW_FORUM && rtng.FORUM_NAME %}
+					{% if rtng_show_forum && rtng.U_VIEW_FORUM && rtng.FORUM_NAME %}
 					<span class="toptopics-lastpost-forum">
 						<span class="toptopics-info-label">{{ lang('TOPTOPICS_FORUM_LABEL') }}</span>
 						<span class="toptopics-info-content"><a href="{{ rtng.U_VIEW_FORUM }}">{{ rtng.FORUM_NAME }}</a></span>
@@ -186,7 +187,7 @@
 						</a>
 					{% endif %}
 					<br>{{ rtng.LAST_POST_TIME }}
-					{% if rtng.S_POST_GLOBAL && FORUM_ID != rtng.FORUM_ID %}<br>{{ lang('POSTED') }} {{ lang('IN') }} <a href="{{ rtng.U_VIEW_FORUM }}">{{ rtng.FORUM_NAME }}</a>{% endif %}
+					{% if rtng_show_forum && rtng.S_POST_GLOBAL && FORUM_ID != rtng.FORUM_ID %}<br>{{ lang('POSTED') }} {{ lang('IN') }} <a href="{{ rtng.U_VIEW_FORUM }}">{{ rtng.FORUM_NAME }}</a>{% endif %}
 				</span>
 			</dd>
 			{% endif %}

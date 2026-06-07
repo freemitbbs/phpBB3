@@ -3270,7 +3270,7 @@ function roomDeadlineSeconds(room, camelKey, snakeKey) {
 
 function roomReviewSeconds(room) {
   const guandanRoom = isGuandanRoom(room);
-  const defaultSeconds = guandanRoom ? 1 : 2;
+  const defaultSeconds = guandanRoom ? 1 : 3;
   const seconds = Number(guandanRoom
     ? room.settings?.guandanTrickReviewSeconds ?? room.settings?.guandan_trick_review_seconds ?? defaultSeconds
     : room.settings?.tractorTrickReviewSeconds ?? room.settings?.tractor_trick_review_seconds ?? defaultSeconds);
