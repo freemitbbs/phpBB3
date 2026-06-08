@@ -353,6 +353,7 @@ class oauth extends base
 
 				$login_data['BLOCK_VARS'][$service_name] = [
 					'REDIRECT_URL'	=> redirect($redirect_url, true),
+					'SERVICE_ID'	=> $provider,
 					'SERVICE_NAME'	=> $this->get_provider_title($provider),
 				];
 			}

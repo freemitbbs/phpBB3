@@ -6365,3 +6365,200 @@ td, th {
 .affix {
   position: fixed;
 }
+
+/* Registration onboarding */
+.register-onboarding-panel .inner {
+  max-width: 660px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.login-title,
+.register-onboarding-title,
+.register-email-title {
+  text-align: center;
+}
+
+.register-oauth-options {
+  margin: 16px 0 18px;
+  text-align: center;
+}
+
+.oauth-login-options {
+  margin: 14px 0 0;
+  text-align: center;
+}
+
+.login-password-form {
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+.login-password-form dl {
+  margin: 0 0 12px;
+}
+
+fieldset.login-password-form dt,
+fieldset.fields1.login-password-form dt,
+fieldset.fields2.login-password-form dt {
+  float: none;
+  width: auto;
+  margin: 0 0 4px;
+  text-align: left;
+}
+
+fieldset.login-password-form dd,
+fieldset.fields1.login-password-form dd,
+fieldset.fields2.login-password-form dd {
+  margin-left: 0;
+  text-align: left;
+}
+
+.login-password-form input.inputbox {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+}
+
+.login-password-form dd + dd {
+  margin-top: 4px;
+}
+
+.login-password-form dd label {
+  white-space: normal;
+}
+
+.login-password-form .login-options dt,
+.login-password-form .login-submit dt {
+  display: none;
+}
+
+.login-password-form .login-submit {
+  margin-top: 16px;
+  text-align: center;
+}
+
+.login-password-form .login-submit dd {
+  text-align: center;
+}
+
+.login-password-form .login-submit input.button1 {
+  min-width: 160px;
+  min-height: 36px;
+  padding-left: 18px;
+  padding-right: 18px;
+  font-weight: bold;
+}
+
+a.register-google-button.button2,
+a.google-oauth-button.button2 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: 360px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid #4285f4;
+  border-radius: 4px;
+  background: #4285f4;
+  color: #ffffff;
+  font-weight: bold;
+  line-height: 1.25;
+  text-align: center;
+  text-decoration: none;
+  vertical-align: middle;
+  box-shadow: 0 1px 2px rgba(20, 45, 82, 0.18);
+}
+
+a.register-google-button.button2:hover,
+a.register-google-button.button2:focus,
+a.google-oauth-button.button2:hover,
+a.google-oauth-button.button2:focus {
+  border-color: #3367d6;
+  background: #3367d6;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.register-google-logo,
+.google-oauth-logo {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 3px;
+  border-radius: 3px;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.register-google-logo svg,
+.google-oauth-logo svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.register-method-separator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 360px;
+  margin: 20px auto 18px;
+  color: #6b7280;
+  font-size: 0.95em;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.register-method-separator::before,
+.register-method-separator::after {
+  content: "";
+  flex: 1 1 auto;
+  border-top: 1px solid #c9d0d8;
+}
+
+.register-method-separator span {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.register-email-title {
+  margin: 0 0 14px;
+  color: #2f3844;
+  font-size: 1.15em;
+  font-weight: bold;
+}
+
+.register-captcha-separator {
+  margin: 18px 0 14px;
+}
+
+.register-coppa-note {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #d7dde4;
+  border-radius: 4px;
+  background: #f7f9fb;
+}
+
+.register-coppa-note h4 {
+  margin-top: 0;
+}
+
+.register-submit-buttons {
+  margin-top: 18px;
+}
+
+.register-submit-buttons input.button1 {
+  min-width: 220px;
+  min-height: 38px;
+  padding-left: 18px;
+  padding-right: 18px;
+  font-weight: bold;
+}

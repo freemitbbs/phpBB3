@@ -75,6 +75,13 @@ class mover
 			try
 			{
 				$context = $this->topic_context($topic);
+				if ($this->should_keep_in_source($context))
+				{
+					$this->record_topic_considered($topic_id);
+					$result['skipped']++;
+					continue;
+				}
+
 				$decision = $this->classify_topic($context, $forums);
 				$this->record_topic_considered($topic_id);
 
@@ -86,6 +93,17 @@ class mover
 				{
 					$result['skipped']++;
 					continue;
+				}
+				$normalized_destination_forum_id = $this->normalize_destination_for_topic($context, $forums, $destination_forum_id);
+				if ($normalized_destination_forum_id <= 0 || !isset($forum_ids[$normalized_destination_forum_id]))
+				{
+					$result['skipped']++;
+					continue;
+				}
+				if ($normalized_destination_forum_id !== $destination_forum_id)
+				{
+					$destination_forum_id = $normalized_destination_forum_id;
+					$reason .= ' 自动修正：主题主体是中国，目标版面改为中国新闻。';
 				}
 
 				$this->move_topic($topic_id, $destination_forum_id);
@@ -296,7 +314,7 @@ class mover
 				[
 					'role' => 'user',
 					'content' => $this->encode_json([
-						'instruction' => '只有当某个公开版面明显比来源版面 ID 2 更适合时，才建议移动该主题。不要选择 forum_id=2。如果不确定，请将 destination_forum_id 设为 null。',
+						'instruction' => '来源版面 ID 2 是军事天地。只有当主题明显不是军事、国防、战争、武器装备、军队、军工、军事技术或国家间军事对比，并且某个公开版面明显比来源版面 ID 2 更适合时，才建议移动该主题。军事主题必须留在来源版面：例如潜艇、核潜艇、航母、导弹、战机、军舰、海军、空军、陆军、解放军、美军、军演、台海/南海军事态势、军工技术、中美/中俄/任何国家军事比较，都应返回 destination_forum_id=null。不要因为提到美国就选择美国新闻；美国新闻只适合以美国国内政治、社会、经济等非军事新闻为主体的主题。中国为主体的非军事新闻/时政主题应选择中国新闻，不应选择美国新闻。不要选择 forum_id=2。如果不确定，请将 destination_forum_id 设为 null。',
 						'allowed_destination_forums' => array_values($forums),
 						'topic' => $topic_context,
 					]),
@@ -313,6 +331,111 @@ class mover
 		}
 
 		return $decoded;
+	}
+
+	protected function should_keep_in_source(array $topic_context): bool
+	{
+		return $this->is_military_topic($topic_context);
+	}
+
+	protected function normalize_destination_for_topic(array $topic_context, array $forums, int $destination_forum_id): int
+	{
+		$forum_name = (string) ($forums[$destination_forum_id]['name'] ?? '');
+		if (strpos($forum_name, '美国新闻') !== false && $this->is_china_focused_topic($topic_context) && !$this->is_us_domestic_topic($topic_context))
+		{
+			$china_news_forum_id = $this->find_forum_id_by_name($forums, '中国新闻');
+
+			return $china_news_forum_id > 0 ? $china_news_forum_id : 0;
+		}
+
+		return $destination_forum_id;
+	}
+
+	protected function find_forum_id_by_name(array $forums, string $name): int
+	{
+		foreach ($forums as $forum)
+		{
+			if ((string) ($forum['name'] ?? '') === $name)
+			{
+				return (int) ($forum['forum_id'] ?? 0);
+			}
+		}
+
+		return 0;
+	}
+
+	protected function is_military_topic(array $topic_context): bool
+	{
+		$text = $this->topic_rule_text($topic_context);
+		if ($text === '')
+		{
+			return false;
+		}
+
+		$patterns = [
+			'/军(?:事|队|方|工|演|援|备|舰|费|力|种|校|官|人|改|迷|用)/iu',
+			'/国防|战争|战场|战区|战役|战术|战略|兵棋|武器|装备|火力|弹药|核武|核弹|核潜艇|潜艇|航母|航空母舰|军舰|舰艇|驱逐舰|护卫舰|巡洋舰|两栖攻击舰|登陆舰|海军|空军|陆军|火箭军|导弹|洲际导弹|高超音速|反导|雷达|战机|轰炸机|无人机|歼\\s*-?\\s*\\d+|轰\\s*-?\\s*\\d+|东风\\s*-?\\s*\\d+|解放军|美军|俄军|台海|南海|军备竞赛|军事技术|军事对比/iu',
+			'/\\b(?:PLA|PLAN|PLAAF|USAF|USN|USMC|NATO|AUKUS|ICBM|SLBM|SSBN|SSN|CVN|carrier|submarine|navy|air\\s*force|army|missile|warship|destroyer|frigate|bomber|fighter|hypersonic|military)\\b/iu',
+		];
+
+		foreach ($patterns as $pattern)
+		{
+			if (preg_match($pattern, $text))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	protected function is_china_focused_topic(array $topic_context): bool
+	{
+		$title = (string) ($topic_context['title'] ?? '');
+		if ($title === '')
+		{
+			return false;
+		}
+
+		return (bool) preg_match('/中国|中方|中共|大陆|北京|国产|解放军|台海|南海|台湾/u', $title);
+	}
+
+	protected function is_us_domestic_topic(array $topic_context): bool
+	{
+		$title = (string) ($topic_context['title'] ?? '');
+		if ($title === '' || !preg_match('/美国|美帝|美方|白宫|国会|特朗普|川普|拜登|共和党|民主党|最高法院|FBI|CIA/u', $title))
+		{
+			return false;
+		}
+
+		return (bool) preg_match('/大选|选举|总统|白宫|国会|参议院|众议院|最高法院|州长|市长|共和党|民主党|移民|边境|通胀|经济|就业|股市|税|医保|治安|枪击|警察|政府|预算|债务|FBI|CIA/u', $title);
+	}
+
+	protected function topic_rule_text(array $topic_context): string
+	{
+		$parts = [
+			(string) ($topic_context['title'] ?? ''),
+		];
+
+		foreach (['first_post'] as $post_key)
+		{
+			if (!empty($topic_context[$post_key]) && is_array($topic_context[$post_key]))
+			{
+				$parts[] = (string) ($topic_context[$post_key]['subject'] ?? '');
+				$parts[] = (string) ($topic_context[$post_key]['text'] ?? '');
+			}
+		}
+
+		foreach (($topic_context['latest_replies'] ?? []) as $reply)
+		{
+			if (is_array($reply))
+			{
+				$parts[] = (string) ($reply['subject'] ?? '');
+				$parts[] = (string) ($reply['text'] ?? '');
+			}
+		}
+
+		return implode("\n", array_filter($parts, static fn ($part) => trim($part) !== ''));
 	}
 
 	protected function api_request(array $payload): array

@@ -12,23 +12,36 @@
 	}
 </script>
 
-{% if PROVIDER_TEMPLATE_FILE %}
-	<div class="panel">
-		<div class="inner">
-
-			<h2>{{ SITENAME }} - {{ lang('OAUTH_REGISTRATION') }}</h2>
-
-			{% include PROVIDER_TEMPLATE_FILE %}
-		</div>
-	</div>
-{% endif %}
-
 <form id="register" method="post" action="{S_UCP_ACTION}"{S_FORM_ENCTYPE}>
 
-<div class="panel">
+<div class="panel register-onboarding-panel">
 	<div class="inner">
 
-	<h2>{SITENAME} - {L_REGISTRATION}</h2>
+	<h2 class="register-onboarding-title">{SITENAME} - {L_REGISTRATION}</h2>
+
+	{% if PROVIDER_TEMPLATE_FILE %}
+		<div class="register-oauth-options">
+			{% for oauth in oauth %}
+				<a href="{{ oauth.REDIRECT_URL }}" class="button2 register-google-button">
+					<span class="register-google-logo" aria-hidden="true">
+						<svg viewBox="0 0 18 18" focusable="false">
+							<path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/>
+							<path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.33-1.58-5.04-3.7H.96v2.33A9 9 0 0 0 9 18z"/>
+							<path fill="#FBBC05" d="M3.96 10.72A5.41 5.41 0 0 1 3.68 9c0-.6.1-1.18.28-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4.05l3-2.33z"/>
+							<path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A8.64 8.64 0 0 0 9 0 9 9 0 0 0 .96 4.95l3 2.33C4.67 5.16 6.66 3.58 9 3.58z"/>
+						</svg>
+					</span>
+					<span>{{ lang('REGISTER_WITH_GOOGLE') }}</span>
+				</a>
+			{% endfor %}
+		</div>
+
+		<div class="register-method-separator" role="separator">
+			<span>{{ lang('REGISTER_OR') }}</span>
+		</div>
+
+		<h3 class="register-email-title">{{ lang('REGISTER_WITH_PASSWORD') }}</h3>
+	{% endif %}
 
 	<fieldset class="fields2">
 	<!-- IF ERROR --><dl><dd class="error">{ERROR}</dd></dl><!-- ENDIF -->
@@ -79,33 +92,26 @@
 	<!-- END profile_fields -->
 
 	<!-- EVENT ucp_register_profile_fields_after -->
-	</fieldset>
-	</div>
-</div>
-<!-- IF CAPTCHA_TEMPLATE -->
-	<!-- DEFINE $CAPTCHA_TAB_INDEX = 8 -->
-	<!-- INCLUDE {CAPTCHA_TEMPLATE} -->
-<!-- ENDIF -->
+
+	<!-- IF CAPTCHA_TEMPLATE -->
+		<hr class="dashed register-captcha-separator" />
+		<!-- DEFINE $CAPTCHA_TAB_INDEX = 8 -->
+		<!-- INCLUDE {CAPTCHA_TEMPLATE} -->
+	<!-- ENDIF -->
 
 <!-- IF S_COPPA -->
-<div class="panel">
-	<div class="inner">
-
-	<h4>{L_COPPA_COMPLIANCE}</h4>
-
-	<p>{L_COPPA_EXPLAIN}</p>
+	<div class="register-coppa-note">
+		<h4>{L_COPPA_COMPLIANCE}</h4>
+		<p>{L_COPPA_EXPLAIN}</p>
 	</div>
-</div>
 <!-- ENDIF -->
+	</fieldset>
 
 <!-- EVENT ucp_register_buttons_before -->
 
-<div class="panel">
-	<div class="inner">
-
-	<fieldset class="submit-buttons">
+	<fieldset class="submit-buttons register-submit-buttons">
 		{S_HIDDEN_FIELDS}
-		<input type="submit" tabindex="9" name="submit" id="submit" value="{L_SUBMIT}" class="button1 default-submit-action" />
+		<input type="submit" tabindex="9" name="submit" id="submit" value="{% if PROVIDER_TEMPLATE_FILE %}{{ lang('REGISTER_WITH_PASSWORD') }}{% else %}{{ lang('SUBMIT') }}{% endif %}" class="button1 default-submit-action" />
 		{S_FORM_TOKEN}
 	</fieldset>
 
