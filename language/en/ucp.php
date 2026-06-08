@@ -288,8 +288,9 @@ $lang = array_merge($lang, array(
 	'LINK_REMOTE_SIZE'			=> 'Avatar dimensions',
 	'LINK_REMOTE_SIZE_EXPLAIN'	=> 'Specify the width and height of the avatar, leave blank to attempt automatic verification.',
 	'LOGIN_EXPLAIN_UCP'			=> 'Please login in order to access the User Control Panel.',
-	'LOGIN_LINK'					=> 'Link or register your account on an external service with your board account',
-	'LOGIN_LINK_EXPLAIN'			=> 'You have attempted to login with an external service that is not yet connected to an account on this board. You must now either link this account to an existing account or create a new account.',
+	'LOGIN_LINK'					=> 'Create a forum username',
+	'LOGIN_LINK_EXPLAIN'			=> 'Your Google account has been verified. Choose a forum username to finish registration. You can use Google to sign in next time.',
+	'LOGIN_LINK_ERROR_OAUTH_NO_ACCESS_TOKEN'	=> 'Your sign-in information has expired. Please restart Google sign-in.',
 	'LOGIN_LINK_MISSING_DATA'		=> 'Data that is necessary to link your account with an external service is not available. Please restart the login process.',
 	'LOGIN_LINK_NO_DATA_PROVIDED'	=> 'No data has been provided to this page to link an external account to a forum account. Please contact the board administrator if you continue to experience problems.',
 	'LOGIN_KEY'					=> 'Login Key',
@@ -326,6 +327,9 @@ $lang = array_merge($lang, array(
 	'NEW_PASSWORD'					=> 'New password',
 	'NEW_PASSWORD_CONFIRM_EMPTY'	=> 'You did not enter a confirm password.',
 	'NEW_PASSWORD_ERROR'			=> 'The passwords you entered do not match.',
+
+	'OAUTH_REGISTER_EMAIL_UNAVAILABLE'	=> 'A verified email address could not be read from Google. Please restart Google sign-in.',
+	'OAUTH_REGISTER_USERNAME_EXPLAIN'	=> 'You will use Google to sign in. No password is needed.',
 
 	'NOTIFICATIONS_MARK_ALL_READ'						=> 'Mark all notifications read',
 	'NOTIFICATIONS_MARK_ALL_READ_CONFIRM'				=> 'Are you sure you want to mark all notifications read?',
@@ -531,7 +535,7 @@ $lang = array_merge($lang, array(
 	'UCP_COPPA_ON_AFTER'		=> 'On or after %s',
 	'UCP_EMAIL_ACTIVATE'		=> 'Please note that you will need to enter a valid email address before your account is activated. You will receive an email at the address you provide that contains an account activation link.',
 	'UCP_JABBER'				=> 'Jabber address',
-	'UCP_LOGIN_LINK'			=> 'Set up an external account association',
+	'UCP_LOGIN_LINK'			=> 'Create a forum username',
 
 	'UCP_MAIN'					=> 'Overview',
 	'UCP_MAIN_ATTACHMENTS'		=> 'Manage attachments',

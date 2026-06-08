@@ -24,6 +24,9 @@ class google extends base
 	/** @var \phpbb\request\request_interface */
 	protected $request;
 
+	/** @var array */
+	protected $user_info = [];
+
 	/**
 	 * Constructor.
 	 *
@@ -78,15 +81,7 @@ class google extends base
 			throw new exception('AUTH_PROVIDER_OAUTH_ERROR_REQUEST');
 		}
 
-		try
-		{
-			// Send a request with it
-			$result = (array) json_decode($this->service_provider->request('https://www.googleapis.com/oauth2/v1/userinfo'), true);
-		}
-		catch (\OAuth\Common\Exception\Exception $e)
-		{
-			throw new exception('AUTH_PROVIDER_OAUTH_ERROR_REQUEST');
-		}
+		$result = $this->request_user_info();
 
 		// Return the unique identifier
 		return $result['id'];
@@ -102,17 +97,53 @@ class google extends base
 			throw new exception('AUTH_PROVIDER_OAUTH_ERROR_INVALID_SERVICE_TYPE');
 		}
 
+		$result = $this->request_user_info();
+
+		// Return the unique identifier
+		return $result['id'];
+	}
+
+	/**
+	 * Returns the email from the last Google userinfo response.
+	 *
+	 * @return string
+	 */
+	public function get_user_email()
+	{
+		return !empty($this->user_info['email']) ? strtolower($this->user_info['email']) : '';
+	}
+
+	/**
+	 * Returns whether the last Google userinfo email was verified.
+	 *
+	 * @return bool
+	 */
+	public function is_user_email_verified()
+	{
+		return !empty($this->user_info['verified_email']);
+	}
+
+	/**
+	 * Requests and stores Google userinfo for the current token.
+	 *
+	 * @return array
+	 */
+	protected function request_user_info()
+	{
 		try
 		{
-			// Send a request with it
-			$result = (array) json_decode($this->service_provider->request('https://www.googleapis.com/oauth2/v1/userinfo'), true);
+			$this->user_info = (array) json_decode($this->service_provider->request('https://www.googleapis.com/oauth2/v1/userinfo'), true);
 		}
 		catch (\OAuth\Common\Exception\Exception $e)
 		{
 			throw new exception('AUTH_PROVIDER_OAUTH_ERROR_REQUEST');
 		}
 
-		// Return the unique identifier
-		return $result['id'];
+		if (empty($this->user_info['id']))
+		{
+			throw new exception('AUTH_PROVIDER_OAUTH_ERROR_REQUEST');
+		}
+
+		return $this->user_info;
 	}
 }

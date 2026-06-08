@@ -280,8 +280,9 @@ $lang = array_merge($lang, array(
 	'LINK_REMOTE_SIZE'			=> '头像尺寸',
 	'LINK_REMOTE_SIZE_EXPLAIN'	=> '指定头像的长和宽，如果留空将自动检测。',
 	'LOGIN_EXPLAIN_UCP'			=> '请登录后使用用户控制面板',
-	'LOGIN_LINK'					=> '用您的论坛账号连接或注册您的外部服务账户',
-	'LOGIN_LINK_EXPLAIN'			=> '您已经尝试登录使用一个未连接到本论坛账号的外部服务，您必须连接此账号到一个已有账号或者创建一个新账号。',
+	'LOGIN_LINK'					=> '创建论坛用户名',
+	'LOGIN_LINK_EXPLAIN'			=> '您的 Google 账号已经验证。请选择一个本站用户名完成注册，以后您可以直接使用 Google 登录。',
+	'LOGIN_LINK_ERROR_OAUTH_NO_ACCESS_TOKEN'	=> '登录信息已过期，请重新使用 Google 登录。',
 	'LOGIN_LINK_MISSING_DATA'		=> '连接您账号用外部服务所需的数据不可用，请重启登录进程。',
 	'LOGIN_LINK_NO_DATA_PROVIDED'	=> '没有数据被提供到此页用来连接一个外部账号到一个论坛账号，请联系论坛管理员如果您继续遇到问题。',
 	'LOGIN_KEY'					=> '登录密钥',
@@ -317,6 +318,9 @@ $lang = array_merge($lang, array(
 	'NEW_PASSWORD'					=> '新密码',
 	'NEW_PASSWORD_CONFIRM_EMPTY'	=> '您没有输入确认密码。',
 	'NEW_PASSWORD_ERROR'			=> '您输入的密码不匹配。',
+
+	'OAUTH_REGISTER_EMAIL_UNAVAILABLE'	=> '无法从 Google 获取已验证的 Email，请重新使用 Google 登录。',
+	'OAUTH_REGISTER_USERNAME_EXPLAIN'	=> '以后使用 Google 登录，不需要设置密码。',
 
 	'NOTIFICATIONS_MARK_ALL_READ'						=> '标记所有通知为已读',
 	'NOTIFICATIONS_MARK_ALL_READ_CONFIRM'				=> '您确定要标记所有通知为已读吗？',
@@ -520,7 +524,7 @@ $lang = array_merge($lang, array(
 	'UCP_COPPA_ON_AFTER'		=> '晚于 %s',
 	'UCP_EMAIL_ACTIVATE'		=> '请注意在帐号激活前您必须输入一个有效的 Email 地址。通过这个 Email 地址您将收到包含帐号激活链接的邮件。',
 	'UCP_JABBER'				=> 'Jabber 地址',
-	'UCP_LOGIN_LINK'			=> '设置一个外部账户关联',
+	'UCP_LOGIN_LINK'			=> '创建论坛用户名',
 
 	'UCP_MAIN'					=> '主要信息',
 	'UCP_MAIN_ATTACHMENTS'		=> '管理附件',

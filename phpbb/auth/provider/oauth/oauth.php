@@ -428,6 +428,49 @@ class oauth extends base
 	}
 
 	/**
+	 * Returns OAuth profile data for a pending login-link token.
+	 *
+	 * @param array	$link_data	Login-link data
+	 * @return array
+	 * @throws exception
+	 */
+	public function get_login_link_user_data(array $link_data)
+	{
+		if ($error = $this->login_link_has_necessary_data($link_data))
+		{
+			throw new exception($error);
+		}
+
+		$service_name = $this->get_service_name($link_data['oauth_service']);
+
+		if (!$this->service_providers->offsetExists($service_name))
+		{
+			throw new exception('LOGIN_ERROR_OAUTH_SERVICE_DOES_NOT_EXIST');
+		}
+
+		$storage = new token_storage($this->db, $this->user, $this->oauth_token_table, $this->oauth_state_table);
+
+		if (!$storage->has_access_token_by_session($service_name))
+		{
+			throw new exception('LOGIN_LINK_ERROR_OAUTH_NO_ACCESS_TOKEN');
+		}
+
+		$query = 'mode=login_link&login_link_oauth_service=' . $link_data['oauth_service'];
+		$service = $this->get_service($link_data['oauth_service'], $storage, $query);
+		$this->service_providers[$service_name]->set_external_service_provider($service);
+
+		$unique_id = $this->service_providers[$service_name]->perform_token_auth();
+		$service_provider = $this->service_providers[$service_name];
+
+		return [
+			'provider'				=> utf8_strtolower($link_data['oauth_service']),
+			'oauth_provider_id'		=> $unique_id,
+			'email'					=> method_exists($service_provider, 'get_user_email') ? $service_provider->get_user_email() : '',
+			'email_verified'		=> method_exists($service_provider, 'is_user_email_verified') ? $service_provider->is_user_email_verified() : false,
+		];
+	}
+
+	/**
 	 * {@inheritdoc}
 	 */
 	public function link_account(array $link_data)

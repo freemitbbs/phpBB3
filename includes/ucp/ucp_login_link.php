@@ -39,13 +39,15 @@ class ucp_login_link
 	*/
 	function main($id, $mode)
 	{
-		global $phpbb_container, $request, $template, $user, $phpbb_dispatcher;
+		global $config, $db, $phpbb_container, $request, $template, $user, $phpbb_dispatcher;
 		global $phpbb_root_path, $phpEx;
 
 		// Initialize necessary variables
 		$login_error = null;
 		$login_link_error = null;
-		$login_username = null;
+		$oauth_username = '';
+		$fatal_error = false;
+		$oauth_user_data = array();
 
 		// Build the data array
 		$data = $this->get_login_link_data_array();
@@ -54,6 +56,7 @@ class ucp_login_link
 		if (empty($data))
 		{
 			$login_link_error = $user->lang['LOGIN_LINK_NO_DATA_PROVIDED'];
+			$fatal_error = true;
 		}
 
 		// Use the auth_provider requested even if different from configured
@@ -69,58 +72,191 @@ class ucp_login_link
 		if ($result !== null)
 		{
 			$login_link_error = $user->lang[$result];
+			$fatal_error = true;
 		}
 
-		// Perform link action if there is no error
-		if (!$login_link_error)
+		if (!$fatal_error)
 		{
-			if ($request->is_set_post('login'))
+			if (!method_exists($auth_provider, 'get_login_link_user_data'))
 			{
-				$login_username = $request->variable('login_username', '', true, \phpbb\request\request_interface::POST);
-				$login_password = $request->untrimmed_variable('login_password', '', true, \phpbb\request\request_interface::POST);
-
-				$login_result = $auth_provider->login($login_username, $login_password);
-
-				// We only care if there is or is not an error
-				$login_error = $this->process_login_result($login_result);
-
-				if (!$login_error)
+				$login_link_error = $user->lang['LOGIN_LINK_MISSING_DATA'];
+				$fatal_error = true;
+			}
+			else
+			{
+				try
 				{
-					// Give the user_id to the data
-					$data['user_id'] = $login_result['user_row']['user_id'];
+					$oauth_user_data = $auth_provider->get_login_link_user_data($data);
+				}
+				catch (\RuntimeException $e)
+				{
+					$login_link_error = isset($user->lang[$e->getMessage()]) ? $user->lang[$e->getMessage()] : $e->getMessage();
+					$fatal_error = true;
+				}
+			}
+		}
 
-					// The user is now logged in, attempt to link the user to the external account
+		if (!$fatal_error && (empty($oauth_user_data['email']) || empty($oauth_user_data['email_verified'])))
+		{
+			$login_link_error = $user->lang['OAUTH_REGISTER_EMAIL_UNAVAILABLE'];
+			$fatal_error = true;
+		}
+
+		if (!$fatal_error)
+		{
+			$existing_user = $this->find_user_by_email($oauth_user_data['email']);
+
+			if ($existing_user)
+			{
+				if ((int) $existing_user['user_type'] !== USER_NORMAL && (int) $existing_user['user_type'] !== USER_FOUNDER)
+				{
+					$login_link_error = $user->lang['ACTIVE_ERROR'];
+					$fatal_error = true;
+				}
+				else
+				{
+					$data['user_id'] = (int) $existing_user['user_id'];
 					$result = $auth_provider->link_account($data);
 
 					if ($result)
 					{
 						$login_link_error = $user->lang[$result];
+						$fatal_error = true;
 					}
 					else
 					{
-						// Finish login
-						$user->session_create($login_result['user_row']['user_id'], false, false, true);
-
-						// Perform a redirect as the account has been linked
+						$user->session_create((int) $existing_user['user_id'], false, false, true);
 						$this->perform_redirect();
 					}
 				}
 			}
 		}
 
+		add_form_key('ucp_oauth_register');
+
+		if (!$fatal_error && $request->is_set_post('register'))
+		{
+			$oauth_username = $request->variable('username', '', true, \phpbb\request\request_interface::POST);
+			$validation_data = array(
+				'username'	=> $oauth_username,
+				'email'		=> $oauth_user_data['email'],
+			);
+			$error = validate_data($validation_data, array(
+				'username'	=> array(
+					array('string', false, $config['min_name_chars'], $config['max_name_chars']),
+					array('username', ''),
+				),
+				'email'		=> array(
+					array('string', false, 6, 60),
+					array('user_email'),
+				),
+			));
+
+			if (!check_form_key('ucp_oauth_register'))
+			{
+				$error[] = $user->lang['FORM_INVALID'];
+			}
+
+			$error = array_map(array($user, 'lang'), $error);
+
+			if ($config['check_dnsbl'])
+			{
+				if (($dnsbl = $user->check_dnsbl('register')) !== false)
+				{
+					$error[] = sprintf($user->lang['IP_BLACKLISTED'], $user->ip, $dnsbl[1]);
+				}
+			}
+
+			if (!count($error))
+			{
+				$sql = 'SELECT group_id
+					FROM ' . GROUPS_TABLE . "
+					WHERE group_name = 'REGISTERED'
+						AND group_type = " . GROUP_SPECIAL;
+				$result = $db->sql_query($sql);
+				$row = $db->sql_fetchrow($result);
+				$db->sql_freeresult($result);
+
+				if (!$row)
+				{
+					trigger_error('NO_GROUP');
+				}
+
+				/* @var $passwords_manager \phpbb\passwords\manager */
+				$passwords_manager = $phpbb_container->get('passwords.manager');
+
+				$user_row = array(
+					'username'		=> $oauth_username,
+					'user_password'	=> $passwords_manager->hash(gen_rand_string(32)),
+					'user_email'	=> $oauth_user_data['email'],
+					'group_id'		=> (int) $row['group_id'],
+					'user_timezone'	=> $config['board_timezone'],
+					'user_lang'		=> $user->lang_name,
+					'user_type'		=> USER_NORMAL,
+					'user_ip'		=> $user->ip,
+					'user_regdate'	=> time(),
+				);
+
+				if ($config['new_member_post_limit'])
+				{
+					$user_row['user_new'] = 1;
+				}
+
+				$user_id = user_add($user_row);
+
+				if ((bool) $user_id === false)
+				{
+					trigger_error('NO_USER', E_USER_ERROR);
+				}
+
+				$data['user_id'] = (int) $user_id;
+				$result = $auth_provider->link_account($data);
+
+				if ($result)
+				{
+					$login_link_error = $user->lang[$result];
+				}
+				else
+				{
+					$user->session_create((int) $user_id, false, false, true);
+					$this->perform_redirect();
+				}
+			}
+			else
+			{
+				$login_link_error = implode('<br />', $error);
+			}
+		}
+
+		$register_query = array(
+			'mode'			=> 'login_link',
+			'auth_provider'	=> $request->variable('auth_provider', ''),
+		);
+
+		foreach ($data as $key => $value)
+		{
+			if ($key !== 'link_method')
+			{
+				$register_query['login_link_' . $key] = $value;
+			}
+		}
+
 		$tpl_ary = array(
 			// Common template elements
-			'LOGIN_LINK_ERROR'		=> $login_link_error,
-			'PASSWORD_CREDENTIAL'	=> 'login_password',
-			'USERNAME_CREDENTIAL'	=> 'login_username',
-			'S_HIDDEN_FIELDS'		=> $this->get_hidden_fields($data),
+			'LOGIN_LINK_ERROR'					=> $login_link_error,
+			'S_CAN_OAUTH_REGISTER'				=> !$fatal_error,
+			'S_HIDDEN_FIELDS'					=> $this->get_hidden_fields($data),
 
 			// Registration elements
-			'REGISTER_ACTION'	=> append_sid("{$phpbb_root_path}ucp.$phpEx", 'mode=register'),
+			'OAUTH_USERNAME'					=> $oauth_username,
+			'OAUTH_USERNAME_EXPLAIN'			=> $user->lang($config['allow_name_chars'] . '_EXPLAIN', $user->lang('CHARACTERS_XY', (int) $config['min_name_chars']), $user->lang('CHARACTERS_XY', (int) $config['max_name_chars'])),
+			'REGISTER_ACTION'					=> append_sid("{$phpbb_root_path}ucp.$phpEx", $register_query),
 
-			// Login elements
-			'LOGIN_ERROR'		=> $login_error,
-			'LOGIN_USERNAME'	=> $login_username,
+			// Kept for the event contract.
+			'LOGIN_ERROR'						=> $login_error,
+			'LOGIN_USERNAME'					=> '',
+			'PASSWORD_CREDENTIAL'				=> 'login_password',
+			'USERNAME_CREDENTIAL'				=> 'login_username',
 		);
 
 		/**
@@ -135,6 +271,7 @@ class ucp_login_link
 		* @var	array							tpl_ary				Template variables
 		* @since 3.2.4-RC1
 		*/
+		$login_username = '';
 		$vars = array('data', 'auth_provider', 'login_link_error', 'login_error', 'login_username', 'tpl_ary');
 		extract($phpbb_dispatcher->trigger_event('core.ucp_login_link_template_after', compact($vars)));
 
@@ -142,6 +279,47 @@ class ucp_login_link
 
 		$this->tpl_name = 'ucp_login_link';
 		$this->page_title = 'UCP_LOGIN_LINK';
+	}
+
+	/**
+	* Finds a board user by email, respecting phpBB's Gmail alias comparison.
+	*
+	* @param	string	$email	Email address
+	* @return	array|false
+	*/
+	protected function find_user_by_email($email)
+	{
+		global $db;
+
+		$email = strtolower($email);
+		$email_comparison = phpbb_email_address_for_ban_comparison($email);
+
+		if (phpbb_email_address_uses_gmail_dot_aliasing($email))
+		{
+			$sql = 'SELECT user_id, username, user_email, user_ip, user_type
+				FROM ' . USERS_TABLE . '
+				WHERE user_email ' . $db->sql_like_expression($db->get_any_char() . '@gmail.com') . '
+					OR user_email ' . $db->sql_like_expression($db->get_any_char() . '@googlemail.com');
+		}
+		else
+		{
+			$sql = 'SELECT user_id, username, user_email, user_ip, user_type
+				FROM ' . USERS_TABLE . "
+				WHERE user_email = '" . $db->sql_escape($email) . "'";
+		}
+
+		$result = $db->sql_query($sql);
+		while ($row = $db->sql_fetchrow($result))
+		{
+			if (!phpbb_email_address_uses_gmail_dot_aliasing($email) || $email_comparison === phpbb_email_address_for_ban_comparison($row['user_email']))
+			{
+				$db->sql_freeresult($result);
+				return $row;
+			}
+		}
+		$db->sql_freeresult($result);
+
+		return false;
 	}
 
 	/**

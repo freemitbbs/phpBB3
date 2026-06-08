@@ -369,6 +369,16 @@ ul.topiclist.forums > li.toptopics-category-empty {
 	align-items: flex-start;
 }
 
+ul.topiclist.topics.freemitbbs-from-stats-list,
+.toptopics-category-row.toptopics-enhanced-topic-list-row {
+	--toptopics-inline-preview-media-height: 92px;
+}
+
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row > dl.row-item > dt > .list-inner,
+.toptopics-category-row.toptopics-enhanced-topic-list-row > dl.row-item > dt > .list-inner {
+	min-height: var(--toptopics-inline-preview-media-height);
+}
+
 ul.topiclist.topics.freemitbbs-from-stats-list a.topictitle,
 .toptopics-category-row.toptopics-enhanced-topic-list-row a.topictitle {
 	font-size: 1.35em;
@@ -385,8 +395,8 @@ ul.topiclist.topics.freemitbbs-from-stats-list a.topictitle,
 
 .toptopics-inline-preview {
 	--toptopics-inline-preview-max-height: 300px;
-	--toptopics-inline-preview-media-height: 100px;
-	--toptopics-inline-preview-media-column-width: 140px;
+	--toptopics-inline-preview-media-height: 92px;
+	--toptopics-inline-preview-media-column-width: 130px;
 	--toptopics-inline-preview-box-bg: #f7f9fb;
 	--toptopics-inline-preview-box-border: rgba(74, 85, 104, 0.28);
 
@@ -959,8 +969,8 @@ dl.row-item dt a.toptopics-inline-preview-carousel-slide {
 
 @media only screen and (min-width: 701px) {
 	.list-inner.toptopics-inline-preview-side-media {
-		--toptopics-inline-preview-media-height: 100px;
-		--toptopics-inline-preview-media-column-width: 140px;
+		--toptopics-inline-preview-media-height: 92px;
+		--toptopics-inline-preview-media-column-width: 130px;
 
 		display: grid;
 		grid-template-columns: min-content minmax(0, 1fr) var(--toptopics-inline-preview-media-column-width);
@@ -1219,6 +1229,11 @@ dl.row-item dt a.toptopics-inline-preview-carousel-slide {
 }
 
 @media only screen and (max-width: 700px) {
+	ul.topiclist.topics.freemitbbs-from-stats-list,
+	.toptopics-category-row.toptopics-enhanced-topic-list-row {
+		--toptopics-inline-preview-media-height: 90px;
+	}
+
 	.toptopics-inline-preview {
 		--toptopics-inline-preview-media-height: 90px;
 		--toptopics-inline-preview-media-column-width: 120px;
@@ -1329,6 +1344,18 @@ dl.row-item dt a.toptopics-inline-preview-carousel-slide {
 	.list-inner.toptopics-inline-preview-side-media > .postlove-topic-count {
 		grid-column: 1 / 4;
 		min-width: 0;
+	}
+
+	.list-inner.toptopics-inline-preview-side-media > .freemitbbs-mobile-topic-author,
+	.list-inner.toptopics-inline-preview-side-media > .freemitbbs-mobile-lastpost,
+	.list-inner.toptopics-inline-preview-side-media > .freemitbbs-mobile-topic-stats,
+	.list-inner.toptopics-inline-preview-side-media > .toptopics-mobile-meta,
+	.list-inner.toptopics-inline-preview-side-media > .toptopics-mobile-lastpost,
+	.list-inner.toptopics-inline-preview-side-media > .toptopics-mobile-stats,
+	.list-inner.toptopics-inline-preview-side-media > .rtng-mobile-meta,
+	.list-inner.toptopics-inline-preview-side-media > .rtng-mobile-lastpost,
+	.list-inner.toptopics-inline-preview-side-media > .rtng-mobile-stats {
+		margin-top: 0;
 	}
 
 	.list-inner.toptopics-inline-preview-side-media > .freemitbbs-mobile-topic-author,

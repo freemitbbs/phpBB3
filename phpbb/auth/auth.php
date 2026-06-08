@@ -941,12 +941,15 @@ class auth
 	function login($username, $password, $autologin = false, $viewonline = 1, $admin = 0)
 	{
 		global $db, $user, $phpbb_root_path, $phpEx, $phpbb_container;
-		global $phpbb_dispatcher;
+		global $phpbb_dispatcher, $request;
 
 		/* @var $provider_collection \phpbb\auth\provider_collection */
 		$provider_collection = $phpbb_container->get('auth.provider_collection');
 
-		$provider = $provider_collection->get_provider();
+		$provider_name = (!$admin && $request->variable('login', '') === 'external' && $request->is_set('oauth_service'))
+			? 'oauth'
+			: '';
+		$provider = $provider_collection->get_provider($provider_name);
 		if ($provider)
 		{
 			$login = $provider->login($username, $password);
