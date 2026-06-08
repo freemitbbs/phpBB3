@@ -442,12 +442,16 @@ class listener implements EventSubscriberInterface
 
 	public function customise_blog_posting_title($event): void
 	{
+		$mode = (string) $event['mode'];
+		$page_data = $event['page_data'];
+		$page_data['S_FREEMITBBS_CAN_SUBMIT_POST_TO_BLOG'] = $this->can_show_submit_post_to_blog_button($mode, (int) $event['forum_id'], $event['post_data'] ?? []);
+
 		if (!$this->is_blog_forum((int) $event['forum_id']))
 		{
+			$event['page_data'] = $page_data;
 			return;
 		}
 
-		$mode = (string) $event['mode'];
 		$page_title = '';
 		$page_explain = '';
 		if ($mode === 'post')
@@ -459,6 +463,7 @@ class listener implements EventSubscriberInterface
 			$post_data = $event['post_data'];
 			if ((int) ($post_data['topic_first_post_id'] ?? 0) !== (int) $event['post_id'])
 			{
+				$event['page_data'] = $page_data;
 				return;
 			}
 
@@ -475,10 +480,10 @@ class listener implements EventSubscriberInterface
 
 		if ($page_title === '')
 		{
+			$event['page_data'] = $page_data;
 			return;
 		}
 
-		$page_data = $event['page_data'];
 		$page_data['L_POST_A'] = $page_title;
 		$page_data['S_FREEMITBBS_BLOG_POSTING'] = true;
 		$page_data['S_DELETE_ALLOWED'] = false;
@@ -497,6 +502,17 @@ class listener implements EventSubscriberInterface
 	public function redirect_blog_after_submit($event): void
 	{
 		$data = $event['data'];
+		if ($this->should_copy_submitted_post_to_blog((string) ($event['mode'] ?? ''), $data, (int) ($event['post_visibility'] ?? ITEM_UNAPPROVED)))
+		{
+			$post_id = (int) ($data['post_id'] ?? 0);
+			$event['url'] = $this->helper->route('freemitbbs_blog_send_post', [
+				'post_id' => $post_id,
+				'hash' => generate_link_hash('freemitbbs_blog_send_' . $post_id),
+				'autosend' => 1,
+			]);
+			return;
+		}
+
 		if (!$this->is_blog_forum((int) ($data['forum_id'] ?? 0)))
 		{
 			return;
@@ -507,6 +523,44 @@ class listener implements EventSubscriberInterface
 		{
 			$event['url'] = $this->public_blog_route('freemitbbs_blog_entry', ['entry_id' => $topic_id]);
 		}
+	}
+
+	protected function can_show_submit_post_to_blog_button(string $mode, int $forum_id, array $post_data): bool
+	{
+		if (!in_array($mode, ['post', 'reply', 'quote', 'edit'], true)
+			|| $forum_id <= 0
+			|| $this->is_blog_forum($forum_id)
+			|| !$this->can_submit_post_to_blog())
+		{
+			return false;
+		}
+
+		if ($mode === 'edit')
+		{
+			return (int) ($post_data['poster_id'] ?? 0) === (int) $this->user->data['user_id'];
+		}
+
+		return true;
+	}
+
+	protected function should_copy_submitted_post_to_blog(string $mode, array $data, int $post_visibility): bool
+	{
+		return $this->request->is_set_post('post_to_blog')
+			&& $post_visibility === ITEM_APPROVED
+			&& (int) ($data['post_id'] ?? 0) > 0
+			&& $this->can_show_submit_post_to_blog_button($mode, (int) ($data['forum_id'] ?? 0), $data);
+	}
+
+	protected function can_submit_post_to_blog(): bool
+	{
+		$user_id = (int) $this->user->data['user_id'];
+		$blog_forum_id = $this->blog_forum_id();
+
+		return $user_id !== ANONYMOUS
+			&& empty($this->user->data['is_bot'])
+			&& $blog_forum_id > 0
+			&& $this->auth->acl_get('u_blog_create')
+			&& $this->auth->acl_get('f_post', $blog_forum_id);
 	}
 
 	public function delete_blog_topic_metadata_after_post_delete($event): void

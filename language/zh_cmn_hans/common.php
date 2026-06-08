@@ -646,6 +646,9 @@ $lang = array_merge($lang, array(
 	'REDIRECT'					=> '重定向',
 	'REDIRECTS'					=> '总共转向',
 	'REGISTER'					=> '注册',
+	'REGISTER_OR'				=> '或者',
+	'REGISTER_WITH_GOOGLE'		=> '使用 Google 账号登录',
+	'REGISTER_WITH_PASSWORD'		=> '使用密码注册',
 	'REGISTERED_USERS'			=> '注册用户：',
 	// "... and 2 hidden users online"
 	'REG_USERS_ONLINE'			=> array(

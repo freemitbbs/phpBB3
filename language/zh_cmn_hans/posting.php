@@ -220,6 +220,8 @@ $lang = array_merge($lang, array(
 	'POST_SUBMIT_RECOVERY_DRAFT_SUBJECT'	=> '恢复草稿',
 	'POST_SUBMIT_ERROR_DRAFT_SAVED'	=> '服务器未能完成发帖。您的正文仍保留在下方，并已保存一份恢复草稿。请检查后再提交。',
 	'POST_SUBMIT_ERROR_RETRY'	=> '服务器未能完成发帖。您的正文仍保留在下方。请检查后再提交。',
+	'SUBMIT_POST'				=> '提交发帖',
+	'SUBMIT_POST_AND_COPY_TO_BLOG'	=> '提交并复制到博客',
 	'POST_TOPIC_AS'				=> '发表新主题为',
 	'PROGRESS_BAR'				=> '进度条',
 

@@ -658,6 +658,9 @@ $lang = array_merge($lang, array(
 	'REDIRECT'					=> 'Redirect',
 	'REDIRECTS'					=> 'Total redirects',
 	'REGISTER'					=> 'Register',
+	'REGISTER_OR'				=> '或者',
+	'REGISTER_WITH_GOOGLE'		=> '使用 Google 账号登录',
+	'REGISTER_WITH_PASSWORD'		=> '使用密码注册',
 	'REGISTERED_USERS'			=> 'Registered users:',
 	// "... and 2 hidden users online"
 	'REG_USERS_ONLINE'			=> array(

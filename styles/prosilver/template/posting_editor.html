@@ -114,7 +114,8 @@
 			<!-- IF S_HAS_DRAFTS --><input type="submit" accesskey="d" tabindex="8" name="load" value="{L_LOAD_DRAFT}" class="button2" onclick="load_draft = true;" />&nbsp; <!-- ENDIF -->
 			<!-- IF S_SAVE_ALLOWED --><input type="submit" accesskey="k" tabindex="7" name="save" value="{L_SAVE_DRAFT}" class="button2" />&nbsp; <!-- ENDIF -->
 			<input type="submit" tabindex="5" name="preview" value="{L_PREVIEW}" class="button1"<!-- IF not S_PRIVMSGS --> onclick="document.getElementById('postform').action += '#preview';"<!-- ENDIF --> />&nbsp;
-			<input type="submit" accesskey="s" tabindex="6" name="post" value="{L_SUBMIT}" class="button1 default-submit-action" />&nbsp;
+			<input type="submit" accesskey="s" tabindex="6" name="post" value="<!-- IF S_PRIVMSGS -->{L_SUBMIT}<!-- ELSE -->{L_SUBMIT_POST}<!-- ENDIF -->" class="button1 default-submit-action" />&nbsp;
+			<!-- IF S_FREEMITBBS_CAN_SUBMIT_POST_TO_BLOG --><input type="submit" tabindex="6" name="post_to_blog" value="{L_SUBMIT_POST_AND_COPY_TO_BLOG}" class="button2" />&nbsp;<!-- ENDIF -->
 
 		</fieldset>
 

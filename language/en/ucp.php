@@ -330,9 +330,9 @@ $lang = array_merge($lang, array(
 
 	'OAUTH_REGISTER_EMAIL_UNAVAILABLE'	=> 'A verified email address could not be read from Google. Please restart Google sign-in.',
 	'OAUTH_REGISTER_USERNAME_EXPLAIN'	=> 'You will use Google to sign in. No password is needed.',
-	'REGISTER_OR'						=> 'or',
-	'REGISTER_WITH_GOOGLE'				=> '使用Google账号登录',
-	'REGISTER_WITH_PASSWORD'			=> 'Use a registration password',
+	'REGISTER_OR'						=> '或者',
+	'REGISTER_WITH_GOOGLE'				=> '使用 Google 账号登录',
+	'REGISTER_WITH_PASSWORD'			=> '使用密码注册',
 
 	'NOTIFICATIONS_MARK_ALL_READ'						=> 'Mark all notifications read',
 	'NOTIFICATIONS_MARK_ALL_READ_CONFIRM'				=> 'Are you sure you want to mark all notifications read?',

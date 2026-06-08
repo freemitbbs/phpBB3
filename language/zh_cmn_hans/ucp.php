@@ -322,8 +322,8 @@ $lang = array_merge($lang, array(
 	'OAUTH_REGISTER_EMAIL_UNAVAILABLE'	=> '无法从 Google 获取已验证的 Email，请重新使用 Google 登录。',
 	'OAUTH_REGISTER_USERNAME_EXPLAIN'	=> '以后使用 Google 登录，不需要设置密码。',
 	'REGISTER_OR'						=> '或者',
-	'REGISTER_WITH_GOOGLE'				=> '使用Google账号登录',
-	'REGISTER_WITH_PASSWORD'			=> '使用注册密码登录',
+	'REGISTER_WITH_GOOGLE'				=> '使用 Google 账号登录',
+	'REGISTER_WITH_PASSWORD'			=> '使用密码注册',
 
 	'NOTIFICATIONS_MARK_ALL_READ'						=> '标记所有通知为已读',
 	'NOTIFICATIONS_MARK_ALL_READ_CONFIRM'				=> '您确定要标记所有通知为已读吗？',

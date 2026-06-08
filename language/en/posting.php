@@ -231,6 +231,8 @@ $lang = array_merge($lang, array(
 	'POST_SUBMIT_RECOVERY_DRAFT_SUBJECT'	=> 'Recovered post',
 	'POST_SUBMIT_ERROR_DRAFT_SAVED'	=> 'The server could not finish submitting this post. Your text is still shown below and a recovery draft was saved. Please review it and submit again.',
 	'POST_SUBMIT_ERROR_RETRY'	=> 'The server could not finish submitting this post. Your text is still shown below. Please review it and submit again.',
+	'SUBMIT_POST'				=> '提交发帖',
+	'SUBMIT_POST_AND_COPY_TO_BLOG'	=> '提交并复制到博客',
 	'POST_TOPIC_AS'				=> 'Post topic as',
 	'PROGRESS_BAR'				=> 'Progress bar',
 

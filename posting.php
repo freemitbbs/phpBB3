@@ -236,7 +236,7 @@ $confirm	= $request->is_set_post('confirm');
 $cancel		= ($request->is_set_post('cancel') && !$save) ? true : false;
 
 $refresh	= ($request->is_set_post('add_file') || $request->is_set_post('delete_file') || $save || $load || $preview);
-$submit = $request->is_set_post('post') && !$refresh && !$preview;
+$submit = ($request->is_set_post('post') || $request->is_set_post('post_to_blog')) && !$refresh && !$preview;
 $mode		= $request->variable('mode', '');
 
 // Only assign required URL parameters

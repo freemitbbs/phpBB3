@@ -200,22 +200,6 @@
 							{% if topicrow.S_POST_GLOBAL and FORUM_ID != topicrow.FORUM_ID %} &raquo; {{ lang('IN') }} <a href="{{ topicrow.U_VIEW_FORUM }}">{{ topicrow.FORUM_NAME }}</a>{% endif %}
 						</div>
 
-						{% if topicrow.pagination|length %}
-						<div class="pagination">
-							<span><i class="icon fa-clone fa-fw" aria-hidden="true"></i></span>
-							<ul>
-							{% for pagination in topicrow.pagination %}
-								{% if pagination.S_IS_PREV %}
-								{% elseif pagination.S_IS_CURRENT %}<li class="active"><span>{{ pagination.PAGE_NUMBER }}</span></li>
-								{% elseif pagination.S_IS_ELLIPSIS %}<li class="ellipsis"><span>{{ lang('ELLIPSIS') }}</span></li>
-								{% elseif pagination.S_IS_NEXT %}
-								{% else %}<li><a class="button" href="{{ pagination.PAGE_URL }}">{{ pagination.PAGE_NUMBER }}</a></li>
-								{% endif %}
-							{% endfor %}
-							</ul>
-						</div>
-						{% endif %}
-
 						{% EVENT topiclist_row_append %}
 							</div>
 						</dt>

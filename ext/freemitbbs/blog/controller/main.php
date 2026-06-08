@@ -482,6 +482,7 @@ class main
 		$forum = $this->require_blog_permission($this->helper->route('freemitbbs_blog_manage'));
 		$blog_forum_id = (int) $forum['forum_id'];
 		$hash = $this->request->variable('hash', '');
+		$autosend = $this->request->variable('autosend', 0) === 1;
 
 		if (!check_link_hash($hash, 'freemitbbs_blog_send_' . $post_id))
 		{
@@ -499,13 +500,13 @@ class main
 			redirect($this->source_post_url($post));
 		}
 
-		if (!$this->request->is_set_post('send') && !$this->request->is_set_post('confirm'))
+		if (!$autosend && !$this->request->is_set_post('send') && !$this->request->is_set_post('confirm'))
 		{
 			throw new \phpbb\exception\http_exception(403, 'FORM_INVALID');
 		}
 
 		$existing = $this->get_existing_source_topic((int) $this->user->data['user_id'], $post_id, $blog_forum_id);
-		if (!confirm_box(true))
+		if (!$autosend && !confirm_box(true))
 		{
 			confirm_box(
 				false,
@@ -523,12 +524,13 @@ class main
 
 		if ($existing)
 		{
-			redirect($this->posting_edit_url((int) $existing['topic_first_post_id']));
+			$this->publish_existing_source_topic($existing, $blog_forum_id);
+			redirect($this->public_blog_entry_url((int) $existing['topic_id']));
 		}
 
-		$topic = $this->create_topic_from_post($post, $forum);
+		$topic = $this->create_topic_from_post($post, $forum, true);
 
-		redirect($this->posting_edit_url((int) $topic['post_id']));
+		redirect($this->public_blog_entry_url((int) $topic['topic_id']));
 	}
 
 	public function ucp(string $u_action): void
@@ -1110,7 +1112,7 @@ class main
 
 	protected function get_existing_source_topic(int $user_id, int $post_id, int $blog_forum_id): ?array
 	{
-		$sql = 'SELECT t.topic_id, t.topic_first_post_id
+		$sql = 'SELECT t.topic_id, t.topic_first_post_id, t.topic_poster, t.topic_visibility, bt.is_draft
 			FROM ' . $this->blog_topics_table . ' bt
 			INNER JOIN ' . TOPICS_TABLE . ' t
 				ON t.topic_id = bt.topic_id
@@ -1127,7 +1129,26 @@ class main
 		return $row;
 	}
 
-	protected function create_topic_from_post(array $post, array $forum): array
+	protected function publish_existing_source_topic(array $topic, int $blog_forum_id): void
+	{
+		$topic_id = (int) ($topic['topic_id'] ?? 0);
+		if ($topic_id <= 0)
+		{
+			return;
+		}
+
+		if ((int) ($topic['topic_visibility'] ?? ITEM_UNAPPROVED) !== ITEM_APPROVED)
+		{
+			$this->content_visibility->set_topic_visibility(ITEM_APPROVED, $topic_id, $blog_forum_id, (int) $this->user->data['user_id'], time(), '');
+		}
+
+		if (!empty($topic['is_draft']))
+		{
+			$this->set_blog_topic_draft($topic_id, (int) ($topic['topic_poster'] ?? $this->user->data['user_id']), 0);
+		}
+	}
+
+	protected function create_topic_from_post(array $post, array $forum, bool $publish = false): array
 	{
 		$title = trim((string) ($post['post_subject'] ?: $post['topic_title']));
 		$title = $title !== '' ? $title : $this->language->lang('BLOG_UNTITLED');
@@ -1136,6 +1157,7 @@ class main
 		$forum_id = (int) $forum['forum_id'];
 		$user_id = (int) $this->user->data['user_id'];
 		$current_time = time();
+		$post_visibility = $publish ? ITEM_APPROVED : ITEM_UNAPPROVED;
 
 		$copied_attachments = [];
 		$this->db->sql_transaction('begin');
@@ -1148,11 +1170,11 @@ class main
 				'topic_last_view_time' => $current_time,
 				'forum_id' => $forum_id,
 				'icon_id' => 0,
-				'topic_posts_approved' => 0,
+				'topic_posts_approved' => $publish ? 1 : 0,
 				'topic_posts_softdeleted' => 0,
-				'topic_posts_unapproved' => 1,
-				'topic_visibility' => ITEM_UNAPPROVED,
-				'topic_delete_user' => $user_id,
+				'topic_posts_unapproved' => $publish ? 0 : 1,
+				'topic_visibility' => $post_visibility,
+				'topic_delete_user' => $publish ? 0 : $user_id,
 				'topic_title' => $title,
 				'topic_first_poster_name' => (string) $this->user->data['username'],
 				'topic_first_poster_colour' => (string) $this->user->data['user_colour'],
@@ -1171,7 +1193,7 @@ class main
 				'icon_id' => 0,
 				'poster_ip' => $this->user->ip,
 				'post_time' => $current_time,
-				'post_visibility' => ITEM_UNAPPROVED,
+				'post_visibility' => $post_visibility,
 				'enable_bbcode' => (int) $post['enable_bbcode'],
 				'enable_smilies' => (int) $post['enable_smilies'],
 				'enable_magic_url' => (int) $post['enable_magic_url'],
@@ -1204,17 +1226,19 @@ class main
 				SET ' . $this->db->sql_build_array('UPDATE', $topic_update) . '
 				WHERE topic_id = ' . $topic_id);
 
-			$this->db->sql_query('UPDATE ' . FORUMS_TABLE . '
-				SET forum_topics_unapproved = forum_topics_unapproved + 1,
-					forum_posts_unapproved = forum_posts_unapproved + 1
-				WHERE forum_id = ' . $forum_id);
+			$this->update_forum_after_copy($forum_id, $post_id, $title, $current_time, $publish);
 
+			$user_stat = 'user_lastpost_time = ' . $current_time;
+			if ($publish && $this->auth->acl_get('f_postcount', $forum_id))
+			{
+				$user_stat .= ', user_posts = user_posts + 1';
+			}
 			$this->db->sql_query('UPDATE ' . USERS_TABLE . '
-				SET user_lastpost_time = ' . $current_time . '
+				SET ' . $user_stat . '
 				WHERE user_id = ' . $user_id);
 
 			$copied_attachments = $this->copy_post_attachments($post, $topic_id, $post_id);
-			$this->insert_source_topic($topic_id, $user_id, $post);
+			$this->insert_source_topic($topic_id, $user_id, $post, $publish ? 0 : 1);
 
 			$this->db->sql_transaction('commit');
 		}
@@ -1229,6 +1253,33 @@ class main
 			'topic_id' => $topic_id,
 			'post_id' => $post_id,
 		];
+	}
+
+	protected function update_forum_after_copy(int $forum_id, int $post_id, string $title, int $current_time, bool $publish): void
+	{
+		if ($publish)
+		{
+			$this->config->increment('num_topics', 1, false);
+			$this->config->increment('num_posts', 1, false);
+
+			$sql = 'UPDATE ' . FORUMS_TABLE . '
+				SET forum_topics_approved = forum_topics_approved + 1,
+					forum_posts_approved = forum_posts_approved + 1,
+					forum_last_post_id = ' . $post_id . ",
+					forum_last_post_subject = '" . $this->db->sql_escape($title) . "',
+					forum_last_post_time = " . $current_time . ',
+					forum_last_poster_id = ' . (int) $this->user->data['user_id'] . ",
+					forum_last_poster_name = '" . $this->db->sql_escape((string) $this->user->data['username']) . "',
+					forum_last_poster_colour = '" . $this->db->sql_escape((string) $this->user->data['user_colour']) . "'
+				WHERE forum_id = " . $forum_id;
+			$this->db->sql_query($sql);
+			return;
+		}
+
+		$this->db->sql_query('UPDATE ' . FORUMS_TABLE . '
+			SET forum_topics_unapproved = forum_topics_unapproved + 1,
+				forum_posts_unapproved = forum_posts_unapproved + 1
+			WHERE forum_id = ' . $forum_id);
 	}
 
 	protected function copy_post_attachments(array $source_post, int $topic_id, int $post_id): array
@@ -1423,14 +1474,14 @@ class main
 		return $exists;
 	}
 
-	protected function insert_source_topic(int $topic_id, int $user_id, array $post): void
+	protected function insert_source_topic(int $topic_id, int $user_id, array $post, int $is_draft = 1): void
 	{
 		$sql_ary = [
 			'topic_id' => $topic_id,
 			'user_id' => $user_id,
 			'source_post_id' => (int) $post['post_id'],
 			'source_topic_id' => (int) $post['topic_id'],
-			'is_draft' => 1,
+			'is_draft' => $is_draft,
 			'created_time' => time(),
 		];
 
