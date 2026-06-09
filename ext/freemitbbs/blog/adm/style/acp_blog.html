@@ -1,0 +1,33 @@
+<!-- INCLUDE overall_header.html -->
+
+<a name="maincontent"></a>
+<h1>{L_ACP_BLOG}</h1>
+<p>{L_BLOG_ACP_EXPLAIN}</p>
+
+<form id="acp_blog" method="post" action="{U_ACTION}">
+	<fieldset>
+		<legend>{L_BLOG_ACP_INDEX_FIELDSET}</legend>
+		<dl>
+			<dt>
+				<label for="freemitbbs_blog_index_latest_limit">{L_BLOG_INDEX_LATEST_LIMIT}</label><br />
+				<span>{L_BLOG_INDEX_LATEST_LIMIT_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="0" max="50" id="freemitbbs_blog_index_latest_limit" name="freemitbbs_blog_index_latest_limit" value="{BLOG_INDEX_LATEST_LIMIT}" class="inputbox autowidth" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="freemitbbs_blog_index_latest_days">{L_BLOG_INDEX_LATEST_DAYS}</label><br />
+				<span>{L_BLOG_INDEX_LATEST_DAYS_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="0" max="365" id="freemitbbs_blog_index_latest_days" name="freemitbbs_blog_index_latest_days" value="{BLOG_INDEX_LATEST_DAYS}" class="inputbox autowidth" /></dd>
+		</dl>
+	</fieldset>
+
+	<fieldset class="submit-buttons">
+		{S_FORM_TOKEN}
+		<input class="button1" type="submit" id="submit" name="submit" value="{L_SUBMIT}" />
+		<input class="button2" type="reset" id="reset" name="reset" value="{L_RESET}" />
+	</fieldset>
+</form>
+
+<!-- INCLUDE overall_footer.html -->

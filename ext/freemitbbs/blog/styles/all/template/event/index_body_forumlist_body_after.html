@@ -1,0 +1,64 @@
+<!-- IF S_FREEMITBBS_BLOG_INDEX_LATEST -->
+	<!-- IF S_BLOG_INDEX_LATEST_COLLAPSIBLE -->
+		<a class="category<!-- IF S_BLOG_INDEX_LATEST_HIDDEN --> hidden-category<!-- ENDIF -->" id="category{BLOG_INDEX_LATEST_BLOCK_ID}" style="display: none; height: 0"></a>
+	<!-- ENDIF -->
+	<div class="forabg blog-index-latest-list">
+		<div class="inner">
+			<ul class="topiclist">
+				<li class="header">
+					<dl class="row-item">
+						<dt><div class="list-inner"><a href="{U_BLOG_INDEX}"><i class="icon fa-book fa-fw" aria-hidden="true"></i> {L_BLOG_LATEST_ENTRIES}</a></div></dt>
+						<dd class="posts">{L_BLOG_COMMENTS}</dd>
+						<dd class="views">{L_VIEWS}</dd>
+						<dd class="lastpost"><span>{L_BLOG_LAST_COMMENT}</span></dd>
+					</dl>
+					<!-- IF S_BLOG_INDEX_LATEST_COLLAPSIBLE -->
+						<a href="{U_BLOG_INDEX_LATEST_COLLAPSE_URL}"
+							class="collapse-btn"
+							data-hidden="{BLOG_INDEX_LATEST_COLLAPSE_HIDDEN_DATA}"
+							data-ajax="phpbb_collapse"
+							data-overlay="false"
+							data-title-alt="{BLOG_INDEX_LATEST_COLLAPSE_ALT_TITLE}"
+							title="{BLOG_INDEX_LATEST_COLLAPSE_TITLE}"
+							style="display: none; line-height: 0;">
+							<i class="fa {BLOG_INDEX_LATEST_COLLAPSE_ICON}"></i>
+						</a>
+					<!-- ENDIF -->
+				</li>
+			</ul>
+			<ul class="topiclist topics collapsible">
+			<!-- BEGIN latest_blog_entries -->
+				<li class="row <!-- IF latest_blog_entries.S_ROW_COUNT is odd -->bg1<!-- ELSE -->bg2<!-- ENDIF -->">
+					<dl class="row-item">
+						<dt>
+							<div class="list-inner">
+								<a href="{latest_blog_entries.U_ENTRY}" class="topictitle">{latest_blog_entries.TOPIC_TITLE}</a>
+								<div class="blog-entry-meta">
+									{L_POST_BY_AUTHOR} {latest_blog_entries.USERNAME_FULL} &bull; {latest_blog_entries.POST_TIME}
+								</div>
+								<div class="responsive-show blog-mobile-stats" style="display: none;">
+									<span>{L_BLOG_COMMENTS}{L_COLON} <strong>{latest_blog_entries.REPLIES}</strong></span>
+									<span>{L_VIEWS}{L_COLON} <strong>{latest_blog_entries.VIEWS}</strong></span>
+								</div>
+								<div class="responsive-show blog-mobile-lastpost" style="display: none;">
+									{L_BLOG_LAST_COMMENT} {L_POST_BY_AUTHOR} {latest_blog_entries.LAST_POST_AUTHOR_FULL} &laquo; <a href="{latest_blog_entries.U_LAST_POST}" title="{L_GOTO_LAST_POST}">{latest_blog_entries.LAST_POST_TIME}</a>
+								</div>
+							</div>
+						</dt>
+						<dd class="posts">{latest_blog_entries.REPLIES} <dfn>{L_BLOG_COMMENTS}</dfn></dd>
+						<dd class="views">{latest_blog_entries.VIEWS} <dfn>{L_VIEWS}</dfn></dd>
+						<dd class="lastpost">
+							<span><dfn>{L_BLOG_LAST_COMMENT} </dfn>{L_POST_BY_AUTHOR} {latest_blog_entries.LAST_POST_AUTHOR_FULL}
+								<a href="{latest_blog_entries.U_LAST_POST}" title="{L_GOTO_LAST_POST}">
+									<i class="icon fa-external-link-square fa-fw icon-lightgray icon-md" aria-hidden="true"></i><span class="sr-only">{L_VIEW_LATEST_POST}</span>
+								</a>
+								<br /><time datetime="{latest_blog_entries.LAST_POST_TIME_RFC3339}">{latest_blog_entries.LAST_POST_TIME}</time>
+							</span>
+						</dd>
+					</dl>
+				</li>
+			<!-- END latest_blog_entries -->
+			</ul>
+		</div>
+	</div>
+<!-- ENDIF -->
