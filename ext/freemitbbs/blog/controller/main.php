@@ -19,6 +19,7 @@ class main
 	private const BLOG_HEADER_IMAGE_EXTENSIONS = ['gif', 'jpg', 'jpeg', 'png', 'webp'];
 	private const BLOG_TITLE_MAX_LENGTH = 80;
 	private const BLOG_SUBTITLE_MAX_LENGTH = 140;
+	private const BLOG_PROTECTION_DEFAULT_KEYWORDS = '六四,反共,反华,中共,中国,美国,日本,印度,习近平,毛泽东,邓小平,法西斯,军国主义,靖国神社,共产党,华为,抗美';
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
@@ -228,6 +229,8 @@ class main
 			throw new \phpbb\exception\http_exception(404, 'BLOG_ENTRY_NOT_FOUND');
 		}
 
+		$this->enforce_public_blog_entry_protection($entry);
+
 		if ($this->is_public_cacheable_blog_entry($entry))
 		{
 			return $this->render_public_cacheable_blog_entry($entry, $forum);
@@ -331,6 +334,271 @@ class main
 		return empty($entry['is_draft'])
 			&& (int) ($entry['topic_visibility'] ?? ITEM_UNAPPROVED) === ITEM_APPROVED
 			&& !$this->can_edit_topic($entry);
+	}
+
+	protected function enforce_public_blog_entry_protection(array $entry): void
+	{
+		if (!$this->is_anonymous_public_blog_request())
+		{
+			return;
+		}
+
+		if (!empty($this->config['freemitbbs_blog_block_direct_sid_anon'])
+			&& $this->is_direct_sid_blog_request())
+		{
+			$this->deny_public_blog_entry($entry);
+		}
+
+		if (empty($this->config['freemitbbs_blog_china_safe_mode'])
+			|| !$this->is_protected_blog_entry($entry)
+			|| !$this->is_high_risk_public_blog_request())
+		{
+			return;
+		}
+
+		$this->deny_public_blog_entry($entry);
+	}
+
+	protected function is_anonymous_public_blog_request(): bool
+	{
+		$method = strtoupper((string) $this->request->server('REQUEST_METHOD', 'GET'));
+
+		return in_array($method, ['GET', 'HEAD'], true)
+			&& (int) $this->user->data['user_id'] === ANONYMOUS
+			&& empty($this->user->data['is_registered'])
+			&& empty($this->user->data['is_bot']);
+	}
+
+	protected function is_direct_sid_blog_request(): bool
+	{
+		return $this->request->is_set('sid', \phpbb\request\request_interface::GET)
+			&& $this->is_direct_request();
+	}
+
+	protected function is_high_risk_public_blog_request(): bool
+	{
+		if ($this->is_direct_sid_blog_request())
+		{
+			return true;
+		}
+
+		if ($this->is_risk_country_request() || $this->is_risk_client_address())
+		{
+			return true;
+		}
+
+		return $this->is_direct_request()
+			&& !$this->has_phpbb_session_cookie();
+	}
+
+	protected function is_direct_request(): bool
+	{
+		return trim((string) $this->request->header('Referer', '')) === ''
+			&& trim((string) $this->request->header('Referrer', '')) === '';
+	}
+
+	protected function has_phpbb_session_cookie(): bool
+	{
+		$cookie_name = (string) ($this->config['cookie_name'] ?? '');
+		if ($cookie_name === '')
+		{
+			return trim((string) $this->request->header('Cookie', '')) !== '';
+		}
+
+		return $this->request->is_set($cookie_name . '_sid', \phpbb\request\request_interface::COOKIE)
+			|| $this->request->is_set($cookie_name . '_u', \phpbb\request\request_interface::COOKIE)
+			|| $this->request->is_set($cookie_name . '_k', \phpbb\request\request_interface::COOKIE);
+	}
+
+	protected function is_protected_blog_entry(array $entry): bool
+	{
+		$topic_id = (int) ($entry['topic_id'] ?? 0);
+		if ($topic_id > 0 && in_array($topic_id, $this->integer_config_list('freemitbbs_blog_china_safe_topic_ids'), true))
+		{
+			return true;
+		}
+
+		$title = html_entity_decode((string) ($entry['topic_title'] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+		foreach ($this->string_config_list('freemitbbs_blog_china_safe_keywords', self::BLOG_PROTECTION_DEFAULT_KEYWORDS) as $keyword)
+		{
+			if ($keyword !== '' && $this->contains_case_insensitive($title, $keyword))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	protected function is_risk_country_request(): bool
+	{
+		$risk_countries = array_map('strtoupper', $this->string_config_list('freemitbbs_blog_china_safe_countries', 'CN'));
+		if (!$risk_countries)
+		{
+			return false;
+		}
+
+		foreach ($this->string_config_list('freemitbbs_blog_china_safe_country_headers', 'CF-IPCountry,CloudFront-Viewer-Country,X-Country-Code') as $header_name)
+		{
+			$country = strtoupper(trim((string) $this->request->header($header_name, '')));
+			if ($country !== '' && in_array($country, $risk_countries, true))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	protected function is_risk_client_address(): bool
+	{
+		$cidrs = $this->string_config_list('freemitbbs_blog_china_safe_cidrs');
+		if (!$cidrs)
+		{
+			return false;
+		}
+
+		foreach ($this->client_addresses() as $address)
+		{
+			foreach ($cidrs as $cidr)
+			{
+				if ($this->ip_matches_cidr($address, $cidr))
+				{
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	protected function client_addresses(): array
+	{
+		$addresses = [];
+		foreach ([
+			(string) $this->request->server('REMOTE_ADDR', ''),
+			(string) $this->request->header('CF-Connecting-IP', ''),
+			(string) $this->request->header('True-Client-IP', ''),
+			(string) $this->request->header('X-Real-IP', ''),
+		] as $address)
+		{
+			$address = trim($address);
+			if ($address !== '')
+			{
+				$addresses[] = $address;
+			}
+		}
+
+		$forwarded_for = trim((string) $this->request->header('X-Forwarded-For', ''));
+		if ($forwarded_for !== '')
+		{
+			$first_forwarded = trim((string) strtok($forwarded_for, ','));
+			if ($first_forwarded !== '')
+			{
+				$addresses[] = $first_forwarded;
+			}
+		}
+
+		return array_values(array_unique($addresses));
+	}
+
+	protected function ip_matches_cidr(string $address, string $cidr): bool
+	{
+		$address = trim($address);
+		$cidr = trim($cidr);
+		if ($address === '' || $cidr === '')
+		{
+			return false;
+		}
+
+		if (!str_contains($cidr, '/'))
+		{
+			return $address === $cidr || str_starts_with($address, $cidr);
+		}
+
+		[$network, $bits] = array_map('trim', explode('/', $cidr, 2));
+		if (!ctype_digit($bits))
+		{
+			return false;
+		}
+
+		$address_binary = @inet_pton($address);
+		$network_binary = @inet_pton($network);
+		if ($address_binary === false || $network_binary === false || strlen($address_binary) !== strlen($network_binary))
+		{
+			return false;
+		}
+
+		$bit_count = (int) $bits;
+		$max_bits = strlen($address_binary) * 8;
+		if ($bit_count < 0 || $bit_count > $max_bits)
+		{
+			return false;
+		}
+
+		$full_bytes = intdiv($bit_count, 8);
+		$remaining_bits = $bit_count % 8;
+		if ($full_bytes > 0 && substr($address_binary, 0, $full_bytes) !== substr($network_binary, 0, $full_bytes))
+		{
+			return false;
+		}
+
+		if ($remaining_bits === 0)
+		{
+			return true;
+		}
+
+		$mask = (0xFF << (8 - $remaining_bits)) & 0xFF;
+
+		return (ord($address_binary[$full_bytes]) & $mask) === (ord($network_binary[$full_bytes]) & $mask);
+	}
+
+	protected function deny_public_blog_entry(array $entry): void
+	{
+		$action = strtolower(trim((string) ($this->config['freemitbbs_blog_china_safe_action'] ?? '404')));
+		if ($action === 'login')
+		{
+			login_box($this->public_blog_entry_url((int) ($entry['topic_id'] ?? 0)));
+		}
+
+		throw new \phpbb\exception\http_exception(404, 'BLOG_ENTRY_NOT_FOUND');
+	}
+
+	protected function integer_config_list(string $config_name): array
+	{
+		$values = [];
+		foreach ($this->string_config_list($config_name) as $value)
+		{
+			if (ctype_digit($value))
+			{
+				$values[] = (int) $value;
+			}
+		}
+
+		return array_values(array_unique($values));
+	}
+
+	protected function string_config_list(string $config_name, string $default = ''): array
+	{
+		$value = trim((string) ($this->config[$config_name] ?? $default));
+		if ($value === '')
+		{
+			return [];
+		}
+
+		return array_values(array_filter(array_map('trim', preg_split('/[\s,]+/u', $value) ?: []), static function (string $item): bool {
+			return $item !== '';
+		}));
+	}
+
+	protected function contains_case_insensitive(string $haystack, string $needle): bool
+	{
+		if (function_exists('mb_stripos'))
+		{
+			return mb_stripos($haystack, $needle, 0, 'UTF-8') !== false;
+		}
+
+		return stripos($haystack, $needle) !== false;
 	}
 
 	protected function without_url_session_id(callable $callback): \Symfony\Component\HttpFoundation\Response

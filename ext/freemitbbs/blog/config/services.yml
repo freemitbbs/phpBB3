@@ -34,5 +34,6 @@ services:
             - '@template'
             - '@user'
             - '%core.table_prefix%'
+            - '@?phpbb.collapsiblecategories.operator'
         tags:
             - { name: event.listener }

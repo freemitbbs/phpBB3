@@ -158,7 +158,8 @@
 	margin-top: 8px;
 }
 
-.blog-top-list {
+.blog-top-list,
+.blog-index-latest-list {
 	margin-bottom: 12px;
 }
 

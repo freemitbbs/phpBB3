@@ -6,6 +6,8 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 class listener implements EventSubscriberInterface
 {
+	private const INDEX_LATEST_BLOG_COLLAPSE_ID = 'freemitbbs_blog_index_latest';
+	private const INDEX_LATEST_BLOG_DEFAULT_LIMIT = 10;
 	private const NICKNAME_PROFILE_FIELD_IDENT = 'nick_name';
 
 	protected \phpbb\auth\auth $auth;
@@ -16,6 +18,7 @@ class listener implements EventSubscriberInterface
 	protected \phpbb\request\request_interface $request;
 	protected \phpbb\template\template $template;
 	protected \phpbb\user $user;
+	protected $collapsible_operator;
 	protected string $blog_topics_table;
 	protected array $blog_comments_disabled_topic_cache = [];
 	protected array $blog_profile_link_cache = [];
@@ -31,7 +34,8 @@ class listener implements EventSubscriberInterface
 		\phpbb\request\request_interface $request,
 		\phpbb\template\template $template,
 		\phpbb\user $user,
-		string $table_prefix
+		string $table_prefix,
+		$collapsible_operator = null
 	)
 	{
 		$this->auth = $auth;
@@ -42,6 +46,7 @@ class listener implements EventSubscriberInterface
 		$this->request = $request;
 		$this->template = $template;
 		$this->user = $user;
+		$this->collapsible_operator = $collapsible_operator;
 		$this->blog_topics_table = $table_prefix . 'blog_topics';
 	}
 
@@ -51,6 +56,7 @@ class listener implements EventSubscriberInterface
 			'core.user_setup' => 'load_language',
 			'core.modify_username_string' => 'append_profile_nickname_to_username',
 			'core.page_header' => 'assign_header_links',
+			'core.index_modify_page_title' => 'assign_index_latest_blog_posts',
 			'core.permissions' => 'add_permissions',
 			'core.viewtopic_modify_post_row' => 'add_send_to_blog_button',
 			'core.viewtopic_modify_forum_id' => 'redirect_blog_viewtopic',
@@ -142,6 +148,40 @@ class listener implements EventSubscriberInterface
 		]);
 	}
 
+	public function assign_index_latest_blog_posts(): void
+	{
+		$forum_id = $this->blog_forum_id();
+		if ($forum_id <= 0 || !$this->auth->acl_get('f_read', $forum_id))
+		{
+			return;
+		}
+
+		$topics = $this->get_latest_blog_topics($forum_id, $this->index_latest_blog_limit());
+		if (empty($topics))
+		{
+			return;
+		}
+
+		$collapsible = $this->has_collapsible_categories();
+		$hidden = $collapsible ? (bool) $this->collapsible_operator->is_collapsed(self::INDEX_LATEST_BLOG_COLLAPSE_ID) : false;
+		foreach ($topics as $topic)
+		{
+			$this->template->assign_block_vars('latest_blog_entries', $this->latest_blog_entry_template_vars($topic));
+		}
+
+		$this->template->assign_vars([
+			'S_FREEMITBBS_BLOG_INDEX_LATEST' => true,
+			'S_BLOG_INDEX_LATEST_COLLAPSIBLE' => $collapsible,
+			'S_BLOG_INDEX_LATEST_HIDDEN' => $hidden,
+			'U_BLOG_INDEX_LATEST_COLLAPSE_URL' => $collapsible ? $this->collapsible_operator->get_collapsible_link(self::INDEX_LATEST_BLOG_COLLAPSE_ID) : '',
+			'BLOG_INDEX_LATEST_BLOCK_ID' => self::INDEX_LATEST_BLOG_COLLAPSE_ID,
+			'BLOG_INDEX_LATEST_COLLAPSE_HIDDEN_DATA' => $hidden ? '1' : '',
+			'BLOG_INDEX_LATEST_COLLAPSE_TITLE' => $hidden ? $this->language->lang('BLOG_LATEST_COLLAPSE_SHOW') : $this->language->lang('BLOG_LATEST_COLLAPSE_HIDE'),
+			'BLOG_INDEX_LATEST_COLLAPSE_ALT_TITLE' => $hidden ? $this->language->lang('BLOG_LATEST_COLLAPSE_HIDE') : $this->language->lang('BLOG_LATEST_COLLAPSE_SHOW'),
+			'BLOG_INDEX_LATEST_COLLAPSE_ICON' => $hidden ? 'fa-plus-square' : 'fa-minus-square',
+		]);
+	}
+
 	public function add_permissions($event): void
 	{
 		$permissions = $event['permissions'];
@@ -188,6 +228,12 @@ class listener implements EventSubscriberInterface
 			|| !$post_id
 			|| !$this->auth->acl_get('u_blog_create')
 			|| !empty($this->user->data['is_bot']))
+		{
+			$event['post_row'] = $post_row;
+			return;
+		}
+
+		if (!$this->is_first_post_row($post_row, $event['topic_data'] ?? [], $post_id))
 		{
 			$event['post_row'] = $post_row;
 			return;
@@ -527,7 +573,7 @@ class listener implements EventSubscriberInterface
 
 	protected function can_show_submit_post_to_blog_button(string $mode, int $forum_id, array $post_data): bool
 	{
-		if (!in_array($mode, ['post', 'reply', 'quote', 'edit'], true)
+		if (!in_array($mode, ['post', 'edit'], true)
 			|| $forum_id <= 0
 			|| $this->is_blog_forum($forum_id)
 			|| !$this->can_submit_post_to_blog())
@@ -537,7 +583,13 @@ class listener implements EventSubscriberInterface
 
 		if ($mode === 'edit')
 		{
-			return (int) ($post_data['poster_id'] ?? 0) === (int) $this->user->data['user_id'];
+			$post_id = (int) ($post_data['post_id'] ?? 0);
+			$first_post_id = (int) ($post_data['topic_first_post_id'] ?? 0);
+
+			return $post_id > 0
+				&& $first_post_id > 0
+				&& $post_id === $first_post_id
+				&& (int) ($post_data['poster_id'] ?? 0) === (int) $this->user->data['user_id'];
 		}
 
 		return true;
@@ -595,6 +647,106 @@ class listener implements EventSubscriberInterface
 	protected function blog_forum_id(): int
 	{
 		return (int) ($this->config['freemitbbs_blog_forum_id'] ?? 0);
+	}
+
+	protected function get_latest_blog_topics(int $forum_id, int $limit): array
+	{
+		if ($limit <= 0)
+		{
+			return [];
+		}
+
+		$max_age_days = max(0, min(365, (int) ($this->config['freemitbbs_blog_index_latest_days'] ?? 0)));
+		$min_topic_time_sql = $max_age_days > 0
+			? ' AND t.topic_time >= ' . max(0, time() - ($max_age_days * 86400)) . "\n"
+			: '';
+		$sql = 'SELECT t.topic_id, t.topic_title, t.topic_time, t.topic_last_post_time,
+				t.topic_last_post_id, t.topic_last_poster_id, t.topic_last_poster_name,
+				t.topic_last_poster_colour, t.topic_posts_approved, t.topic_views,
+				t.topic_poster, t.topic_first_poster_name, t.topic_first_poster_colour
+			FROM ' . TOPICS_TABLE . ' t
+			LEFT JOIN ' . $this->blog_topics_table . ' bt
+				ON bt.topic_id = t.topic_id
+			WHERE t.forum_id = ' . $forum_id . '
+				AND t.topic_moved_id = 0
+				AND t.topic_visibility = ' . ITEM_APPROVED . '
+				AND (bt.is_draft IS NULL OR bt.is_draft = 0)' .
+				$min_topic_time_sql . '
+			ORDER BY t.topic_time DESC, t.topic_id DESC';
+		$result = $this->db->sql_query_limit($sql, $limit);
+		$rows = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$rows[] = $row;
+		}
+		$this->db->sql_freeresult($result);
+
+		return $rows;
+	}
+
+	protected function index_latest_blog_limit(): int
+	{
+		return max(0, min(50, (int) ($this->config['freemitbbs_blog_index_latest_limit'] ?? self::INDEX_LATEST_BLOG_DEFAULT_LIMIT)));
+	}
+
+	protected function latest_blog_entry_template_vars(array $topic): array
+	{
+		$topic_id = (int) $topic['topic_id'];
+		$last_post_time = (int) ($topic['topic_last_post_time'] ?? $topic['topic_time'] ?? 0);
+		$entry_url = $this->public_blog_route('freemitbbs_blog_entry', ['entry_id' => $topic_id]);
+
+		return [
+			'U_ENTRY' => $entry_url,
+			'U_LAST_POST' => $entry_url,
+			'TOPIC_TITLE' => censor_text((string) $topic['topic_title']),
+			'USERNAME_FULL' => get_username_string(
+				'full',
+				(int) $topic['topic_poster'],
+				(string) $topic['topic_first_poster_name'],
+				(string) $topic['topic_first_poster_colour']
+			),
+			'POST_TIME' => $this->user->format_date((int) ($topic['topic_time'] ?? 0)),
+			'LAST_POST_AUTHOR_FULL' => $this->last_post_author_full($topic),
+			'LAST_POST_TIME' => $this->user->format_date($last_post_time),
+			'LAST_POST_TIME_RFC3339' => gmdate(DATE_RFC3339, $last_post_time),
+			'REPLIES' => max(0, (int) ($topic['topic_posts_approved'] ?? 0) - 1),
+			'VIEWS' => (int) ($topic['topic_views'] ?? 0),
+		];
+	}
+
+	protected function last_post_author_full(array $topic): string
+	{
+		$last_poster_id = (int) ($topic['topic_last_poster_id'] ?? 0);
+		$last_poster_name = (string) ($topic['topic_last_poster_name'] ?? '');
+		$last_poster_colour = (string) ($topic['topic_last_poster_colour'] ?? '');
+
+		if ($last_poster_id <= 0 || $last_poster_name === '')
+		{
+			$last_poster_id = (int) ($topic['topic_poster'] ?? 0);
+			$last_poster_name = (string) ($topic['topic_first_poster_name'] ?? '');
+			$last_poster_colour = (string) ($topic['topic_first_poster_colour'] ?? '');
+		}
+
+		return get_username_string('full', $last_poster_id, $last_poster_name, $last_poster_colour);
+	}
+
+	protected function has_collapsible_categories(): bool
+	{
+		return $this->collapsible_operator
+			&& method_exists($this->collapsible_operator, 'is_collapsed')
+			&& method_exists($this->collapsible_operator, 'get_collapsible_link');
+	}
+
+	protected function is_first_post_row(array $post_row, array $topic_data, int $post_id): bool
+	{
+		if (!empty($post_row['S_FIRST_POST']))
+		{
+			return true;
+		}
+
+		$first_post_id = (int) ($topic_data['topic_first_post_id'] ?? 0);
+
+		return $post_id > 0 && $first_post_id > 0 && $post_id === $first_post_id;
 	}
 
 	protected function is_blog_draft(int $topic_id): bool

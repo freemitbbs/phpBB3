@@ -3,7 +3,7 @@
 	"type": "phpbb-extension",
 	"description": "User-owned blogs with drafts and post-to-blog promotion.",
 	"homepage": "https://freemitbbs.com",
-	"version": "1.0.10",
+	"version": "1.0.12",
 	"license": "GPL-2.0-only",
 	"authors": [
 		{
