@@ -242,8 +242,12 @@ class main
 
 	public function share_image(int $entry_id): \Symfony\Component\HttpFoundation\Response
 	{
-		$this->boot();
+		if ($this->request->is_set('sid', \phpbb\request\request_interface::GET))
+		{
+			return $this->share_image_clean_redirect($entry_id);
+		}
 
+		$this->boot();
 		$forum = $this->require_blog_forum();
 		$entry = $this->get_topic_entry((int) $entry_id, (int) $forum['forum_id']);
 		if (!$entry || !$this->can_view_topic($entry) || !empty($entry['is_draft']) || (int) $entry['topic_visibility'] !== ITEM_APPROVED)
@@ -259,7 +263,7 @@ class main
 			$cached_response = $this->cached_share_image_response($cache_path, $filename);
 			if ($cached_response !== null)
 			{
-				return $cached_response;
+				return $this->cacheable_share_image_response($cached_response);
 			}
 		}
 
@@ -290,10 +294,20 @@ class main
 		}
 		if ($cache_path !== null && $this->write_share_image_cache($cache_path, $image, (int) $entry['topic_id']))
 		{
-			return $this->share_image_file_response($cache_path, $filename);
+			return $this->cacheable_share_image_response($this->share_image_file_response($cache_path, $filename));
 		}
 
-		return new \Symfony\Component\HttpFoundation\Response($image, 200, $this->share_image_response_headers($filename));
+		return $this->cacheable_share_image_response(new \Symfony\Component\HttpFoundation\Response($image, 200, $this->share_image_response_headers($filename)));
+	}
+
+	protected function share_image_clean_redirect(int $entry_id): \Symfony\Component\HttpFoundation\Response
+	{
+		$response = new \Symfony\Component\HttpFoundation\RedirectResponse($this->share_image_url($entry_id), 301);
+		$response->headers->set('Cache-Control', 'public, max-age=3600, s-maxage=' . self::SHARE_IMAGE_CACHE_TTL_SECONDS);
+		$response->headers->set('CDN-Cache-Control', 'public, max-age=' . self::SHARE_IMAGE_CACHE_TTL_SECONDS);
+		$response->headers->set('Cloudflare-CDN-Cache-Control', 'public, max-age=' . self::SHARE_IMAGE_CACHE_TTL_SECONDS);
+
+		return $this->cacheable_share_image_response($response);
 	}
 
 	protected function render_blog_entry(array $entry, array $forum): \Symfony\Component\HttpFoundation\Response
@@ -2340,7 +2354,7 @@ class main
 			'BLOG_SHARE_IMAGE_URL' => $this->escape_attribute($share_image_url),
 			'BLOG_META_TITLE' => $this->escape_attribute($title),
 			'BLOG_META_DESCRIPTION' => $this->escape_attribute($description),
-			'U_BLOG_SHARE_IMAGE' => $this->escape_attribute($this->public_blog_route('freemitbbs_blog_share_image', ['entry_id' => $topic_id])),
+			'U_BLOG_SHARE_IMAGE' => $this->escape_attribute($this->share_image_url($topic_id)),
 			'U_BLOG_SHARE_REDDIT' => $this->escape_attribute($reddit_url),
 			'U_CANONICAL' => $this->escape_attribute($share_url),
 		];
@@ -2359,13 +2373,17 @@ class main
 
 	protected function absolute_share_image_url(int $topic_id): string
 	{
-		return $this->helper->route(
+		return $this->route_without_url_session_id(
 			'freemitbbs_blog_share_image',
 			['entry_id' => $topic_id],
 			false,
-			'',
 			\Symfony\Component\Routing\Generator\UrlGeneratorInterface::ABSOLUTE_URL
 		);
+	}
+
+	protected function share_image_url(int $topic_id): string
+	{
+		return $this->route_without_url_session_id('freemitbbs_blog_share_image', ['entry_id' => $topic_id]);
 	}
 
 	protected function plain_text_from_html(string $html_text): string
@@ -2463,6 +2481,19 @@ class main
 			true,
 			true
 		);
+	}
+
+	protected function cacheable_share_image_response(\Symfony\Component\HttpFoundation\Response $response): \Symfony\Component\HttpFoundation\Response
+	{
+		if (!headers_sent())
+		{
+			header_remove('Set-Cookie');
+		}
+
+		$response->headers->remove('Set-Cookie');
+		$response->headers->remove('Pragma');
+
+		return $response;
 	}
 
 	protected function share_image_response_headers(string $filename): array
@@ -3892,6 +3923,26 @@ class main
 	protected function public_blog_route(string $route, array $params = []): string
 	{
 		return $this->helper->route($route, $params, true, '');
+	}
+
+	protected function route_without_url_session_id(string $route, array $params = [], bool $is_amp = true, $reference_type = \Symfony\Component\Routing\Generator\UrlGeneratorInterface::ABSOLUTE_PATH): string
+	{
+		global $SID, $_SID;
+
+		$previous_sid = $SID ?? '';
+		$previous_underscore_sid = $_SID ?? '';
+		$SID = '';
+		$_SID = '';
+
+		try
+		{
+			return $this->helper->route($route, $params, $is_amp, '', $reference_type);
+		}
+		finally
+		{
+			$SID = $previous_sid;
+			$_SID = $previous_underscore_sid;
+		}
 	}
 
 	protected function public_blog_entry_url(int $topic_id): string

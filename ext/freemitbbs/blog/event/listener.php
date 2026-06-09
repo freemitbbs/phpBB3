@@ -597,10 +597,19 @@ class listener implements EventSubscriberInterface
 
 	protected function should_copy_submitted_post_to_blog(string $mode, array $data, int $post_visibility): bool
 	{
-		return $this->request->is_set_post('post_to_blog')
+		return $this->is_submit_post_to_blog_request()
 			&& $post_visibility === ITEM_APPROVED
 			&& (int) ($data['post_id'] ?? 0) > 0
 			&& $this->can_show_submit_post_to_blog_button($mode, (int) ($data['forum_id'] ?? 0), $data);
+	}
+
+	protected function is_submit_post_to_blog_request(): bool
+	{
+		$post = $this->request->variable('post', '', true);
+
+		return $this->request->is_set_post('post_to_blog')
+			|| $post === 'post_to_blog'
+			|| $post === $this->language->lang('SUBMIT_POST_AND_COPY_TO_BLOG');
 	}
 
 	protected function can_submit_post_to_blog(): bool
