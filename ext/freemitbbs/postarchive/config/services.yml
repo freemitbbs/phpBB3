@@ -1,0 +1,46 @@
+parameters:
+    tables.freemitbbs.postarchive.users: '%tables.users%'
+    tables.freemitbbs.postarchive.posts: '%tables.posts%'
+    tables.freemitbbs.postarchive.topics: '%tables.topics%'
+    tables.freemitbbs.postarchive.forums: '%tables.forums%'
+    tables.freemitbbs.postarchive.archives: '%core.table_prefix%postarchive_archives'
+    tables.freemitbbs.postarchive.jobs: '%core.table_prefix%postarchive_jobs'
+
+services:
+    freemitbbs.postarchive.manager:
+        class: freemitbbs\postarchive\service\manager
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@controller.helper'
+            - '@dbal.conn'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+            - '%tables.freemitbbs.postarchive.users%'
+            - '%tables.freemitbbs.postarchive.posts%'
+            - '%tables.freemitbbs.postarchive.topics%'
+            - '%tables.freemitbbs.postarchive.forums%'
+            - '%tables.freemitbbs.postarchive.archives%'
+            - '%tables.freemitbbs.postarchive.jobs%'
+
+    freemitbbs.postarchive.controller:
+        class: freemitbbs\postarchive\controller\main
+        arguments:
+            - '@controller.helper'
+            - '@language'
+            - '@request'
+            - '@user'
+            - '@freemitbbs.postarchive.manager'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+
+    freemitbbs.postarchive.cron.process_queue:
+        class: freemitbbs\postarchive\cron\process_queue
+        arguments:
+            - '@cache'
+            - '@config'
+            - '@freemitbbs.postarchive.manager'
+        calls:
+            - [set_name, [cron.task.freemitbbs.postarchive.process_queue]]
+        tags:
+            - { name: cron.task }

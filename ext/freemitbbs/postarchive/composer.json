@@ -1,0 +1,24 @@
+{
+	"name": "freemitbbs/postarchive",
+	"type": "phpbb-extension",
+	"description": "User-facing post archive downloads.",
+	"homepage": "https://freemitbbs.com",
+	"version": "1.0.0",
+	"license": "GPL-2.0-only",
+	"authors": [
+		{
+			"name": "FreeMITBBS"
+		}
+	],
+	"require": {
+		"php": ">=8.0",
+		"ext-zip": "*",
+		"phpbb/phpbb": ">=3.3.10,<4.0.0"
+	},
+	"extra": {
+		"display-name": "Post Archive",
+		"soft-require": {
+			"phpbb/phpbb": ">=3.3.10,<4.0.0"
+		}
+	}
+}

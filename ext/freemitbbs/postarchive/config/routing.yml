@@ -1,0 +1,11 @@
+freemitbbs_postarchive_create:
+    path: /post-archive/create
+    defaults: { _controller: freemitbbs.postarchive.controller:create }
+    methods: [POST]
+
+freemitbbs_postarchive_download:
+    path: /post-archive/download/{archive}
+    defaults: { _controller: freemitbbs.postarchive.controller:download }
+    requirements:
+        archive: \d+
+    methods: [GET]

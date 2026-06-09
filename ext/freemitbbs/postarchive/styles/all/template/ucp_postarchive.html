@@ -1,0 +1,83 @@
+<!-- INCLUDE ucp_header.html -->
+
+<h2>{L_UCP_POSTARCHIVE}</h2>
+
+<!-- IF S_POSTARCHIVE_ARCHIVE_READY -->
+	<div class="panel">
+		<div class="inner">
+			<h3>{L_POSTARCHIVE_READY_TITLE}</h3>
+			<p>{L_POSTARCHIVE_READY_EXPLAIN}</p>
+
+			<dl class="details">
+				<dt>{L_POSTARCHIVE_ARCHIVE_CREATED}{L_COLON}</dt>
+				<dd>{POSTARCHIVE_ARCHIVE_CREATED}</dd>
+				<dt>{L_POSTARCHIVE_ARCHIVE_EXPIRES}{L_COLON}</dt>
+				<dd>{POSTARCHIVE_ARCHIVE_EXPIRES}</dd>
+				<dt>{L_POSTARCHIVE_ARCHIVE_POSTS}{L_COLON}</dt>
+				<dd>{POSTARCHIVE_ARCHIVE_POST_COUNT}</dd>
+				<dt>{L_POSTARCHIVE_ARCHIVE_SIZE}{L_COLON}</dt>
+				<dd>{POSTARCHIVE_ARCHIVE_SIZE}</dd>
+			</dl>
+
+			<fieldset class="submit-buttons">
+				<a href="{U_POSTARCHIVE_DOWNLOAD}" class="button1">{L_POSTARCHIVE_DOWNLOAD_BUTTON}</a>
+			</fieldset>
+		</div>
+	</div>
+<!-- ENDIF -->
+
+<!-- IF S_POSTARCHIVE_JOB_PENDING -->
+	<div class="panel">
+		<div class="inner">
+			<h3><!-- IF S_POSTARCHIVE_JOB_PROCESSING -->{L_POSTARCHIVE_PROCESSING_TITLE}<!-- ELSE -->{L_POSTARCHIVE_PENDING_TITLE}<!-- ENDIF --></h3>
+			<p>{L_POSTARCHIVE_PENDING_EXPLAIN}</p>
+
+			<dl class="details">
+				<dt>{L_POSTARCHIVE_JOB_STATUS}{L_COLON}</dt>
+				<dd>{POSTARCHIVE_JOB_STATUS}</dd>
+				<dt>{L_POSTARCHIVE_JOB_REQUESTED}{L_COLON}</dt>
+				<dd>{POSTARCHIVE_JOB_REQUESTED}</dd>
+				<!-- IF POSTARCHIVE_JOB_STARTED -->
+					<dt>{L_POSTARCHIVE_JOB_STARTED}{L_COLON}</dt>
+					<dd>{POSTARCHIVE_JOB_STARTED}</dd>
+				<!-- ENDIF -->
+			</dl>
+		</div>
+	</div>
+<!-- ENDIF -->
+
+<!-- IF S_POSTARCHIVE_JOB_FAILED -->
+	<div class="panel">
+		<div class="inner">
+			<h3>{L_POSTARCHIVE_FAILED_TITLE}</h3>
+			<p>{L_POSTARCHIVE_FAILED_EXPLAIN}</p>
+
+			<dl class="details">
+				<dt>{L_POSTARCHIVE_FAILED_TIME}{L_COLON}</dt>
+				<dd>{POSTARCHIVE_FAILED_TIME}</dd>
+			</dl>
+		</div>
+	</div>
+<!-- ENDIF -->
+
+<form id="ucp_postarchive" method="post" action="{U_POSTARCHIVE_CREATE}">
+	<div class="panel">
+		<div class="inner">
+			<h3>{L_POSTARCHIVE_CREATE_TITLE}</h3>
+			<p>{L_POSTARCHIVE_CREATE_EXPLAIN}</p>
+
+			<dl class="details">
+				<dt>{L_POSTARCHIVE_VISIBLE_POSTS}{L_COLON}</dt>
+				<dd>{POSTARCHIVE_POST_COUNT}</dd>
+			</dl>
+
+			<fieldset class="submit-buttons">
+				<input type="submit" name="create_archive" value="{POSTARCHIVE_CREATE_BUTTON_LABEL}" class="button1"<!-- IF not S_POSTARCHIVE_CAN_REQUEST --> disabled="disabled"<!-- ENDIF --> />
+			</fieldset>
+		</div>
+	</div>
+
+	{S_FORM_TOKEN}
+</form>
+
+<!-- INCLUDE ucp_footer.html -->
