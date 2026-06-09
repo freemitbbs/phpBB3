@@ -12,6 +12,7 @@ class main
 	private const SHARE_IMAGE_HEIGHT = 1440;
 	private const SHARE_CONTENT_IMAGE_MIN_SIDE = 120;
 	private const SHARE_CONTENT_IMAGE_MIN_AREA = 20000;
+	private const SHARE_IMAGE_CACHE_TTL_SECONDS = 86400;
 	private const SHARE_REMOTE_IMAGE_MAX_BYTES = 20971520;
 	private const SHARE_REMOTE_IMAGE_MIME_TYPES = ['image/gif', 'image/jpeg', 'image/png', 'image/webp'];
 	private const COMMENT_PAGE_SIZE = 50;
@@ -250,6 +251,18 @@ class main
 			throw new \phpbb\exception\http_exception(404, 'BLOG_ENTRY_NOT_FOUND');
 		}
 
+		$attachments = $this->get_post_attachments($entry);
+		$filename = 'blog-share-' . (int) $entry['topic_id'] . '.png';
+		$cache_path = $this->share_image_cache_path($entry, $attachments);
+		if ($cache_path !== null)
+		{
+			$cached_response = $this->cached_share_image_response($cache_path, $filename);
+			if ($cached_response !== null)
+			{
+				return $cached_response;
+			}
+		}
+
 		if (!extension_loaded('gd') || !function_exists('imagecreatetruecolor') || !function_exists('imagepng'))
 		{
 			throw new \phpbb\exception\http_exception(500, 'GENERAL_ERROR');
@@ -261,7 +274,6 @@ class main
 			$entry['bbcode_bitfield'],
 			$this->post_options($entry)
 		);
-		$attachments = $this->get_post_attachments($entry);
 		$display_text = $text;
 		if (!empty($attachments))
 		{
@@ -276,14 +288,12 @@ class main
 		{
 			imagedestroy($post_image);
 		}
-		$filename = 'blog-share-' . (int) $entry['topic_id'] . '.png';
+		if ($cache_path !== null && $this->write_share_image_cache($cache_path, $image, (int) $entry['topic_id']))
+		{
+			return $this->share_image_file_response($cache_path, $filename);
+		}
 
-		return new \Symfony\Component\HttpFoundation\Response($image, 200, [
-			'Content-Type' => 'image/png',
-			'Content-Disposition' => 'inline; filename="' . $filename . '"',
-			'Cache-Control' => 'no-store, max-age=0',
-			'X-Content-Type-Options' => 'nosniff',
-		]);
+		return new \Symfony\Component\HttpFoundation\Response($image, 200, $this->share_image_response_headers($filename));
 	}
 
 	protected function render_blog_entry(array $entry, array $forum): \Symfony\Component\HttpFoundation\Response
@@ -2374,6 +2384,178 @@ class main
 		}
 
 		return rtrim((string) preg_replace('/(?:\.\.\.|…)\s*$/u', '', $excerpt));
+	}
+
+	protected function share_image_cache_path(array $entry, array $attachments): ?string
+	{
+		$directory = $this->share_image_cache_directory();
+		if ($directory === null)
+		{
+			return null;
+		}
+
+		$topic_id = (int) ($entry['topic_id'] ?? 0);
+		if ($topic_id <= 0)
+		{
+			return null;
+		}
+
+		return $directory . '/blog-share-' . $topic_id . '-' . $this->share_image_cache_key($entry, $attachments) . '.png';
+	}
+
+	protected function cached_share_image_response(string $cache_path, string $filename): ?\Symfony\Component\HttpFoundation\Response
+	{
+		if (!is_file($cache_path) || !is_readable($cache_path))
+		{
+			return null;
+		}
+
+		$mtime = (int) @filemtime($cache_path);
+		if ($mtime <= 0 || $mtime <= time() - self::SHARE_IMAGE_CACHE_TTL_SECONDS)
+		{
+			return null;
+		}
+
+		return $this->share_image_file_response($cache_path, $filename);
+	}
+
+	protected function write_share_image_cache(string $cache_path, string $image, int $topic_id): bool
+	{
+		$directory = dirname($cache_path);
+		if (!is_dir($directory) || !is_writable($directory))
+		{
+			return false;
+		}
+
+		$temp_path = tempnam($directory, 'share_');
+		if ($temp_path === false)
+		{
+			return false;
+		}
+
+		$written = @file_put_contents($temp_path, $image, LOCK_EX);
+		if ($written === false || $written !== strlen($image))
+		{
+			@unlink($temp_path);
+			return false;
+		}
+
+		@chmod($temp_path, 0664);
+		if (!@rename($temp_path, $cache_path))
+		{
+			@unlink($temp_path);
+			return false;
+		}
+
+		$this->cleanup_old_share_image_cache_files($topic_id, $cache_path);
+
+		return true;
+	}
+
+	protected function share_image_file_response(string $cache_path, string $filename): \Symfony\Component\HttpFoundation\Response
+	{
+		return new \Symfony\Component\HttpFoundation\BinaryFileResponse(
+			$cache_path,
+			200,
+			$this->share_image_response_headers($filename),
+			true,
+			null,
+			true,
+			true
+		);
+	}
+
+	protected function share_image_response_headers(string $filename): array
+	{
+		return [
+			'Content-Type' => 'image/png',
+			'Content-Disposition' => 'inline; filename="' . $filename . '"',
+			'Cache-Control' => 'public, max-age=3600, s-maxage=' . self::SHARE_IMAGE_CACHE_TTL_SECONDS,
+			'CDN-Cache-Control' => 'public, max-age=' . self::SHARE_IMAGE_CACHE_TTL_SECONDS,
+			'Cloudflare-CDN-Cache-Control' => 'public, max-age=' . self::SHARE_IMAGE_CACHE_TTL_SECONDS,
+			'X-Content-Type-Options' => 'nosniff',
+		];
+	}
+
+	protected function share_image_cache_directory(): ?string
+	{
+		$directory = rtrim($this->root_path, '/\\') . '/store/freemitbbs/blog/share-image';
+		if (!is_dir($directory) && !@mkdir($directory, 0775, true) && !is_dir($directory))
+		{
+			return null;
+		}
+
+		if (!is_writable($directory))
+		{
+			return null;
+		}
+
+		$index_path = $directory . '/index.htm';
+		if (!is_file($index_path))
+		{
+			@file_put_contents($index_path, '');
+		}
+
+		return $directory;
+	}
+
+	protected function share_image_cache_key(array $entry, array $attachments): string
+	{
+		$attachment_state = [];
+		foreach ($attachments as $attachment)
+		{
+			$attachment_state[] = [
+				'attach_id' => (int) ($attachment['attach_id'] ?? 0),
+				'physical_filename' => (string) ($attachment['physical_filename'] ?? ''),
+				'real_filename' => (string) ($attachment['real_filename'] ?? ''),
+				'filesize' => (int) ($attachment['filesize'] ?? 0),
+				'filetime' => (int) ($attachment['filetime'] ?? 0),
+				'thumbnail' => (int) ($attachment['thumbnail'] ?? 0),
+				'mimetype' => (string) ($attachment['mimetype'] ?? ''),
+				'extension' => (string) ($attachment['extension'] ?? ''),
+				's3_object_key' => (string) ($attachment['s3_object_key'] ?? ''),
+				's3_thumb_object_key' => (string) ($attachment['s3_thumb_object_key'] ?? ''),
+			];
+		}
+
+		$payload = [
+			'version' => 1,
+			'topic_id' => (int) ($entry['topic_id'] ?? 0),
+			'topic_title' => (string) ($entry['topic_title'] ?? ''),
+			'topic_time' => (int) ($entry['topic_time'] ?? 0),
+			'topic_last_post_time' => (int) ($entry['topic_last_post_time'] ?? 0),
+			'post_id' => (int) ($entry['topic_first_post_id'] ?? $entry['post_id'] ?? 0),
+			'post_text' => (string) ($entry['post_text'] ?? ''),
+			'post_edit_time' => (int) ($entry['post_edit_time'] ?? 0),
+			'bbcode_uid' => (string) ($entry['bbcode_uid'] ?? ''),
+			'bbcode_bitfield' => (string) ($entry['bbcode_bitfield'] ?? ''),
+			'enable_bbcode' => (int) ($entry['enable_bbcode'] ?? 0),
+			'enable_smilies' => (int) ($entry['enable_smilies'] ?? 0),
+			'enable_magic_url' => (int) ($entry['enable_magic_url'] ?? 0),
+			'username' => (string) ($entry['username'] ?? ''),
+			'sitename' => (string) ($this->config['sitename'] ?? ''),
+			'language' => (string) ($this->user->lang_name ?? ''),
+			'attachments' => $attachment_state,
+		];
+
+		return substr(hash('sha256', (string) json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)), 0, 32);
+	}
+
+	protected function cleanup_old_share_image_cache_files(int $topic_id, string $keep_path): void
+	{
+		if ($topic_id <= 0)
+		{
+			return;
+		}
+
+		$pattern = dirname($keep_path) . '/blog-share-' . $topic_id . '-*.png';
+		foreach (glob($pattern) ?: [] as $path)
+		{
+			if ($path !== $keep_path && is_file($path))
+			{
+				@unlink($path);
+			}
+		}
 	}
 
 	protected function render_share_image(array $entry, string $html_text, $post_image = null): string
