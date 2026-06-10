@@ -687,6 +687,14 @@ ul.topiclist.forums > li.toptopics-category-row.toptopics-enhanced-topic-list-ro
 	max-width: 640px !important;
 }
 
+.toptopics-inline-preview-media-frame-fitted:not(.toptopics-inline-preview-media-frame-youtube) > [data-s9e-mediaembed]:not([data-s9e-mediaembed="twitter"]),
+.toptopics-inline-preview-media-frame-fitted:not(.toptopics-inline-preview-media-frame-youtube) > iframe:not([data-s9e-mediaembed="twitter"]),
+.toptopics-inline-preview-media-frame-fitted:not(.toptopics-inline-preview-media-frame-youtube) > object,
+.toptopics-inline-preview-media-frame-fitted:not(.toptopics-inline-preview-media-frame-youtube) > embed {
+	width: var(--toptopics-inline-preview-media-fit-width, 640px) !important;
+	max-width: none !important;
+}
+
 .toptopics-inline-preview-media-frame-youtube {
 	align-items: stretch;
 	height: 100%;
@@ -714,6 +722,23 @@ ul.topiclist.forums > li.toptopics-category-row.toptopics-enhanced-topic-list-ro
 	height: 360px;
 	max-width: none !important;
 	max-height: none;
+}
+
+.toptopics-inline-preview-media-frame-tradingview {
+	align-items: flex-start;
+	height: 100%;
+	max-height: none;
+}
+
+.toptopics-inline-preview-media-frame-tradingview > iframe[data-s9e-mediaembed="tradingview"],
+.toptopics-inline-preview-media-frame-tradingview > [data-s9e-mediaembed="tradingview"] {
+	width: 300% !important;
+	height: 300% !important;
+	max-width: none !important;
+	max-height: none !important;
+	aspect-ratio: auto;
+	transform: scale(0.333333) !important;
+	transform-origin: top center !important;
 }
 
 .toptopics-inline-preview-media-frame-youtube > .toptopics-inline-preview-youtube-thumb {

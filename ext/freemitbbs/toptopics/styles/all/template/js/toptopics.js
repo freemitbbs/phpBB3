@@ -391,6 +391,20 @@
 		return $media.is('[data-s9e-mediaembed="tiktok"]');
 	}
 
+	function isInlinePreviewTradingViewMedia($media) {
+		return $media.is('[data-s9e-mediaembed="tradingview"]');
+	}
+
+	function getInlinePreviewPixelLength(value) {
+		value = $.trim(String(value || ''));
+
+		if (!value || value.indexOf('%') !== -1) {
+			return 0;
+		}
+
+		return parseFloat(value) || 0;
+	}
+
 	function getInlinePreviewMediaHeight($media) {
 		var media = $media.get(0);
 		var height = 0;
@@ -400,14 +414,14 @@
 		}
 
 		if (media && media.style && media.style.height) {
-			height = parseFloat(media.style.height);
+			height = getInlinePreviewPixelLength(media.style.height);
 		}
 
 		if (!height && $media.is('iframe[data-s9e-mediaembed="youtube"], iframe[data-s9e-mediaembed="bilibili"]')) {
 			height = $media.outerHeight(true) || ((parseFloat($media.outerWidth()) || 0) * 9 / 16) || 0;
 		}
 
-		height = height || parseFloat($media.attr('height')) || $media.outerHeight(true) || 0;
+		height = height || getInlinePreviewPixelLength($media.attr('height')) || $media.outerHeight(true) || 0;
 
 		if (!height && isInlinePreviewTwitterMedia($media)) {
 			height = 350;
@@ -425,14 +439,16 @@
 		var width = 0;
 
 		if (media && media.style && media.style.width) {
-			width = parseFloat(media.style.width);
+			width = getInlinePreviewPixelLength(media.style.width);
 		}
 
-		width = width || parseFloat($media.attr('width')) || 0;
+		width = width || getInlinePreviewPixelLength($media.attr('width')) || 0;
 		if (!width && isInlinePreviewTwitterMedia($media)) {
 			width = 550;
 		} else if (!width && isInlinePreviewTikTokMedia($media)) {
 			width = 340;
+		} else if (!width && $media.is('iframe, object, embed, [data-s9e-mediaembed]')) {
+			width = 640;
 		}
 
 		return width || $media.outerWidth(true) || 0;
@@ -446,14 +462,39 @@
 			var maxWidth = $frame.innerWidth() || parseFloat($frame.css('width')) || 0;
 			var mediaHeight = getInlinePreviewMediaHeight($media);
 			var mediaWidth = getInlinePreviewMediaWidth($media);
+			var forceFitWidth;
 			var fitKey;
 			var ratio;
+
+			if ($frame.hasClass('toptopics-inline-preview-media-frame-tradingview')) {
+				$frame
+					.removeData('toptopicsInlinePreviewMediaFitKey')
+					.removeClass('toptopics-inline-preview-media-frame-fitted')
+					.css({
+						'--toptopics-inline-preview-media-fit-width': '',
+						height: ''
+					});
+				$media.css({
+					height: '',
+					'max-height': '',
+					transform: '',
+					'transform-origin': '',
+					width: '',
+					'max-width': ''
+				});
+				return;
+			}
 
 			if (!mediaHeight) {
 				return;
 			}
 
 			ratio = Math.max(0.1, Math.min(1, maxHeight / mediaHeight, maxWidth && mediaWidth ? maxWidth / mediaWidth : 1));
+			forceFitWidth = ratio < 1
+				&& mediaWidth
+				&& !$frame.hasClass('toptopics-inline-preview-media-frame-youtube')
+				&& !isInlinePreviewTikTokMedia($media)
+				&& !isInlinePreviewTwitterMedia($media);
 			fitKey = maxWidth + ':' + mediaWidth + ':' + maxHeight + ':' + mediaHeight + ':' + ratio;
 
 			if ($frame.data('toptopicsInlinePreviewMediaFitKey') === fitKey) {
@@ -461,6 +502,9 @@
 			}
 
 			$frame.data('toptopicsInlinePreviewMediaFitKey', fitKey);
+			$frame
+				.toggleClass('toptopics-inline-preview-media-frame-fitted', forceFitWidth)
+				.css('--toptopics-inline-preview-media-fit-width', forceFitWidth ? mediaWidth + 'px' : '');
 			$frame.css({
 				height: Math.max(1, Math.ceil(mediaHeight * ratio)) + 'px'
 			});
@@ -988,6 +1032,8 @@
 				frameClass += ' toptopics-inline-preview-media-frame-youtube';
 			} else if (isInlinePreviewTikTokMedia($mediaNode)) {
 				frameClass += ' toptopics-inline-preview-media-frame-tiktok';
+			} else if (isInlinePreviewTradingViewMedia($mediaNode)) {
+				frameClass += ' toptopics-inline-preview-media-frame-tradingview';
 			}
 			$mediaNode.find('script').remove();
 			$frame = $('<div/>', {
@@ -1012,6 +1058,8 @@
 			frameClass += ' toptopics-inline-preview-media-frame-youtube';
 		} else if (isInlinePreviewTikTokMedia($mediaNode)) {
 			frameClass += ' toptopics-inline-preview-media-frame-tiktok';
+		} else if (isInlinePreviewTradingViewMedia($mediaNode)) {
+			frameClass += ' toptopics-inline-preview-media-frame-tradingview';
 		}
 
 		if (fadeClass) {
