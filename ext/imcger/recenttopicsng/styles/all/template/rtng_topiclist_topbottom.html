@@ -110,6 +110,7 @@
 								<span class="rtng-mobile-stat">{{ lang('REPLIES') }}{{ lang('COLON') }} <strong>{{ rtng.REPLIES }}</strong></span>
 								<span class="rtng-mobile-stat">{{ lang('VIEWS') }}{{ lang('COLON') }} <strong>{{ rtng.VIEWS }}</strong></span>
 								{% if rtng.TOPIC_LIKE_COUNT %}<span class="rtng-mobile-stat toptopics-topic-like-stat" title="{{ lang('LIKED_BY') }}"><i class="liked" aria-hidden="true"></i><strong>{{ rtng.TOPIC_LIKE_COUNT }}</strong></span>{% endif %}
+								{% if rtng.S_TOPTOPICS_FIRST_POST_LENGTH_BADGE %}<span class="rtng-mobile-stat toptopics-first-post-length {{ rtng.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS }}">{{ rtng.TOPTOPICS_FIRST_POST_LENGTH_LABEL }}</span>{% endif %}
 							</div>
 						{% endif %}
 					{% if not S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW %}
@@ -120,6 +121,7 @@
 							{{ lang('POST_BY_AUTHOR') }} {% EVENT viewforum_body_topic_author_username_prepend %} {{ rtng.TOPIC_AUTHOR_FULL }} {% EVENT viewforum_body_topic_author_username_append %} &raquo; {{ rtng.FIRST_POST_TIME }}
 							{% EVENT topiclist_row_topic_by_author_after %}
 							{% if rtng_show_forum && rtng.U_VIEW_FORUM && rtng.FORUM_NAME %} &raquo; {{ lang('IN') }} <a href="{{ rtng.U_VIEW_FORUM }}">{{ rtng.FORUM_NAME }}</a>{% endif %}
+							{% if rtng.S_TOPTOPICS_FIRST_POST_LENGTH_BADGE %}<span class="toptopics-first-post-length {{ rtng.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS }}">{{ rtng.TOPTOPICS_FIRST_POST_LENGTH_LABEL }}</span>{% endif %}
 						</div>
 					{% endif %}
 

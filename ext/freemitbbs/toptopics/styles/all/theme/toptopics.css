@@ -386,6 +386,15 @@ ul.topiclist.topics.freemitbbs-from-stats-list a.topictitle,
 	line-height: 1.18;
 }
 
+.toptopics-first-post-length {
+	display: inline-block;
+	margin-left: 4px;
+	color: #6b7280;
+	font-size: 0.82em;
+	font-weight: normal;
+	white-space: nowrap;
+}
+
 .toptopics-summary .list-inner .unread {
 	display: inline-block;
 	line-height: 1;

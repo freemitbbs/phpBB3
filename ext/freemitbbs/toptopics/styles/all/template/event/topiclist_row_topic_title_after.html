@@ -22,6 +22,13 @@
 	{% endfor %}
 {% endif %}
 
+{% for context in [topicrow] %}
+	{% set has_inline_preview = context.S_TOPTOPICS_INLINE_SERVER_PREVIEW or context.S_TOPTOPICS_INLINE_LAZY_PREVIEW or context.S_TOPTOPICS_INLINE_IMAGE_PREVIEW or context.S_TOPTOPICS_INLINE_EXCERPT_PREVIEW %}
+	{% if context.S_TOPTOPICS_FIRST_POST_LENGTH_BADGE and not has_inline_preview %}
+		<span class="toptopics-first-post-length {{ context.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS }}">{{ context.TOPTOPICS_FIRST_POST_LENGTH_LABEL }}</span>
+	{% endif %}
+{% endfor %}
+
 {% if not S_IS_BOT %}
 	{% if similar is defined and similar.TOPIC_VIEWS is defined %}
 		<div class="responsive-show freemitbbs-mobile-topic-stats" style="display: none;">

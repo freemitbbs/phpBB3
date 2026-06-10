@@ -73,11 +73,13 @@
 									<span class="toptopics-mobile-stat">{L_REPLIES}{L_COLON} <strong>{top_topics.REPLIES}</strong></span>
 									<span class="toptopics-mobile-stat">{L_VIEWS}{L_COLON} <strong>{top_topics.VIEWS}</strong></span>
 									<!-- IF top_topics.TOPIC_LIKE_COUNT --><span class="toptopics-mobile-stat toptopics-topic-like-stat" title="{L_LIKED_BY}"><i class="liked" aria-hidden="true"></i><strong>{top_topics.TOPIC_LIKE_COUNT}</strong></span><!-- ENDIF -->
+									<!-- IF top_topics.S_TOPTOPICS_FIRST_POST_LENGTH_BADGE --><span class="toptopics-mobile-stat toptopics-first-post-length {top_topics.TOPIC_DISLIKE_FADE_CLASS}">{top_topics.TOPTOPICS_FIRST_POST_LENGTH_LABEL}</span><!-- ENDIF -->
 								</div>
 								<!-- IF not S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW -->
 									<div class="responsive-hide left-box">
 										{L_POST_BY_AUTHOR} {top_topics.USERNAME_FULL} &raquo; {top_topics.POST_TIME}
 										<!-- IF S_TOPTOPICS_INCLUDE_FORUM_NAME --> &raquo; {L_IN} <a href="{top_topics.U_FORUM}">{top_topics.FORUM_NAME}</a><!-- ENDIF -->
+										<!-- IF top_topics.S_TOPTOPICS_FIRST_POST_LENGTH_BADGE --><span class="toptopics-first-post-length {top_topics.TOPIC_DISLIKE_FADE_CLASS}">{top_topics.TOPTOPICS_FIRST_POST_LENGTH_LABEL}</span><!-- ENDIF -->
 									</div>
 								<!-- ENDIF -->
 								</div>

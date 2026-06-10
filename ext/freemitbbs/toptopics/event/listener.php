@@ -1185,6 +1185,7 @@ class listener implements EventSubscriberInterface
 			unset($row);
 
 			$rowset = $this->add_topic_like_counts($rowset);
+			$rowset = $this->add_first_post_length_badges($rowset);
 			$event['rowset'] = $this->add_inline_topic_previews($rowset, $topic_list, false);
 			return;
 		}
@@ -1210,6 +1211,7 @@ class listener implements EventSubscriberInterface
 			$filtered_rowset[] = $row;
 		}
 		$filtered_rowset = $this->add_topic_like_counts($filtered_rowset);
+		$filtered_rowset = $this->add_first_post_length_badges($filtered_rowset);
 		$event['rowset'] = $this->add_inline_topic_previews($filtered_rowset, $filtered_topic_list, false);
 	}
 
@@ -1227,6 +1229,7 @@ class listener implements EventSubscriberInterface
 		);
 		$tpl_ary['TOPIC_LIKE_COUNT'] = $this->get_topic_like_count_from_row($row);
 		$tpl_ary = $this->copy_inline_topic_preview_vars($tpl_ary, $row, true);
+		$tpl_ary = $this->copy_first_post_length_badge_vars($tpl_ary, $row);
 		$event['tpl_ary'] = $tpl_ary;
 	}
 
@@ -1273,6 +1276,7 @@ class listener implements EventSubscriberInterface
 		}
 		unset($row);
 
+		$rowset = $this->add_first_post_length_badges($rowset);
 		$event['rowset'] = $this->add_inline_topic_previews($rowset, $topic_list, false);
 	}
 
@@ -1289,6 +1293,7 @@ class listener implements EventSubscriberInterface
 			(int) ($row['TOPTOPICS_FIRST_POST_NET_DISLIKE_SCORE'] ?? 0)
 		);
 		$topic_row = $this->copy_inline_topic_preview_vars($topic_row, $row, true);
+		$topic_row = $this->copy_first_post_length_badge_vars($topic_row, $row);
 		$event['topic_row'] = $topic_row;
 	}
 
@@ -2909,6 +2914,7 @@ class listener implements EventSubscriberInterface
 		{
 			$html .= $this->build_topic_like_stat_html($like_count, 'toptopics-mobile-stat');
 		}
+		$html .= $this->build_mobile_first_post_length_stat_html($topic);
 		$html .= '</div>';
 
 		return $html;
@@ -3028,6 +3034,7 @@ class listener implements EventSubscriberInterface
 	{
 		return '<div class="responsive-hide left-box">'
 			. $this->build_topic_author_detail_html($topic, true)
+			. $this->build_first_post_length_badge_html($topic)
 			. '</div>';
 	}
 
@@ -3133,6 +3140,32 @@ class listener implements EventSubscriberInterface
 				. ' data-toptopics-topic-url="' . $this->escape_attr($this->decode_html_url($topic_url)) . '"'
 				. ' data-toptopics-inline-media-preview="' . (!empty($topic['S_TOPTOPICS_INLINE_MEDIA_PREVIEW']) ? '1' : '0') . '"'
 				. ' aria-busy="true"></div>';
+	}
+
+	protected function build_first_post_length_badge_html(array $topic, string $topic_fade_class = ''): string
+	{
+		if (empty($topic['S_TOPTOPICS_FIRST_POST_LENGTH_BADGE'])
+			|| !$this->user_hides_enhanced_topic_list_view())
+		{
+			return '';
+		}
+
+		return '<span class="toptopics-first-post-length'
+			. ($topic_fade_class !== '' ? ' ' . $topic_fade_class : '')
+			. '">' . $this->escape_text((string) ($topic['TOPTOPICS_FIRST_POST_LENGTH_LABEL'] ?? '')) . '</span>';
+	}
+
+	protected function build_mobile_first_post_length_stat_html(array $topic): string
+	{
+		if (empty($topic['S_TOPTOPICS_FIRST_POST_LENGTH_BADGE'])
+			|| !$this->user_hides_enhanced_topic_list_view())
+		{
+			return '';
+		}
+
+		return '<span class="toptopics-mobile-stat toptopics-first-post-length">'
+			. $this->escape_text((string) ($topic['TOPTOPICS_FIRST_POST_LENGTH_LABEL'] ?? ''))
+			. '</span>';
 	}
 
 	protected function build_inline_preview_topic_url(array $topic): string
@@ -3462,6 +3495,7 @@ class listener implements EventSubscriberInterface
 				'S_UNREAD_TOPIC' => !empty($topic['unread_topic']),
 			];
 			$topic_row = $this->copy_inline_topic_preview_vars($topic_row, $topic);
+			$topic_row = $this->copy_first_post_length_badge_vars($topic_row, $topic);
 
 			$this->template->assign_block_vars('top_topics', $topic_row);
 		}
@@ -3737,6 +3771,154 @@ class listener implements EventSubscriberInterface
 	protected function get_topic_like_count_from_row(array $row): int
 	{
 		return (int) ($row['TOPIC_LIKE_COUNT'] ?? $row['topic_like_count'] ?? $row['like_count'] ?? 0);
+	}
+
+	protected function add_first_post_length_badges(array $topics): array
+	{
+		if (empty($topics) || !$this->user_hides_enhanced_topic_list_view())
+		{
+			return $topics;
+		}
+
+		$first_post_ids = [];
+		$topic_first_post_ids = [];
+		$topic_ids_without_first_post_id = [];
+		foreach ($topics as $topic)
+		{
+			if (!is_array($topic))
+			{
+				continue;
+			}
+
+			$topic_id = (int) ($topic['topic_id'] ?? $topic['TOPIC_ID'] ?? 0);
+			$post_id = $this->get_first_post_id_from_topic_row($topic);
+			if ($post_id > 0)
+			{
+				$first_post_ids[$post_id] = true;
+				if ($topic_id > 0)
+				{
+					$topic_first_post_ids[$topic_id] = $post_id;
+				}
+			}
+			else if ($topic_id > 0)
+			{
+				$topic_ids_without_first_post_id[$topic_id] = true;
+			}
+		}
+
+		if (!empty($topic_ids_without_first_post_id))
+		{
+			foreach ($this->get_topic_first_post_id_map(array_keys($topic_ids_without_first_post_id)) as $topic_id => $post_id)
+			{
+				$topic_first_post_ids[(int) $topic_id] = (int) $post_id;
+				$first_post_ids[(int) $post_id] = true;
+			}
+		}
+
+		if (empty($first_post_ids))
+		{
+			return $topics;
+		}
+
+		$lengths = $this->get_post_text_length_map(array_keys($first_post_ids));
+		foreach ($topics as &$topic)
+		{
+			if (!is_array($topic))
+			{
+				continue;
+			}
+
+			$topic_id = (int) ($topic['topic_id'] ?? $topic['TOPIC_ID'] ?? 0);
+			$post_id = $this->get_first_post_id_from_topic_row($topic);
+			if ($post_id <= 0 && $topic_id > 0)
+			{
+				$post_id = (int) ($topic_first_post_ids[$topic_id] ?? 0);
+			}
+			if ($post_id <= 0 || !array_key_exists($post_id, $lengths))
+			{
+				$topic = $this->copy_first_post_length_badge_vars($topic, []);
+				continue;
+			}
+
+			$length = max(0, (int) $lengths[$post_id]);
+			$topic['S_TOPTOPICS_FIRST_POST_LENGTH_BADGE'] = true;
+			$topic['TOPTOPICS_FIRST_POST_LENGTH'] = $length;
+			$topic['TOPTOPICS_FIRST_POST_LENGTH_LABEL'] = '(' . $length . '字)';
+		}
+		unset($topic);
+
+		return $topics;
+	}
+
+	protected function get_first_post_id_from_topic_row(array $topic): int
+	{
+		return (int) ($topic['topic_first_post_id'] ?? $topic['TOPIC_FIRST_POST_ID'] ?? $topic['first_post_id'] ?? $topic['FIRST_POST_ID'] ?? 0);
+	}
+
+	protected function get_topic_first_post_id_map(array $topic_ids): array
+	{
+		$topic_ids = array_values(array_unique(array_filter(array_map('intval', $topic_ids), static function (int $topic_id): bool {
+			return $topic_id > 0;
+		})));
+		if (empty($topic_ids))
+		{
+			return [];
+		}
+
+		$sql = 'SELECT topic_id, topic_first_post_id
+			FROM ' . TOPICS_TABLE . '
+			WHERE ' . $this->db->sql_in_set('topic_id', $topic_ids);
+		$result = $this->db->sql_query($sql);
+		$first_post_ids = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$topic_id = (int) ($row['topic_id'] ?? 0);
+			$post_id = (int) ($row['topic_first_post_id'] ?? 0);
+			if ($topic_id > 0 && $post_id > 0)
+			{
+				$first_post_ids[$topic_id] = $post_id;
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		return $first_post_ids;
+	}
+
+	protected function get_post_text_length_map(array $post_ids): array
+	{
+		$post_ids = array_values(array_unique(array_filter(array_map('intval', $post_ids), static function (int $post_id): bool {
+			return $post_id > 0;
+		})));
+		if (empty($post_ids))
+		{
+			return [];
+		}
+
+		$sql = 'SELECT post_id, post_text
+			FROM ' . POSTS_TABLE . '
+			WHERE ' . $this->db->sql_in_set('post_id', $post_ids);
+		$result = $this->db->sql_query($sql);
+		$lengths = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$post_id = (int) ($row['post_id'] ?? 0);
+			if ($post_id > 0)
+			{
+				$lengths[$post_id] = \freemitbbs\toptopics\service\quality_length::calculate((string) ($row['post_text'] ?? ''));
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		return $lengths;
+	}
+
+	protected function copy_first_post_length_badge_vars(array $target, array $source): array
+	{
+		$target['S_TOPTOPICS_FIRST_POST_LENGTH_BADGE'] = !empty($source['S_TOPTOPICS_FIRST_POST_LENGTH_BADGE']);
+		$target['TOPTOPICS_FIRST_POST_LENGTH'] = (int) ($source['TOPTOPICS_FIRST_POST_LENGTH'] ?? 0);
+		$target['TOPTOPICS_FIRST_POST_LENGTH_LABEL'] = (string) ($source['TOPTOPICS_FIRST_POST_LENGTH_LABEL'] ?? '');
+
+		return $target;
 	}
 
 	protected function add_inline_topic_previews(array $topics, array $topic_order = [], bool $server_render = true): array
@@ -4115,6 +4297,7 @@ class listener implements EventSubscriberInterface
 		$topics = $this->add_topic_like_counts($topics);
 		$topics = $this->add_topic_tracking($topics);
 		$topics = $this->add_topic_display_state($topics);
+		$topics = $this->add_first_post_length_badges($topics);
 		if ($with_previews)
 		{
 			$topics = $this->add_inline_topic_previews($topics);

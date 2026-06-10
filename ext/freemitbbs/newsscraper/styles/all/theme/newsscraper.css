@@ -45,8 +45,10 @@ ul.topiclist.newsscraper-digest-list li.row {
 }
 
 .newsscraper-discuss-profile .newsscraper-discuss-dropdown {
+	display: block;
 	margin: 0;
 	max-width: 100%;
+	width: 100%;
 }
 
 .newsscraper-discuss-profile .newsscraper-discuss-trigger {
