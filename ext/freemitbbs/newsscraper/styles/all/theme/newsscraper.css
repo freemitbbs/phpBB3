@@ -75,16 +75,53 @@ ul.topiclist.newsscraper-digest-list li.row {
 	margin-top: 6px;
 }
 
+.newsscraper-topic-from {
+	color: #5d6875;
+	display: block;
+	font-size: 0.9em;
+	line-height: 1.35;
+	margin-top: 6px;
+}
+
+.newsscraper-topic-from-mobile {
+	margin: 2px 0 4px;
+}
+
+.newsscraper-topic-from-separator {
+	color: #8a94a3;
+	margin: 0 4px;
+}
+
 ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row dd.lastpost > .newsscraper-topic-discussion-action {
 	box-sizing: border-box;
 	margin-top: 0;
 	padding: 6px var(--toptopics-topic-column-separator-gutter, 18px);
 }
 
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row dd.lastpost > .newsscraper-topic-from {
+	box-sizing: border-box;
+	padding: 0 var(--toptopics-topic-column-separator-gutter, 18px) 6px;
+}
+
 ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row > dl.row-item > dd.lastpost {
 	border-left: 0;
 	margin-bottom: 0;
 	padding: 4px 0;
+}
+
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row > dl.row-item {
+	background-position: 10px 12px;
+	display: flow-root;
+	overflow: visible;
+}
+
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row > dl.row-item > dt {
+	background-position: 5px 30px;
+}
+
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row > dl.row-item a.row-item-link {
+	top: 12px;
+	margin-top: 0;
 }
 
 .newsscraper-topic-discuss-dropdown {
@@ -127,31 +164,18 @@ ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic
 	}
 }
 
-ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:has(.newsscraper-topic-discuss-dropdown.dropdown-visible),
-ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:hover,
-ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:focus-within {
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row .newsscraper-topic-discuss-dropdown.dropdown-visible {
+	z-index: 3002;
+}
+
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:has(.newsscraper-topic-discuss-dropdown.dropdown-visible) {
 	z-index: 3000;
 }
 
-ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:has(.newsscraper-topic-discuss-dropdown.dropdown-visible) > dl.row-item,
-ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:hover > dl.row-item,
-ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:focus-within > dl.row-item {
-	overflow: visible;
-}
-
-ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:has(.newsscraper-topic-discuss-dropdown.dropdown-visible) dd.lastpost,
-ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:hover dd.lastpost,
-ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:focus-within dd.lastpost,
-ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:has(.newsscraper-topic-discuss-dropdown.dropdown-visible) .newsscraper-topic-discussion-action,
-ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:hover .newsscraper-topic-discussion-action,
-ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:focus-within .newsscraper-topic-discussion-action {
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:has(.newsscraper-topic-discuss-dropdown.dropdown-visible) > dl.row-item > dd.lastpost,
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:has(.newsscraper-topic-discuss-dropdown.dropdown-visible) .newsscraper-topic-discussion-action {
 	position: relative;
 	z-index: 3001;
-}
-
-ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row .newsscraper-topic-discuss-dropdown.dropdown-visible,
-ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row .newsscraper-topic-discuss-dropdown:hover {
-	z-index: 3002;
 }
 
 .newsscraper-topic-discuss-trigger,

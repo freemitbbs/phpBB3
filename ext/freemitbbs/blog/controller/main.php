@@ -1451,7 +1451,6 @@ class main
 		$current_time = time();
 		$post_visibility = $publish ? ITEM_APPROVED : ITEM_UNAPPROVED;
 
-		$copied_attachments = [];
 		$this->db->sql_transaction('begin');
 
 		try
@@ -1529,7 +1528,7 @@ class main
 				SET ' . $user_stat . '
 				WHERE user_id = ' . $user_id);
 
-			$copied_attachments = $this->copy_post_attachments($post, $topic_id, $post_id);
+			$this->copy_post_attachments($post, $topic_id, $post_id);
 			$this->insert_source_topic($topic_id, $user_id, $post, $publish ? 0 : 1);
 
 			$this->db->sql_transaction('commit');
@@ -1537,7 +1536,6 @@ class main
 		catch (\Throwable $e)
 		{
 			$this->db->sql_transaction('rollback');
-			$this->cleanup_copied_attachment_files($copied_attachments);
 			throw $e;
 		}
 
@@ -1574,7 +1572,7 @@ class main
 			WHERE forum_id = ' . $forum_id);
 	}
 
-	protected function copy_post_attachments(array $source_post, int $topic_id, int $post_id): array
+	protected function copy_post_attachments(array $source_post, int $topic_id, int $post_id): void
 	{
 		$sql = 'SELECT *
 			FROM ' . ATTACHMENTS_TABLE . '
@@ -1585,48 +1583,32 @@ class main
 		$result = $this->db->sql_query($sql);
 
 		$attachment_rows = [];
-		$copied_physical_filenames = [];
-		$space_taken = 0;
 		$result_freed = false;
 		try
 		{
 			while ($row = $this->db->sql_fetchrow($result))
 			{
-				$target_physical_filename = $this->new_attachment_physical_filename();
-				$copied_physical_filenames[] = $target_physical_filename;
-				$s3_object_keys = $this->copy_attachment_storage($row, $target_physical_filename);
-
+				// phpBB supports multiple attachment rows referencing one physical file.
+				// Keep storage shared so copying a post to the blog does not duplicate bytes.
 				unset($row['attach_id']);
 				$row['post_msg_id'] = $post_id;
 				$row['topic_id'] = $topic_id;
 				$row['in_message'] = 0;
 				$row['is_orphan'] = 0;
 				$row['poster_id'] = (int) $this->user->data['user_id'];
-				$row['physical_filename'] = $target_physical_filename;
 				$row['real_filename'] = utf8_basename((string) $row['real_filename']);
 				$row['download_count'] = 0;
-				if (array_key_exists('s3_object_key', $row))
-				{
-					$row['s3_object_key'] = $s3_object_keys['s3_object_key'] ?? '';
-				}
-				if (array_key_exists('s3_thumb_object_key', $row))
-				{
-					$row['s3_thumb_object_key'] = $s3_object_keys['s3_thumb_object_key'] ?? '';
-				}
 				$attachment_rows[] = $row;
-				$space_taken += (int) ($row['filesize'] ?? 0);
 			}
 			$this->db->sql_freeresult($result);
 			$result_freed = true;
 
 			if (empty($attachment_rows))
 			{
-				return [];
+				return;
 			}
 
 			$this->db->sql_multi_insert(ATTACHMENTS_TABLE, $attachment_rows);
-			$this->config->increment('upload_dir_size', $space_taken, false);
-			$this->config->increment('num_files', count($attachment_rows), false);
 
 			$this->db->sql_query('UPDATE ' . POSTS_TABLE . '
 				SET post_attachment = 1
@@ -1641,61 +1623,7 @@ class main
 			{
 				$this->db->sql_freeresult($result);
 			}
-			$this->cleanup_copied_attachment_files($copied_physical_filenames);
 			throw $e;
-		}
-
-		return $copied_physical_filenames;
-	}
-
-	protected function copy_attachment_storage(array $source_attachment, string $target_physical_filename): array
-	{
-		$source_physical_filename = utf8_basename((string) $source_attachment['physical_filename']);
-		$source_file_is_local = $this->attachment_local_file_is_usable($source_physical_filename, false);
-		$source_thumb_is_local = !$source_attachment['thumbnail'] || $this->attachment_local_file_is_usable($source_physical_filename, true);
-		$needs_remote_copy = $this->attachment_has_s3_object($source_attachment) || !$source_file_is_local || !$source_thumb_is_local;
-
-		if ($needs_remote_copy)
-		{
-			if (!$this->attachment_storage || !method_exists($this->attachment_storage, 'clone_attachment_storage'))
-			{
-				throw new \RuntimeException('Unable to copy remote attachment storage for blog post.');
-			}
-
-			$s3_object_keys = $this->attachment_storage->clone_attachment_storage($source_attachment, $target_physical_filename);
-			if (empty($s3_object_keys['s3_object_key']) && !$source_file_is_local)
-			{
-				throw new \RuntimeException('Unable to copy remote attachment object for blog post.');
-			}
-
-			if (!empty($s3_object_keys))
-			{
-				return $s3_object_keys;
-			}
-		}
-
-		$this->copy_local_attachment_file($source_physical_filename, $target_physical_filename, false);
-		if ((int) $source_attachment['thumbnail'])
-		{
-			$this->copy_local_attachment_file($source_physical_filename, $target_physical_filename, true);
-		}
-
-		return [];
-	}
-
-	protected function copy_local_attachment_file(string $source_physical_filename, string $target_physical_filename, bool $thumbnail): void
-	{
-		$source_path = $this->attachment_path($source_physical_filename, $thumbnail);
-		$target_path = $this->attachment_path($target_physical_filename, $thumbnail);
-
-		if (!is_file($source_path) || !is_readable($source_path) || @filesize($source_path) <= 0)
-		{
-			throw new \RuntimeException('Unable to copy attachment file for blog post.');
-		}
-
-		if (!@copy($source_path, $target_path))
-		{
-			throw new \RuntimeException('Unable to write copied attachment file for blog post.');
 		}
 	}
 
@@ -1726,44 +1654,6 @@ class main
 		$path = $this->attachment_path($physical_filename, $thumbnail);
 
 		return is_file($path) && is_readable($path) && @filesize($path) > 0;
-	}
-
-	protected function attachment_has_s3_object(array $attachment): bool
-	{
-		return trim((string) ($attachment['s3_object_key'] ?? '')) !== ''
-			|| trim((string) ($attachment['s3_thumb_object_key'] ?? '')) !== '';
-	}
-
-	protected function new_attachment_physical_filename(): string
-	{
-		$user_id = (int) $this->user->data['user_id'];
-		for ($i = 0; $i < 20; $i++)
-		{
-			$filename = $user_id . '_' . md5(unique_id() . ':' . $i);
-			if (!$this->attachment_physical_filename_exists($filename))
-			{
-				return $filename;
-			}
-		}
-
-		throw new \RuntimeException('Unable to allocate attachment filename for blog post.');
-	}
-
-	protected function attachment_physical_filename_exists(string $physical_filename): bool
-	{
-		if (file_exists($this->attachment_path($physical_filename, false)) || file_exists($this->attachment_path($physical_filename, true)))
-		{
-			return true;
-		}
-
-		$sql = 'SELECT attach_id
-			FROM ' . ATTACHMENTS_TABLE . "
-			WHERE physical_filename = '" . $this->db->sql_escape($physical_filename) . "'";
-		$result = $this->db->sql_query_limit($sql, 1);
-		$exists = (bool) $this->db->sql_fetchfield('attach_id');
-		$this->db->sql_freeresult($result);
-
-		return $exists;
 	}
 
 	protected function insert_source_topic(int $topic_id, int $user_id, array $post, int $is_draft = 1): void

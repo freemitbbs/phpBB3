@@ -111,7 +111,7 @@ function toggleWidget(id, isHidden) {
 <!-- IF S_DISPLAY_POST_INFO or .pagination or TOTAL_POSTS or TOTAL_TOPICS -->
 	<div class="action-bar bar-top">
 
-	<!-- IF not S_IS_BOT and S_DISPLAY_POST_INFO -->
+	<!-- IF not S_IS_BOT and S_DISPLAY_POST_INFO and not S_NEWSSCRAPER_DIGEST_FORUM -->
 			<!-- EVENT viewforum_buttons_top_before -->
 
 		<a href="{U_POST_NEW_TOPIC}" class="button" title="<!-- IF S_IS_LOCKED -->{L_FORUM_LOCKED}<!-- ELSE -->{L_POST_TOPIC}<!-- ENDIF -->">
@@ -314,11 +314,18 @@ function toggleWidget(id, isHidden) {
 													</ul>
 												</div>
 											</div>
-										{% endif %}
-									</div>
-								{% else %}
-									<div class="responsive-show freemitbbs-mobile-lastpost {topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}" style="display: none;">
-										{L_TOPTOPICS_LATEST} {L_POST_BY_AUTHOR} <!-- EVENT viewforum_body_last_post_author_username_prepend -->{topicrow.LAST_POST_AUTHOR_FULL}<!-- EVENT viewforum_body_last_post_author_username_append --> &laquo; <a href="{topicrow.U_LAST_POST}" title="{L_GOTO_LAST_POST}"><time datetime="{topicrow.LAST_POST_TIME_RFC3339}">{topicrow.LAST_POST_TIME}</time></a>
+											{% endif %}
+										</div>
+										<div class="responsive-show newsscraper-topic-from newsscraper-topic-from-mobile {topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}" style="display: none;">
+											{% if topicrow.S_NEWSSCRAPER_SOURCE %}
+												<span>{{ topicrow.NEWSSCRAPER_SOURCE_LABEL }}</span>
+												<span class="newsscraper-topic-from-separator" aria-hidden="true">&bull;</span>
+											{% endif %}
+											<time datetime="{topicrow.FIRST_POST_TIME_RFC3339}">{topicrow.FIRST_POST_TIME}</time>
+										</div>
+									{% else %}
+										<div class="responsive-show freemitbbs-mobile-lastpost {topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}" style="display: none;">
+											{L_TOPTOPICS_LATEST} {L_POST_BY_AUTHOR} <!-- EVENT viewforum_body_last_post_author_username_prepend -->{topicrow.LAST_POST_AUTHOR_FULL}<!-- EVENT viewforum_body_last_post_author_username_append --> &laquo; <a href="{topicrow.U_LAST_POST}" title="{L_GOTO_LAST_POST}"><time datetime="{topicrow.LAST_POST_TIME_RFC3339}">{topicrow.LAST_POST_TIME}</time></a>
 										<!-- IF topicrow.S_POST_GLOBAL and FORUM_ID != topicrow.FORUM_ID --><br />{L_POSTED} {L_IN} <a href="{topicrow.U_VIEW_FORUM}">{topicrow.FORUM_NAME}</a><!-- ENDIF -->
 									</div>
 									<div class="responsive-show freemitbbs-mobile-topic-stats" style="display: none;">
@@ -385,10 +392,17 @@ function toggleWidget(id, isHidden) {
 										</ul>
 									</div>
 								</div>
-							{% endif %}
-						</div>
-					{% else %}
-						<span class="{topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}">
+								{% endif %}
+							</div>
+							<div class="newsscraper-topic-from {topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}">
+								{% if topicrow.S_NEWSSCRAPER_SOURCE %}
+									<span>{{ topicrow.NEWSSCRAPER_SOURCE_LABEL }}</span>
+									<span class="newsscraper-topic-from-separator" aria-hidden="true">&bull;</span>
+								{% endif %}
+								<time datetime="{topicrow.FIRST_POST_TIME_RFC3339}">{topicrow.FIRST_POST_TIME}</time>
+							</div>
+						{% else %}
+							<span class="{topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}">
 							<span class="topic-poster toptopics-lastpost-topic-author">
 								<span class="toptopics-info-label">{L_TOPTOPICS_TOPIC_LABEL}</span>
 								<span class="toptopics-info-content">
@@ -464,7 +478,7 @@ function toggleWidget(id, isHidden) {
 
 <!-- IF .topicrow and not S_DISPLAY_ACTIVE -->
 	<div class="action-bar bar-bottom">
-		<!-- IF not S_IS_BOT and S_DISPLAY_POST_INFO -->
+		<!-- IF not S_IS_BOT and S_DISPLAY_POST_INFO and not S_NEWSSCRAPER_DIGEST_FORUM -->
 			<!-- EVENT viewforum_buttons_bottom_before -->
 
 			<a href="{U_POST_NEW_TOPIC}" class="button" title="<!-- IF S_IS_LOCKED -->{L_FORUM_LOCKED}<!-- ELSE -->{L_POST_TOPIC}<!-- ENDIF -->">

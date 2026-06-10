@@ -21,6 +21,7 @@ class listener implements EventSubscriberInterface
 	protected \phpbb\template\template $template;
 	protected $collapsible_operator;
 	protected array $digest_discussion_links = [];
+	protected array $digest_topic_meta = [];
 	protected ?array $discussion_forum_rows = null;
 	protected array $discussion_forum_templates = [];
 	protected string $seen_table;
@@ -63,10 +64,11 @@ class listener implements EventSubscriberInterface
 			'core.user_setup' => 'load_language',
 			'core.page_header' => 'assign_header_link',
 			'core.index_modify_page_title' => 'assign_index_digest',
+			'core.viewforum_modify_page_title' => 'force_digest_forum_topic_list_view',
 			'core.viewtopic_modify_page_title' => 'assign_discuss_form',
 			'core.viewtopic_modify_post_row' => 'customise_digest_post_row',
 			'core.viewforum_modify_topics_data' => 'prepare_digest_forum_topic_rows',
-			'core.viewforum_modify_topicrow' => 'customise_digest_forum_topic_row',
+			'core.viewforum_modify_topicrow' => ['customise_digest_forum_topic_row', -100],
 			'core.posting_modify_post_data' => 'prefill_discussion_post',
 			'core.submit_post_end' => 'record_submitted_discussion',
 			'freemitbbs.toptopics.modify_topic_list' => 'filter_digest_top_topics',
@@ -89,6 +91,21 @@ class listener implements EventSubscriberInterface
 		$this->template->assign_vars([
 			'S_FREEMITBBS_NEWSSCRAPER_NAV' => true,
 			'U_NEWSSCRAPER_DIGEST_FORUM' => append_sid("{$this->phpbb_root_path}viewforum.{$this->php_ext}", 'f=' . $forum_id),
+		]);
+	}
+
+	public function force_digest_forum_topic_list_view($event): void
+	{
+		$forum_id = (int) ($event['forum_id'] ?? 0);
+		if ($forum_id <= 0 || $forum_id !== $this->digest_forum_id())
+		{
+			return;
+		}
+
+		$this->template->assign_vars([
+			'S_NEWSSCRAPER_DIGEST_FORUM' => true,
+			'S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW' => true,
+			'S_TOPTOPICS_CLASSIC_TOPIC_LIST_VIEW' => false,
 		]);
 	}
 
@@ -299,6 +316,7 @@ class listener implements EventSubscriberInterface
 		if ($forum_id <= 0 || $forum_id !== $this->digest_forum_id())
 		{
 			$this->digest_discussion_links = [];
+			$this->digest_topic_meta = [];
 			return;
 		}
 
@@ -312,7 +330,9 @@ class listener implements EventSubscriberInterface
 			}
 		}
 
-		$this->digest_discussion_links = $this->discussion_links_by_digest_topic_ids(array_values(array_unique($topic_ids)), $forum_id);
+		$topic_ids = array_values(array_unique($topic_ids));
+		$this->digest_discussion_links = $this->discussion_links_by_digest_topic_ids($topic_ids, $forum_id);
+		$this->digest_topic_meta = $this->digest_topic_meta_by_topic_ids($topic_ids);
 	}
 
 	public function customise_digest_forum_topic_row($event): void
@@ -327,6 +347,23 @@ class listener implements EventSubscriberInterface
 		}
 
 		$topic_row['S_NEWSSCRAPER_DIGEST_TOPIC_ROW'] = true;
+		$topic_meta = $this->digest_topic_meta[$topic_id] ?? [];
+		if (!empty($topic_meta['source_label']))
+		{
+			$topic_row['S_NEWSSCRAPER_SOURCE'] = true;
+			$topic_row['NEWSSCRAPER_SOURCE_LABEL'] = $this->escape((string) $topic_meta['source_label']);
+		}
+		if (!empty($topic_meta['preview_text']))
+		{
+			$topic_row['S_TOPTOPICS_INLINE_LAZY_PREVIEW'] = false;
+			$topic_row['S_TOPTOPICS_INLINE_SERVER_PREVIEW'] = false;
+			$topic_row['S_TOPTOPICS_INLINE_IMAGE_PREVIEW'] = false;
+			$topic_row['S_TOPTOPICS_INLINE_EXCERPT_PREVIEW'] = true;
+			$topic_row['S_TOPTOPICS_INLINE_RICH_PREVIEW'] = false;
+			$topic_row['U_TOPTOPICS_INLINE_PREVIEW'] = '';
+			$topic_row['TOPTOPICS_INLINE_PREVIEW_HTML'] = '';
+			$topic_row['TOPTOPICS_INLINE_EXCERPT'] = $this->escape(censor_text((string) $topic_meta['preview_text']));
+		}
 		if (isset($this->digest_discussion_links[$topic_id]))
 		{
 			$topic_row['U_NEWSSCRAPER_DISCUSSION'] = $this->digest_discussion_links[$topic_id]['url'];
@@ -382,6 +419,101 @@ class listener implements EventSubscriberInterface
 		}
 
 		return $forums;
+	}
+
+	protected function digest_topic_meta_by_topic_ids(array $digest_topic_ids): array
+	{
+		$digest_topic_ids = array_values(array_unique(array_filter(array_map('intval', $digest_topic_ids), static function ($topic_id) {
+			return $topic_id > 0;
+		})));
+		if (!$digest_topic_ids)
+		{
+			return [];
+		}
+
+		$sql = 'SELECT s.topic_id, s.source_key, p.post_text
+			FROM ' . $this->seen_table . ' s
+			LEFT JOIN ' . TOPICS_TABLE . ' t
+				ON t.topic_id = s.topic_id
+			LEFT JOIN ' . POSTS_TABLE . ' p
+				ON p.post_id = t.topic_first_post_id
+			WHERE s.status = ' . "'" . $this->db->sql_escape('posted') . "'" . '
+				AND ' . $this->db->sql_in_set('s.topic_id', $digest_topic_ids) . '
+			ORDER BY s.updated_time DESC';
+		$result = $this->db->sql_query($sql);
+		$meta = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$topic_id = (int) $row['topic_id'];
+			if ($topic_id <= 0 || isset($meta[$topic_id]))
+			{
+				continue;
+			}
+
+			$source_key = (string) $row['source_key'];
+			$source_label = $this->source_label($source_key);
+			if ($source_label === '')
+			{
+				$source_label = $source_key;
+			}
+
+			$meta[$topic_id] = [
+				'source_label' => $source_label,
+				'preview_text' => $this->digest_preview_text((string) ($row['post_text'] ?? '')),
+			];
+		}
+		$this->db->sql_freeresult($result);
+
+		return $meta;
+	}
+
+	protected function source_label(string $source_key): string
+	{
+		$labels = [
+			'guardian' => 'The Guardian',
+			'bbc' => 'BBC',
+			'dw' => 'DW',
+			'cnbc' => 'CNBC',
+			'dailymail' => 'Daily Mail',
+			'ars' => 'Ars Technica',
+			'zerohedge' => 'ZeroHedge',
+			'foxnews' => 'Fox News',
+			'wenxuecity' => 'Wenxuecity',
+			'zaobao' => 'Zaobao',
+			'sina_world' => 'Sina World',
+			'sohu' => 'Sohu',
+			'xinhua_world' => 'Xinhua World',
+		];
+
+		return $labels[$source_key] ?? '';
+	}
+
+	protected function digest_preview_text(string $post_text): string
+	{
+		$text = preg_replace('#<br\s*/?>#iu', "\n", $post_text) ?? $post_text;
+		$text = preg_replace('#<s>.*?</s>#isu', '', $text) ?? $text;
+		$text = preg_replace('#<e>.*?</e>#isu', '', $text) ?? $text;
+		$text = preg_replace('#</?[^>]+>#u', '', $text) ?? $text;
+		$text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
+		$text = preg_replace('/\[\/?b(?::[a-z0-9]+)?\]/iu', '', $text) ?? $text;
+		$text = preg_replace('/\[url(?:=[^\]]*)?(?::[a-z0-9]+)?\](.*?)\[\/url(?::[a-z0-9]+)?\]/isu', '$1', $text) ?? $text;
+
+		$lines = preg_split('/\R+/u', $text) ?: [];
+		$body_lines = [];
+		foreach ($lines as $line)
+		{
+			$line = trim((string) preg_replace('/\s+/u', ' ', $line));
+			if ($line === ''
+				|| preg_match('/^(来源|原标题)\s*[:：]/u', $line)
+				|| $line === '阅读原文')
+			{
+				continue;
+			}
+
+			$body_lines[] = $line;
+		}
+
+		return trim(implode("\n", $body_lines));
 	}
 
 	protected function discussion_target_forum_templates(int $digest_forum_id): array
