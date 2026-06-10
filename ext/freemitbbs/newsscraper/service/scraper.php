@@ -15,6 +15,8 @@ class scraper
 	private const MAX_DIGEST_CHARS = 1200;
 	private const MIN_ARTICLE_CHARS = 300;
 	private const DIGEST_CONTEXT_LIMIT = 20;
+	private const RTNG_DEFAULT_TPL_LOOP = 'rtng_topics';
+	private const RTNG_RECENT_CONTEXT_LIMIT = 30;
 	private const RTNG_JUNBAN_TPL_LOOP = 'rtng_junban_topics';
 	private const RTNG_JUNBAN_CONTEXT_LIMIT = 10;
 
@@ -407,6 +409,7 @@ class scraper
 	protected function select_interesting_candidates(array $candidates): array
 	{
 		$recent_digest_titles = $this->recent_digest_titles_for_selection();
+		$recent_topic_titles = $this->recent_topic_titles_for_selection();
 		$recent_junban_titles = $this->recent_junban_topic_titles_for_selection();
 		$payload_candidates = [];
 		foreach ($candidates as $index => $candidate)
@@ -427,7 +430,7 @@ class scraper
 			'messages' => [
 				[
 					'role' => 'system',
-					'content' => '你是 mitbbs（买买提）的新闻编辑。本站用户多有欧美留学背景，学历至少硕士以上，大多事业有成。请只根据标题和来源挑选可能引发本站用户兴趣的新闻。偏好：中美关系、美国政治社会、华人相关、科技/AI、中国科技、军事、社会新闻、战争与国际局势、经济金融、重大公共事件。娱乐八卦和重大体育赛况不必一律过滤，若可能引发讨论可入选。过滤：软文、地方小新闻、重复/标题党。不要选择与 recent_digest_titles 或 junban_recent_topics 已有话题语义重复的候选；同一事件的不同来源或不同措辞也算重复。候选之间若是同一事件，只选一个。只能返回 JSON，不要 Markdown。格式：{"selected":[{"id":数字,"score":0到100,"reason":"简短中文理由"}]}。',
+					'content' => '你是 mitbbs（买买提）的新闻编辑。本站用户多有欧美留学背景，学历至少硕士以上，大多事业有成。请只根据标题和来源挑选可能引发本站用户兴趣的新闻。偏好：中美关系、美国政治社会、华人相关、科技/AI、中国科技、军事、社会新闻、战争与国际局势、经济金融、重大公共事件。娱乐八卦和重大体育赛况不必一律过滤，若可能引发讨论可入选。过滤：软文、地方小新闻、重复/标题党。不要选择与 recent_digest_titles、recent_topics 或 junban_recent_topics 已有话题语义重复的候选；同一事件的不同来源或不同措辞也算重复。候选之间若是同一事件，只选一个。只能返回 JSON，不要 Markdown。格式：{"selected":[{"id":数字,"score":0到100,"reason":"简短中文理由"}]}。',
 				],
 				[
 					'role' => 'user',
@@ -435,6 +438,7 @@ class scraper
 						'max_selected' => $this->max_selected_per_run(),
 						'min_score' => $this->min_interest_score(),
 						'recent_digest_titles' => $recent_digest_titles,
+						'recent_topics' => $recent_topic_titles,
 						'junban_recent_topics' => $recent_junban_titles,
 						'candidates' => $payload_candidates,
 					]),
@@ -480,7 +484,7 @@ class scraper
 		}
 
 		usort($selected, static fn (array $a, array $b): int => ((int) ($b['score'] ?? 0)) <=> ((int) ($a['score'] ?? 0)));
-		$selected = $this->filter_duplicate_selected_candidates($selected, array_merge($recent_digest_titles, $recent_junban_titles));
+		$selected = $this->filter_duplicate_selected_candidates($selected, array_merge($recent_digest_titles, $recent_topic_titles, $recent_junban_titles));
 
 		return array_slice($selected, 0, $this->max_selected_per_run());
 	}
@@ -501,6 +505,22 @@ class scraper
 			ORDER BY topic_time DESC, topic_id DESC';
 
 		return $this->fetch_topic_titles_from_sql($sql, self::DIGEST_CONTEXT_LIMIT);
+	}
+
+	protected function recent_topic_titles_for_selection(): array
+	{
+		$topic_ids = $this->recenttopicsng_topic_ids_for_selection(self::RTNG_DEFAULT_TPL_LOOP, self::RTNG_RECENT_CONTEXT_LIMIT);
+		if (!$topic_ids)
+		{
+			return [];
+		}
+
+		$sql = 'SELECT topic_title
+			FROM ' . TOPICS_TABLE . '
+			WHERE ' . $this->db->sql_in_set('topic_id', $topic_ids) . '
+			ORDER BY topic_last_post_time DESC, topic_id DESC';
+
+		return $this->fetch_topic_titles_from_sql($sql, self::RTNG_RECENT_CONTEXT_LIMIT);
 	}
 
 	protected function recent_junban_topic_titles_for_selection(): array

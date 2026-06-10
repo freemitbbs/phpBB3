@@ -69,7 +69,6 @@ class listener implements EventSubscriberInterface
 			'core.viewforum_modify_topicrow' => 'customise_digest_forum_topic_row',
 			'core.posting_modify_post_data' => 'prefill_discussion_post',
 			'core.submit_post_end' => 'record_submitted_discussion',
-			'imcger.recenttopicsng.modify_topics_list' => 'filter_digest_recent_topics',
 			'freemitbbs.toptopics.modify_topic_list' => 'filter_digest_top_topics',
 		];
 	}
@@ -355,19 +354,6 @@ class listener implements EventSubscriberInterface
 		$event['topic_row'] = $topic_row;
 	}
 
-	public function filter_digest_recent_topics($event): void
-	{
-		$rowset = $event['rowset'] ?? [];
-		if (empty($rowset) || !is_array($rowset))
-		{
-			return;
-		}
-
-		$rowset = $this->filter_digest_forum_rowset($rowset);
-		$event['rowset'] = $rowset;
-		$event['topic_list'] = $this->topic_ids_from_rowset($rowset);
-	}
-
 	public function filter_digest_top_topics($event): void
 	{
 		$topics = $event['topics'] ?? [];
@@ -650,21 +636,6 @@ class listener implements EventSubscriberInterface
 		}
 
 		return $filtered;
-	}
-
-	protected function topic_ids_from_rowset(array $rowset): array
-	{
-		$topic_ids = [];
-		foreach ($rowset as $row)
-		{
-			$topic_id = (int) ($row['topic_id'] ?? 0);
-			if ($topic_id > 0)
-			{
-				$topic_ids[] = $topic_id;
-			}
-		}
-
-		return $topic_ids;
 	}
 
 	protected function has_collapsible_categories(): bool

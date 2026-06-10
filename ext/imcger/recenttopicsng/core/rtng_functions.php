@@ -347,17 +347,24 @@ class rtng_functions
 	 */
 	private function get_forum_id_list_for_loop(string $tpl_loopname): array
 	{
+		$news_digest_forum_ids = $this->get_news_digest_forum_ids();
 		if ($tpl_loopname === self::JUNBAN_TPL_LOOP)
 		{
-			return $this->getforumlist($this->should_apply_user_home_forum_exclusions($tpl_loopname), [self::JUNBAN_FORUM_ID]);
+			return $this->getforumlist($this->should_apply_user_home_forum_exclusions($tpl_loopname), [self::JUNBAN_FORUM_ID], $news_digest_forum_ids);
 		}
 
 		if ($tpl_loopname === self::DEFAULT_TPL_LOOP)
 		{
-			return $this->getforumlist($this->should_apply_user_home_forum_exclusions($tpl_loopname), null, [self::JUNBAN_FORUM_ID]);
+			return $this->getforumlist($this->should_apply_user_home_forum_exclusions($tpl_loopname), null, array_merge([self::JUNBAN_FORUM_ID], $news_digest_forum_ids));
 		}
 
-		return $this->getforumlist($this->should_apply_user_home_forum_exclusions($tpl_loopname));
+		return $this->getforumlist($this->should_apply_user_home_forum_exclusions($tpl_loopname), null, $news_digest_forum_ids);
+	}
+
+	private function get_news_digest_forum_ids(): array
+	{
+		$forum_id = (int) ($this->config['newsscraper_digest_forum_id'] ?? 0);
+		return $forum_id > 0 ? [$forum_id] : [];
 	}
 
 	private function get_title_for_loop(string $tpl_loopname): string
