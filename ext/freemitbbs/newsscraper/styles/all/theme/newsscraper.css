@@ -1,0 +1,194 @@
+.newsscraper-index-block {
+	margin-top: 8px;
+}
+
+ul.topiclist.newsscraper-digest-list {
+	margin: 0;
+}
+
+ul.topiclist.newsscraper-digest-list li.row {
+	margin: 0;
+}
+
+.newsscraper-digest-row {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.newsscraper-digest-title {
+	display: block;
+	min-width: 0;
+	padding: 7px 10px;
+	color: #105289;
+	font-family: "Trebuchet MS", Helvetica, Arial, Sans-serif;
+	font-size: 1.43em;
+	font-weight: bold;
+	line-height: 1.35;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.newsscraper-digest-title:nth-child(odd) {
+	border-right: 1px solid transparent;
+}
+
+.newsscraper-discuss-profile {
+	clear: both;
+	margin-top: 10px;
+}
+
+.newsscraper-discuss-profile::after {
+	clear: both;
+	content: "";
+	display: block;
+}
+
+.newsscraper-discuss-profile .newsscraper-discuss-dropdown {
+	margin: 0;
+	max-width: 100%;
+}
+
+.newsscraper-discuss-profile .newsscraper-discuss-trigger {
+	box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	width: 100%;
+	font-weight: bold;
+}
+
+.newsscraper-discuss-row {
+	cursor: default;
+	display: block;
+	margin-right: 20px;
+	padding: 5px 10px;
+	text-decoration: none;
+	width: 100%;
+}
+
+.newsscraper-topic-discussion-action {
+	display: block;
+	margin-top: 6px;
+}
+
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row dd.lastpost > .newsscraper-topic-discussion-action {
+	box-sizing: border-box;
+	margin-top: 0;
+	padding: 6px var(--toptopics-topic-column-separator-gutter, 18px);
+}
+
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row > dl.row-item > dd.lastpost {
+	border-left: 0;
+	margin-bottom: 0;
+	padding: 4px 0;
+}
+
+.newsscraper-topic-discuss-dropdown {
+	display: inline-block;
+	float: none;
+	margin: 0;
+	position: relative;
+	text-align: left;
+}
+
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row {
+	position: relative;
+}
+
+@media only screen and (min-width: 701px) {
+	ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row > dl.row-item > dt {
+		width: calc(100% - 320px);
+		margin-right: 0;
+	}
+
+	ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row > dl.row-item > dt > .list-inner {
+		margin-right: 0;
+	}
+
+	ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row > dl.row-item > dd.lastpost {
+		width: 320px;
+		position: relative;
+		z-index: 2;
+	}
+
+	ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row > dl.row-item::after {
+		content: "";
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: calc(100% - 320px);
+		border-left: 1px solid #FFFFFF;
+		pointer-events: none;
+		z-index: 1;
+	}
+}
+
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:has(.newsscraper-topic-discuss-dropdown.dropdown-visible),
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:hover,
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:focus-within {
+	z-index: 3000;
+}
+
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:has(.newsscraper-topic-discuss-dropdown.dropdown-visible) > dl.row-item,
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:hover > dl.row-item,
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:focus-within > dl.row-item {
+	overflow: visible;
+}
+
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:has(.newsscraper-topic-discuss-dropdown.dropdown-visible) dd.lastpost,
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:hover dd.lastpost,
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:focus-within dd.lastpost,
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:has(.newsscraper-topic-discuss-dropdown.dropdown-visible) .newsscraper-topic-discussion-action,
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:hover .newsscraper-topic-discussion-action,
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row:focus-within .newsscraper-topic-discussion-action {
+	position: relative;
+	z-index: 3001;
+}
+
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row .newsscraper-topic-discuss-dropdown.dropdown-visible,
+ul.topiclist.topics.freemitbbs-from-stats-list > li.row.newsscraper-digest-topic-row .newsscraper-topic-discuss-dropdown:hover {
+	z-index: 3002;
+}
+
+.newsscraper-topic-discuss-trigger,
+.newsscraper-discussion-link {
+	box-sizing: border-box;
+	position: relative;
+	z-index: 3;
+	max-width: 100%;
+	font-weight: bold;
+	pointer-events: auto;
+}
+
+.newsscraper-discussion-link {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 3px;
+}
+
+.newsscraper-topic-discuss-dropdown .dropdown {
+	min-width: 190px;
+	text-align: left;
+	z-index: 3003;
+}
+
+.newsscraper-topic-discuss-dropdown .dropdown .pointer {
+	z-index: 3004;
+}
+
+.newsscraper-prefill-note {
+	margin-bottom: 10px;
+}
+
+@media (max-width: 700px) {
+	.newsscraper-digest-row {
+		grid-template-columns: 1fr;
+	}
+
+	.newsscraper-digest-title:nth-child(odd) {
+		border-right: 0;
+	}
+}

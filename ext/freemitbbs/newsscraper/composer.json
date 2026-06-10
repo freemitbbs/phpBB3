@@ -1,0 +1,23 @@
+{
+	"name": "freemitbbs/newsscraper",
+	"type": "phpbb-extension",
+	"description": "Scrapes selected news sources, creates AI-generated Chinese digests, and displays them on the forum index.",
+	"homepage": "https://freemitbbs.com",
+	"version": "1.0.1",
+	"license": "GPL-2.0-only",
+	"authors": [
+		{
+			"name": "FreeMITBBS"
+		}
+	],
+	"require": {
+		"php": ">=8.0",
+		"phpbb/phpbb": ">=3.3.0,<4.0.0"
+	},
+	"extra": {
+		"display-name": "News Scraper",
+		"soft-require": {
+			"phpbb/phpbb": ">=3.3.0,<4.0.0"
+		}
+	}
+}

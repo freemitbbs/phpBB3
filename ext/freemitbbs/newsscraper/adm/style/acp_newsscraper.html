@@ -1,0 +1,137 @@
+<!-- INCLUDE overall_header.html -->
+
+<a name="maincontent"></a>
+<h1>{L_ACP_NEWSSCRAPER}</h1>
+<p>{L_NEWSSCRAPER_EXPLAIN}</p>
+
+<form id="acp_newsscraper" method="post" action="{U_ACTION}">
+	<fieldset>
+		<legend>{L_NEWSSCRAPER_FIELDSET_GENERAL}</legend>
+		<dl>
+			<dt>
+				<label for="newsscraper_enabled">{L_NEWSSCRAPER_ENABLED}</label><br />
+				<span>{L_NEWSSCRAPER_ENABLED_EXPLAIN}</span>
+			</dt>
+			<dd><label><input type="checkbox" id="newsscraper_enabled" name="newsscraper_enabled" value="1"<!-- IF NEWSSCRAPER_ENABLED --> checked="checked"<!-- ENDIF --> /> {L_ENABLED}</label></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="newsscraper_digest_forum_id">{L_NEWSSCRAPER_DIGEST_FORUM_ID}</label><br />
+				<span>{L_NEWSSCRAPER_DIGEST_FORUM_ID_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="0" id="newsscraper_digest_forum_id" name="newsscraper_digest_forum_id" value="{NEWSSCRAPER_DIGEST_FORUM_ID}" class="inputbox autowidth" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="newsscraper_interval_seconds">{L_NEWSSCRAPER_INTERVAL_SECONDS}</label><br />
+				<span>{L_NEWSSCRAPER_INTERVAL_SECONDS_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="300" max="86400" id="newsscraper_interval_seconds" name="newsscraper_interval_seconds" value="{NEWSSCRAPER_INTERVAL_SECONDS}" class="inputbox autowidth" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="newsscraper_frontpage_count">{L_NEWSSCRAPER_FRONTPAGE_COUNT}</label><br />
+				<span>{L_NEWSSCRAPER_FRONTPAGE_COUNT_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="0" max="50" id="newsscraper_frontpage_count" name="newsscraper_frontpage_count" value="{NEWSSCRAPER_FRONTPAGE_COUNT}" class="inputbox autowidth" /></dd>
+		</dl>
+	</fieldset>
+
+	<fieldset>
+		<legend>{L_NEWSSCRAPER_FIELDSET_PIPELINE}</legend>
+		<dl>
+			<dt>
+				<label for="newsscraper_candidates_per_run">{L_NEWSSCRAPER_CANDIDATES_PER_RUN}</label><br />
+				<span>{L_NEWSSCRAPER_CANDIDATES_PER_RUN_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="1" max="200" id="newsscraper_candidates_per_run" name="newsscraper_candidates_per_run" value="{NEWSSCRAPER_CANDIDATES_PER_RUN}" class="inputbox autowidth" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="newsscraper_max_selected_per_run">{L_NEWSSCRAPER_MAX_SELECTED_PER_RUN}</label><br />
+				<span>{L_NEWSSCRAPER_MAX_SELECTED_PER_RUN_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="1" max="50" id="newsscraper_max_selected_per_run" name="newsscraper_max_selected_per_run" value="{NEWSSCRAPER_MAX_SELECTED_PER_RUN}" class="inputbox autowidth" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="newsscraper_min_interest_score">{L_NEWSSCRAPER_MIN_INTEREST_SCORE}</label><br />
+				<span>{L_NEWSSCRAPER_MIN_INTEREST_SCORE_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="0" max="100" id="newsscraper_min_interest_score" name="newsscraper_min_interest_score" value="{NEWSSCRAPER_MIN_INTEREST_SCORE}" class="inputbox autowidth" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="newsscraper_per_source_cap">{L_NEWSSCRAPER_PER_SOURCE_CAP}</label><br />
+				<span>{L_NEWSSCRAPER_PER_SOURCE_CAP_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="1" max="20" id="newsscraper_per_source_cap" name="newsscraper_per_source_cap" value="{NEWSSCRAPER_PER_SOURCE_CAP}" class="inputbox autowidth" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="newsscraper_title_max_chars">{L_NEWSSCRAPER_TITLE_MAX_CHARS}</label><br />
+				<span>{L_NEWSSCRAPER_TITLE_MAX_CHARS_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="8" max="60" id="newsscraper_title_max_chars" name="newsscraper_title_max_chars" value="{NEWSSCRAPER_TITLE_MAX_CHARS}" class="inputbox autowidth" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="newsscraper_seen_retention_days">{L_NEWSSCRAPER_SEEN_RETENTION_DAYS}</label><br />
+				<span>{L_NEWSSCRAPER_SEEN_RETENTION_DAYS_EXPLAIN}</span>
+			</dt>
+			<dd><input type="number" min="1" max="365" id="newsscraper_seen_retention_days" name="newsscraper_seen_retention_days" value="{NEWSSCRAPER_SEEN_RETENTION_DAYS}" class="inputbox autowidth" /></dd>
+		</dl>
+	</fieldset>
+
+	<fieldset>
+		<legend>{L_NEWSSCRAPER_FIELDSET_SOURCES}</legend>
+		<p>{L_NEWSSCRAPER_SOURCES_EXPLAIN}</p>
+		<!-- BEGIN sources -->
+		<label style="display: inline-block; min-width: 13em; margin: 0 1em 0.5em 0;">
+			<input type="checkbox" name="newsscraper_sources[{sources.KEY}]" value="1"<!-- IF sources.S_CHECKED --> checked="checked"<!-- ENDIF --> />
+			{sources.LABEL}
+		</label>
+		<!-- END sources -->
+	</fieldset>
+
+	<fieldset>
+		<legend>{L_NEWSSCRAPER_FIELDSET_API}</legend>
+		<p>{L_NEWSSCRAPER_API_FALLBACK_EXPLAIN}</p>
+		<dl>
+			<dt>
+				<label for="newsscraper_api_endpoint">{L_NEWSSCRAPER_API_ENDPOINT}</label><br />
+				<span>{L_NEWSSCRAPER_API_ENDPOINT_EXPLAIN}</span>
+			</dt>
+			<dd><input type="url" id="newsscraper_api_endpoint" name="newsscraper_api_endpoint" value="{NEWSSCRAPER_API_ENDPOINT}" placeholder="{NEWSSCRAPER_DEFAULT_API_ENDPOINT}" class="inputbox" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="newsscraper_model">{L_NEWSSCRAPER_MODEL}</label><br />
+				<span>{L_NEWSSCRAPER_MODEL_EXPLAIN}</span>
+			</dt>
+			<dd><input type="text" id="newsscraper_model" name="newsscraper_model" value="{NEWSSCRAPER_MODEL}" placeholder="{NEWSSCRAPER_DEFAULT_MODEL}" class="inputbox" /></dd>
+		</dl>
+		<dl>
+			<dt>
+				<label for="newsscraper_api_key">{L_NEWSSCRAPER_API_KEY}</label><br />
+				<span>{L_NEWSSCRAPER_API_KEY_EXPLAIN}</span>
+			</dt>
+			<dd>
+				<input type="password" id="newsscraper_api_key" name="newsscraper_api_key" value="" class="inputbox" autocomplete="new-password" />
+				<!-- IF S_NEWSSCRAPER_API_KEY_CONFIGURED -->
+				<br /><label><input type="checkbox" name="newsscraper_api_key_clear" value="1" /> {L_NEWSSCRAPER_API_KEY_CLEAR}</label>
+				<!-- ELSEIF S_NEWSSCRAPER_TOPICMOVER_API_KEY_CONFIGURED -->
+				<br /><span>{L_NEWSSCRAPER_USING_TOPICMOVER_API_KEY}</span>
+				<!-- ENDIF -->
+			</dd>
+		</dl>
+	</fieldset>
+
+	<fieldset class="submit-buttons">
+		{S_FORM_TOKEN}
+		<input class="button1" type="submit" id="submit" name="submit" value="{L_SUBMIT}" />
+		<input class="button2" type="reset" id="reset" name="reset" value="{L_RESET}" />
+	</fieldset>
+</form>
+
+<!-- INCLUDE overall_footer.html -->

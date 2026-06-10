@@ -1,0 +1,43 @@
+parameters:
+    tables.freemitbbs.newsscraper.seen: '%core.table_prefix%newsscraper_seen'
+    tables.freemitbbs.newsscraper.discussions: '%core.table_prefix%newsscraper_discussions'
+
+services:
+    freemitbbs.newsscraper.scraper:
+        class: freemitbbs\newsscraper\service\scraper
+        arguments:
+            - '@config'
+            - '@dbal.conn'
+            - '@log'
+            - '%tables.freemitbbs.newsscraper.seen%'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+
+    freemitbbs.newsscraper.cron.scrape_news:
+        class: freemitbbs\newsscraper\cron\scrape_news
+        arguments:
+            - '@cache'
+            - '@config'
+            - '@freemitbbs.newsscraper.scraper'
+        calls:
+            - [set_name, [cron.task.freemitbbs.newsscraper.scrape_news]]
+        tags:
+            - { name: cron.task }
+
+    freemitbbs.newsscraper.listener:
+        class: freemitbbs\newsscraper\event\listener
+        arguments:
+            - '@auth'
+            - '@cache'
+            - '@config'
+            - '@dbal.conn'
+            - '@language'
+            - '@request'
+            - '@template'
+            - '%tables.freemitbbs.newsscraper.seen%'
+            - '%tables.freemitbbs.newsscraper.discussions%'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+            - '@?phpbb.collapsiblecategories.operator'
+        tags:
+            - { name: event.listener }

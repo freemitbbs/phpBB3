@@ -1,0 +1,46 @@
+{% if S_NEWSSCRAPER_INDEX_DIGEST %}
+{% if S_NEWSSCRAPER_INDEX_COLLAPSIBLE %}
+	<a class="category{% if S_NEWSSCRAPER_INDEX_HIDDEN %} hidden-category{% endif %}" id="category{{ NEWSSCRAPER_INDEX_BLOCK_ID }}" style="display: none; height: 0"></a>
+{% endif %}
+<div class="forabg newsscraper-index-block">
+	<div class="inner">
+		<ul class="topiclist">
+			<li class="header">
+				<dl class="row-item">
+					<dt>
+						<div class="list-inner">
+							<i class="icon fa-newspaper-o fa-fw" aria-hidden="true"></i>
+							<a href="{{ U_NEWSSCRAPER_DIGEST_FORUM }}">{{ NEWSSCRAPER_INDEX_TITLE }}</a>
+						</div>
+					</dt>
+				</dl>
+				{% if S_NEWSSCRAPER_INDEX_COLLAPSIBLE %}
+					<a href="{{ U_NEWSSCRAPER_INDEX_COLLAPSE_URL }}"
+						class="collapse-btn"
+						data-hidden="{{ NEWSSCRAPER_INDEX_COLLAPSE_HIDDEN_DATA }}"
+						data-ajax="phpbb_collapse"
+						data-overlay="false"
+						data-title-alt="{{ NEWSSCRAPER_INDEX_COLLAPSE_ALT_TITLE }}"
+						title="{{ NEWSSCRAPER_INDEX_COLLAPSE_TITLE }}"
+						style="display: none; line-height: 0;">
+						<i class="fa {{ NEWSSCRAPER_INDEX_COLLAPSE_ICON }}"></i>
+					</a>
+				{% endif %}
+			</li>
+		</ul>
+			<ul class="topiclist topics newsscraper-digest-list collapsible">
+				{% for item in loops.newsscraper_digest %}
+					{% if item.S_ROW_START %}
+						<li class="row {{ item.ROW_CLASS }}">
+							<div class="newsscraper-digest-row">
+					{% endif %}
+								<a class="newsscraper-digest-title" href="{{ item.U_TOPIC }}" title="{{ item.FULL_TITLE }}">{{ item.TITLE }}</a>
+					{% if item.S_ROW_END %}
+							</div>
+						</li>
+					{% endif %}
+				{% endfor %}
+			</ul>
+	</div>
+</div>
+{% endif %}
