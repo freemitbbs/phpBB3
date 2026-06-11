@@ -25,6 +25,9 @@ class listener implements EventSubscriberInterface
 	private const FIRST_POST_LENGTH_CACHE_PREFIX = '_freemitbbs_toptopics_first_post_length_';
 	private const FIRST_POST_LENGTH_CACHE_REVISION = 1;
 	private const FIRST_POST_LENGTH_CACHE_SECONDS = 604800;
+	private const POST_MESSAGE_REWRITE_CACHE_PREFIX = '_freemitbbs_toptopics_post_message_rewrite_';
+	private const POST_MESSAGE_REWRITE_CACHE_REVISION = 1;
+	private const POST_MESSAGE_REWRITE_CACHE_SECONDS = 604800;
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
@@ -61,6 +64,7 @@ class listener implements EventSubscriberInterface
 		'p' => [],
 		't' => [],
 	];
+	protected ?string $local_viewtopic_link_titles_cache_fingerprint = null;
 	protected array $inline_preview_visible_server_render_counts = [];
 	protected ?int $current_user_reputation = null;
 	protected array $index_category_blocks = [];
@@ -476,12 +480,91 @@ class listener implements EventSubscriberInterface
 		}
 		if (!empty($post_row['MESSAGE']))
 		{
-			$message = (string) $post_row['MESSAGE'];
-			$message = $this->rewrite_unparsed_media_embed_links($message);
-			$post_row['MESSAGE'] = $this->rewrite_local_viewtopic_link_texts($message);
+			$post_row['MESSAGE'] = $this->rewrite_post_message_with_cache($post_id, (array) $event['row'], (string) $post_row['MESSAGE']);
 		}
 
 		$event['post_row'] = $post_row;
+	}
+
+	protected function rewrite_post_message_with_cache(int $post_id, array $row, string $message): string
+	{
+		if ($post_id <= 0 || $message === '')
+		{
+			return $message;
+		}
+
+		$needs_media_rewrite = stripos($message, '[media]') !== false;
+		$needs_local_link_rewrite = $this->can_rewrite_local_viewtopic_link_texts($message);
+		if (!$needs_media_rewrite && !$needs_local_link_rewrite)
+		{
+			return $message;
+		}
+
+		$link_title_fingerprint = $needs_local_link_rewrite
+			? $this->get_local_viewtopic_link_titles_cache_fingerprint()
+			: 'no-links';
+		$cache_key = $this->build_post_message_rewrite_cache_key($post_id, $row, $message, $link_title_fingerprint);
+		$cached_message = $this->cache_invalidator->get($cache_key);
+		if (is_string($cached_message))
+		{
+			return $cached_message;
+		}
+
+		$rewritten = $message;
+		if ($needs_media_rewrite)
+		{
+			$rewritten = $this->rewrite_unparsed_media_embed_links($rewritten);
+		}
+		if ($needs_local_link_rewrite)
+		{
+			$rewritten = $this->rewrite_local_viewtopic_link_texts($rewritten);
+		}
+
+		$this->cache_invalidator->put($cache_key, $rewritten, self::POST_MESSAGE_REWRITE_CACHE_SECONDS);
+
+		return $rewritten;
+	}
+
+	protected function build_post_message_rewrite_cache_key(int $post_id, array $row, string $message, string $link_title_fingerprint): string
+	{
+		$post_version = max((int) ($row['post_time'] ?? 0), (int) ($row['post_edit_time'] ?? 0));
+
+		return self::POST_MESSAGE_REWRITE_CACHE_PREFIX
+			. self::POST_MESSAGE_REWRITE_CACHE_REVISION
+			. '_' . $post_id
+			. '_' . $post_version
+			. '_' . md5($message)
+			. '_' . $link_title_fingerprint;
+	}
+
+	protected function can_rewrite_local_viewtopic_link_texts(string $message): bool
+	{
+		return $message !== ''
+			&& stripos($message, 'viewtopic.') !== false
+			&& (!empty($this->local_viewtopic_link_titles['p']) || !empty($this->local_viewtopic_link_titles['t']));
+	}
+
+	protected function get_local_viewtopic_link_titles_cache_fingerprint(): string
+	{
+		if ($this->local_viewtopic_link_titles_cache_fingerprint !== null)
+		{
+			return $this->local_viewtopic_link_titles_cache_fingerprint;
+		}
+
+		$titles = $this->local_viewtopic_link_titles;
+		foreach (['p', 't'] as $type)
+		{
+			if (empty($titles[$type]) || !is_array($titles[$type]))
+			{
+				$titles[$type] = [];
+				continue;
+			}
+			ksort($titles[$type], SORT_NUMERIC);
+		}
+
+		$this->local_viewtopic_link_titles_cache_fingerprint = md5(serialize($titles));
+
+		return $this->local_viewtopic_link_titles_cache_fingerprint;
 	}
 
 	protected function rewrite_unparsed_media_embed_links(string $message): string
@@ -582,6 +665,7 @@ class listener implements EventSubscriberInterface
 			'p' => [],
 			't' => [],
 		];
+		$this->local_viewtopic_link_titles_cache_fingerprint = null;
 
 		if (empty($rowset))
 		{
@@ -932,6 +1016,12 @@ class listener implements EventSubscriberInterface
 
 	public function index_category_blocks($event): void
 	{
+		if ($this->user->data['is_bot'])
+		{
+			$this->index_category_blocks = [];
+			return;
+		}
+
 		$root_data = $event['root_data'] ?? [];
 		if ((int) ($root_data['forum_id'] ?? -1) !== 0)
 		{
@@ -1302,6 +1392,11 @@ class listener implements EventSubscriberInterface
 
 	public function display_forums_modify_category_template_vars($event): void
 	{
+		if ($this->user->data['is_bot'])
+		{
+			return;
+		}
+
 		$category_id = (int) (($event['row']['forum_id'] ?? 0));
 		if (!isset($this->index_category_blocks[$category_id]))
 		{
@@ -4243,25 +4338,18 @@ class listener implements EventSubscriberInterface
 			return $topics;
 		}
 
-		if (!function_exists('get_complete_topic_tracking'))
-		{
-			include_once($this->root_path . 'includes/functions_display.' . $this->php_ext);
-		}
-
 		$topic_ids_by_forum = [];
 		foreach ($topics as $topic)
 		{
-			$topic_ids_by_forum[(int) $topic['forum_id']][] = (int) $topic['topic_id'];
-		}
-
-		$topic_tracking_info = [];
-		if ($this->config['load_anon_lastread'] || $this->user->data['is_registered'])
-		{
-			foreach ($topic_ids_by_forum as $forum_id => $topic_ids)
+			$forum_id = (int) ($topic['forum_id'] ?? 0);
+			$topic_id = (int) ($topic['topic_id'] ?? 0);
+			if ($forum_id > 0 && $topic_id > 0)
 			{
-				$topic_tracking_info[$forum_id] = get_complete_topic_tracking($forum_id, array_values(array_unique($topic_ids)));
+				$topic_ids_by_forum[$forum_id][$topic_id] = $topic_id;
 			}
 		}
+
+		$topic_tracking_info = $this->get_topic_tracking_map($topic_ids_by_forum);
 
 		foreach ($topics as &$topic)
 		{
@@ -4269,8 +4357,8 @@ class listener implements EventSubscriberInterface
 			$topic_id = (int) $topic['topic_id'];
 			$topic_last_post_time = (int) ($topic['topic_last_post_time'] ?? $topic['topic_time']);
 
-			$topic['unread_topic'] = isset($topic_tracking_info[$forum_id][$topic_id])
-				&& $topic_last_post_time > (int) $topic_tracking_info[$forum_id][$topic_id];
+			$topic['unread_topic'] = isset($topic_tracking_info[$topic_id])
+				&& $topic_last_post_time > (int) $topic_tracking_info[$topic_id];
 			$topic['u_newest_post'] = append_sid(
 				$this->root_path . 'viewtopic.' . $this->php_ext,
 				'f=' . $forum_id . '&t=' . $topic_id
@@ -4279,6 +4367,112 @@ class listener implements EventSubscriberInterface
 		unset($topic);
 
 		return $topics;
+	}
+
+	protected function get_topic_tracking_map(array $topic_ids_by_forum): array
+	{
+		if (empty($topic_ids_by_forum))
+		{
+			return [];
+		}
+
+		if (!empty($this->config['load_db_lastread']) && !empty($this->user->data['is_registered']))
+		{
+			return $this->get_db_topic_tracking_map($topic_ids_by_forum);
+		}
+
+		if (empty($this->config['load_anon_lastread']) && empty($this->user->data['is_registered']))
+		{
+			return [];
+		}
+
+		if (!function_exists('get_complete_topic_tracking'))
+		{
+			include_once($this->root_path . 'includes/functions_display.' . $this->php_ext);
+		}
+
+		$topic_tracking_info = [];
+		foreach ($topic_ids_by_forum as $forum_id => $topic_ids)
+		{
+			foreach (get_complete_topic_tracking((int) $forum_id, array_values($topic_ids)) as $topic_id => $mark_time)
+			{
+				$topic_tracking_info[(int) $topic_id] = (int) $mark_time;
+			}
+		}
+
+		return $topic_tracking_info;
+	}
+
+	protected function get_db_topic_tracking_map(array $topic_ids_by_forum): array
+	{
+		$topic_forum_ids = [];
+		foreach ($topic_ids_by_forum as $forum_id => $topic_ids)
+		{
+			$forum_id = (int) $forum_id;
+			foreach ($topic_ids as $topic_id)
+			{
+				$topic_id = (int) $topic_id;
+				if ($forum_id > 0 && $topic_id > 0)
+				{
+					$topic_forum_ids[$topic_id] = $forum_id;
+				}
+			}
+		}
+
+		if (empty($topic_forum_ids))
+		{
+			return [];
+		}
+
+		$user_id = (int) $this->user->data['user_id'];
+		$last_read = [];
+
+		$sql = 'SELECT topic_id, mark_time
+			FROM ' . TOPICS_TRACK_TABLE . '
+			WHERE user_id = ' . $user_id . '
+				AND ' . $this->db->sql_in_set('topic_id', array_keys($topic_forum_ids));
+		$result = $this->db->sql_query($sql);
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$topic_id = (int) ($row['topic_id'] ?? 0);
+			if ($topic_id > 0)
+			{
+				$last_read[$topic_id] = (int) ($row['mark_time'] ?? 0);
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		$missing_topic_forum_ids = array_diff_key($topic_forum_ids, $last_read);
+		if (empty($missing_topic_forum_ids))
+		{
+			return $last_read;
+		}
+
+		$forum_ids = array_values(array_unique(array_map('intval', array_values($missing_topic_forum_ids))));
+		$sql = 'SELECT forum_id, mark_time
+			FROM ' . FORUMS_TRACK_TABLE . '
+			WHERE user_id = ' . $user_id . '
+				AND ' . $this->db->sql_in_set('forum_id', $forum_ids);
+		$result = $this->db->sql_query($sql);
+		$forum_mark_times = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$forum_id = (int) ($row['forum_id'] ?? 0);
+			if ($forum_id > 0)
+			{
+				$forum_mark_times[$forum_id] = (int) ($row['mark_time'] ?? 0);
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		$user_lastmark = (int) ($this->user->data['user_lastmark'] ?? 0);
+		foreach ($missing_topic_forum_ids as $topic_id => $forum_id)
+		{
+			$forum_id = (int) $forum_id;
+			$last_read[(int) $topic_id] = $forum_mark_times[$forum_id] ?? $user_lastmark;
+		}
+
+		return $last_read;
 	}
 
 	protected function add_topic_display_state(array $topics): array
