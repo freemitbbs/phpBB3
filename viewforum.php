@@ -18,7 +18,12 @@ define('IN_PHPBB', true);
 $phpbb_root_path = (defined('PHPBB_ROOT_PATH')) ? PHPBB_ROOT_PATH : './';
 $phpEx = substr(strrchr(__FILE__, '.'), 1);
 include($phpbb_root_path . 'common.' . $phpEx);
+include($phpbb_root_path . 'includes/functions_request_canonical.' . $phpEx);
 include($phpbb_root_path . 'includes/functions_display.' . $phpEx);
+
+/* @var $symfony_request \phpbb\symfony_request */
+$symfony_request = $phpbb_container->get('symfony_request');
+phpbb_strip_sid_for_allowed_get_query($request, $symfony_request, ['sid', 'amp;sid', 'f', 'start', 'st', 'sk', 'sd']);
 
 // Start session
 $user->session_begin();

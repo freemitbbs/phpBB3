@@ -18,12 +18,20 @@ define('IN_PHPBB', true);
 $phpbb_root_path = (defined('PHPBB_ROOT_PATH')) ? PHPBB_ROOT_PATH : './';
 $phpEx = substr(strrchr(__FILE__, '.'), 1);
 require($phpbb_root_path . 'common.' . $phpEx);
+require($phpbb_root_path . 'includes/functions_request_canonical.' . $phpEx);
 require($phpbb_root_path . 'includes/functions_user.' . $phpEx);
 require($phpbb_root_path . 'includes/functions_module.' . $phpEx);
 
 // Basic parameter data
 $id 	= $request->variable('i', '');
 $mode	= $request->variable('mode', '');
+
+if (in_array($mode, ['login', 'register', 'terms', 'privacy'], true))
+{
+	/* @var $symfony_request \phpbb\symfony_request */
+	$symfony_request = $phpbb_container->get('symfony_request');
+	phpbb_strip_sid_for_allowed_get_query($request, $symfony_request, ['sid', 'amp;sid', 'mode', 'redirect', 'coppa']);
+}
 
 if (in_array($mode, array('login', 'login_link', 'logout', 'confirm', 'sendpassword', 'activate')))
 {

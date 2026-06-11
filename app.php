@@ -21,16 +21,25 @@ define('IN_PHPBB', true);
 $phpbb_root_path = (defined('PHPBB_ROOT_PATH')) ? PHPBB_ROOT_PATH : './';
 $phpEx = substr(strrchr(__FILE__, '.'), 1);
 include($phpbb_root_path . 'common.' . $phpEx);
+include($phpbb_root_path . 'includes/functions_request_canonical.' . $phpEx);
 
 /* @var $symfony_request \phpbb\symfony_request */
 $symfony_request = $phpbb_container->get('symfony_request');
-if ($request->is_set('sid', \phpbb\request\request_interface::GET) && preg_match('#^/blog/entry/[0-9]+/share-image$#', $symfony_request->getPathInfo()))
+$path_info = $symfony_request->getPathInfo();
+if (phpbb_app_path_strips_public_sid($path_info))
+{
+	phpbb_strip_sid_and_redirect_current_get_request($request, $symfony_request, [
+		'Cache-Control' => 'public, max-age=3600, s-maxage=86400',
+		'CDN-Cache-Control' => 'public, max-age=86400',
+		'Cloudflare-CDN-Cache-Control' => 'public, max-age=86400',
+	]);
+}
+if (phpbb_request_is_get($request) && strpos($path_info, '/collapse/') === 0 && !$request->is_ajax())
 {
 	header_remove('Set-Cookie');
-	header('Location: ' . $symfony_request->getBaseUrl() . $symfony_request->getPathInfo(), true, 301);
-	header('Cache-Control: public, max-age=3600, s-maxage=86400');
-	header('CDN-Cache-Control: public, max-age=86400');
-	header('Cloudflare-CDN-Cache-Control: public, max-age=86400');
+	http_response_code(403);
+	header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+	header('X-Robots-Tag: noindex, nofollow');
 	exit;
 }
 

@@ -125,6 +125,7 @@ class scraper
 		}
 
 		$posted_by_source = [];
+		$posted_digest_titles = $this->recent_digest_titles_for_selection();
 		$forum_id = $this->digest_forum_id();
 		$post_target = $this->max_selected_per_run();
 		foreach ($selected as $candidate)
@@ -155,10 +156,17 @@ class scraper
 				}
 
 				$digest = $this->generate_digest($candidate, $article_text);
+				if ($this->title_matches_any((string) ($digest['title'] ?? ''), $posted_digest_titles))
+				{
+					$this->update_seen($candidate, 'rejected', (int) ($candidate['score'] ?? 0), 'duplicate digest title');
+					$result['rejected']++;
+					continue;
+				}
 				$topic_id = $this->post_digest($forum_id, $candidate, $digest);
 				$candidate['topic_id'] = $topic_id;
 				$this->update_seen($candidate, 'posted', (int) ($candidate['score'] ?? 0), '', $topic_id);
 				$posted_by_source[$source_key]++;
+				$posted_digest_titles[] = (string) ($digest['title'] ?? '');
 				$result['posted']++;
 			}
 			catch (\Throwable $e)
@@ -470,7 +478,7 @@ class scraper
 				[
 					'role' => 'user',
 					'content' => $this->encode_json([
-							'max_selected' => $selection_limit,
+						'max_selected' => $selection_limit,
 						'min_score' => $this->min_interest_score(),
 						'recent_digest_titles' => $recent_digest_titles,
 						'recent_topics' => $recent_topic_titles,
@@ -711,6 +719,25 @@ class scraper
 		}
 
 		return $filtered;
+	}
+
+	protected function title_matches_any(string $title, array $context_titles): bool
+	{
+		$title = $this->normalize_text($title);
+		if ($title === '')
+		{
+			return false;
+		}
+
+		foreach ($context_titles as $context_title)
+		{
+			if ($this->titles_are_near_duplicates($title, (string) $context_title))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	protected function titles_are_near_duplicates(string $left, string $right): bool

@@ -1,4 +1,6 @@
 {% if S_NEWSSCRAPER_PREFILLED_DISCUSSION %}
+	<input type="hidden" name="newsdigest_topic" value="{{ NEWSSCRAPER_DISCUSS_TOPIC_ID }}" />
+	<input type="hidden" name="hash" value="{{ NEWSSCRAPER_DISCUSS_HASH }}" />
 	<div class="rules newsscraper-prefill-note">
 		<div class="inner">{{ lang('NEWSSCRAPER_DISCUSS_PREFILLED') }}</div>
 	</div>

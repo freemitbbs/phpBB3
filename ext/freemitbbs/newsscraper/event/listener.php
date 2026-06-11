@@ -279,6 +279,12 @@ class listener implements EventSubscriberInterface
 		$post_data['post_text'] = $this->language->lang('NEWSSCRAPER_ORIGINAL_NEWS_LINK') . "\n"
 			. '[url=' . $digest_url . ']' . $this->bbcode_text($title) . "[/url]\n\n";
 		$event['post_data'] = $post_data;
+
+		$this->template->assign_vars([
+			'S_NEWSSCRAPER_PREFILLED_DISCUSSION' => true,
+			'NEWSSCRAPER_DISCUSS_TOPIC_ID' => $digest_topic_id,
+			'NEWSSCRAPER_DISCUSS_HASH' => $hash,
+		]);
 	}
 
 	public function record_submitted_discussion($event): void
