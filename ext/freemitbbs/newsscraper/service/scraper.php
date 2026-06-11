@@ -125,7 +125,7 @@ class scraper
 		}
 
 		$posted_by_source = [];
-		$posted_digest_titles = $this->recent_digest_titles_for_selection();
+		$posted_digest_titles = $this->recent_posted_titles_for_dedupe();
 		$forum_id = $this->digest_forum_id();
 		$post_target = $this->max_selected_per_run();
 		foreach ($selected as $candidate)
@@ -146,6 +146,13 @@ class scraper
 				continue;
 			}
 
+			if ($this->title_matches_any((string) ($candidate['title'] ?? ''), $posted_digest_titles))
+			{
+				$this->update_seen($candidate, 'rejected', (int) ($candidate['score'] ?? 0), 'duplicate source title');
+				$result['rejected']++;
+				continue;
+			}
+
 			try
 			{
 				$article_text = $this->fetch_article_text($candidate);
@@ -156,7 +163,8 @@ class scraper
 				}
 
 				$digest = $this->generate_digest($candidate, $article_text);
-				if ($this->title_matches_any((string) ($digest['title'] ?? ''), $posted_digest_titles))
+				if ($this->title_matches_any((string) ($digest['title'] ?? ''), $posted_digest_titles)
+					|| $this->title_matches_any((string) ($candidate['title'] ?? ''), $posted_digest_titles))
 				{
 					$this->update_seen($candidate, 'rejected', (int) ($candidate['score'] ?? 0), 'duplicate digest title');
 					$result['rejected']++;
@@ -167,6 +175,7 @@ class scraper
 				$this->update_seen($candidate, 'posted', (int) ($candidate['score'] ?? 0), '', $topic_id);
 				$posted_by_source[$source_key]++;
 				$posted_digest_titles[] = (string) ($digest['title'] ?? '');
+				$posted_digest_titles[] = (string) ($candidate['title'] ?? '');
 				$result['posted']++;
 			}
 			catch (\Throwable $e)
@@ -451,6 +460,7 @@ class scraper
 	protected function select_interesting_candidates(array $candidates): array
 	{
 		$recent_digest_titles = $this->recent_digest_titles_for_selection();
+		$recent_posted_titles = $this->recent_posted_titles_for_dedupe($recent_digest_titles);
 		$recent_topic_titles = $this->recent_topic_titles_for_selection();
 		$recent_junban_titles = $this->recent_junban_topic_titles_for_selection();
 		$selection_limit = $this->selection_limit(count($candidates));
@@ -527,7 +537,7 @@ class scraper
 		}
 
 		usort($selected, static fn (array $a, array $b): int => ((int) ($b['score'] ?? 0)) <=> ((int) ($a['score'] ?? 0)));
-		$selected = $this->filter_duplicate_selected_candidates($selected, array_merge($recent_digest_titles, $recent_topic_titles, $recent_junban_titles));
+		$selected = $this->filter_duplicate_selected_candidates($selected, array_merge($recent_posted_titles, $recent_topic_titles, $recent_junban_titles));
 
 		return array_slice($selected, 0, $selection_limit);
 	}
@@ -556,6 +566,19 @@ class scraper
 			ORDER BY topic_time DESC, topic_id DESC';
 
 		return $this->fetch_topic_titles_from_sql($sql, self::DIGEST_CONTEXT_LIMIT);
+	}
+
+	protected function recent_posted_titles_for_dedupe(?array $digest_titles = null): array
+	{
+		$titles = $digest_titles ?? $this->recent_digest_titles_for_selection();
+
+		$sql = "SELECT title
+			FROM {$this->seen_table}
+			WHERE status = 'posted'
+				AND topic_id > 0
+			ORDER BY updated_time DESC";
+
+		return $this->unique_title_context(array_merge($titles, $this->fetch_seen_titles_from_sql($sql, self::DIGEST_CONTEXT_LIMIT)));
 	}
 
 	protected function recent_topic_titles_for_selection(): array
@@ -654,6 +677,43 @@ class scraper
 		$this->db->sql_freeresult($result);
 
 		return array_values(array_unique($titles));
+	}
+
+	protected function fetch_seen_titles_from_sql(string $sql, int $limit): array
+	{
+		if ($limit <= 0)
+		{
+			return [];
+		}
+
+		$titles = [];
+		$result = $this->db->sql_query_limit($sql, $limit);
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$title = $this->normalize_text((string) ($row['title'] ?? ''));
+			if ($title !== '')
+			{
+				$titles[] = $this->truncate($title, 120, '');
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		return $this->unique_title_context($titles);
+	}
+
+	protected function unique_title_context(array $titles): array
+	{
+		$unique = [];
+		foreach ($titles as $title)
+		{
+			$title = $this->normalize_text((string) $title);
+			if ($title !== '')
+			{
+				$unique[$title] = $title;
+			}
+		}
+
+		return array_values($unique);
 	}
 
 	protected function recenttopicsng_functions()
@@ -769,7 +829,12 @@ class scraper
 		$common_bigrams = count(array_intersect_key($this->cjk_bigrams($left), $this->cjk_bigrams($right)));
 		$char_score = $this->character_similarity_score($left, $right);
 
-		return $common_bigrams >= 4 && $char_score >= 0.5;
+		if ($common_bigrams >= 4 && $char_score >= 0.5)
+		{
+			return true;
+		}
+
+		return $this->titles_share_event_signature($left, $right, $common_bigrams, $char_score);
 	}
 
 	protected function normalize_title_for_similarity(string $title): string
@@ -813,19 +878,97 @@ class scraper
 
 	protected function cjk_bigrams(string $text): array
 	{
+		return $this->cjk_ngrams($text, 2);
+	}
+
+	protected function cjk_trigrams(string $text): array
+	{
+		return $this->cjk_ngrams($text, 3);
+	}
+
+	protected function cjk_ngrams(string $text, int $size): array
+	{
 		$chars = $this->cjk_chars($text);
-		if (count($chars) < 2)
+		if ($size <= 0 || count($chars) < $size)
 		{
 			return [];
 		}
 
-		$bigrams = [];
-		for ($i = 0, $max = count($chars) - 1; $i < $max; $i++)
+		$ngrams = [];
+		for ($i = 0, $max = count($chars) - $size; $i <= $max; $i++)
 		{
-			$bigrams[$chars[$i] . $chars[$i + 1]] = true;
+			$ngrams[implode('', array_slice($chars, $i, $size))] = true;
 		}
 
-		return $bigrams;
+		return $ngrams;
+	}
+
+	protected function titles_share_event_signature(string $left, string $right, int $common_bigrams, float $char_score): bool
+	{
+		if ($common_bigrams < 5 || $char_score < 0.4)
+		{
+			return false;
+		}
+
+		$common_trigrams = count(array_intersect_key($this->cjk_trigrams($left), $this->cjk_trigrams($right)));
+		$shared_event_terms = $this->shared_event_term_count($left, $right);
+
+		return ($common_trigrams >= 3 && $shared_event_terms >= 1)
+			|| ($common_bigrams >= 6 && $shared_event_terms >= 2 && $char_score >= 0.45);
+	}
+
+	protected function shared_event_term_count(string $left, string $right): int
+	{
+		$terms = [
+			'取消',
+			'打击',
+			'军事',
+			'空袭',
+			'袭击',
+			'开火',
+			'击中',
+			'攻击',
+			'轰炸',
+			'爆炸',
+			'失踪',
+			'死亡',
+			'遇难',
+			'受伤',
+			'召见',
+			'抗议',
+			'制裁',
+			'关税',
+			'谈判',
+			'批准',
+			'降价',
+			'价格战',
+			'竞争',
+			'起诉',
+			'判决',
+			'逮捕',
+			'获释',
+			'辞职',
+			'罢免',
+			'裁员',
+			'收购',
+			'出售',
+			'发射',
+			'坠毁',
+			'禁令',
+			'封锁',
+			'泄露',
+		];
+
+		$count = 0;
+		foreach ($terms as $term)
+		{
+			if (strpos($left, $term) !== false && strpos($right, $term) !== false)
+			{
+				$count++;
+			}
+		}
+
+		return $count;
 	}
 
 	protected function character_similarity_score(string $left, string $right): float
