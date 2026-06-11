@@ -373,10 +373,10 @@
 		var inlinePreviewRequests = {};
 		var inlinePreviewBatchQueue = [];
 		var inlinePreviewBatchTimer = null;
-		var inlinePreviewBatchDelay = 25;
+		var inlinePreviewBatchDelay = 200;
 		var inlinePreviewBatchMaxTopics = 40;
 		var inlinePreviewInitIdleTimeout = 700;
-		var inlinePreviewObserverRootMargin = '640px 0px 960px 0px';
+		var inlinePreviewObserverRootMargin = '960px 0px 1600px 0px';
 		var inlinePreviewMaxImages = 8;
 		var inlinePreviewTikTokFitHeight = 360;
 		var inlinePreviewTextJoiner = '\u3000';
