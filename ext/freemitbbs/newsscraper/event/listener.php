@@ -179,6 +179,17 @@ class listener implements EventSubscriberInterface
 			return;
 		}
 
+		$discussion_links = $this->discussion_links_by_digest_topic_ids([$topic_id], $forum_id);
+		if (isset($discussion_links[$topic_id]))
+		{
+			$this->template->assign_vars([
+				'S_NEWSSCRAPER_DIGEST_TOPIC' => true,
+				'U_NEWSSCRAPER_DISCUSSION' => $discussion_links[$topic_id]['url'],
+				'NEWSSCRAPER_DISCUSSION_TITLE' => $this->escape((string) $discussion_links[$topic_id]['title']),
+			]);
+			return;
+		}
+
 		$hash = generate_link_hash(self::DISCUSS_HASH_PREFIX . $topic_id);
 		$forums = $this->discussion_target_forums($forum_id, $topic_id, $hash);
 		if (!$forums)
@@ -221,8 +232,19 @@ class listener implements EventSubscriberInterface
 		}
 
 		$post_id = (int) ($row['post_id'] ?? 0);
+		$topic_id = (int) ($topic_data['topic_id'] ?? $row['topic_id'] ?? 0);
 		$topic_first_post_id = (int) ($topic_data['topic_first_post_id'] ?? 0);
-		$post_row['S_NEWSSCRAPER_DIGEST_DISCUSSION'] = $topic_first_post_id <= 0 || $post_id === $topic_first_post_id;
+		$is_discussion_slot = $topic_first_post_id <= 0 || $post_id === $topic_first_post_id;
+		$post_row['S_NEWSSCRAPER_DIGEST_DISCUSSION'] = $is_discussion_slot;
+		if ($is_discussion_slot && $topic_id > 0)
+		{
+			$discussion_links = $this->discussion_links_by_digest_topic_ids([$topic_id], $forum_id);
+			if (isset($discussion_links[$topic_id]))
+			{
+				$post_row['U_NEWSSCRAPER_DISCUSSION'] = $discussion_links[$topic_id]['url'];
+				$post_row['NEWSSCRAPER_DISCUSSION_TITLE'] = $this->escape((string) $discussion_links[$topic_id]['title']);
+			}
+		}
 		$event['post_row'] = $post_row;
 	}
 

@@ -14,7 +14,7 @@ class scraper
 	private const MAX_ARTICLE_CHARS = 6500;
 	private const MAX_DIGEST_CHARS = 1200;
 	private const MIN_ARTICLE_CHARS = 300;
-	private const DIGEST_CONTEXT_LIMIT = 20;
+	private const DIGEST_CONTEXT_LIMIT = 100;
 	private const RTNG_DEFAULT_TPL_LOOP = 'rtng_topics';
 	private const RTNG_RECENT_CONTEXT_LIMIT = 30;
 	private const RTNG_JUNBAN_TPL_LOOP = 'rtng_junban_topics';
