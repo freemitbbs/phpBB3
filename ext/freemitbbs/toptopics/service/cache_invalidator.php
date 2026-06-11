@@ -29,6 +29,16 @@ class cache_invalidator
 		return $scope;
 	}
 
+	public function get(string $key)
+	{
+		return $this->cache->get($key);
+	}
+
+	public function put(string $key, $value, int $ttl = 0): void
+	{
+		$this->cache->put($key, $value, $ttl);
+	}
+
 	public function invalidate_forums(array $forum_ids): void
 	{
 		foreach ($this->normalize_forum_ids($forum_ids) as $forum_id)

@@ -52,19 +52,32 @@ class inline_preview
 			return $this->json_response(['status' => 404], 404);
 		}
 
-		$rows = $this->get_preview_rows([$topic_id]);
+		$rows = $this->get_preview_metadata_rows([$topic_id]);
 		if (!isset($rows[$topic_id]))
 		{
 			return $this->json_response(['status' => 404], 404);
 		}
 
-		$preview = $this->build_preview_for_row($rows[$topic_id]);
+		$public_cacheable = $this->is_public_cacheable_row($rows[$topic_id]);
+		$cached = $this->get_cached_preview_for_row($rows[$topic_id]);
+		if ($cached)
+		{
+			return $this->json_response($cached, 200, $public_cacheable);
+		}
+
+		$full_rows = $this->get_preview_content_rows($rows);
+		if (!isset($full_rows[$topic_id]))
+		{
+			return $this->json_response(['status' => 404], 404);
+		}
+
+		$preview = $this->build_preview_for_row($full_rows[$topic_id], null, true);
 		if (!$preview)
 		{
 			return $this->json_response(['status' => 404], 404);
 		}
 
-		return $this->json_response($preview, 200, $this->is_public_cacheable_row($rows[$topic_id]));
+		return $this->json_response($preview, 200, $public_cacheable);
 	}
 
 	public function batch(): JsonResponse
@@ -75,9 +88,9 @@ class inline_preview
 			return $this->json_response([]);
 		}
 
-		$rows = $this->get_preview_rows($topic_ids);
+		$rows = $this->get_preview_metadata_rows($topic_ids);
 		$response = [];
-		$pending_rows = [];
+		$pending_metadata_rows = [];
 		$public_cacheable = true;
 		foreach ($topic_ids as $topic_id)
 		{
@@ -95,7 +108,7 @@ class inline_preview
 				}
 				else
 				{
-					$pending_rows[$topic_id] = $rows[$topic_id];
+					$pending_metadata_rows[$topic_id] = $rows[$topic_id];
 				}
 			}
 			else
@@ -105,9 +118,18 @@ class inline_preview
 			}
 		}
 
+		$pending_rows = $this->get_preview_content_rows($pending_metadata_rows);
 		$attachment_media_by_post_id = $this->get_attachment_media_for_rows($pending_rows);
-		foreach ($pending_rows as $topic_id => $row)
+		foreach ($pending_metadata_rows as $topic_id => $metadata_row)
 		{
+			if (!isset($pending_rows[$topic_id]))
+			{
+				$response[(string) $topic_id] = ['status' => 404];
+				$public_cacheable = false;
+				continue;
+			}
+
+			$row = $pending_rows[$topic_id];
 			$post_id = (int) $row['post_id'];
 			$preview = $this->build_preview_for_row($row, $attachment_media_by_post_id[$post_id] ?? null, true);
 			$response[(string) $topic_id] = $preview ?: ['status' => 404];
@@ -130,9 +152,9 @@ class inline_preview
 			return [];
 		}
 
-		$rows = $this->get_preview_rows($topic_ids);
+		$rows = $this->get_preview_metadata_rows($topic_ids);
 		$response = [];
-		$pending_rows = [];
+		$pending_metadata_rows = [];
 		foreach ($topic_ids as $topic_id)
 		{
 			if (!isset($rows[$topic_id]))
@@ -147,10 +169,11 @@ class inline_preview
 			}
 			else
 			{
-				$pending_rows[$topic_id] = $rows[$topic_id];
+				$pending_metadata_rows[$topic_id] = $rows[$topic_id];
 			}
 		}
 
+		$pending_rows = $this->get_preview_content_rows($pending_metadata_rows);
 		$attachment_media_by_post_id = $this->get_attachment_media_for_rows($pending_rows);
 		foreach ($pending_rows as $topic_id => $row)
 		{
@@ -199,7 +222,7 @@ class inline_preview
 		return $response;
 	}
 
-	protected function get_preview_rows(array $topic_ids): array
+	protected function get_preview_metadata_rows(array $topic_ids): array
 	{
 		$topic_ids = array_values(array_unique(array_filter(array_map('intval', $topic_ids), static function ($topic_id) {
 			return $topic_id > 0;
@@ -210,9 +233,8 @@ class inline_preview
 		}
 
 		$sql = 'SELECT t.topic_id, t.forum_id, t.topic_first_post_id, t.topic_visibility, t.topic_poster,
-				p.post_id, p.poster_id, p.post_visibility, p.post_text, p.bbcode_uid, p.bbcode_bitfield,
-				p.enable_bbcode, p.enable_smilies, p.enable_magic_url, p.post_attachment,
-				p.post_time, p.post_edit_time, f.forum_password
+				p.post_id, p.poster_id, p.post_visibility, p.post_attachment, p.post_time, p.post_edit_time,
+				f.forum_password
 			FROM ' . TOPICS_TABLE . ' t
 			INNER JOIN ' . POSTS_TABLE . ' p
 				ON p.post_id = t.topic_first_post_id
@@ -228,6 +250,49 @@ class inline_preview
 			if ($this->can_view_row($row))
 			{
 				$rows[$topic_id] = $row;
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		return $rows;
+	}
+
+	protected function get_preview_content_rows(array $metadata_rows): array
+	{
+		if (empty($metadata_rows))
+		{
+			return [];
+		}
+
+		$post_id_to_topic_id = [];
+		foreach ($metadata_rows as $topic_id => $row)
+		{
+			$post_id = (int) ($row['post_id'] ?? 0);
+			if ($post_id > 0)
+			{
+				$post_id_to_topic_id[$post_id] = (int) $topic_id;
+			}
+		}
+
+		if (empty($post_id_to_topic_id))
+		{
+			return [];
+		}
+
+		$sql = 'SELECT post_id, post_text, bbcode_uid, bbcode_bitfield,
+				enable_bbcode, enable_smilies, enable_magic_url
+			FROM ' . POSTS_TABLE . '
+			WHERE ' . $this->db->sql_in_set('post_id', array_keys($post_id_to_topic_id));
+		$result = $this->db->sql_query($sql);
+
+		$rows = [];
+		while ($post_row = $this->db->sql_fetchrow($result))
+		{
+			$post_id = (int) ($post_row['post_id'] ?? 0);
+			$topic_id = (int) ($post_id_to_topic_id[$post_id] ?? 0);
+			if ($topic_id > 0 && isset($metadata_rows[$topic_id]))
+			{
+				$rows[$topic_id] = array_merge($metadata_rows[$topic_id], $post_row);
 			}
 		}
 		$this->db->sql_freeresult($result);

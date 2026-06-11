@@ -22,6 +22,9 @@ class listener implements EventSubscriberInterface
 	private const REPUTATION_TIER_TRUSTED = 500;
 	private const REPUTATION_TIER_ELITE = 2000;
 	private const REPUTATION_TIER_LEGEND = 5000;
+	private const FIRST_POST_LENGTH_CACHE_PREFIX = '_freemitbbs_toptopics_first_post_length_';
+	private const FIRST_POST_LENGTH_CACHE_REVISION = 1;
+	private const FIRST_POST_LENGTH_CACHE_SECONDS = 604800;
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
@@ -1186,7 +1189,7 @@ class listener implements EventSubscriberInterface
 
 			$rowset = $this->add_topic_like_counts($rowset);
 			$rowset = $this->add_first_post_length_badges($rowset);
-			$event['rowset'] = $this->add_inline_topic_previews($rowset, $topic_list, false);
+			$event['rowset'] = $this->add_inline_topic_previews($rowset, $topic_list);
 			return;
 		}
 
@@ -1212,7 +1215,7 @@ class listener implements EventSubscriberInterface
 		}
 		$filtered_rowset = $this->add_topic_like_counts($filtered_rowset);
 		$filtered_rowset = $this->add_first_post_length_badges($filtered_rowset);
-		$event['rowset'] = $this->add_inline_topic_previews($filtered_rowset, $filtered_topic_list, false);
+		$event['rowset'] = $this->add_inline_topic_previews($filtered_rowset, $filtered_topic_list);
 	}
 
 	public function recenttopics_fade_first_post_disliked_topic($event): void
@@ -1277,7 +1280,7 @@ class listener implements EventSubscriberInterface
 		unset($row);
 
 		$rowset = $this->add_first_post_length_badges($rowset);
-		$event['rowset'] = $this->add_inline_topic_previews($rowset, $topic_list, false);
+		$event['rowset'] = $this->add_inline_topic_previews($rowset, $topic_list);
 	}
 
 	public function viewforum_fade_first_post_disliked_topic($event): void
@@ -3894,22 +3897,64 @@ class listener implements EventSubscriberInterface
 			return [];
 		}
 
-		$sql = 'SELECT post_id, post_text
+		$sql = 'SELECT post_id, post_edit_time
 			FROM ' . POSTS_TABLE . '
 			WHERE ' . $this->db->sql_in_set('post_id', $post_ids);
 		$result = $this->db->sql_query($sql);
 		$lengths = [];
+		$missing_post_edit_times = [];
 		while ($row = $this->db->sql_fetchrow($result))
 		{
 			$post_id = (int) ($row['post_id'] ?? 0);
 			if ($post_id > 0)
 			{
-				$lengths[$post_id] = \freemitbbs\toptopics\service\quality_length::calculate((string) ($row['post_text'] ?? ''));
+				$post_edit_time = (int) ($row['post_edit_time'] ?? 0);
+				$cached_length = $this->cache_invalidator->get($this->build_first_post_length_cache_key($post_id, $post_edit_time));
+				if ($cached_length !== false)
+				{
+					$lengths[$post_id] = max(0, (int) $cached_length);
+				}
+				else
+				{
+					$missing_post_edit_times[$post_id] = $post_edit_time;
+				}
 			}
 		}
 		$this->db->sql_freeresult($result);
 
+		if (empty($missing_post_edit_times))
+		{
+			return $lengths;
+		}
+
+		$sql = 'SELECT post_id, post_text
+			FROM ' . POSTS_TABLE . '
+			WHERE ' . $this->db->sql_in_set('post_id', array_keys($missing_post_edit_times));
+		$result = $this->db->sql_query($sql);
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$post_id = (int) ($row['post_id'] ?? 0);
+			if ($post_id <= 0 || !array_key_exists($post_id, $missing_post_edit_times))
+			{
+				continue;
+			}
+
+			$length = \freemitbbs\toptopics\service\quality_length::calculate((string) ($row['post_text'] ?? ''));
+			$lengths[$post_id] = $length;
+			$this->cache_invalidator->put(
+				$this->build_first_post_length_cache_key($post_id, $missing_post_edit_times[$post_id]),
+				$length,
+				self::FIRST_POST_LENGTH_CACHE_SECONDS
+			);
+		}
+		$this->db->sql_freeresult($result);
+
 		return $lengths;
+	}
+
+	protected function build_first_post_length_cache_key(int $post_id, int $post_edit_time): string
+	{
+		return self::FIRST_POST_LENGTH_CACHE_PREFIX . self::FIRST_POST_LENGTH_CACHE_REVISION . '_' . $post_id . '_' . max(0, $post_edit_time);
 	}
 
 	protected function copy_first_post_length_badge_vars(array $target, array $source): array
