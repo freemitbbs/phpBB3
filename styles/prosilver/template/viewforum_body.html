@@ -266,14 +266,16 @@ function toggleWidget(id, isHidden) {
 						<br />
 						<!-- EVENT topiclist_row_topic_title_after -->
 
-							<!-- IF not S_IS_BOT -->
-								<div class="responsive-show freemitbbs-mobile-topic-author {topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}" style="display: none;">
-									<!-- IF topicrow.S_HAS_POLL --><i class="icon fa-bar-chart fa-fw" aria-hidden="true"></i><!-- ENDIF -->
-									<!-- IF topicrow.ATTACH_ICON_IMG --><i class="icon fa-paperclip fa-fw" aria-hidden="true"></i><!-- ENDIF -->
-									{L_TOPTOPICS_TOPIC_LABEL} {L_POST_BY_AUTHOR} <!-- EVENT viewforum_body_topic_author_username_prepend -->{topicrow.TOPIC_AUTHOR_FULL}<!-- EVENT viewforum_body_topic_author_username_append --> &raquo; <time datetime="{topicrow.FIRST_POST_TIME_RFC3339}">{topicrow.FIRST_POST_TIME}</time>
-									<!-- IF topicrow.S_POST_GLOBAL and FORUM_ID != topicrow.FORUM_ID --> &raquo; {L_IN} <a href="{topicrow.U_VIEW_FORUM}">{topicrow.FORUM_NAME}</a><!-- ENDIF -->
-								</div>
-								{% if topicrow.S_NEWSSCRAPER_DIGEST_TOPIC_ROW %}
+								<!-- IF not S_IS_BOT -->
+									{% if not topicrow.S_NEWSSCRAPER_DIGEST_TOPIC_ROW %}
+										<div class="responsive-show freemitbbs-mobile-topic-author {topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS}" style="display: none;">
+											<!-- IF topicrow.S_HAS_POLL --><i class="icon fa-bar-chart fa-fw" aria-hidden="true"></i><!-- ENDIF -->
+											<!-- IF topicrow.ATTACH_ICON_IMG --><i class="icon fa-paperclip fa-fw" aria-hidden="true"></i><!-- ENDIF -->
+											{L_TOPTOPICS_TOPIC_LABEL} {L_POST_BY_AUTHOR} <!-- EVENT viewforum_body_topic_author_username_prepend -->{topicrow.TOPIC_AUTHOR_FULL}<!-- EVENT viewforum_body_topic_author_username_append --> &raquo; <time datetime="{topicrow.FIRST_POST_TIME_RFC3339}">{topicrow.FIRST_POST_TIME}</time>
+											<!-- IF topicrow.S_POST_GLOBAL and FORUM_ID != topicrow.FORUM_ID --> &raquo; {L_IN} <a href="{topicrow.U_VIEW_FORUM}">{topicrow.FORUM_NAME}</a><!-- ENDIF -->
+										</div>
+									{% endif %}
+									{% if topicrow.S_NEWSSCRAPER_DIGEST_TOPIC_ROW %}
 									<div class="responsive-show newsscraper-topic-discussion-action" style="display: none;">
 										{% if topicrow.U_NEWSSCRAPER_DISCUSSION %}
 											<a href="{{ topicrow.U_NEWSSCRAPER_DISCUSSION }}" class="button button-secondary newsscraper-discussion-link" title="{{ topicrow.NEWSSCRAPER_DISCUSSION_TITLE }}">

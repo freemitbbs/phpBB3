@@ -126,8 +126,16 @@ class scraper
 
 		$posted_by_source = [];
 		$forum_id = $this->digest_forum_id();
+		$post_target = $this->max_selected_per_run();
 		foreach ($selected as $candidate)
 		{
+			if ($result['posted'] >= $post_target)
+			{
+				$this->update_seen($candidate, 'rejected', (int) ($candidate['score'] ?? 0), 'backup not needed');
+				$result['rejected']++;
+				continue;
+			}
+
 			$source_key = (string) $candidate['source_key'];
 			$posted_by_source[$source_key] = $posted_by_source[$source_key] ?? 0;
 			if ($posted_by_source[$source_key] >= $this->per_source_cap())
@@ -140,9 +148,10 @@ class scraper
 			try
 			{
 				$article_text = $this->fetch_article_text($candidate);
-				if ($this->strlen($article_text) < self::MIN_ARTICLE_CHARS)
+				$article_length = $this->strlen($article_text);
+				if ($article_length < self::MIN_ARTICLE_CHARS)
 				{
-					throw new \RuntimeException('Article text too short.');
+					throw new \RuntimeException('Article text too short (' . $article_length . ' chars).');
 				}
 
 				$digest = $this->generate_digest($candidate, $article_text);
@@ -169,7 +178,7 @@ class scraper
 
 	protected function discover_candidates(): array
 	{
-		$candidates = [];
+		$candidates_by_source = [];
 		$seen_hashes = [];
 		$sources = $this->source_configs();
 		$enabled_sources = $this->enabled_sources();
@@ -190,6 +199,7 @@ class scraper
 					? $this->parse_feed($source, $html)
 					: $this->parse_listing($source, $html);
 
+				$candidates_by_source[$source_key] = [];
 				foreach ($source_candidates as $candidate)
 				{
 					$hash = (string) ($candidate['url_hash'] ?? '');
@@ -198,11 +208,7 @@ class scraper
 						continue;
 					}
 					$seen_hashes[$hash] = true;
-					$candidates[] = $candidate;
-					if (count($candidates) >= $limit)
-					{
-						return $candidates;
-					}
+					$candidates_by_source[$source_key][] = $candidate;
 				}
 			}
 			catch (\Throwable $e)
@@ -213,6 +219,34 @@ class scraper
 				]);
 			}
 		}
+
+		return $this->interleave_source_candidates($candidates_by_source, $limit);
+	}
+
+	protected function interleave_source_candidates(array $candidates_by_source, int $limit): array
+	{
+		$candidates = [];
+		$offset = 0;
+		do
+		{
+			$added = false;
+			foreach ($candidates_by_source as $source_candidates)
+			{
+				if (!isset($source_candidates[$offset]))
+				{
+					continue;
+				}
+
+				$candidates[] = $source_candidates[$offset];
+				$added = true;
+				if (count($candidates) >= $limit)
+				{
+					return $candidates;
+				}
+			}
+			$offset++;
+		}
+		while ($added);
 
 		return $candidates;
 	}
@@ -411,6 +445,7 @@ class scraper
 		$recent_digest_titles = $this->recent_digest_titles_for_selection();
 		$recent_topic_titles = $this->recent_topic_titles_for_selection();
 		$recent_junban_titles = $this->recent_junban_topic_titles_for_selection();
+		$selection_limit = $this->selection_limit(count($candidates));
 		$payload_candidates = [];
 		foreach ($candidates as $index => $candidate)
 		{
@@ -430,12 +465,12 @@ class scraper
 			'messages' => [
 				[
 					'role' => 'system',
-					'content' => '你是 mitbbs（买买提）的新闻编辑。本站用户多有欧美留学背景，学历至少硕士以上，大多事业有成。请只根据标题和来源挑选可能引发本站用户兴趣的新闻。偏好：中美关系、美国政治社会、华人相关、科技/AI、中国科技、军事、社会新闻、战争与国际局势、经济金融、重大公共事件。娱乐八卦和重大体育赛况不必一律过滤，若可能引发讨论可入选。过滤：软文、地方小新闻、重复/标题党。不要选择与 recent_digest_titles、recent_topics 或 junban_recent_topics 已有话题语义重复的候选；同一事件的不同来源或不同措辞也算重复。候选之间若是同一事件，只选一个。只能返回 JSON，不要 Markdown。格式：{"selected":[{"id":数字,"score":0到100,"reason":"简短中文理由"}]}。',
+					'content' => '你是 mitbbs（买买提）的新闻编辑。本站用户多有欧美留学背景，学历至少硕士以上，大多事业有成。请只根据标题和来源挑选可能引发本站用户兴趣的新闻。偏好：中美关系、美国政治社会、华人相关、科技/AI、中国科技、中国军事、中国社会新闻、战争与国际局势、经济金融、重大公共事件。候选中若有非重复、质量尚可的中文来源新闻或中国相关新闻，优先纳入，目标每轮至少 1 到 2 条；除非明显低质、重复或标题党。娱乐八卦和重大体育赛况不必一律过滤，若可能引发讨论可入选。过滤：软文、地方小新闻、重复/标题党。不要选择与 recent_digest_titles、recent_topics 或 junban_recent_topics 已有话题语义重复的候选；同一事件的不同来源或不同措辞也算重复。候选之间若是同一事件，只选一个。按优先级返回最多 max_selected 条。只能返回 JSON，不要 Markdown。格式：{"selected":[{"id":数字,"score":0到100,"reason":"简短中文理由"}]}。',
 				],
 				[
 					'role' => 'user',
 					'content' => $this->encode_json([
-						'max_selected' => $this->max_selected_per_run(),
+							'max_selected' => $selection_limit,
 						'min_score' => $this->min_interest_score(),
 						'recent_digest_titles' => $recent_digest_titles,
 						'recent_topics' => $recent_topic_titles,
@@ -486,7 +521,15 @@ class scraper
 		usort($selected, static fn (array $a, array $b): int => ((int) ($b['score'] ?? 0)) <=> ((int) ($a['score'] ?? 0)));
 		$selected = $this->filter_duplicate_selected_candidates($selected, array_merge($recent_digest_titles, $recent_topic_titles, $recent_junban_titles));
 
-		return array_slice($selected, 0, $this->max_selected_per_run());
+		return array_slice($selected, 0, $selection_limit);
+	}
+
+	protected function selection_limit(int $candidate_count): int
+	{
+		$post_target = $this->max_selected_per_run();
+		$backup_limit = min(50, max($post_target, $post_target * 2));
+
+		return max(1, min($candidate_count, $backup_limit));
 	}
 
 	protected function recent_digest_titles_for_selection(): array
@@ -793,22 +836,10 @@ class scraper
 
 	protected function extract_article_text(string $html, array $source): string
 	{
-		if (preg_match_all('/"articleBody"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/iu', $html, $matches))
+		$text = $this->extract_json_ld_article_body($html);
+		if ($this->strlen($text) >= self::MIN_ARTICLE_CHARS)
 		{
-			$parts = [];
-			foreach ($matches[1] as $match)
-			{
-				$decoded = json_decode('"' . $match . '"');
-				if (is_string($decoded))
-				{
-					$parts[] = $this->normalize_text($decoded);
-				}
-			}
-			$text = $this->truncate_article(implode("\n\n", array_filter($parts)));
-			if ($this->strlen($text) >= self::MIN_ARTICLE_CHARS)
-			{
-				return $text;
-			}
+			return $text;
 		}
 
 		$dom = $this->load_html($html);
@@ -818,11 +849,8 @@ class scraper
 		}
 
 		$xpath = new \DOMXPath($dom);
-		$queries = [];
-		if (!empty($source['content_xpath']))
-		{
-			$queries[] = (string) $source['content_xpath'];
-		}
+		$queries = $this->content_xpath_queries($source);
+		$queries[] = '//*[@id="articleContent" or @id="article_content" or @id="artibody" or @id="mp-editor" or @id="detailContent" or contains(@class, "article-content") or contains(@class, "article_body") or contains(@class, "article-body") or contains(@class, "articleContent") or contains(@class, "text-content")]//p';
 		$queries[] = '//article//p';
 		$queries[] = '//main//p';
 		$queries[] = '//p';
@@ -846,7 +874,96 @@ class scraper
 			}
 		}
 
+		foreach ($this->article_container_xpath_queries() as $query)
+		{
+			$parts = [];
+			foreach ($xpath->query($query) ?: [] as $node)
+			{
+				$text = $this->normalize_text($node->textContent);
+				if ($this->strlen($text) < self::MIN_ARTICLE_CHARS
+					|| ($this->strlen($text) < 500 && $this->is_boilerplate_paragraph($text)))
+				{
+					continue;
+				}
+				$parts[] = $text;
+			}
+			$text = $this->truncate_article(implode("\n\n", $parts));
+			if ($this->strlen($text) >= self::MIN_ARTICLE_CHARS)
+			{
+				return $text;
+			}
+		}
+
 		return '';
+	}
+
+	protected function extract_json_ld_article_body(string $html): string
+	{
+		$parts = [];
+		if (preg_match_all('#<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>#isu', $html, $matches))
+		{
+			foreach ($matches[1] as $json)
+			{
+				$decoded = json_decode(trim(html_entity_decode($json, ENT_QUOTES | ENT_HTML5, 'UTF-8')), true);
+				$this->collect_article_body_values($decoded, $parts);
+			}
+		}
+
+		if (!$parts && preg_match_all('/"articleBody"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/iu', $html, $matches))
+		{
+			foreach ($matches[1] as $match)
+			{
+				$decoded = json_decode('"' . $match . '"');
+				if (is_string($decoded))
+				{
+					$parts[] = $this->normalize_text($decoded);
+				}
+			}
+		}
+
+		return $this->truncate_article(implode("\n\n", array_filter($parts)));
+	}
+
+	protected function collect_article_body_values($value, array &$parts): void
+	{
+		if (!is_array($value))
+		{
+			return;
+		}
+
+		if (isset($value['articleBody']) && is_string($value['articleBody']))
+		{
+			$parts[] = $this->normalize_text($value['articleBody']);
+		}
+
+		foreach ($value as $item)
+		{
+			if (is_array($item))
+			{
+				$this->collect_article_body_values($item, $parts);
+			}
+		}
+	}
+
+	protected function content_xpath_queries(array $source): array
+	{
+		$queries = $source['content_xpath'] ?? [];
+		if (!is_array($queries))
+		{
+			$queries = [(string) $queries];
+		}
+
+		return array_values(array_filter(array_map('strval', $queries)));
+	}
+
+	protected function article_container_xpath_queries(): array
+	{
+		return [
+			'//*[@id="articleContent" or @id="article_content" or @id="artibody" or @id="mp-editor" or @id="detailContent"]',
+			'//*[contains(@class, "article-content") or contains(@class, "article_body") or contains(@class, "article-body") or contains(@class, "articleContent") or contains(@class, "text-content")]',
+			'//article',
+			'//main',
+		];
 	}
 
 	protected function generate_digest(array $candidate, string $article_text): array
@@ -1257,33 +1374,49 @@ class scraper
 				'type' => 'listing',
 				'url' => 'https://www.wenxuecity.com/news/',
 				'article_url_regex' => '#^https?://(?:www\.)?wenxuecity\.com/news/\d{4}/\d{2}/\d{2}/#i',
-				'content_xpath' => '//*[@id="articleContent"]//p',
+				'content_xpath' => [
+					'//*[@id="articleContent"]//p',
+					'//*[@id="article_content"]//p',
+				],
 			],
 			'zaobao' => [
 				'label' => 'Zaobao',
 				'type' => 'listing',
 				'url' => 'https://www.zaobao.com.sg/realtime/world',
 				'article_url_regex' => '#^https?://(?:www\.)?zaobao\.com\.sg/#i',
+				'content_xpath' => [
+					'//*[contains(@class, "article-content") or contains(@class, "field--name-body") or contains(@class, "article-body")]//p',
+				],
 			],
 			'sina_world' => [
 				'label' => 'Sina World',
 				'type' => 'listing',
 				'url' => 'https://news.sina.com.cn/world/',
 				'article_url_regex' => '#^https?://(?:[a-z0-9-]+\.)?news\.sina\.com\.cn/.+\.shtml#i',
-				'content_xpath' => '//*[@id="article_content"]//p',
+				'content_xpath' => [
+					'//*[@id="article_content"]//p',
+					'//*[@id="artibody"]//p',
+				],
 			],
 			'sohu' => [
 				'label' => 'Sohu',
 				'type' => 'listing',
 				'url' => 'https://news.sohu.com/',
 				'article_url_regex' => '#^https?://www\.sohu\.com/a/\d+_#i',
+				'content_xpath' => [
+					'//*[@id="mp-editor"]//p',
+					'//*[contains(@class, "article") or contains(@class, "text-content")]//p',
+				],
 			],
 			'xinhua_world' => [
 				'label' => 'Xinhua World',
 				'type' => 'listing',
 				'url' => 'https://www.news.cn/world/index.htm',
 				'article_url_regex' => '#^https?://www\.news\.cn/world/.+\.htm#i',
-				'content_xpath' => '//*[@id="detailContent"]//p',
+				'content_xpath' => [
+					'//*[@id="detailContent"]//p',
+					'//*[contains(@class, "detailContent") or contains(@class, "article-content")]//p',
+				],
 			],
 		];
 	}

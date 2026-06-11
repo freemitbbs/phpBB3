@@ -62,7 +62,7 @@ class release_1_0_0 extends \phpbb\db\migration\migration
 			['config.add', ['newsscraper_frontpage_count', '20']],
 			['config.add', ['newsscraper_title_max_chars', '30']],
 			['config.add', ['newsscraper_seen_retention_days', '30']],
-			['config.add', ['newsscraper_enabled_sources', 'guardian,bbc,dw,cnbc,ars,zerohedge,foxnews,wenxuecity,zaobao,sina_world,sohu']],
+			['config.add', ['newsscraper_enabled_sources', 'wenxuecity,zaobao,sina_world,sohu,guardian,bbc,dw,cnbc,ars,zerohedge,foxnews']],
 			['config.add', ['newsscraper_api_endpoint', '']],
 			['config.add', ['newsscraper_model', '']],
 			['config.add', ['newsscraper_api_key', '']],
