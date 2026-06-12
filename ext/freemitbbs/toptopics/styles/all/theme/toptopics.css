@@ -701,14 +701,30 @@ ul.topiclist.forums > li.toptopics-category-row.toptopics-enhanced-topic-list-ro
 	max-height: none;
 }
 
-.toptopics-inline-preview-media-frame-youtube > iframe[data-s9e-mediaembed="youtube"],
-.toptopics-inline-preview-media-frame-youtube > iframe[data-s9e-mediaembed="bilibili"] {
+.toptopics-inline-preview-media-frame-youtube > iframe[data-s9e-mediaembed="youtube"] {
 	width: 100% !important;
 	height: 100% !important;
 	max-width: none !important;
 	max-height: none;
 	aspect-ratio: auto;
 	transform: none !important;
+}
+
+.toptopics-inline-preview-media-frame-bilibili {
+	align-items: flex-start;
+	height: 100%;
+	max-height: none;
+}
+
+.toptopics-inline-preview-media-frame-bilibili > iframe[data-s9e-mediaembed="bilibili"],
+.toptopics-inline-preview-media-frame-bilibili > [data-s9e-mediaembed="bilibili"] {
+	width: 300% !important;
+	height: 300% !important;
+	max-width: none !important;
+	max-height: none !important;
+	aspect-ratio: auto;
+	transform: scale(0.333333) !important;
+	transform-origin: top center !important;
 }
 
 .toptopics-inline-preview-media-frame-tiktok {

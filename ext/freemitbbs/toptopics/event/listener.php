@@ -9,6 +9,7 @@ class listener implements EventSubscriberInterface
 	private const USER_OPTION_HIDE_FORUM_SUMMARY = 20;
 	private const USER_OPTION_HIDE_TOPIC_LIST_MEDIA_PREVIEWS = 21;
 	private const USER_OPTION_HIDE_ENHANCED_TOPIC_LIST_VIEW = 22;
+	private const USER_OPTION_SHOW_ENHANCED_TOPIC_LIST_VIEW = 23;
 	private const DEFAULT_PER_FORUM_TOPIC_LIMIT = 3;
 	private const BALANCED_TOPIC_FETCH_MULTIPLIER = 5;
 	private const INDEX_CATEGORY_FORUM_CANDIDATE_MULTIPLIER = 2;
@@ -250,8 +251,8 @@ class listener implements EventSubscriberInterface
 			? (bool) $this->request->variable('toptopics_show_topic_list_media_previews', true)
 			: !$this->user_hides_topic_list_media_previews();
 		$data['toptopics_show_enhanced_topic_list_view'] = !empty($event['submit'])
-			? (bool) $this->request->variable('toptopics_show_enhanced_topic_list_view', true)
-			: !$this->user_hides_enhanced_topic_list_view();
+			? (bool) $this->request->variable('toptopics_show_enhanced_topic_list_view', false)
+			: $this->user_shows_enhanced_topic_list_view();
 		$this->template->assign_vars([
 			'S_TOPTOPICS_SHOW_TOPIC_LIST_MEDIA_PREVIEWS' => $data['toptopics_show_topic_list_media_previews'],
 			'S_TOPTOPICS_TOPIC_LIST_MEDIA_PREVIEWS_DISABLED' => !$data['toptopics_show_topic_list_media_previews'],
@@ -274,6 +275,7 @@ class listener implements EventSubscriberInterface
 	{
 		$data = $event['data'];
 		$sql_ary = $event['sql_ary'];
+		$show_enhanced_topic_list_view = (bool) ($data['toptopics_show_enhanced_topic_list_view'] ?? false);
 		$sql_ary['user_options'] = phpbb_optionset(
 			self::USER_OPTION_HIDE_TOPIC_LIST_MEDIA_PREVIEWS,
 			!(bool) ($data['toptopics_show_topic_list_media_previews'] ?? true),
@@ -281,7 +283,12 @@ class listener implements EventSubscriberInterface
 		);
 		$sql_ary['user_options'] = phpbb_optionset(
 			self::USER_OPTION_HIDE_ENHANCED_TOPIC_LIST_VIEW,
-			!(bool) ($data['toptopics_show_enhanced_topic_list_view'] ?? true),
+			!$show_enhanced_topic_list_view,
+			(int) $sql_ary['user_options']
+		);
+		$sql_ary['user_options'] = phpbb_optionset(
+			self::USER_OPTION_SHOW_ENHANCED_TOPIC_LIST_VIEW,
+			$show_enhanced_topic_list_view,
 			(int) $sql_ary['user_options']
 		);
 
@@ -1911,7 +1918,23 @@ class listener implements EventSubscriberInterface
 
 	protected function user_hides_enhanced_topic_list_view(): bool
 	{
-		return phpbb_optionget(self::USER_OPTION_HIDE_ENHANCED_TOPIC_LIST_VIEW, (int) $this->user->data['user_options']);
+		return !$this->user_shows_enhanced_topic_list_view();
+	}
+
+	protected function user_shows_enhanced_topic_list_view(): bool
+	{
+		if ((int) ($this->user->data['user_id'] ?? ANONYMOUS) === ANONYMOUS)
+		{
+			return false;
+		}
+
+		$user_options = (int) ($this->user->data['user_options'] ?? 0);
+		if (phpbb_optionget(self::USER_OPTION_HIDE_ENHANCED_TOPIC_LIST_VIEW, $user_options))
+		{
+			return false;
+		}
+
+		return phpbb_optionget(self::USER_OPTION_SHOW_ENHANCED_TOPIC_LIST_VIEW, $user_options);
 	}
 
 	protected function has_user_home_forum_exclusion_column(): bool
@@ -2672,7 +2695,7 @@ class listener implements EventSubscriberInterface
 				. '</dt>'
 				. ($enhanced_topic_list_view
 					? $this->build_lastpost_column_html($topic)
-					: $this->build_topic_stats_columns_html($topic) . $this->build_classic_lastpost_column_html($topic, true))
+					: $this->build_topic_stats_columns_html($topic) . $this->build_classic_lastpost_column_html($topic))
 				. '</dl>'
 				. '</li>';
 		}

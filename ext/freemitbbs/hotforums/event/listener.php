@@ -6,6 +6,8 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 class listener implements EventSubscriberInterface
 {
+	private const INDEX_COLLAPSE_ID = 'freemitbbs_hotforums_index';
+
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\cache\service $cache;
 	protected \phpbb\config\config $config;
@@ -13,6 +15,7 @@ class listener implements EventSubscriberInterface
 	protected \phpbb\db\driver\driver_interface $db;
 	protected \phpbb\template\template $template;
 	protected \phpbb\user $user;
+	protected $collapsible_operator;
 	protected string $root_path;
 	protected string $php_ext;
 
@@ -25,7 +28,8 @@ class listener implements EventSubscriberInterface
 		\phpbb\template\template $template,
 		\phpbb\user $user,
 		string $root_path,
-		string $php_ext
+		string $php_ext,
+		$collapsible_operator = null
 	)
 	{
 		$this->auth = $auth;
@@ -37,6 +41,7 @@ class listener implements EventSubscriberInterface
 		$this->user = $user;
 		$this->root_path = $root_path;
 		$this->php_ext = $php_ext;
+		$this->collapsible_operator = $collapsible_operator;
 	}
 
 	public static function getSubscribedEvents()
@@ -68,7 +73,7 @@ class listener implements EventSubscriberInterface
 				]);
 			}
 
-			$this->template->assign_var('S_HAS_HOT_FORUMS', $has_rows);
+			$this->assign_hotforums_template_state($has_rows);
 			return;
 		}
 
@@ -110,7 +115,44 @@ class listener implements EventSubscriberInterface
 		}
 		$this->db->sql_freeresult($result);
 
-		$this->template->assign_var('S_HAS_HOT_FORUMS', $has_rows);
+		$this->assign_hotforums_template_state($has_rows);
+	}
+
+	protected function assign_hotforums_template_state(bool $has_rows): void
+	{
+		$template_vars = [
+			'S_HAS_HOT_FORUMS' => $has_rows,
+			'S_HOTFORUMS_COLLAPSIBLE' => false,
+		];
+
+		if ($has_rows && $this->has_collapsible_categories())
+		{
+			$hidden = (bool) $this->collapsible_operator->is_collapsed(self::INDEX_COLLAPSE_ID);
+			$template_vars = array_merge($template_vars, [
+				'S_HOTFORUMS_COLLAPSIBLE' => true,
+				'S_HOTFORUMS_HIDDEN' => $hidden,
+				'HOTFORUMS_BLOCK_ID' => self::INDEX_COLLAPSE_ID,
+				'U_HOTFORUMS_COLLAPSE_URL' => $this->collapsible_operator->get_collapsible_link(self::INDEX_COLLAPSE_ID),
+				'HOTFORUMS_COLLAPSE_HIDDEN_DATA' => $hidden ? '1' : '',
+				'HOTFORUMS_COLLAPSE_TITLE' => $this->collapse_button_title($hidden),
+				'HOTFORUMS_COLLAPSE_ALT_TITLE' => $this->collapse_button_title(!$hidden),
+				'HOTFORUMS_COLLAPSE_ICON' => $hidden ? 'fa-plus-square' : 'fa-minus-square',
+			]);
+		}
+
+		$this->template->assign_vars($template_vars);
+	}
+
+	protected function has_collapsible_categories(): bool
+	{
+		return $this->collapsible_operator
+			&& method_exists($this->collapsible_operator, 'is_collapsed')
+			&& method_exists($this->collapsible_operator, 'get_collapsible_link');
+	}
+
+	protected function collapse_button_title(bool $hidden): string
+	{
+		return (string) $this->user->lang('COLLAPSIBLE_CATEGORIES_TITLE', $hidden ? 1 : 0);
 	}
 
 	protected function get_viewership_service(): ?object

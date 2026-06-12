@@ -284,10 +284,14 @@ dd.option {
 
 .postbody img.postimage {
 	max-width: 100%;
-	max-height: 80vh;
 	-webkit-box-sizing: border-box;
 	-moz-box-sizing: border-box;
 	box-sizing: border-box;
+}
+
+.postbody .content img.postimage,
+.postbody .attachbox img.postimage {
+	max-height: 80vh;
 }
 
 .search .postbody {
@@ -432,6 +436,11 @@ p.author {
 	line-height: 140%;
 	overflow: hidden;
 	width: 100%;
+}
+
+.signature:has(img) {
+	max-height: none;
+	overflow: visible;
 }
 
 .signature.standalone {

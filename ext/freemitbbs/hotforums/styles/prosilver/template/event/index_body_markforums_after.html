@@ -1,4 +1,7 @@
 <!-- IF S_HAS_HOT_FORUMS -->
+<!-- IF S_HOTFORUMS_COLLAPSIBLE -->
+	<a class="category<!-- IF S_HOTFORUMS_HIDDEN --> hidden-category<!-- ENDIF -->" id="category{HOTFORUMS_BLOCK_ID}" style="display: none; height: 0"></a>
+<!-- ENDIF -->
 <div class="forabg hotforums-block">
 	<div class="inner">
 	<ul class="topiclist">
@@ -6,8 +9,20 @@
 			<dl class="row-item">
 				<dt><div class="list-inner"><i class="icon fa-eye fa-fw hotforums-icon" aria-hidden="true"></i> {L_HOTFORUMS_TITLE}</div></dt>
 			</dl>
+			<!-- IF S_HOTFORUMS_COLLAPSIBLE -->
+				<a href="{U_HOTFORUMS_COLLAPSE_URL}"
+					class="collapse-btn"
+					data-hidden="{HOTFORUMS_COLLAPSE_HIDDEN_DATA}"
+					data-ajax="phpbb_collapse"
+					data-overlay="false"
+					data-title-alt="{HOTFORUMS_COLLAPSE_ALT_TITLE}"
+					title="{HOTFORUMS_COLLAPSE_TITLE}"
+					style="display: none; line-height: 0;">
+					<i class="fa {HOTFORUMS_COLLAPSE_ICON}"></i>
+				</a>
+			<!-- ENDIF -->
 		</li>
-		<li class="hotforums-shell">
+		<li class="hotforums-shell collapsible">
 			<div class="hotforums-wrap">
 				<div class="hotforums-menu">
 					<!-- BEGIN hot_forums -->
