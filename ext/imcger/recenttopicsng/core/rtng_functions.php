@@ -20,6 +20,8 @@ class rtng_functions
 	private const DEFAULT_TPL_LOOP = 'rtng_topics';
 	private const JUNBAN_TPL_LOOP = 'rtng_junban_topics';
 	private const JUNBAN_FORUM_ID = 2;
+	private const LIMITED_MODE_CANDIDATE_EXTRA_MIN = 20;
+	private const LIMITED_MODE_CANDIDATE_EXTRA_MAX = 50;
 
 	private array $user_setting;
 	private int $topics_start;
@@ -32,6 +34,7 @@ class rtng_functions
 	private ?array $prepared_index_topic_list_for_display;
 	private ?array $foe_user_id_map;
 	private ?array $user_home_excluded_forum_id_map;
+	private bool $topic_rows_require_page_slice;
 
 	public function __construct
 	(
@@ -63,6 +66,7 @@ class rtng_functions
 		$this->prepared_index_topic_list_for_display = null;
 		$this->foe_user_id_map = null;
 		$this->user_home_excluded_forum_id_map = null;
+		$this->topic_rows_require_page_slice = false;
 	}
 
 	/**
@@ -193,6 +197,8 @@ class rtng_functions
 		else
 		{
 			$topics_count = $this->gettopiclist($obtain_icons, $forums, $rtng_start, $total_topics_limit, $excluded_topics, $forum_id_list, $topic_list, $topic_rows);
+			$topic_rows = $this->prepare_topic_rows_for_display($topic_list, $topic_rows, $this->topic_rows_require_page_slice);
+			$topic_rows = $this->rebuild_topic_list_context($topic_rows, $obtain_icons, $forums, $topic_list);
 		}
 
 		// Return if there are no topics available to display.
@@ -304,6 +310,8 @@ class rtng_functions
 		$topic_list = [];
 		$topic_rows = [];
 		$topics_count = $this->gettopiclist($obtain_icons, $forums, $rtng_start, $total_topics_limit, $excluded_topics, $forum_id_list, $topic_list, $topic_rows);
+		$topic_rows = $this->prepare_topic_rows_for_display($topic_list, $topic_rows, $this->topic_rows_require_page_slice);
+		$topic_rows = $this->rebuild_topic_list_context($topic_rows, $obtain_icons, $forums, $topic_list);
 		$display_topic_list = $topic_list;
 
 		if (empty($additional_excluded_topic_ids))
@@ -582,21 +590,25 @@ class rtng_functions
 	{
 		$topics_count	 = 0;
 		$min_topic_level = $this->config['rtng_min_topic_level'];
+		$this->topic_rows_require_page_slice = false;
 
 		// Either use the phpBB core function to get unread topics, or the custom function for default behavior
 		if ($this->user_setting['user_rtng_unread_only'] && $this->user->data['is_registered'])
 		{
+			$candidate_limit = $this->limited_mode_candidate_limit($total_topics_limit);
+
 			// Get unread topics
 			$sql_extra	   = ' AND ' . $this->db->sql_in_set('t.topic_id', $excluded_topics, true);
 			$sql_extra	  .= ' AND ' . $this->content_visibility->get_forums_visibility_sql('topic', $forum_id_list, $table_alias = 't.');
 			$sql_extra	  .= ' AND t.topic_status <> ' . ITEM_MOVED;
 			$sql_extra	  .= $this->build_non_foe_topic_poster_sql('t');
-			$unread_topics = get_unread_topics(false, $sql_extra, '', $total_topics_limit);
+			$unread_topics = get_unread_topics(false, $sql_extra, '', $candidate_limit);
 
 			$total_topics_limit = min($total_topics_limit, count($unread_topics));
 			$rtng_start = $this->validate_start($rtng_start, $this->topics_per_page, $total_topics_limit);
 
-			$topic_list = array_slice(array_keys($unread_topics), $rtng_start, $this->topics_per_page);
+			$topic_list = array_keys($unread_topics);
+			$this->topic_rows_require_page_slice = true;
 		}
 		else
 		{
@@ -606,7 +618,8 @@ class rtng_functions
 
 			if ((int) $this->config['rtng_all_topics'] == 0)
 			{
-				$result = $this->db->sql_query_limit($sql, $total_topics_limit);
+				$candidate_limit = $this->limited_mode_candidate_limit($total_topics_limit);
+				$result = $this->db->sql_query_limit($sql, $candidate_limit);
 				if ($result == false)
 				{
 					return 0;
@@ -619,13 +632,8 @@ class rtng_functions
 				$total_topics_limit = min($total_topics_limit, $topics_count);
 				$rtng_start = $this->validate_start($rtng_start, $this->topics_per_page, $total_topics_limit);
 
-				$this->collect_topic_list_rows(
-					array_slice($rows, $rtng_start, $this->topics_per_page),
-					$obtain_icons,
-					$forums,
-					$topic_list,
-					$topic_rows
-				);
+				$this->collect_topic_list_rows($rows, $obtain_icons, $forums, $topic_list, $topic_rows);
+				$this->topic_rows_require_page_slice = true;
 			}
 			else
 			{
@@ -660,6 +668,74 @@ class rtng_functions
 
 		// Return number of total topics counts to display
 		return $total_topics_limit;
+	}
+
+	private function limited_mode_candidate_limit(int $total_topics_limit): int
+	{
+		if ((int) $this->config['rtng_all_topics'] !== 0)
+		{
+			return $total_topics_limit;
+		}
+
+		$extra = min(
+			max($this->topics_per_page * 2, self::LIMITED_MODE_CANDIDATE_EXTRA_MIN),
+			self::LIMITED_MODE_CANDIDATE_EXTRA_MAX
+		);
+
+		return $total_topics_limit + $extra;
+	}
+
+	private function prepare_topic_rows_for_display(array $topic_list, array $preloaded_rowset, bool $slice_current_page): array
+	{
+		if (empty($topic_list) && empty($preloaded_rowset))
+		{
+			return [];
+		}
+
+		$rowset = $this->can_use_preloaded_topic_rowset($preloaded_rowset)
+			? $preloaded_rowset
+			: $this->get_topics_sql($topic_list);
+
+		if (empty($rowset))
+		{
+			return [];
+		}
+
+		/**
+		 * Event to modify the topics list data before we start the display loop
+		 *
+		 * @event imcger.recenttopicsng.modify_topics_list
+		 * @var	array	topic_list	Array of all the topic IDs
+		 * @var	array	rowset		The full topics list array
+		 * @since 1.0.0
+		 */
+		$vars = ['topic_list', 'rowset'];
+		extract($this->dispatcher->trigger_event('imcger.recenttopicsng.modify_topics_list', compact($vars)));
+
+		if (empty($rowset) || !is_array($rowset))
+		{
+			return [];
+		}
+
+		$rowset = array_values($rowset);
+		if ($slice_current_page)
+		{
+			return array_slice($rowset, $this->topics_start, $this->topics_per_page);
+		}
+
+		return array_slice($rowset, 0, $this->topics_per_page);
+	}
+
+	private function rebuild_topic_list_context(array $rows, bool &$obtain_icons, array &$forums, array &$topic_list): array
+	{
+		$obtain_icons = false;
+		$forums = [];
+		$topic_list = [];
+		$rebuilt_rows = [];
+
+		$this->collect_topic_list_rows($rows, $obtain_icons, $forums, $topic_list, $rebuilt_rows);
+
+		return $rebuilt_rows;
 	}
 
 	private function collect_topic_list_rows(array $rows, bool &$obtain_icons, array &$forums, array &$topic_list, array &$topic_rows): void
@@ -1000,12 +1076,20 @@ class rtng_functions
 		$sort_topics = $this->user_setting['user_rtng_sort_start_time'] ? 'topic_time' : 'topic_last_post_time';
 
 		$sql_array = [
-			'SELECT'    => 't.*, f.forum_name, tp.topic_posted',
+			'SELECT'    => 't.*, f.forum_name, tp.topic_posted, tt.mark_time, ft.mark_time as f_mark_time',
 			'FROM'      => [TOPICS_TABLE => 't', ],
 			'LEFT_JOIN' => [
 				[
 					'FROM' => [FORUMS_TABLE => 'f', ],
 					'ON'   => 'f.forum_id = t.forum_id',
+				],
+				[
+					'FROM' => [TOPICS_TRACK_TABLE => 'tt', ],
+					'ON'   => 'tt.topic_id = t.topic_id AND tt.user_id = ' . (int) $this->user->data['user_id'],
+				],
+				[
+					'FROM' => [FORUMS_TRACK_TABLE => 'ft', ],
+					'ON'   => 'ft.forum_id = t.forum_id AND ft.user_id = ' . (int) $this->user->data['user_id'],
 				],
 				[
 					'FROM' => [TOPICS_POSTED_TABLE => 'tp', ],
@@ -1046,25 +1130,12 @@ class rtng_functions
 	 */
 	private function fill_template(array $icons, string $tpl_loopname, array $topic_tracking_info, int $topics_count, array $topic_list, array $preloaded_rowset = []): void
 	{
-		$rowset = $this->can_use_preloaded_topic_rowset($preloaded_rowset)
-			? $preloaded_rowset
-			: $this->get_topics_sql($topic_list);
+		$rowset = !empty($preloaded_rowset) ? $preloaded_rowset : $this->get_topics_sql($topic_list);
 		$topic_icons = [];
 
 		// if topics returned by DB
 		if (count($rowset))
 		{
-			/**
-			 * Event to modify the topics list data before we start the display loop
-			 *
-			 * @event imcger.recenttopicsng.modify_topics_list
-			 * @var	array	topic_list	Array of all the topic IDs
-			 * @var	array	rowset		The full topics list array
-			 * @since 1.0.0
-			 */
-			$vars = ['topic_list', 'rowset'];
-			extract($this->dispatcher->trigger_event('imcger.recenttopicsng.modify_topics_list', compact($vars)));
-
 			foreach ($rowset as $row)
 			{
 				$first_unread	= [];

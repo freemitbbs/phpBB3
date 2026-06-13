@@ -73,6 +73,8 @@ class listener implements EventSubscriberInterface
 			'core.delete_topics_before_query' => 'delete_blog_topic_metadata_before_topic_delete',
 			'core.search_backend_search_after' => 'filter_reposted_blog_search_results',
 			'vse.similartopics.modify_rowset' => 'filter_reposted_blog_similar_topics',
+			'imcger.recenttopicsng.sql_pull_topics_list' => 'exclude_reposted_blog_recent_topics_from_sql',
+			'imcger.recenttopicsng.sql_pull_topics_data' => 'exclude_reposted_blog_recent_topics_from_sql',
 			'imcger.recenttopicsng.modify_topics_list' => 'filter_reposted_blog_recent_topics',
 			'freemitbbs.toptopics.modify_topic_list' => 'filter_reposted_blog_top_topics',
 		];
@@ -400,6 +402,33 @@ class listener implements EventSubscriberInterface
 		}
 
 		$event['rowset'] = $this->filter_reposted_topic_rowset($rowset, $extra_excluded_topic_ids);
+	}
+
+	public function exclude_reposted_blog_recent_topics_from_sql($event): void
+	{
+		$sql_array = $event['sql_array'] ?? null;
+		if (!is_array($sql_array) || empty($sql_array['WHERE']))
+		{
+			return;
+		}
+
+		$blog_forum_id = $this->blog_forum_id();
+		if ($blog_forum_id <= 0)
+		{
+			return;
+		}
+
+		$sql_array['WHERE'] .= '
+			AND NOT (
+				t.forum_id = ' . $blog_forum_id . '
+				AND EXISTS (
+					SELECT 1
+					FROM ' . $this->blog_topics_table . ' bt_rtng_repost
+					WHERE bt_rtng_repost.topic_id = t.topic_id
+						AND ' . $this->reposted_blog_sql('bt_rtng_repost') . '
+				)
+			)';
+		$event['sql_array'] = $sql_array;
 	}
 
 	public function filter_reposted_blog_recent_topics($event): void
