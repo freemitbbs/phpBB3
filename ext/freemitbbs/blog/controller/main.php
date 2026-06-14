@@ -38,6 +38,7 @@ class main
 	protected $public_object_store;
 	protected $shared_storage_config_provider;
 	protected $collapsible_operator;
+	protected $posttags_manager;
 	protected string $blog_topics_table;
 	protected string $root_path;
 	protected string $php_ext;
@@ -61,7 +62,8 @@ class main
 		$attachment_storage = null,
 		$public_object_store = null,
 		$shared_storage_config_provider = null,
-		$collapsible_operator = null
+		$collapsible_operator = null,
+		$posttags_manager = null
 	)
 	{
 		$this->auth = $auth;
@@ -80,6 +82,7 @@ class main
 		$this->public_object_store = $public_object_store;
 		$this->shared_storage_config_provider = $shared_storage_config_provider;
 		$this->collapsible_operator = $collapsible_operator;
+		$this->posttags_manager = $posttags_manager;
 		$this->blog_topics_table = $table_prefix . 'blog_topics';
 		$this->root_path = $root_path;
 		$this->php_ext = $php_ext;
@@ -1539,6 +1542,8 @@ class main
 			throw $e;
 		}
 
+		$this->copy_post_tags((int) $post['post_id'], $post_id);
+
 		return [
 			'topic_id' => $topic_id,
 			'post_id' => $post_id,
@@ -1625,6 +1630,22 @@ class main
 			}
 			throw $e;
 		}
+	}
+
+	protected function copy_post_tags(int $source_post_id, int $target_post_id): void
+	{
+		if (!$this->posttags_available() || $source_post_id <= 0 || $target_post_id <= 0)
+		{
+			return;
+		}
+
+		$tags = $this->posttags_manager->get_post_tags($source_post_id);
+		if (empty($tags))
+		{
+			return;
+		}
+
+		$this->posttags_manager->set_post_tags($target_post_id, $tags);
 	}
 
 	protected function cleanup_copied_attachment_files(array $physical_filenames): void
@@ -1756,14 +1777,85 @@ class main
 
 	protected function assign_entry_list(array $rows, bool $manage, int $start = 0): void
 	{
+		$rows = $this->hydrate_entry_tags($rows);
 		foreach ($rows as $row)
 		{
 			$this->template->assign_block_vars('blog_entries', $this->entry_template_vars($row, $manage, $start));
+			$this->assign_tag_blocks('blog_entries.posttags', $row['_posttags'] ?? []);
 		}
 
 		$this->template->assign_vars([
 			'S_BLOG_HAS_ENTRIES' => !empty($rows),
 		]);
+	}
+
+	protected function hydrate_entry_tags(array $rows): array
+	{
+		if (!$this->posttags_available() || empty($rows))
+		{
+			return $rows;
+		}
+
+		$post_ids = [];
+		foreach ($rows as $row)
+		{
+			$post_id = (int) ($row['topic_first_post_id'] ?? 0);
+			if ($post_id > 0)
+			{
+				$post_ids[] = $post_id;
+			}
+		}
+
+		$tags_by_post = $this->posttags_manager->get_tags_for_posts($post_ids);
+		foreach ($rows as &$row)
+		{
+			$post_id = (int) ($row['topic_first_post_id'] ?? 0);
+			$row['_posttags'] = $tags_by_post[$post_id] ?? [];
+		}
+		unset($row);
+
+		return $rows;
+	}
+
+	protected function post_tags_for_post(int $post_id): array
+	{
+		if (!$this->posttags_available() || $post_id <= 0)
+		{
+			return [];
+		}
+
+		return $this->posttags_manager->get_post_tags($post_id);
+	}
+
+	protected function assign_tag_blocks(string $block_name, array $tags): void
+	{
+		if (empty($tags))
+		{
+			return;
+		}
+
+		foreach ($tags as $tag)
+		{
+			$this->template->assign_block_vars($block_name, $this->tag_template_vars($tag));
+		}
+	}
+
+	protected function tag_template_vars(array $tag): array
+	{
+		$name = (string) ($tag['tag_name'] ?? '');
+
+		return [
+			'NAME' => $name,
+			'U_SEARCH' => $this->route_without_url_session_id('freemitbbs_posttags_search', ['tag' => $name]),
+		];
+	}
+
+	protected function posttags_available(): bool
+	{
+		return $this->posttags_manager
+			&& method_exists($this->posttags_manager, 'get_post_tags')
+			&& method_exists($this->posttags_manager, 'get_tags_for_posts')
+			&& method_exists($this->posttags_manager, 'set_post_tags');
 	}
 
 	protected function assign_top_blog_list(int $forum_id): void
@@ -2126,6 +2218,7 @@ class main
 
 	protected function assign_entry(array $entry): void
 	{
+		$entry['_posttags'] = $this->post_tags_for_post((int) ($entry['topic_first_post_id'] ?? 0));
 		$text = generate_text_for_display(
 			$entry['post_text'],
 			$entry['bbcode_uid'],
@@ -2160,6 +2253,7 @@ class main
 		);
 
 		$this->template->assign_vars($this->entry_template_vars($entry, false));
+		$this->assign_tag_blocks('blog_tags', $entry['_posttags']);
 		$this->template->assign_vars($this->entry_share_template_vars($entry, $text));
 		$this->template->assign_vars([
 			'BLOG_TEXT' => $text,
@@ -2194,6 +2288,7 @@ class main
 		$source_post_id = (int) ($row['source_post_id'] ?? 0);
 		$time = (int) ($row['topic_time'] ?: $row['topic_last_post_time']);
 		$is_draft = !empty($row['is_draft']);
+		$tags = $row['_posttags'] ?? [];
 
 		return [
 			'ENTRY_ID' => $topic_id,
@@ -2217,6 +2312,7 @@ class main
 			'TOGGLE_LABEL' => $is_draft ? $this->language->lang('BLOG_PUBLISH') : $this->language->lang('BLOG_UNPUBLISH'),
 			'U_DELETE' => $manage ? $this->posting_delete_url((int) $row['topic_first_post_id']) : '',
 			'S_ENTRY_DRAFT' => $is_draft || (int) $row['topic_visibility'] !== ITEM_APPROVED,
+			'S_HAS_TAGS' => !empty($tags),
 			'S_HAS_SOURCE_POST' => $source_post_id > 0,
 			'U_SOURCE_POST' => $source_post_id > 0 ? append_sid(
 				$this->root_path . 'viewtopic.' . $this->php_ext,

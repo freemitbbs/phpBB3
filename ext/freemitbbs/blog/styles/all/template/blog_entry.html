@@ -7,6 +7,13 @@
 	<time datetime="{ENTRY_TIME_RFC3339}">{ENTRY_TIME}</time>
 	<span class="blog-entry-status {ENTRY_STATUS_CLASS}">{ENTRY_STATUS}</span>
 </div>
+<!-- IF S_HAS_TAGS -->
+	<div class="posttags-post blog-entry-tags">
+		<!-- BEGIN blog_tags -->
+			<a class="posttags-tag" href="{blog_tags.U_SEARCH}">#{blog_tags.NAME}</a>
+		<!-- END blog_tags -->
+	</div>
+<!-- ENDIF -->
 
 <div class="blog-actions">
 	<a class="button" href="{U_AUTHOR_BLOG}">{L_BLOG_AUTHOR_LINK}</a>

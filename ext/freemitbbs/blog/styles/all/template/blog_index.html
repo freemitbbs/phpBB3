@@ -106,6 +106,13 @@
 									{L_BLOG_WRITTEN_BY} {blog_entries.ENTRY_AUTHOR_FULL} &bull;
 									<time datetime="{blog_entries.ENTRY_TIME_RFC3339}">{blog_entries.ENTRY_TIME}</time>
 								</div>
+								<!-- IF blog_entries.S_HAS_TAGS -->
+									<div class="posttags-post blog-entry-tags">
+										<!-- BEGIN posttags -->
+											<a class="posttags-tag" href="{blog_entries.posttags.U_SEARCH}">#{blog_entries.posttags.NAME}</a>
+										<!-- END posttags -->
+									</div>
+								<!-- ENDIF -->
 								<!-- IF blog_entries.ENTRY_EXCERPT -->
 									<div class="blog-entry-excerpt">{blog_entries.ENTRY_EXCERPT}</div>
 								<!-- ENDIF -->

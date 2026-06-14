@@ -21,6 +21,7 @@ services:
             - '@?freemitbbs.s3storage.object_store'
             - '@?freemitbbs.s3storage.config_provider'
             - '@?phpbb.collapsiblecategories.operator'
+            - '@?freemitbbs.posttags.manager'
 
     freemitbbs.blog.listener:
         class: freemitbbs\blog\event\listener

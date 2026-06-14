@@ -3529,7 +3529,7 @@ class listener implements EventSubscriberInterface
 		{
 			return $this->build_server_inline_structured_media_preview_html(
 				'<iframe src="https://player.bilibili.com/player.html?bvid=' . rawurlencode($media_id) . '&amp;autoplay=0" loading="lazy" frameborder="0" scrolling="no" allowfullscreen="allowfullscreen" title="Bilibili video" width="640" height="360" data-s9e-mediaembed="bilibili"></iframe>',
-				' toptopics-inline-preview-media-frame-youtube',
+				' toptopics-inline-preview-media-frame-bilibili',
 				$topic_fade_class
 			);
 		}

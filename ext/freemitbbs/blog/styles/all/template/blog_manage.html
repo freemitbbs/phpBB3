@@ -24,6 +24,13 @@
 									<time datetime="{blog_entries.ENTRY_TIME_RFC3339}">{blog_entries.ENTRY_TIME}</time>
 									<!-- IF blog_entries.S_HAS_SOURCE_POST --> &bull; <a href="{blog_entries.U_SOURCE_POST}">{L_BLOG_SOURCE_POST}</a><!-- ENDIF -->
 								</div>
+								<!-- IF blog_entries.S_HAS_TAGS -->
+									<div class="posttags-post blog-entry-tags">
+										<!-- BEGIN posttags -->
+											<a class="posttags-tag" href="{blog_entries.posttags.U_SEARCH}">#{blog_entries.posttags.NAME}</a>
+										<!-- END posttags -->
+									</div>
+								<!-- ENDIF -->
 								<div class="blog-actions">
 									<a class="button" href="{blog_entries.U_EDIT}">{L_BLOG_EDIT_LINK}</a>
 									<a class="button" href="{blog_entries.U_TOGGLE}">{blog_entries.TOGGLE_LABEL}</a>
