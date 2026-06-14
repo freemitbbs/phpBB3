@@ -112,6 +112,16 @@ services:
             - '%core.root_path%'
             - '%core.php_ext%'
 
+    freemitbbs.toptopics.header_preferences:
+        class: freemitbbs\toptopics\controller\header_preferences
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@dbal.conn'
+            - '@request'
+            - '@user'
+            - '%core.php_ext%'
+
     freemitbbs.toptopics.reaction_records:
         class: freemitbbs\toptopics\controller\reaction_records
         arguments:

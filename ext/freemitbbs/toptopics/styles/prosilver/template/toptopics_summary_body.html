@@ -42,6 +42,11 @@
 								</a>
 							<!-- ENDIF -->
 								<a href="{top_topics.U_TOPIC}" class="topictitle {top_topics.TOPIC_DISLIKE_FADE_CLASS}">{top_topics.TOPIC_TITLE}</a>
+								{% if not S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW and top_topics.TOPIC_PREVIEW_TOPIC_ID %}
+									<div class="topic_preview_content"
+										data-topic-preview-id="{{ top_topics.TOPIC_PREVIEW_TOPIC_ID|e('html_attr') }}"
+										style="display: none;"></div>
+								{% endif %}
 								{% if top_topics.S_TOPTOPICS_INLINE_SERVER_PREVIEW and top_topics.TOPTOPICS_INLINE_PREVIEW_HTML %}
 									{{ top_topics.TOPTOPICS_INLINE_PREVIEW_HTML|raw }}
 								{% elseif top_topics.S_TOPTOPICS_INLINE_LAZY_PREVIEW and top_topics.U_TOPTOPICS_INLINE_PREVIEW %}

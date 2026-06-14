@@ -1,0 +1,21 @@
+<!-- IF S_TOPTOPICS_HEADER_PREFS -->
+<div class="freemitbbs-header-prefs"
+	data-header-prefs-url="{U_TOPTOPICS_HEADER_PREFS}"
+	data-header-prefs-hash="{TOPTOPICS_HEADER_PREFS_HASH}"
+	data-header-prefs-current-theme="{TOPTOPICS_HEADER_PREFS_CURRENT_THEME}"
+	data-header-prefs-current-topic-list="{TOPTOPICS_HEADER_PREFS_CURRENT_TOPIC_LIST}"
+	data-header-prefs-anonymous="<!-- IF S_TOPTOPICS_HEADER_PREFS_ANONYMOUS -->1<!-- ELSE -->0<!-- ENDIF -->"
+	data-header-prefs-gold-style-id="{TOPTOPICS_HEADER_PREFS_GOLD_STYLE_ID}"
+	data-header-prefs-cool-style-id="{TOPTOPICS_HEADER_PREFS_COOL_STYLE_ID}">
+	<!-- IF S_TOPTOPICS_HEADER_PREFS_THEME -->
+	<div class="freemitbbs-header-pref-group" aria-label="{L_TOPTOPICS_HEADER_THEME_TOGGLE}">
+		<button type="button" class="freemitbbs-header-pref-toggle<!-- IF S_TOPTOPICS_HEADER_PREFS_GOLD_ACTIVE --> active<!-- ENDIF -->" data-header-pref-theme="prosilver_fm" data-header-pref-style-id="{TOPTOPICS_HEADER_PREFS_GOLD_STYLE_ID}">{L_TOPTOPICS_HEADER_THEME_GOLD}</button>
+		<button type="button" class="freemitbbs-header-pref-toggle<!-- IF S_TOPTOPICS_HEADER_PREFS_COOL_ACTIVE --> active<!-- ENDIF -->" data-header-pref-theme="prosilver_fm_cool" data-header-pref-style-id="{TOPTOPICS_HEADER_PREFS_COOL_STYLE_ID}">{L_TOPTOPICS_HEADER_THEME_COOL}</button>
+	</div>
+	<!-- ENDIF -->
+	<div class="freemitbbs-header-pref-group" aria-label="{L_TOPTOPICS_HEADER_TOPIC_LIST_TOGGLE}">
+		<button type="button" class="freemitbbs-header-pref-toggle<!-- IF S_TOPTOPICS_HEADER_PREFS_CLASSIC_ACTIVE --> active<!-- ENDIF -->" data-header-pref-topic-list="classic">{L_TOPTOPICS_HEADER_TOPIC_LIST_CLASSIC}</button>
+		<button type="button" class="freemitbbs-header-pref-toggle<!-- IF S_TOPTOPICS_HEADER_PREFS_ENHANCED_ACTIVE --> active<!-- ENDIF -->" data-header-pref-topic-list="enhanced">{L_TOPTOPICS_HEADER_TOPIC_LIST_ENHANCED}</button>
+	</div>
+</div>
+<!-- ENDIF -->

@@ -15,6 +15,10 @@ freemitbbs_toptopics_reaction_records_page:
     requirements:
         page: \d+
 
+freemitbbs_toptopics_header_preferences:
+    path: /toptopics/header-preferences
+    defaults: { _controller: freemitbbs.toptopics.header_preferences:save }
+
 freemitbbs_toptopics_override:
     path: /toptopics/override/{topic}/{state}
     defaults: { _controller: freemitbbs.toptopics.moderation:topic_override }

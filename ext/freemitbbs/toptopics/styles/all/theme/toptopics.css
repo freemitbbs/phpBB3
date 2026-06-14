@@ -4,6 +4,102 @@
 	position: relative;
 }
 
+.freemitbbs-header-prefs {
+	box-sizing: border-box;
+	display: flex;
+	float: right;
+	flex-wrap: nowrap;
+	gap: 4px 6px;
+	justify-content: flex-end;
+	margin: 30px 8px 0 0;
+	max-width: none;
+}
+
+.freemitbbs-header-pref-group {
+	display: inline-flex;
+	overflow: hidden;
+	border: 1px solid rgba(57, 72, 86, 0.36);
+	border-radius: 5px;
+	background: rgba(255, 255, 255, 0.74);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+	white-space: nowrap;
+}
+
+.freemitbbs-header-pref-toggle {
+	box-sizing: border-box;
+	min-height: 24px;
+	padding: 2px 8px;
+	border: 0;
+	border-left: 1px solid rgba(57, 72, 86, 0.2);
+	background: transparent;
+	color: #2f3b46;
+	cursor: pointer;
+	font-size: 12px;
+	font-weight: normal;
+	line-height: 20px;
+	text-shadow: none;
+}
+
+.freemitbbs-header-pref-toggle:first-child {
+	border-left: 0;
+}
+
+.freemitbbs-header-pref-toggle:hover,
+.freemitbbs-header-pref-toggle:focus {
+	background: rgba(255, 255, 255, 0.96);
+	color: #105289;
+	outline: none;
+}
+
+.freemitbbs-header-pref-toggle.active {
+	background: #105289;
+	color: #ffffff;
+}
+
+.freemitbbs-header-pref-toggle.active:hover,
+.freemitbbs-header-pref-toggle.active:focus {
+	background: #0b4a7d;
+	color: #ffffff;
+}
+
+@media (min-width: 701px) {
+	.headerbar .inner {
+		display: flex;
+		align-items: flex-start;
+	}
+
+	.headerbar .site-description {
+		flex: 1 1 auto;
+		min-width: 0;
+		width: auto;
+	}
+
+	.headerbar .search-header {
+		flex: 0 0 auto;
+		float: none;
+		margin-left: auto;
+	}
+
+	.freemitbbs-header-prefs {
+		flex: 0 0 auto;
+		float: none;
+		margin-right: 0;
+	}
+
+	.freemitbbs-header-pref-group {
+		box-sizing: border-box;
+		height: 24px;
+	}
+
+	.freemitbbs-header-pref-toggle {
+		min-height: 0;
+		height: 22px;
+		line-height: 18px;
+		padding-top: 2px;
+		padding-bottom: 2px;
+	}
+}
+
 .toptopics-dislike:before,
 .toptopics-disliked:before {
 	font-family: FontAwesome;
@@ -215,6 +311,55 @@ a.topictitle.toptopics-topic-dislike-fade,
 
 .postprofile .toptopics-reputation-fresh .toptopics-reputation-mark::before {
 	content: "\f040";
+}
+
+@media (max-width: 700px) {
+	.headerbar .inner {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 6px;
+		position: relative;
+		min-height: 0;
+	}
+
+	.headerbar .site-description {
+		flex: 1 1 auto;
+		min-width: 0;
+		width: auto;
+		padding-right: 0;
+		text-align: left;
+	}
+
+	.headerbar .site-description h1,
+	.headerbar .site-description p {
+		text-align: left;
+	}
+
+	.freemitbbs-header-prefs {
+		position: static;
+		float: none;
+		flex: 0 0 auto;
+		flex-direction: row;
+		flex-wrap: nowrap;
+		align-items: flex-start;
+		justify-content: flex-end;
+		gap: 4px;
+		margin: 5px 0 0 6px;
+		max-width: none;
+	}
+
+	.freemitbbs-header-pref-group {
+		flex: 0 0 auto;
+		max-width: 100%;
+	}
+
+	.freemitbbs-header-pref-toggle {
+		min-height: 22px;
+		padding: 2px 5px;
+		font-size: 11px;
+		line-height: 16px;
+	}
 }
 
 .postprofile .toptopics-reputation-steady {
