@@ -142,6 +142,7 @@ class ajaxify
 								{
 									$this->cache->destroy('sql', $this->likes_table);
 									$this->invalidate_summary_cache();
+									$this->invalidate_topic_like_count_cache((int) $row['topic_id']);
 									$this->invalidate_toptopics_state((int) $row['forum_id'], (int) $row['poster_id'], (int) $post);
 									$this->notifyhelper->notify('add', $row['topic_id'], (int) $post, $row['post_subject'], $row['poster_id'] , $this->user->data['user_id']);
 								}
@@ -166,6 +167,7 @@ class ajaxify
 								{
 									$this->cache->destroy('sql', $this->likes_table);
 									$this->invalidate_summary_cache();
+									$this->invalidate_topic_like_count_cache((int) $row['topic_id']);
 									$this->invalidate_toptopics_state((int) $row['forum_id'], (int) $row['poster_id'], (int) $post);
 									$this->notifyhelper->notify('remove', $row['topic_id'], (int) $post, $row['post_subject'], $row['poster_id'], $this->user->data['user_id']);
 								}
@@ -232,6 +234,14 @@ class ajaxify
 	protected function invalidate_summary_cache(): void
 	{
 		$this->config->set(self::SUMMARY_CACHE_VERSION_CONFIG, (string) microtime(true));
+	}
+
+	protected function invalidate_topic_like_count_cache(int $topic_id): void
+	{
+		if ($topic_id > 0)
+		{
+			$this->cache->destroy(\avathar\postlove\service\topic_likes::cache_key_for_topic($topic_id));
+		}
 	}
 
 	protected function has_user_liked(int $post_id): bool

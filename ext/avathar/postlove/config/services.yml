@@ -101,6 +101,7 @@ services:
         class: avathar\postlove\service\topic_likes
         arguments:
             - '@dbal.conn'
+            - '@cache'
             - '%tables.avathar.postlove%'
     avathar.postlove.notification.type.postlove:
         class: avathar\postlove\notification\postlove

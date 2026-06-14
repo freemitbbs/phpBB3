@@ -53,6 +53,7 @@ class listener implements EventSubscriberInterface
 	protected string $dislike_history_table;
 	protected string $topic_overrides_table;
 	protected string $user_reputation_table;
+	protected string $post_quality_table;
 	protected string $root_path;
 	protected string $php_ext;
 
@@ -129,6 +130,7 @@ class listener implements EventSubscriberInterface
 		$this->dislike_history_table = $dislike_history_table;
 		$this->topic_overrides_table = $topic_overrides_table;
 		$this->user_reputation_table = $user_reputation_table;
+		$this->post_quality_table = $this->derive_post_quality_table($this->likes_table);
 		$this->root_path = $root_path;
 		$this->php_ext = $php_ext;
 	}
@@ -142,6 +144,17 @@ class listener implements EventSubscriberInterface
 		}
 
 		return preg_replace('/dislikes$/', 'likes', $dislikes_table) ?: $dislikes_table;
+	}
+
+	protected function derive_post_quality_table(string $likes_table): string
+	{
+		$likes_suffix = 'posts_likes';
+		if (substr($likes_table, -strlen($likes_suffix)) === $likes_suffix)
+		{
+			return substr($likes_table, 0, -strlen($likes_suffix)) . 'toptopics_post_quality';
+		}
+
+		return preg_replace('/likes$/', 'toptopics_post_quality', $likes_table) ?: $likes_table;
 	}
 
 	public static function getSubscribedEvents()
@@ -1335,6 +1348,11 @@ class listener implements EventSubscriberInterface
 
 	public function viewforum_score_first_post_disliked_topics($event): void
 	{
+		if ($this->user->data['is_bot'])
+		{
+			return;
+		}
+
 		$rowset = $event['rowset'] ?? [];
 		if (!is_array($rowset) || empty($rowset))
 		{
@@ -4045,6 +4063,29 @@ class listener implements EventSubscriberInterface
 			return $lengths;
 		}
 
+		foreach ($this->get_post_quality_length_map($missing_post_edit_times) as $post_id => $length)
+		{
+			$post_id = (int) $post_id;
+			if (!array_key_exists($post_id, $missing_post_edit_times))
+			{
+				continue;
+			}
+
+			$length = max(0, (int) $length);
+			$lengths[$post_id] = $length;
+			$this->cache_invalidator->put(
+				$this->build_first_post_length_cache_key($post_id, $missing_post_edit_times[$post_id]),
+				$length,
+				self::FIRST_POST_LENGTH_CACHE_SECONDS
+			);
+			unset($missing_post_edit_times[$post_id]);
+		}
+
+		if (empty($missing_post_edit_times))
+		{
+			return $lengths;
+		}
+
 		$sql = 'SELECT post_id, post_text
 			FROM ' . POSTS_TABLE . '
 			WHERE ' . $this->db->sql_in_set('post_id', array_keys($missing_post_edit_times));
@@ -4064,6 +4105,43 @@ class listener implements EventSubscriberInterface
 				$length,
 				self::FIRST_POST_LENGTH_CACHE_SECONDS
 			);
+		}
+		$this->db->sql_freeresult($result);
+
+		return $lengths;
+	}
+
+	protected function get_post_quality_length_map(array $post_edit_times): array
+	{
+		$post_ids = array_values(array_unique(array_filter(array_map('intval', array_keys($post_edit_times)), static function (int $post_id): bool {
+			return $post_id > 0;
+		})));
+		if (empty($post_ids))
+		{
+			return [];
+		}
+
+		$sql = 'SELECT post_id, quality_length, computed_time
+			FROM ' . $this->post_quality_table . '
+			WHERE ' . $this->db->sql_in_set('post_id', $post_ids);
+		$result = $this->db->sql_query($sql);
+		$lengths = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$post_id = (int) ($row['post_id'] ?? 0);
+			if ($post_id <= 0 || !array_key_exists($post_id, $post_edit_times))
+			{
+				continue;
+			}
+
+			$post_edit_time = (int) $post_edit_times[$post_id];
+			$computed_time = (int) ($row['computed_time'] ?? 0);
+			if ($post_edit_time > 0 && ($computed_time <= 0 || $computed_time < $post_edit_time))
+			{
+				continue;
+			}
+
+			$lengths[$post_id] = max(0, (int) ($row['quality_length'] ?? 0));
 		}
 		$this->db->sql_freeresult($result);
 
