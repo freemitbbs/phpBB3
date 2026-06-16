@@ -7,12 +7,14 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 class inline_preview
 {
 	private const CACHE_PREFIX = '_freemitbbs_toptopics_inline_preview_';
-	private const CACHE_REVISION = 10;
+	private const CACHE_REVISION = 11;
 	private const CACHE_SECONDS = 600;
 	private const MEDIA_SITE_TAGS_CACHE_KEY = '_freemitbbs_toptopics_inline_preview_media_site_tags';
 	private const MAX_BATCH_TOPICS = 40;
 	private const MAX_IMAGES = 8;
 	private const MAX_TEXT_CHARS = 300;
+	private const PLAIN_TEXT_PARAGRAPH_MARKER = '%%FREEMITBBS_INLINE_PARAGRAPH%%';
+	private const PLAIN_TEXT_PARAGRAPH_SEPARATOR = "\xE3\x80\x80\xE3\x80\x80";
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\cache\service $cache;
@@ -1234,15 +1236,47 @@ class inline_preview
 			'#(?:https?:)?//player\.bilibili\.com/player\.html\?[^\s\[\]<>"\']+#i',
 			'#(?:https?:)?//(?:www\.|m\.|vm\.|vt\.)?tiktok\.com/[^\s\[\]<>"\']+#i',
 			'#https?://(?:www\.)?(?:twitter\.com|x\.com)/[^\s\[\]<>"\']+/status(?:es)?/\d+(?:[?\#][^\s\[\]<>"\']*)?#i',
+		], ' ', $text);
+		$text = $this->replace_all([
 			'#<br\s*/?>#i',
 			'#</(?:p|div|li|blockquote|pre|tr|table|h[1-6])>#i',
-		], ' ', $text);
+		], self::PLAIN_TEXT_PARAGRAPH_MARKER, $text);
 		$text = strip_tags($text);
+		$text = $this->mark_plain_text_paragraph_breaks($text);
 		$text = preg_replace('#\[(?:/?[a-z][a-z0-9_-]*|\*)(?:=[^\]]*)?\]#i', ' ', $text) ?? $text;
-		$text = preg_replace('/[\s\p{Zs}]+/u', "\u{3000}", $text) ?? $text;
-		$text = $this->trim_unicode_whitespace($text);
+		$text = $this->normalize_plain_text_spacing($text);
 
 		return $this->truncate_text($text, self::MAX_TEXT_CHARS);
+	}
+
+	protected function mark_plain_text_paragraph_breaks(string $text): string
+	{
+		$marked = preg_replace('/\r\n|\r|\n/u', self::PLAIN_TEXT_PARAGRAPH_MARKER, $text);
+
+		return is_string($marked) ? $marked : $text;
+	}
+
+	protected function normalize_plain_text_spacing(string $text): string
+	{
+		$text = str_replace(self::PLAIN_TEXT_PARAGRAPH_SEPARATOR, self::PLAIN_TEXT_PARAGRAPH_MARKER, $text);
+		$text = $this->mark_plain_text_paragraph_breaks($text);
+
+		$normalized = preg_replace('/[\t\f\v \p{Zs}]+/u', ' ', $text);
+		if (is_string($normalized))
+		{
+			$text = $normalized;
+		}
+
+		$marker = preg_quote(self::PLAIN_TEXT_PARAGRAPH_MARKER, '/');
+		$normalized = preg_replace('/(?: *' . $marker . ' *)+/u', self::PLAIN_TEXT_PARAGRAPH_MARKER, $text);
+		if (is_string($normalized))
+		{
+			$text = $normalized;
+		}
+
+		$text = str_replace(self::PLAIN_TEXT_PARAGRAPH_MARKER, self::PLAIN_TEXT_PARAGRAPH_SEPARATOR, $text);
+
+		return $this->trim_unicode_whitespace($text);
 	}
 
 	protected function trim_unicode_whitespace(string $text): string

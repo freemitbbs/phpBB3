@@ -1,0 +1,22 @@
+<div class="pagination">
+	{TOPTOPICS_FLAT_TOTAL}
+	<!-- IF .toptopics_flat_pagination -->
+		<ul>
+		<!-- BEGIN toptopics_flat_pagination -->
+			<!-- IF toptopics_flat_pagination.S_IS_PREV -->
+				<li class="arrow previous"><a class="button button-icon-only" href="{toptopics_flat_pagination.PAGE_URL}" rel="prev" role="button"><i class="icon fa-chevron-{S_CONTENT_FLOW_BEGIN} fa-fw" aria-hidden="true"></i><span class="sr-only">{L_PREVIOUS}</span></a></li>
+			<!-- ELSEIF toptopics_flat_pagination.S_IS_CURRENT -->
+				<li class="active"><span>{toptopics_flat_pagination.PAGE_NUMBER}</span></li>
+			<!-- ELSEIF toptopics_flat_pagination.S_IS_ELLIPSIS -->
+				<li class="ellipsis" role="separator"><span>{L_ELLIPSIS}</span></li>
+			<!-- ELSEIF toptopics_flat_pagination.S_IS_NEXT -->
+				<li class="arrow next"><a class="button button-icon-only" href="{toptopics_flat_pagination.PAGE_URL}" rel="next" role="button"><i class="icon fa-chevron-{S_CONTENT_FLOW_END} fa-fw" aria-hidden="true"></i><span class="sr-only">{L_NEXT}</span></a></li>
+			<!-- ELSE -->
+				<li><a class="button" href="{toptopics_flat_pagination.PAGE_URL}" role="button">{toptopics_flat_pagination.PAGE_NUMBER}</a></li>
+			<!-- ENDIF -->
+		<!-- END toptopics_flat_pagination -->
+		</ul>
+	<!-- ELSEIF TOPTOPICS_FLAT_PAGE_NUMBER -->
+		 &bull; {TOPTOPICS_FLAT_PAGE_NUMBER}
+	<!-- ENDIF -->
+</div>

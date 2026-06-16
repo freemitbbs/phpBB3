@@ -14,6 +14,20 @@
 
 <hr />
 <dl>
+	<dt><label for="toptopics_show_flat_topic_list_view1">{L_TOPTOPICS_SHOW_FLAT_TOPIC_LIST_VIEW}{L_COLON}</label><br /><span>{L_TOPTOPICS_SHOW_FLAT_TOPIC_LIST_VIEW_EXPLAIN}</span></dt>
+	<dd>
+		<!-- IF S_TOPTOPICS_FLAT_TOPIC_LIST_VIEW_DISABLED -->
+			<label for="toptopics_show_flat_topic_list_view1"><input type="radio" name="toptopics_show_flat_topic_list_view" id="toptopics_show_flat_topic_list_view1" value="1" /> {L_YES}</label>
+			<label for="toptopics_show_flat_topic_list_view0"><input type="radio" name="toptopics_show_flat_topic_list_view" id="toptopics_show_flat_topic_list_view0" value="0" checked="checked" /> {L_NO}</label>
+		<!-- ELSE -->
+			<label for="toptopics_show_flat_topic_list_view1"><input type="radio" name="toptopics_show_flat_topic_list_view" id="toptopics_show_flat_topic_list_view1" value="1" checked="checked" /> {L_YES}</label>
+			<label for="toptopics_show_flat_topic_list_view0"><input type="radio" name="toptopics_show_flat_topic_list_view" id="toptopics_show_flat_topic_list_view0" value="0" /> {L_NO}</label>
+		<!-- ENDIF -->
+	</dd>
+</dl>
+
+<hr />
+<dl>
 	<dt><label for="toptopics_show_topic_list_media_previews1">{L_TOPTOPICS_SHOW_TOPIC_LIST_MEDIA_PREVIEWS}{L_COLON}</label><br /><span>{L_TOPTOPICS_SHOW_TOPIC_LIST_MEDIA_PREVIEWS_EXPLAIN}</span></dt>
 	<dd>
 		<!-- IF S_TOPTOPICS_TOPIC_LIST_MEDIA_PREVIEWS_DISABLED -->

@@ -133,6 +133,21 @@
 						<!-- ENDIF -->
 				</dl>
 			</li>
+			<!-- BEGINELSE -->
+			<!-- IF S_TOPTOPICS_FLAT_INDEX -->
+			<li class="row bg1">
+				<dl class="row-item">
+					<dt><div class="list-inner">{TOPTOPICS_FLAT_EMPTY}</div></dt>
+					<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW -->
+						<dd class="lastpost">&nbsp;</dd>
+					<!-- ELSE -->
+						<dd class="posts">&nbsp;</dd>
+						<dd class="views">&nbsp;</dd>
+						<dd class="lastpost">&nbsp;</dd>
+					<!-- ENDIF -->
+				</dl>
+			</li>
+			<!-- ENDIF -->
 			<!-- END top_topics -->
 		</ul>
 	</div>

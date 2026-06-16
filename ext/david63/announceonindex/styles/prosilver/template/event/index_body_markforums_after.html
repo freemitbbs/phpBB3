@@ -1,4 +1,4 @@
-{% if S_ALLOW_GUESTS or S_USER_LOGGED_IN %}
+{% if (S_ALLOW_GUESTS or S_USER_LOGGED_IN) and not S_TOPTOPICS_FLAT_INDEX %}
 	<!-- IF .topicrow -->
 	<a class="category{% if S_AOI_HIDDEN %} hidden-category{% endif %}" style="display: none; height: 0"></a>
 		<div class="forabg announcement">

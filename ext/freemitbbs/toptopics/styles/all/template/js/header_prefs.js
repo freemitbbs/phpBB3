@@ -12,11 +12,13 @@
 	};
 	var themes = {
 		prosilver_fm: root.getAttribute('data-header-prefs-gold-style-id') || '',
-		prosilver_fm_cool: root.getAttribute('data-header-prefs-cool-style-id') || ''
+		prosilver_fm_cool: root.getAttribute('data-header-prefs-cool-style-id') || '',
+		prosilver_se: root.getAttribute('data-header-prefs-gray-style-id') || ''
 	};
 	var validTopicLists = {
 		classic: true,
-		enhanced: true
+		enhanced: true,
+		flat: true
 	};
 	var isAnonymous = root.getAttribute('data-header-prefs-anonymous') === '1';
 
@@ -120,6 +122,42 @@
 		return url + (output.length ? '?' + output.join('&') : '') + hash;
 	}
 
+	function removeQueryParams(url, names) {
+		var hash = '';
+		var hashIndex = url.indexOf('#');
+		var query = '';
+		var queryIndex;
+		var pairs;
+		var output = [];
+		var nameMap = {};
+
+		for (var i = 0; i < names.length; i += 1) {
+			nameMap[names[i]] = true;
+		}
+
+		if (hashIndex !== -1) {
+			hash = url.substring(hashIndex);
+			url = url.substring(0, hashIndex);
+		}
+
+		queryIndex = url.indexOf('?');
+		if (queryIndex === -1) {
+			return url + hash;
+		}
+
+		query = url.substring(queryIndex + 1);
+		url = url.substring(0, queryIndex);
+		pairs = query ? query.split('&') : [];
+		for (var j = 0; j < pairs.length; j += 1) {
+			var pairName = pairs[j].split('=')[0];
+			if (!nameMap[decodeURIComponent(pairName.replace(/\+/g, ' '))]) {
+				output.push(pairs[j]);
+			}
+		}
+
+		return url + (output.length ? '?' + output.join('&') : '') + hash;
+	}
+
 	function updateActiveButtons(theme, topicList) {
 		var themeButtons = root.querySelectorAll('[data-header-pref-theme]');
 		for (var i = 0; i < themeButtons.length; i += 1) {
@@ -147,12 +185,19 @@
 
 	root.addEventListener('click', function (event) {
 		var button = event.target.closest ? event.target.closest('.freemitbbs-header-pref-toggle') : event.target;
+		var clickedTheme;
+		var clickedTopicList;
+		var selectedTheme;
+		var selectedTopicList;
+
 		if (!button || !root.contains(button)) {
 			return;
 		}
 
-		var selectedTheme = normalizeTheme(button.getAttribute('data-header-pref-theme') || '') || normalizeTheme(storageGet(keys.theme)) || currentTheme();
-		var selectedTopicList = normalizeTopicList(button.getAttribute('data-header-pref-topic-list') || '') || normalizeTopicList(storageGet(keys.topicList)) || currentTopicList();
+		clickedTheme = normalizeTheme(button.getAttribute('data-header-pref-theme') || '');
+		clickedTopicList = normalizeTopicList(button.getAttribute('data-header-pref-topic-list') || '');
+		selectedTheme = clickedTheme || (isAnonymous ? normalizeTheme(storageGet(keys.theme)) : currentTheme());
+		selectedTopicList = clickedTopicList || (isAnonymous ? normalizeTopicList(storageGet(keys.topicList)) : currentTopicList());
 
 		if (isAnonymous) {
 			storageSet(keys.theme, selectedTheme);
@@ -162,6 +207,14 @@
 		updateActiveButtons(selectedTheme, selectedTopicList);
 		go(selectedTheme, selectedTopicList);
 	});
+
+	if (!isAnonymous) {
+		var cleanUrl = removeQueryParams(currentReturnUrl(), ['style', 'toptopics_view']);
+		if (cleanUrl !== currentReturnUrl()) {
+			window.location.replace(cleanUrl);
+			return;
+		}
+	}
 
 	if (isAnonymous) {
 		var storedTheme = normalizeTheme(storageGet(keys.theme));

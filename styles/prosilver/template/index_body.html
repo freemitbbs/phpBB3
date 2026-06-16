@@ -10,11 +10,13 @@
 -->
 <!-- EVENT index_body_markforums_after -->
 
+<!-- IF not S_TOPTOPICS_FLAT_INDEX -->
 <!-- INCLUDE forumlist_body.html -->
+<!-- ENDIF -->
 
 <!-- EVENT index_body_forumlist_body_after -->
 
-<!-- IF not S_USER_LOGGED_IN and not S_IS_BOT -->
+<!-- IF not S_TOPTOPICS_FLAT_INDEX and not S_USER_LOGGED_IN and not S_IS_BOT -->
 	<form method="post" action="{S_LOGIN_ACTION}" class="headerspace">
 	<h3><a href="{U_LOGIN_LOGOUT}">{L_LOGIN_LOGOUT}</a><!-- IF S_REGISTER_ENABLED -->&nbsp; &bull; &nbsp;<a href="{U_REGISTER}">{L_REGISTER}</a><!-- ENDIF --></h3>
 		<fieldset class="quick-login">
@@ -33,6 +35,7 @@
 	</form>
 <!-- ENDIF -->
 
+<!-- IF not S_TOPTOPICS_FLAT_INDEX -->
 <!-- EVENT index_body_stat_blocks_before -->
 
 <!-- IF S_DISPLAY_ONLINE_LIST -->
@@ -76,5 +79,6 @@
 <!-- ENDIF -->
 
 <!-- EVENT index_body_stat_blocks_after -->
+<!-- ENDIF -->
 
 <!-- INCLUDE overall_footer.html -->

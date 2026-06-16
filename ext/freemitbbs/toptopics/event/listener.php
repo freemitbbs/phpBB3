@@ -10,11 +10,15 @@ class listener implements EventSubscriberInterface
 	private const USER_OPTION_HIDE_TOPIC_LIST_MEDIA_PREVIEWS = 21;
 	private const USER_OPTION_HIDE_ENHANCED_TOPIC_LIST_VIEW = 22;
 	private const USER_OPTION_SHOW_ENHANCED_TOPIC_LIST_VIEW = 23;
+	private const USER_OPTION_SHOW_FLAT_TOPIC_LIST_VIEW = 24;
 	private const HEADER_PREFS_HASH_NAME = 'freemitbbs_toptopics_header_preferences';
 	private const HEADER_THEME_GOLD = 'prosilver_fm';
 	private const HEADER_THEME_COOL = 'prosilver_fm_cool';
+	private const HEADER_THEME_GRAY = 'prosilver_se';
 	private const HEADER_TOPIC_LIST_CLASSIC = 'classic';
 	private const HEADER_TOPIC_LIST_ENHANCED = 'enhanced';
+	private const HEADER_TOPIC_LIST_FLAT = 'flat';
+	private const FLAT_TOPIC_LIST_PER_PAGE = 20;
 	private const DEFAULT_PER_FORUM_TOPIC_LIMIT = 3;
 	private const BALANCED_TOPIC_FETCH_MULTIPLIER = 5;
 	private const INDEX_CATEGORY_FORUM_CANDIDATE_MULTIPLIER = 2;
@@ -34,6 +38,8 @@ class listener implements EventSubscriberInterface
 	private const POST_MESSAGE_REWRITE_CACHE_PREFIX = '_freemitbbs_toptopics_post_message_rewrite_';
 	private const POST_MESSAGE_REWRITE_CACHE_REVISION = 1;
 	private const POST_MESSAGE_REWRITE_CACHE_SECONDS = 604800;
+	private const INLINE_PREVIEW_PARAGRAPH_MARKER = '%%FREEMITBBS_INLINE_PARAGRAPH%%';
+	private const INLINE_PREVIEW_PARAGRAPH_SEPARATOR = "\xE3\x80\x80\xE3\x80\x80";
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
@@ -206,10 +212,11 @@ class listener implements EventSubscriberInterface
 		$this->language->add_lang('toptopics', 'freemitbbs/toptopics');
 		$this->carry_topic_list_view_parameter($this->requested_topic_list_view());
 
-		$classic_topic_list_view = $this->user_hides_enhanced_topic_list_view();
+		$current_topic_list_view = $this->current_topic_list_view();
 		$this->template->assign_vars([
-			'S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW' => !$classic_topic_list_view,
-			'S_TOPTOPICS_CLASSIC_TOPIC_LIST_VIEW' => $classic_topic_list_view,
+			'S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW' => $current_topic_list_view === self::HEADER_TOPIC_LIST_ENHANCED,
+			'S_TOPTOPICS_CLASSIC_TOPIC_LIST_VIEW' => $current_topic_list_view !== self::HEADER_TOPIC_LIST_ENHANCED,
+			'S_TOPTOPICS_FLAT_TOPIC_LIST_VIEW' => $current_topic_list_view === self::HEADER_TOPIC_LIST_FLAT,
 		]);
 	}
 
@@ -217,11 +224,9 @@ class listener implements EventSubscriberInterface
 	{
 		$styles = $this->get_header_preference_styles();
 		$can_switch_style = !$this->config['override_user_style'] || $this->auth->acl_get('a_styles');
-		$has_theme_styles = isset($styles[self::HEADER_THEME_GOLD], $styles[self::HEADER_THEME_COOL]);
-		$current_theme = (string) ($this->user->style['style_path'] ?? '');
-		$current_topic_list = $this->user_hides_enhanced_topic_list_view()
-			? self::HEADER_TOPIC_LIST_CLASSIC
-			: self::HEADER_TOPIC_LIST_ENHANCED;
+		$has_theme_styles = isset($styles[self::HEADER_THEME_GOLD], $styles[self::HEADER_THEME_COOL], $styles[self::HEADER_THEME_GRAY]);
+		$current_theme = $this->get_current_header_preference_theme($styles);
+		$current_topic_list = $this->current_topic_list_view();
 
 		$this->template->assign_vars([
 			'S_TOPTOPICS_HEADER_PREFS' => true,
@@ -229,14 +234,17 @@ class listener implements EventSubscriberInterface
 			'S_TOPTOPICS_HEADER_PREFS_ANONYMOUS' => (int) ($this->user->data['user_id'] ?? ANONYMOUS) === ANONYMOUS,
 			'S_TOPTOPICS_HEADER_PREFS_GOLD_ACTIVE' => $current_theme === self::HEADER_THEME_GOLD,
 			'S_TOPTOPICS_HEADER_PREFS_COOL_ACTIVE' => $current_theme === self::HEADER_THEME_COOL,
+			'S_TOPTOPICS_HEADER_PREFS_GRAY_ACTIVE' => $current_theme === self::HEADER_THEME_GRAY,
 			'S_TOPTOPICS_HEADER_PREFS_CLASSIC_ACTIVE' => $current_topic_list === self::HEADER_TOPIC_LIST_CLASSIC,
 			'S_TOPTOPICS_HEADER_PREFS_ENHANCED_ACTIVE' => $current_topic_list === self::HEADER_TOPIC_LIST_ENHANCED,
+			'S_TOPTOPICS_HEADER_PREFS_FLAT_ACTIVE' => $current_topic_list === self::HEADER_TOPIC_LIST_FLAT,
 			'U_TOPTOPICS_HEADER_PREFS' => $this->helper->route('freemitbbs_toptopics_header_preferences'),
 			'TOPTOPICS_HEADER_PREFS_HASH' => generate_link_hash(self::HEADER_PREFS_HASH_NAME),
 			'TOPTOPICS_HEADER_PREFS_CURRENT_THEME' => $current_theme,
 			'TOPTOPICS_HEADER_PREFS_CURRENT_TOPIC_LIST' => $current_topic_list,
 			'TOPTOPICS_HEADER_PREFS_GOLD_STYLE_ID' => (int) ($styles[self::HEADER_THEME_GOLD] ?? 0),
 			'TOPTOPICS_HEADER_PREFS_COOL_STYLE_ID' => (int) ($styles[self::HEADER_THEME_COOL] ?? 0),
+			'TOPTOPICS_HEADER_PREFS_GRAY_STYLE_ID' => (int) ($styles[self::HEADER_THEME_GRAY] ?? 0),
 		]);
 	}
 
@@ -301,11 +309,16 @@ class listener implements EventSubscriberInterface
 		$data['toptopics_show_enhanced_topic_list_view'] = !empty($event['submit'])
 			? (bool) $this->request->variable('toptopics_show_enhanced_topic_list_view', false)
 			: $this->user_shows_enhanced_topic_list_view(false);
+		$data['toptopics_show_flat_topic_list_view'] = !empty($event['submit'])
+			? (bool) $this->request->variable('toptopics_show_flat_topic_list_view', false)
+			: $this->user_shows_flat_topic_list_view(false);
 		$this->template->assign_vars([
 			'S_TOPTOPICS_SHOW_TOPIC_LIST_MEDIA_PREVIEWS' => $data['toptopics_show_topic_list_media_previews'],
 			'S_TOPTOPICS_TOPIC_LIST_MEDIA_PREVIEWS_DISABLED' => !$data['toptopics_show_topic_list_media_previews'],
 			'S_TOPTOPICS_SHOW_ENHANCED_TOPIC_LIST_VIEW' => $data['toptopics_show_enhanced_topic_list_view'],
 			'S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW_DISABLED' => !$data['toptopics_show_enhanced_topic_list_view'],
+			'S_TOPTOPICS_SHOW_FLAT_TOPIC_LIST_VIEW' => $data['toptopics_show_flat_topic_list_view'],
+			'S_TOPTOPICS_FLAT_TOPIC_LIST_VIEW_DISABLED' => !$data['toptopics_show_flat_topic_list_view'],
 		]);
 
 		if ($this->has_user_home_forum_exclusion_column())
@@ -324,6 +337,11 @@ class listener implements EventSubscriberInterface
 		$data = $event['data'];
 		$sql_ary = $event['sql_ary'];
 		$show_enhanced_topic_list_view = (bool) ($data['toptopics_show_enhanced_topic_list_view'] ?? false);
+		$show_flat_topic_list_view = (bool) ($data['toptopics_show_flat_topic_list_view'] ?? false);
+		if ($show_flat_topic_list_view)
+		{
+			$show_enhanced_topic_list_view = false;
+		}
 		$sql_ary['user_options'] = phpbb_optionset(
 			self::USER_OPTION_HIDE_TOPIC_LIST_MEDIA_PREVIEWS,
 			!(bool) ($data['toptopics_show_topic_list_media_previews'] ?? true),
@@ -337,6 +355,11 @@ class listener implements EventSubscriberInterface
 		$sql_ary['user_options'] = phpbb_optionset(
 			self::USER_OPTION_SHOW_ENHANCED_TOPIC_LIST_VIEW,
 			$show_enhanced_topic_list_view,
+			(int) $sql_ary['user_options']
+		);
+		$sql_ary['user_options'] = phpbb_optionset(
+			self::USER_OPTION_SHOW_FLAT_TOPIC_LIST_VIEW,
+			$show_flat_topic_list_view,
 			(int) $sql_ary['user_options']
 		);
 
@@ -1071,8 +1094,12 @@ class listener implements EventSubscriberInterface
 
 	public function index_category_blocks($event): void
 	{
-		if ($this->user->data['is_bot'])
+		if ($this->user->data['is_bot'] || $this->user_shows_flat_topic_list_view())
 		{
+			if ($this->user_shows_flat_topic_list_view())
+			{
+				$event['forum_rows'] = [];
+			}
 			$this->index_category_blocks = [];
 			return;
 		}
@@ -1482,6 +1509,12 @@ class listener implements EventSubscriberInterface
 			return;
 		}
 
+		if ($this->user_shows_flat_topic_list_view())
+		{
+			$this->assign_flat_index_topic_list();
+			return;
+		}
+
 		$topics = $this->get_index_summary_topics();
 		$this->template->assign_var(
 			'S_TOPTOPICS_INDEX_BELOW',
@@ -1496,6 +1529,219 @@ class listener implements EventSubscriberInterface
 			$this->exclude_index_forum_ids($this->get_readable_forum_ids()),
 			max(0, (int) $this->config['toptopics_index_limit'])
 		);
+	}
+
+	protected function assign_flat_index_topic_list(): void
+	{
+		$forum_ids = $this->get_flat_index_forum_ids();
+		$total_topics = !empty($forum_ids) ? $this->count_flat_index_topics($forum_ids) : 0;
+		$pagination = $this->get_pagination_service();
+		$start = max(0, (int) $this->request->variable('start', 0));
+		if ($pagination !== null)
+		{
+			$start = $pagination->validate_start($start, self::FLAT_TOPIC_LIST_PER_PAGE, $total_topics);
+		}
+		else if ($total_topics > 0 && $start >= $total_topics)
+		{
+			$start = max(0, $total_topics - ($total_topics % self::FLAT_TOPIC_LIST_PER_PAGE ?: self::FLAT_TOPIC_LIST_PER_PAGE));
+		}
+
+		$topics = !empty($forum_ids) && $total_topics > 0
+			? $this->get_flat_index_topics($forum_ids, self::FLAT_TOPIC_LIST_PER_PAGE, $start)
+			: [];
+		$topics = $this->add_first_post_net_dislike_scores($topics);
+		$topics = $this->decorate_topics($topics, false);
+
+		$this->template->assign_vars([
+			'S_TOPTOPICS_FLAT_INDEX' => true,
+			'S_TOPTOPICS_INCLUDE_FORUM_NAME' => true,
+			'S_TOPTOPICS_COLLAPSIBLE' => false,
+			'S_TOPTOPICS_HIDDEN' => false,
+			'U_TOPTOPICS_COLLAPSE_URL' => '',
+			'TOPTOPICS_BLOCK_TITLE' => $this->language->lang('SEARCH_NEW'),
+			'TOPTOPICS_BLOCK_ID' => 'toptopics_flat_index',
+			'TOPTOPICS_FLAT_TOTAL' => $this->language->lang('TOPTOPICS_FLAT_TOTAL', $total_topics),
+			'TOPTOPICS_FLAT_EMPTY' => $this->language->lang('TOPTOPICS_FLAT_EMPTY'),
+			'TOPTOPICS_FLAT_PAGE_NUMBER' => $pagination !== null ? $pagination->on_page($total_topics, self::FLAT_TOPIC_LIST_PER_PAGE, $start) : '',
+		]);
+		$this->template->append_var('BODY_CLASS', ' toptopics-flat-index-page');
+
+		if ($pagination !== null)
+		{
+			$this->template->destroy_block_vars('toptopics_flat_pagination');
+			$pagination->generate_template_pagination(
+				append_sid($this->root_path . 'index.' . $this->php_ext),
+				'toptopics_flat_pagination',
+				'start',
+				$total_topics,
+				self::FLAT_TOPIC_LIST_PER_PAGE,
+				$start
+			);
+		}
+
+		foreach ($topics as $topic)
+		{
+			$this->template->assign_block_vars('top_topics', $this->build_topic_template_row($topic));
+		}
+	}
+
+	protected function get_flat_index_forum_ids(): array
+	{
+		$forum_ids = $this->exclude_index_forum_ids($this->get_readable_forum_ids());
+		$passworded_forums = array_map('intval', $this->user->get_passworded_forums());
+		if (!empty($passworded_forums))
+		{
+			$forum_ids = array_values(array_diff($forum_ids, $passworded_forums));
+		}
+
+		return $this->normalise_forum_ids($forum_ids);
+	}
+
+	protected function count_flat_index_topics(array $forum_ids): int
+	{
+		$where_sql = $this->build_flat_index_topic_where_sql($forum_ids);
+		if ($where_sql === '')
+		{
+			return 0;
+		}
+
+		$sql = 'SELECT COUNT(t.topic_id) AS topic_count
+			FROM ' . TOPICS_TABLE . ' t
+			WHERE ' . $where_sql;
+		$result = $this->db->sql_query($sql);
+		$count = (int) $this->db->sql_fetchfield('topic_count');
+		$this->db->sql_freeresult($result);
+
+		return max(0, $count);
+	}
+
+	protected function get_flat_index_topics(array $forum_ids, int $limit, int $start): array
+	{
+		$where_sql = $this->build_flat_index_topic_where_sql($forum_ids);
+		if ($where_sql === '')
+		{
+			return [];
+		}
+
+		$sql = 'SELECT t.topic_id, t.forum_id, t.topic_title, t.topic_time, t.topic_poster,
+				t.topic_first_poster_name, t.topic_first_poster_colour, t.topic_last_post_id,
+				t.topic_last_post_time, t.topic_last_poster_id, t.topic_last_poster_name,
+				t.topic_last_poster_colour, t.topic_status, t.topic_type, t.poll_start,
+				t.topic_first_post_id, t.topic_views AS views,
+				GREATEST(t.topic_posts_approved - 1, 0) AS replies,
+				0 AS like_count, 0 AS dislike_count, 0 AS flag_count,
+				f.forum_name
+			FROM ' . TOPICS_TABLE . ' t
+			INNER JOIN ' . FORUMS_TABLE . ' f
+				ON f.forum_id = t.forum_id
+			WHERE ' . $where_sql . '
+			ORDER BY t.topic_last_post_time DESC, t.topic_last_post_id DESC';
+		$result = $this->db->sql_query_limit($sql, max(1, $limit), max(0, $start));
+		$topics = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$topics[] = $row;
+		}
+		$this->db->sql_freeresult($result);
+
+		return $topics;
+	}
+
+	protected function build_flat_index_topic_where_sql(array $forum_ids): string
+	{
+		$forum_ids = $this->normalise_forum_ids($forum_ids);
+		if (empty($forum_ids))
+		{
+			return '';
+		}
+
+		$where = [
+			't.topic_moved_id = 0',
+			$this->db->sql_in_set('t.forum_id', $forum_ids),
+			$this->get_topic_visibility_sql($forum_ids, 't.'),
+		];
+
+		$non_foe_topic_sql = trim($this->build_non_foe_topic_sql('t'));
+		if ($non_foe_topic_sql !== '')
+		{
+			$where[] = preg_replace('/^AND\s+/i', '', $non_foe_topic_sql);
+		}
+
+		$disliked_topic_sql = trim($this->build_first_post_disliked_topic_exclusion_sql('t'));
+		if ($disliked_topic_sql !== '')
+		{
+			$where[] = preg_replace('/^AND\s+/i', '', $disliked_topic_sql);
+		}
+
+		return implode('
+			AND ', array_filter($where));
+	}
+
+	protected function get_topic_visibility_sql(array $forum_ids, string $table_alias): string
+	{
+		global $phpbb_container;
+
+		if (isset($phpbb_container) && $phpbb_container->has('content.visibility'))
+		{
+			try
+			{
+				return (string) $phpbb_container->get('content.visibility')->get_forums_visibility_sql('topic', $forum_ids, $table_alias);
+			}
+			catch (\Throwable $exception)
+			{
+			}
+		}
+
+		return $table_alias . 'topic_visibility = ' . ITEM_APPROVED;
+	}
+
+	protected function get_pagination_service(): ?\phpbb\pagination
+	{
+		global $phpbb_container;
+
+		if (!isset($phpbb_container) || !$phpbb_container->has('pagination'))
+		{
+			return null;
+		}
+
+		try
+		{
+			$pagination = $phpbb_container->get('pagination');
+		}
+		catch (\Throwable $exception)
+		{
+			return null;
+		}
+
+		return $pagination instanceof \phpbb\pagination ? $pagination : null;
+	}
+
+	protected function add_first_post_net_dislike_scores(array $topics): array
+	{
+		if (empty($topics))
+		{
+			return [];
+		}
+
+		$topic_ids = [];
+		foreach ($topics as $topic)
+		{
+			$topic_id = (int) ($topic['topic_id'] ?? 0);
+			if ($topic_id > 0)
+			{
+				$topic_ids[] = $topic_id;
+			}
+		}
+
+		$net_scores = $this->get_first_post_net_dislike_score_map($topic_ids);
+		foreach ($topics as &$topic)
+		{
+			$topic_id = (int) ($topic['topic_id'] ?? 0);
+			$topic['first_post_net_dislike_score'] = $net_scores[$topic_id] ?? 0;
+		}
+		unset($topic);
+
+		return $topics;
 	}
 
 	public function forum_page_summary($event)
@@ -1974,36 +2220,53 @@ class listener implements EventSubscriberInterface
 		return !$this->user_shows_enhanced_topic_list_view($honor_request);
 	}
 
-	protected function user_shows_enhanced_topic_list_view(bool $honor_request = true): bool
+	protected function current_topic_list_view(bool $honor_request = true): string
 	{
 		if ($honor_request)
 		{
 			$requested_topic_list_view = $this->requested_topic_list_view();
 			if ($requested_topic_list_view !== '')
 			{
-				return $requested_topic_list_view === self::HEADER_TOPIC_LIST_ENHANCED;
+				return $requested_topic_list_view;
 			}
 		}
 
 		if ((int) ($this->user->data['user_id'] ?? ANONYMOUS) === ANONYMOUS)
 		{
-			return false;
+			return self::HEADER_TOPIC_LIST_CLASSIC;
 		}
 
 		$user_options = (int) ($this->user->data['user_options'] ?? 0);
-		if (phpbb_optionget(self::USER_OPTION_HIDE_ENHANCED_TOPIC_LIST_VIEW, $user_options))
+		if (phpbb_optionget(self::USER_OPTION_SHOW_FLAT_TOPIC_LIST_VIEW, $user_options))
 		{
-			return false;
+			return self::HEADER_TOPIC_LIST_FLAT;
 		}
 
-		return phpbb_optionget(self::USER_OPTION_SHOW_ENHANCED_TOPIC_LIST_VIEW, $user_options);
+		if (phpbb_optionget(self::USER_OPTION_HIDE_ENHANCED_TOPIC_LIST_VIEW, $user_options))
+		{
+			return self::HEADER_TOPIC_LIST_CLASSIC;
+		}
+
+		return phpbb_optionget(self::USER_OPTION_SHOW_ENHANCED_TOPIC_LIST_VIEW, $user_options)
+			? self::HEADER_TOPIC_LIST_ENHANCED
+			: self::HEADER_TOPIC_LIST_CLASSIC;
+	}
+
+	protected function user_shows_enhanced_topic_list_view(bool $honor_request = true): bool
+	{
+		return $this->current_topic_list_view($honor_request) === self::HEADER_TOPIC_LIST_ENHANCED;
+	}
+
+	protected function user_shows_flat_topic_list_view(bool $honor_request = true): bool
+	{
+		return $this->current_topic_list_view($honor_request) === self::HEADER_TOPIC_LIST_FLAT;
 	}
 
 	protected function requested_topic_list_view(): string
 	{
 		$view = strtolower(trim((string) $this->request->variable('toptopics_view', '')));
 
-		return in_array($view, [self::HEADER_TOPIC_LIST_CLASSIC, self::HEADER_TOPIC_LIST_ENHANCED], true) ? $view : '';
+		return in_array($view, [self::HEADER_TOPIC_LIST_CLASSIC, self::HEADER_TOPIC_LIST_ENHANCED, self::HEADER_TOPIC_LIST_FLAT], true) ? $view : '';
 	}
 
 	protected function carry_topic_list_view_parameter(string $view): void
@@ -2033,7 +2296,7 @@ class listener implements EventSubscriberInterface
 		$sql = 'SELECT style_id, style_path
 			FROM ' . STYLES_TABLE . '
 			WHERE style_active = 1
-				AND ' . $this->db->sql_in_set('style_path', [self::HEADER_THEME_GOLD, self::HEADER_THEME_COOL]);
+				AND ' . $this->db->sql_in_set('style_path', [self::HEADER_THEME_GOLD, self::HEADER_THEME_COOL, self::HEADER_THEME_GRAY]);
 		$result = $this->db->sql_query($sql, 3600);
 		while ($row = $this->db->sql_fetchrow($result))
 		{
@@ -2042,6 +2305,25 @@ class listener implements EventSubscriberInterface
 		$this->db->sql_freeresult($result);
 
 		return $styles;
+	}
+
+	protected function get_current_header_preference_theme(array $styles): string
+	{
+		if ((int) ($this->user->data['user_id'] ?? ANONYMOUS) === ANONYMOUS)
+		{
+			return (string) ($this->user->style['style_path'] ?? '');
+		}
+
+		$user_style_id = (int) ($this->user->data['user_style'] ?? 0);
+		foreach ($styles as $style_path => $style_id)
+		{
+			if ((int) $style_id === $user_style_id)
+			{
+				return (string) $style_path;
+			}
+		}
+
+		return '';
 	}
 
 	protected function has_user_home_forum_exclusion_column(): bool
@@ -3492,14 +3774,29 @@ class listener implements EventSubscriberInterface
 			return '';
 		}
 
-		$normalized = preg_replace('/\s+/u', "\xE3\x80\x80", $plain_text);
+		$plain_text = str_replace(self::INLINE_PREVIEW_PARAGRAPH_SEPARATOR, self::INLINE_PREVIEW_PARAGRAPH_MARKER, $plain_text);
+		$normalized = preg_replace('/\r\n|\r|\n/u', self::INLINE_PREVIEW_PARAGRAPH_MARKER, $plain_text);
 		if ($normalized !== null)
 		{
-			return $this->trim_server_inline_preview_plain_text($normalized);
+			$plain_text = $normalized;
 		}
 
-		$normalized = preg_replace('/\s+/', ' ', $plain_text);
-		return trim((string) $normalized);
+		$normalized = preg_replace('/[\t\f\v \p{Zs}]+/u', ' ', $plain_text);
+		if ($normalized !== null)
+		{
+			$plain_text = $normalized;
+		}
+
+		$marker = preg_quote(self::INLINE_PREVIEW_PARAGRAPH_MARKER, '/');
+		$normalized = preg_replace('/(?: *' . $marker . ' *)+/u', self::INLINE_PREVIEW_PARAGRAPH_MARKER, $plain_text);
+		if ($normalized !== null)
+		{
+			$plain_text = $normalized;
+		}
+
+		$plain_text = str_replace(self::INLINE_PREVIEW_PARAGRAPH_MARKER, self::INLINE_PREVIEW_PARAGRAPH_SEPARATOR, $plain_text);
+
+		return $this->trim_server_inline_preview_plain_text($plain_text);
 	}
 
 	protected function trim_server_inline_preview_plain_text(string $plain_text): string
@@ -3699,35 +3996,39 @@ class listener implements EventSubscriberInterface
 
 		foreach ($topics as $topic)
 		{
-			$topic_row = [
-				'U_TOPIC' => append_sid($this->root_path . 'viewtopic.' . $this->php_ext, 'f=' . (int) $topic['forum_id'] . '&t=' . (int) $topic['topic_id']),
-				'U_FORUM' => append_sid($this->root_path . 'viewforum.' . $this->php_ext, 'f=' . (int) $topic['forum_id']),
-				'U_NEWEST_POST' => $topic['u_newest_post'],
-				'TOPIC_TITLE' => $this->escape_display_text(censor_text($topic['topic_title'])),
-				'TOPIC_IMG_STYLE' => $topic['topic_img_style'],
-				'TOPIC_FOLDER_IMG_ALT' => $topic['topic_folder_img_alt'],
-				'FORUM_NAME' => $topic['forum_name'],
-				'USERNAME_FULL' => get_topic_list_username_string('full', (int) $topic['topic_poster'], $topic['topic_first_poster_name'], $topic['topic_first_poster_colour']),
-				'POST_TIME' => $this->user->format_date((int) $topic['topic_time']),
-				'U_LAST_POST' => $this->build_last_post_url($topic),
-				'LAST_POST_AUTHOR_FULL' => $this->get_last_post_author_full($topic),
-				'LAST_POST_TIME' => $this->get_last_post_time_text($topic),
-				'LAST_POST_TIME_RFC3339' => $this->get_last_post_time_rfc3339($topic),
-				'REPLIES' => (int) $topic['replies'],
-				'VIEWS' => (int) $topic['views'],
-				'TOPIC_LIKE_COUNT' => $this->get_topic_like_count_from_row($topic),
-				'LIKES' => (int) $topic['like_count'],
-				'DISLIKES' => (int) $topic['dislike_count'],
-				'FLAGS' => (int) $topic['flag_count'],
-				'TOPIC_DISLIKE_FADE_CLASS' => $this->get_topic_dislike_fade_class((int) ($topic['first_post_net_dislike_score'] ?? 0)),
-				'S_UNREAD_TOPIC' => !empty($topic['unread_topic']),
-			];
-			$topic_row = array_merge($topic_row, $this->build_hover_topic_preview_vars((int) $topic['topic_id']));
-			$topic_row = $this->copy_inline_topic_preview_vars($topic_row, $topic);
-			$topic_row = $this->copy_first_post_length_badge_vars($topic_row, $topic);
-
-			$this->template->assign_block_vars('top_topics', $topic_row);
+			$this->template->assign_block_vars('top_topics', $this->build_topic_template_row($topic));
 		}
+	}
+
+	protected function build_topic_template_row(array $topic): array
+	{
+		$topic_row = [
+			'U_TOPIC' => append_sid($this->root_path . 'viewtopic.' . $this->php_ext, 'f=' . (int) $topic['forum_id'] . '&t=' . (int) $topic['topic_id']),
+			'U_FORUM' => append_sid($this->root_path . 'viewforum.' . $this->php_ext, 'f=' . (int) $topic['forum_id']),
+			'U_NEWEST_POST' => $topic['u_newest_post'] ?? '',
+			'TOPIC_TITLE' => $this->escape_display_text(censor_text((string) ($topic['topic_title'] ?? ''))),
+			'TOPIC_IMG_STYLE' => $topic['topic_img_style'] ?? '',
+			'TOPIC_FOLDER_IMG_ALT' => $topic['topic_folder_img_alt'] ?? '',
+			'FORUM_NAME' => $topic['forum_name'] ?? '',
+			'USERNAME_FULL' => get_topic_list_username_string('full', (int) ($topic['topic_poster'] ?? 0), (string) ($topic['topic_first_poster_name'] ?? ''), (string) ($topic['topic_first_poster_colour'] ?? '')),
+			'POST_TIME' => $this->user->format_date((int) ($topic['topic_time'] ?? 0)),
+			'U_LAST_POST' => $this->build_last_post_url($topic),
+			'LAST_POST_AUTHOR_FULL' => $this->get_last_post_author_full($topic),
+			'LAST_POST_TIME' => $this->get_last_post_time_text($topic),
+			'LAST_POST_TIME_RFC3339' => $this->get_last_post_time_rfc3339($topic),
+			'REPLIES' => (int) ($topic['replies'] ?? 0),
+			'VIEWS' => (int) ($topic['views'] ?? 0),
+			'TOPIC_LIKE_COUNT' => $this->get_topic_like_count_from_row($topic),
+			'LIKES' => (int) ($topic['like_count'] ?? 0),
+			'DISLIKES' => (int) ($topic['dislike_count'] ?? 0),
+			'FLAGS' => (int) ($topic['flag_count'] ?? 0),
+			'TOPIC_DISLIKE_FADE_CLASS' => $this->get_topic_dislike_fade_class((int) ($topic['first_post_net_dislike_score'] ?? 0)),
+			'S_UNREAD_TOPIC' => !empty($topic['unread_topic']),
+		];
+		$topic_row = array_merge($topic_row, $this->build_hover_topic_preview_vars((int) ($topic['topic_id'] ?? 0)));
+		$topic_row = $this->copy_inline_topic_preview_vars($topic_row, $topic);
+
+		return $this->copy_first_post_length_badge_vars($topic_row, $topic);
 	}
 
 	protected function exclude_foe_authored_topics(array $topics): array

@@ -1,4 +1,4 @@
-{% if S_NEWSSCRAPER_INDEX_DIGEST %}
+{% if S_NEWSSCRAPER_INDEX_DIGEST and not S_TOPTOPICS_FLAT_INDEX %}
 {% if S_NEWSSCRAPER_INDEX_COLLAPSIBLE %}
 	<a class="category{% if S_NEWSSCRAPER_INDEX_HIDDEN %} hidden-category{% endif %}" id="category{{ NEWSSCRAPER_INDEX_BLOCK_ID }}" style="display: none; height: 0"></a>
 {% endif %}

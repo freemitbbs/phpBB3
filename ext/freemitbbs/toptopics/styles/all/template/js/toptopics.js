@@ -379,7 +379,9 @@
 		var inlinePreviewObserverRootMargin = '960px 0px 1600px 0px';
 		var inlinePreviewMaxImages = 8;
 		var inlinePreviewTikTokFitHeight = 360;
-		var inlinePreviewTextJoiner = '\u3000';
+		var inlinePreviewTextJoiner = ' ';
+		var inlinePreviewParagraphJoiner = '\u3000\u3000';
+		var inlinePreviewParagraphMarker = '__FREEMITBBS_INLINE_PARAGRAPH__';
 		var inlinePreviewRichMediaSelector = '[data-s9e-mediaembed], iframe, video, audio, object, embed, .inline-attachment, .attachbox, blockquote.twitter-tweet, .twitter-tweet, .twitter-tweet-rendered';
 
 	function isInlinePreviewTwitterMedia($media) {
@@ -1193,16 +1195,29 @@
 		var $clone = $content.clone();
 
 		$clone.find('script, style, noscript, img, iframe, video, audio, object, embed, [data-s9e-mediaembed], .inline-attachment, .attachbox').remove();
-		$clone.find('br').replaceWith(inlinePreviewTextJoiner);
+		$clone.find('br').replaceWith(inlinePreviewParagraphMarker);
 		$clone.find('p, div, li, blockquote, pre, table, tr, h1, h2, h3, h4, h5, h6').each(function() {
-			$(this).before(inlinePreviewTextJoiner).after(inlinePreviewTextJoiner);
+			$(this).before(inlinePreviewParagraphMarker).after(inlinePreviewParagraphMarker);
 		});
 
-		return $.trim($clone.text()).replace(/\s+/g, inlinePreviewTextJoiner);
+		return normalizeInlinePreviewPlainText($clone.text());
 	}
 
 	function normalizeInlinePreviewPlainText(plainText) {
-		return $.trim(String(plainText || '')).replace(/\s+/g, inlinePreviewTextJoiner);
+		var text = $.trim(String(plainText || ''));
+
+		if (!text) {
+			return '';
+		}
+
+		text = text
+			.replace(/\u3000{2,}/g, inlinePreviewParagraphMarker)
+			.replace(/\r\n|\r|\n/g, inlinePreviewParagraphMarker)
+			.replace(/[ \t\f\v\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]+/g, inlinePreviewTextJoiner)
+			.replace(/(?: *__FREEMITBBS_INLINE_PARAGRAPH__ *)+/g, inlinePreviewParagraphMarker)
+			.replace(/__FREEMITBBS_INLINE_PARAGRAPH__/g, inlinePreviewParagraphJoiner);
+
+		return $.trim(text);
 	}
 
 	function buildInlineTextPreviewFromText($placeholder, plainText, rich) {
