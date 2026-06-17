@@ -36,7 +36,7 @@ class listener implements EventSubscriberInterface
 	private const FIRST_POST_LENGTH_CACHE_REVISION = 1;
 	private const FIRST_POST_LENGTH_CACHE_SECONDS = 604800;
 	private const POST_MESSAGE_REWRITE_CACHE_PREFIX = '_freemitbbs_toptopics_post_message_rewrite_';
-	private const POST_MESSAGE_REWRITE_CACHE_REVISION = 1;
+	private const POST_MESSAGE_REWRITE_CACHE_REVISION = 3;
 	private const POST_MESSAGE_REWRITE_CACHE_SECONDS = 604800;
 	private const INLINE_PREVIEW_PARAGRAPH_MARKER = '%%FREEMITBBS_INLINE_PARAGRAPH%%';
 	private const INLINE_PREVIEW_PARAGRAPH_SEPARATOR = "\xE3\x80\x80\xE3\x80\x80";
@@ -571,7 +571,7 @@ class listener implements EventSubscriberInterface
 			return $message;
 		}
 
-		$needs_media_rewrite = stripos($message, '[media]') !== false;
+		$needs_media_rewrite = stripos($message, '[media]') !== false || $this->message_may_contain_youtube_media_link($message);
 		$needs_local_link_rewrite = $this->can_rewrite_local_viewtopic_link_texts($message);
 		if (!$needs_media_rewrite && !$needs_local_link_rewrite)
 		{
@@ -647,7 +647,7 @@ class listener implements EventSubscriberInterface
 
 	protected function rewrite_unparsed_media_embed_links(string $message): string
 	{
-		if ($message === '' || stripos($message, '[media]') === false)
+		if ($message === '' || !$this->message_may_contain_youtube_media_link($message))
 		{
 			return $message;
 		}
@@ -662,12 +662,104 @@ class listener implements EventSubscriberInterface
 			$message
 		);
 
+		$rewritten = preg_replace_callback(
+			'#\[media\]\s*(v?https?://(?:www\.|m\.)?(?:youtube\.com|youtu\.be)/[^\s\[\]<>"\']+)\s*\[/media\]#i',
+			function ($match) {
+				$params = $this->extract_youtube_embed_params((string) ($match[1] ?? ''));
+
+				return $params === null ? (string) $match[0] : $this->build_youtube_embed_html($params);
+			},
+			$rewritten ?? $message
+		);
+
+		$rewritten = preg_replace_callback(
+			'#<a\b(?=[^>]*\bhref=)[^>]*\bhref=(["\'])(.*?)\1[^>]*>(.*?)</a>#is',
+			function ($match) {
+				$params = $this->extract_youtube_embed_params((string) ($match[2] ?? ''));
+				if ($params === null)
+				{
+					return (string) $match[0];
+				}
+
+				$link_text = trim($this->decode_display_text(strip_tags((string) ($match[3] ?? ''))));
+				if (!preg_match('#^v?https?://#i', $link_text))
+				{
+					return (string) $match[0];
+				}
+
+				return $this->build_youtube_embed_html($params);
+			},
+			$rewritten ?? $message
+		);
+
+		$rewritten = $this->rewrite_plain_youtube_text_links($rewritten ?? $message);
+
 		return $rewritten ?? $message;
+	}
+
+	protected function rewrite_plain_youtube_text_links(string $message): string
+	{
+		$parts = preg_split('#(<[^>]+>)#', $message, -1, PREG_SPLIT_DELIM_CAPTURE);
+		if ($parts === false)
+		{
+			return $message;
+		}
+
+		$anchor_depth = 0;
+		foreach ($parts as $index => $part)
+		{
+			if ($part === '')
+			{
+				continue;
+			}
+
+			if ($part[0] === '<')
+			{
+				if (preg_match('#^<\s*a\b#i', $part))
+				{
+					$anchor_depth++;
+				}
+				else if ($anchor_depth > 0 && preg_match('#^<\s*/\s*a\s*>#i', $part))
+				{
+					$anchor_depth--;
+				}
+
+				continue;
+			}
+
+			if ($anchor_depth > 0)
+			{
+				continue;
+			}
+
+			$parts[$index] = preg_replace_callback(
+				'#(?<![\w])v?https?://(?:www\.|m\.)?(?:youtube\.com|youtu\.be)/[^\s\[\]<>"\']+#i',
+				function ($match) {
+					$raw_url = (string) ($match[0] ?? '');
+					$url = rtrim($raw_url, " \t\n\r\0\x0B.,;!?)]}");
+					$suffix = substr($raw_url, strlen($url));
+					$params = $this->extract_youtube_embed_params($url);
+
+					return $params === null ? $raw_url : $this->build_youtube_embed_html($params) . $suffix;
+				},
+				$part
+			) ?? $part;
+		}
+
+		return implode('', $parts);
+	}
+
+	protected function message_may_contain_youtube_media_link(string $message): bool
+	{
+		return stripos($message, 'youtu.be/') !== false
+			|| stripos($message, 'youtube.com/') !== false;
 	}
 
 	protected function extract_youtube_embed_params(string $url): ?array
 	{
 		$url = trim(htmlspecialchars_decode($url, ENT_QUOTES | ENT_HTML5));
+		$url = preg_replace('#^v(?=https?://)#i', '', $url) ?? $url;
+		$url = rtrim($url, " \t\n\r\0\x0B.,;!?)]}");
 		if ($url === '')
 		{
 			return null;
@@ -675,6 +767,12 @@ class listener implements EventSubscriberInterface
 
 		$parts = parse_url($url);
 		if ($parts === false || empty($parts['host']))
+		{
+			return null;
+		}
+
+		$scheme = strtolower((string) ($parts['scheme'] ?? ''));
+		if ($scheme !== '' && $scheme !== 'http' && $scheme !== 'https')
 		{
 			return null;
 		}
