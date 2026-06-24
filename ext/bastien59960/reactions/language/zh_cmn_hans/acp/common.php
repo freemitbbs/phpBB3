@@ -45,7 +45,7 @@ $lang = array_merge($lang ?? [], [
     'REACTIONS_PICKER_USE_JSON'          => '加载完整表情包',
     'REACTIONS_PICKER_USE_JSON_EXPLAIN'  => '取消勾选将不加载外部 JSON 文件，仅显示 10 个常用表情。',
     'REACTIONS_SYNC_INTERVAL'            => '刷新间隔（秒）',
-    'REACTIONS_SYNC_INTERVAL_EXPLAIN'    => '回应数据自动更新的时间间隔（以秒为单位）。',
+    'REACTIONS_SYNC_INTERVAL_EXPLAIN'    => '设为 0 可关闭自动更新。大于 0 且小于 300 秒的值会自动按 300 秒保存。',
 
     // --- Admin Log Messages ---
     'LOG_REACTIONS_IMPORT_START'         => '<strong>尝试导入回应数据</strong><br>• 正在搜索旧版回应扩展的数据。',

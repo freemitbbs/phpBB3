@@ -72,7 +72,7 @@ function toggle_visible(id) {
         showCategories: true,
         showSearch: true,
         useJson: true,
-        syncInterval: 5000,
+        syncInterval: 0,
     };
     
     /** @const {Object} Chaînes de langue pour l'interface JavaScript. Surchargées par `window.REACTIONS_LANG`. */
@@ -1478,8 +1478,18 @@ function toggle_visible(id) {
             liveSyncTimer = null;
         }
 
-        performLiveSync();
-        liveSyncTimer = window.setInterval(performLiveSync, Math.max(1000, options.syncInterval));
+        const configuredInterval = parseInt(options.syncInterval, 10);
+        if (!configuredInterval || configuredInterval < 300000) {
+            return;
+        }
+
+        liveSyncTimer = window.setInterval(() => {
+            if (typeof document.hidden !== 'undefined' && document.hidden) {
+                return;
+            }
+
+            performLiveSync();
+        }, Math.min(3600000, configuredInterval));
     }
 
     /**

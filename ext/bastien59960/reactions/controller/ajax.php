@@ -304,6 +304,19 @@ class ajax
                 ], 400);
             }
 
+            if ($action === 'sync' && !$this->is_background_sync_enabled()) {
+                if (ob_get_level()) {
+                    ob_end_clean();
+                }
+
+                return new JsonResponse([
+                    'success'       => true,
+                    'posts'         => [],
+                    'sync_disabled' => true,
+                    'rid'           => $rid,
+                ]);
+            }
+
             // =====================================================================
             // 4. VALIDATION DES DONNÉES
             // =====================================================================
@@ -813,6 +826,11 @@ class ajax
             'success' => true,
             'posts'   => $payload,
         ]);
+    }
+
+    private function is_background_sync_enabled()
+    {
+        return (int) ($this->config['bastien59960_reactions_sync_interval'] ?? 0) >= 300;
     }
 
     // =============================================================================

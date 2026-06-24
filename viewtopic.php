@@ -25,7 +25,7 @@ include($phpbb_root_path . 'includes/functions_user.' . $phpEx);
 
 /* @var $symfony_request \phpbb\symfony_request */
 $symfony_request = $phpbb_container->get('symfony_request');
-phpbb_strip_sid_for_allowed_get_query($request, $symfony_request, ['sid', 'amp;sid', 'f', 't', 'p', 'start']);
+phpbb_strip_sid_for_allowed_get_query($request, $symfony_request, ['sid', 'amp;sid', 'f', 't', 'p', 'start', 'style', 'toptopics_view', 'view', 'sk', 'sd', 'st', 'hilit']);
 
 // Start session management
 $user->session_begin();
@@ -52,6 +52,10 @@ $sort_key	= $request->variable('sk', $default_sort_key);
 $sort_dir	= $request->variable('sd', $default_sort_dir);
 
 $update		= $request->variable('update', false);
+
+/* @var $viewtopic_guard_cache \phpbb\cache\driver\driver_interface */
+$viewtopic_guard_cache = $phpbb_container->get('cache.driver');
+phpbb_guard_anonymous_viewtopic_get_request($request, $user, $viewtopic_guard_cache, (int) $topic_id, (int) $post_id);
 
 /* @var $pagination \phpbb\pagination */
 $pagination = $phpbb_container->get('pagination');

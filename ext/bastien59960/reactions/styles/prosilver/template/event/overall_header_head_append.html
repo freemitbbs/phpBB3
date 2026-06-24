@@ -28,6 +28,10 @@
 {REACTIONS_AJAX_URL_JS}
 
 // Fallback au cas où l'injection échouerait (ne devrait pas arriver)
+var reactionsSyncInterval = parseInt('{REACTIONS_SYNC_INTERVAL}', 10);
+if (isNaN(reactionsSyncInterval) || reactionsSyncInterval < 0) {
+    reactionsSyncInterval = 0;
+}
 var REACTIONS_OPTIONS = window.REACTIONS_OPTIONS || {
     postEmojiSize: parseInt('{REACTIONS_POST_EMOJI_SIZE}', 10) || 24,
     pickerWidth: parseInt('{REACTIONS_PICKER_WIDTH}', 10) || 320,
@@ -36,7 +40,7 @@ var REACTIONS_OPTIONS = window.REACTIONS_OPTIONS || {
     showCategories: parseInt('{REACTIONS_PICKER_SHOW_CATEGORIES}', 10) === 1,
     showSearch: parseInt('{REACTIONS_PICKER_SHOW_SEARCH}', 10) === 1,
     useJson: parseInt('{REACTIONS_PICKER_USE_JSON}', 10) === 1,
-    syncInterval: parseInt('{REACTIONS_SYNC_INTERVAL}', 10) || 5000
+    syncInterval: reactionsSyncInterval * 1000
 };
 </script>
 

@@ -45,7 +45,7 @@ $lang = array_merge($lang ?? [], [
     'REACTIONS_PICKER_USE_JSON'          => 'Charger l\'ensemble complet d\'emojis',
     'REACTIONS_PICKER_USE_JSON_EXPLAIN'  => 'Décochez pour ne pas charger le fichier JSON externe et n\'afficher que les 10 emojis fréquents.',
     'REACTIONS_SYNC_INTERVAL'            => 'Intervalle de rafraîchissement (en secondes)',
-    'REACTIONS_SYNC_INTERVAL_EXPLAIN'    => 'Temps (en secondes) entre deux actualisations automatiques des réactions.',
+    'REACTIONS_SYNC_INTERVAL_EXPLAIN'    => 'Indiquez 0 pour désactiver les actualisations automatiques. Les valeurs positives inférieures à 300 secondes sont relevées à 300.',
 
     // --- Messages pour le journal d'administration ---
     'LOG_REACTIONS_IMPORT_START'         => '<strong>Tentative d\'importation des réactions</strong><br>• Recherche des données d\'une ancienne extension de réactions.',

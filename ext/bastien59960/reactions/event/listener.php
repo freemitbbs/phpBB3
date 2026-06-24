@@ -123,7 +123,12 @@ class listener implements EventSubscriberInterface
         } catch (\Exception $e) {
             error_log('[phpBB Reactions] AJAX route unavailable: ' . $e->getMessage());
         }
-        $interactive_enabled = $ajax_url !== '';
+        $is_logged_in = (int) ($this->user->data['user_id'] ?? ANONYMOUS) !== ANONYMOUS;
+        $interactive_enabled = $ajax_url !== '' && $is_logged_in;
+        if (!$is_logged_in)
+        {
+            $ajax_url = '';
+        }
 
         $post_emoji_size = (int) ($this->config['bastien59960_reactions_post_emoji_size'] ?? 24);
         $picker_width = (int) ($this->config['bastien59960_reactions_picker_width'] ?? 320);
@@ -133,8 +138,8 @@ class listener implements EventSubscriberInterface
         $picker_show_search = (int) ($this->config['bastien59960_reactions_picker_show_search'] ?? 1);
         $picker_use_json = (int) ($this->config['bastien59960_reactions_picker_use_json'] ?? 1);
 
-        // Lire la valeur en secondes depuis l'ACP (défaut 5s) et la convertir en millisecondes pour le JS.
-        $sync_interval_seconds = (int) ($this->config['bastien59960_reactions_sync_interval'] ?? 20);
+        // Keep background sync opt-in and slow. Legacy short intervals generated too much AJAX load.
+        $sync_interval_seconds = $this->normalise_sync_interval((int) ($this->config['bastien59960_reactions_sync_interval'] ?? 0));
         $sync_interval_ms = $sync_interval_seconds * 1000;
 
         // CORRECTION : Utiliser un chemin web relatif au lieu d'un chemin de fichier serveur.
@@ -174,13 +179,13 @@ class listener implements EventSubscriberInterface
         $debug_mode = (defined('DEBUG') && DEBUG) ? 'true' : 'false';
 
         // Déterminer si l'utilisateur est vraiment connecté (pas anonyme)
-        $is_logged_in = ($this->user->data['user_id'] != ANONYMOUS) ? 'true' : 'false';
+        $is_logged_in_js = $is_logged_in ? 'true' : 'false';
 
         $this->template->assign_var(
             'REACTIONS_AJAX_URL_JS',
             'window.REACTIONS_AJAX_URL = "' . addslashes($ajax_url) . '";' .
             'window.REACTIONS_SID = "' . addslashes(isset($this->user->data['session_id']) ? $this->user->data['session_id'] : '') . '";' .
-            'window.REACTIONS_USER_LOGGED_IN = ' . $is_logged_in . ';' .
+            'window.REACTIONS_USER_LOGGED_IN = ' . $is_logged_in_js . ';' .
             'window.REACTIONS_JSON_PATH = "' . addslashes($json_path) . '";' .
             'window.REACTIONS_DEBUG_MODE = ' . $debug_mode . ';' .
             'window.REACTIONS_OPTIONS = {' .
@@ -218,6 +223,17 @@ class listener implements EventSubscriberInterface
         }
 
         return false;
+    }
+
+    protected function normalise_sync_interval($seconds)
+    {
+        $seconds = (int) $seconds;
+        if ($seconds < 300)
+        {
+            return 0;
+        }
+
+        return min(3600, $seconds);
     }
 
     // Le reste des méthodes reste identique...

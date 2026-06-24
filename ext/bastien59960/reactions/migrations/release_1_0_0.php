@@ -130,7 +130,7 @@ class release_1_0_0 extends \phpbb\db\migration\container_aware_migration
             ['config.add', ['bastien59960_reactions_picker_use_json', 1]],
             ['config.add', ['bastien59960_reactions_picker_emoji_size', 24]],
             ['config.add', ['bastien59960_reactions_post_emoji_size', 24]],
-            ['config.add', ['bastien59960_reactions_sync_interval', 20]], // En secondes (min 3s, max 300s)
+            ['config.add', ['bastien59960_reactions_sync_interval', 0]], // 0 disables background sync; positive values start at 300s
             ['config.add', ['bastien59960_reactions_version', '1.0.0']],
 
             // Modules ACP et UCP (création robuste avec vérification)
