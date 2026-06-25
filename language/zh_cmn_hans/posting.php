@@ -209,7 +209,6 @@ $lang = array_merge($lang, array(
 	'POST_EDITED_MOD'			=> '这篇帖子已经被修改但是需要等待批准。',
 	'POST_GLOBAL'				=> '全局公告',
 	'POST_ICON'					=> '帖子图标',
-	'POSTING_PERMISSIONS'		=> '格式权限',
 	'POST_NORMAL'				=> '普通',
 	'POST_REVIEW'				=> '帖子预览',
 	'POST_REVIEW_EDIT'			=> '帖子查看',

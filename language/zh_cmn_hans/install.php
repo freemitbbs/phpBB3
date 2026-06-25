@@ -82,7 +82,8 @@ $lang = array_merge($lang, array(
 	'ACP_LINK'	=> '前往 <a href="%1$s">管理员控制面板 ACP</a>',
 	
 	'INSTALL_PHPBB_INSTALLED'		=> 'phpBB 已经安装完成。',
-	'INSTALL_PHPBB_NOT_INSTALLED'	=> 'phpBB 尚未安装。'
+	'INSTALL_PHPBB_NOT_INSTALLED'	=> 'phpBB 尚未安装。',
+	'INSTALL_RESTART'				=> '重新启动安装',
 ));
 
 // Requirements translation

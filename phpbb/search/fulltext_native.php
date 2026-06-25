@@ -24,7 +24,6 @@ class fulltext_native extends \phpbb\search\base
 	const UTF8_CJK_LAST = "\xE9\xBE\xBB";
 	const UTF8_CJK_B_FIRST = "\xF0\xA0\x80\x80";
 	const UTF8_CJK_B_LAST = "\xF0\xAA\x9B\x96";
-	const CJK_SEQUENCE_PATTERN = '#[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]{2,}#u';
 
 	/**
 	 * Associative array holding index stats
@@ -51,12 +50,6 @@ class fulltext_native extends \phpbb\search\base
 	 * @var array
 	 */
 	protected $common_words = array();
-
-	/**
-	 * Lookup table for CJK stop bigrams loaded from the Similar Topics language pack.
-	 * @var array|null
-	 */
-	protected $cjk_stop_words;
 
 	/**
 	 * Post ids of posts containing words that are to be included
@@ -205,9 +198,7 @@ class fulltext_native extends \phpbb\search\base
 	{
 		$tokens = '+-|()* ';
 
-		list($keywords, $cjk_placeholders) = $this->prepare_cjk_search_keywords($keywords);
 		$keywords = trim($this->cleanup($keywords, $tokens));
-		$keywords = trim($this->restore_cjk_search_keywords($keywords, $cjk_placeholders));
 
 		// allow word|word|word without brackets
 		if ((strpos($keywords, ' ') === false) && (strpos($keywords, '|') !== false) && (strpos($keywords, '(') === false))
@@ -370,12 +361,9 @@ class fulltext_native extends \phpbb\search\base
 			{
 				if ($row['word_common'])
 				{
-					if (!$this->is_cjk_bigram($row['word_text']))
-					{
-						$this->common_words[] = $row['word_text'];
-						$common_ids[$row['word_text']] = (int) $row['word_id'];
-						continue;
-					}
+					$this->common_words[] = $row['word_text'];
+					$common_ids[$row['word_text']] = (int) $row['word_id'];
+					continue;
 				}
 
 				$words[$row['word_text']] = (int) $row['word_id'];
@@ -1371,8 +1359,7 @@ class fulltext_native extends \phpbb\search\base
 		/**
 		* Clean up the string, remove HTML tags, remove BBCodes
 		*/
-		$text = preg_replace($match, ' ', strip_tags($text));
-		$word = strtok($this->cleanup($text, -1), ' ');
+		$word = strtok($this->cleanup(preg_replace($match, ' ', strip_tags($text)), -1), ' ');
 
 		while (strlen($word))
 		{
@@ -1414,184 +1401,7 @@ class fulltext_native extends \phpbb\search\base
 			$word = strtok(' ');
 		}
 
-		$words = array_merge($words, $this->extract_cjk_bigrams($text));
-
 		return $words;
-	}
-
-	/**
-	* Replace CJK/Hangul runs in user queries with placeholders before cleanup().
-	*
-	* cleanup() intentionally splits CJK into one-character terms. That works for
-	* indexing individual characters, but it makes Chinese search queries hit the
-	* min-length and common-word filters. Placeholders let us restore meaningful
-	* overlapping bigrams after cleanup has normalized the rest of the query.
-	*/
-	protected function prepare_cjk_search_keywords($keywords)
-	{
-		$placeholders = array();
-		$index = 0;
-
-		$prepared = preg_replace_callback(self::CJK_SEQUENCE_PATTERN, function ($match) use (&$placeholders, &$index)
-		{
-			$bigrams = $this->extract_cjk_bigrams($match[0]);
-			if (!count($bigrams))
-			{
-				return $match[0];
-			}
-
-			$placeholder = 'zzzcjk' . $index++ . 'zzz';
-			$placeholders[$placeholder] = $bigrams;
-
-			return $placeholder;
-		}, $keywords);
-
-		return array($prepared !== null ? $prepared : $keywords, $placeholders);
-	}
-
-	/**
-	* Restore CJK/Hangul query placeholders as overlapping bigram terms.
-	*/
-	protected function restore_cjk_search_keywords($keywords, array $placeholders)
-	{
-		foreach ($placeholders as $placeholder => $bigrams)
-		{
-			$keywords = preg_replace_callback('#([+\-]?)' . preg_quote($placeholder, '#') . '#', function ($match) use ($bigrams)
-			{
-				$operator = $match[1];
-				if ($operator === '+' || $operator === '-')
-				{
-					$terms = array();
-					foreach ($bigrams as $bigram)
-					{
-						$terms[] = $operator . $bigram;
-					}
-
-					return implode(' ', $terms);
-				}
-
-				return implode(' ', $bigrams);
-			}, $keywords);
-		}
-
-		return $keywords;
-	}
-
-	/**
-	* Build overlapping bigrams from contiguous CJK/Hangul runs.
-	*/
-	protected function extract_cjk_bigrams($text)
-	{
-		$text = html_entity_decode(utf8_decode_ncr($text), ENT_QUOTES);
-		$text = \Normalizer::normalize($text);
-		if (!is_string($text))
-		{
-			return array();
-		}
-
-		if (!preg_match_all(self::CJK_SEQUENCE_PATTERN, $text, $matches))
-		{
-			return array();
-		}
-
-		$bigrams = array();
-		foreach ($matches[0] as $sequence)
-		{
-			$chars = preg_split('//u', $sequence, -1, PREG_SPLIT_NO_EMPTY);
-			$count = count($chars);
-
-			if ($count === 2)
-			{
-				$bigrams[] = $sequence;
-				continue;
-			}
-
-			for ($i = 0; $i < $count - 1; $i++)
-			{
-				$bigrams[] = $chars[$i] . $chars[$i + 1];
-			}
-		}
-
-		return $this->filter_cjk_stop_bigrams($bigrams);
-	}
-
-	/**
-	* Native search common-word pruning is tuned for whitespace-separated
-	* languages. CJK bigrams can be frequent and still meaningful query terms.
-	*/
-	protected function is_cjk_bigram($word)
-	{
-		return (bool) preg_match('#^[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]{2}$#u', $word);
-	}
-
-	/**
-	* Remove curated CJK stop bigrams when the Similar Topics language file exists.
-	*/
-	protected function filter_cjk_stop_bigrams(array $bigrams)
-	{
-		if (!count($bigrams))
-		{
-			return $bigrams;
-		}
-
-		$stop_words = $this->get_cjk_stop_words();
-		if (!count($stop_words))
-		{
-			return $bigrams;
-		}
-
-		return array_values(array_filter($bigrams, function ($bigram) use ($stop_words)
-		{
-			return !isset($stop_words[$bigram]);
-		}));
-	}
-
-	/**
-	* Load the same curated CJK stop-bigram list used by the Similar Topics extension.
-	*/
-	protected function get_cjk_stop_words()
-	{
-		if ($this->cjk_stop_words !== null)
-		{
-			return $this->cjk_stop_words;
-		}
-
-		$this->cjk_stop_words = array();
-		$lang_names = array();
-		if (!empty($this->user->lang_name))
-		{
-			$lang_names[] = $this->user->lang_name;
-		}
-		if (!empty($this->config['default_lang']))
-		{
-			$lang_names[] = $this->config['default_lang'];
-		}
-		$lang_names[] = 'zh_cmn_hans';
-		$lang_names = array_values(array_unique($lang_names));
-
-		foreach ($lang_names as $lang_name)
-		{
-			$path = $this->phpbb_root_path . 'ext/vse/similartopics/language/' . basename($lang_name) . '/search_ignore_bigrams.txt';
-			if (!file_exists($path))
-			{
-				continue;
-			}
-
-			$text = @file_get_contents($path);
-			if ($text === false || $text === '')
-			{
-				continue;
-			}
-
-			$text = preg_replace('/^\s*#.*$/m', '', $text);
-			$words = preg_split('/[\s\x{3000}]+/u', $text, -1, PREG_SPLIT_NO_EMPTY);
-			foreach ($words as $word)
-			{
-				$this->cjk_stop_words[$word] = true;
-			}
-		}
-
-		return $this->cjk_stop_words;
 	}
 
 	/**
@@ -1875,29 +1685,12 @@ class fulltext_native extends \phpbb\search\base
 			$result = $this->db->sql_query($sql);
 
 			$sql_in = array();
-			$cjk_common_ids = array();
 			while ($row = $this->db->sql_fetchrow($result))
 			{
-				if ($this->is_cjk_bigram($row['word_text']))
-				{
-					$cjk_common_ids[] = (int) $row['word_id'];
-					$destroy_cache_words[] = $row['word_text'];
-					continue;
-				}
-
 				$sql_in[] = $row['word_id'];
 				$destroy_cache_words[] = $row['word_text'];
 			}
 			$this->db->sql_freeresult($result);
-
-			if (count($cjk_common_ids))
-			{
-				$sql = 'UPDATE ' . SEARCH_WORDLIST_TABLE . '
-					SET word_common = 0
-					WHERE ' . $this->db->sql_in_set('word_id', $cjk_common_ids);
-				$this->db->sql_query($sql);
-			}
-			unset($cjk_common_ids);
 
 			if (count($sql_in))
 			{

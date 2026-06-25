@@ -200,8 +200,6 @@ $lang = array_merge($lang, array(
 	'SMILIES_LIMIT'					=> 'Maximum smilies per post',
 	'SMILIES_LIMIT_EXPLAIN'			=> 'Maximum number of smilies in a post. Set to 0 for unlimited smilies.',
 	'SMILIES_PER_PAGE'				=> 'Smilies per page',
-	'TOPIC_TITLE_CHAR_LIMIT'		=> 'Maximum characters per topic title',
-	'TOPIC_TITLE_CHAR_LIMIT_EXPLAIN'=> 'Maximum number of characters allowed in topic titles, including new topics and split-topic subjects.',
 	'TOPICS_PER_PAGE'				=> 'Topics per page',
 ));
 

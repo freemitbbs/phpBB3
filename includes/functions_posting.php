@@ -1687,9 +1687,8 @@ function submit_post($mode, $subject, $username, $topic_type, &$poll_ary, &$data
 
 	// First of all make sure the subject and topic title are having the correct length.
 	// To achieve this without cutting off between special chars we convert to an array and then count the elements.
-	$topic_title_max_chars = isset($config['max_topic_title_chars']) && (int) $config['max_topic_title_chars'] > 0 ? (int) $config['max_topic_title_chars'] : 50;
-	$subject = truncate_string($subject, $topic_title_max_chars);
-	$data_ary['topic_title'] = truncate_string($data_ary['topic_title'], $topic_title_max_chars);
+	$subject = truncate_string($subject, 120);
+	$data_ary['topic_title'] = truncate_string($data_ary['topic_title'], 120);
 
 	// Collect some basic information about which tables and which rows to update/insert
 	$sql_data = $topic_row = array();
@@ -1781,17 +1780,31 @@ function submit_post($mode, $subject, $username, $topic_type, &$poll_ary, &$data
 		case 'edit_last_post':
 		case 'edit_topic':
 
-			// phpBB's default behavior hides last-post and moderator edits.
-			// Track every submitted edit so the ACP display option is reliable.
-			$data_ary['post_edit_reason'] = truncate_string((string) $data_ary['post_edit_reason'], 255, 255, false);
+			// If edit reason is given always display edit info
 
-			$sql_data[POSTS_TABLE]['sql']	= array(
-				'post_edit_time'	=> $current_time,
-				'post_edit_reason'	=> $data_ary['post_edit_reason'],
-				'post_edit_user'	=> (int) $data_ary['post_edit_user'],
-			);
+			// If editing last post then display no edit info
+			// If m_edit permission then display no edit info
+			// If normal edit display edit info
 
-			$sql_data[POSTS_TABLE]['stat'][] = 'post_edit_count = post_edit_count + 1';
+			// Display edit info if edit reason given or user is editing his post, which is not the last within the topic.
+			if ($data_ary['post_edit_reason'] || (!$auth->acl_get('m_edit', $data_ary['forum_id']) && ($post_mode == 'edit' || $post_mode == 'edit_first_post')))
+			{
+				$data_ary['post_edit_reason']		= truncate_string($data_ary['post_edit_reason'], 255, 255, false);
+
+				$sql_data[POSTS_TABLE]['sql']	= array(
+					'post_edit_time'	=> $current_time,
+					'post_edit_reason'	=> $data_ary['post_edit_reason'],
+					'post_edit_user'	=> (int) $data_ary['post_edit_user'],
+				);
+
+				$sql_data[POSTS_TABLE]['stat'][] = 'post_edit_count = post_edit_count + 1';
+			}
+			else if (!$data_ary['post_edit_reason'] && $mode == 'edit' && $auth->acl_get('m_edit', $data_ary['forum_id']))
+			{
+				$sql_data[POSTS_TABLE]['sql'] = array(
+					'post_edit_reason'	=> '',
+				);
+			}
 
 			// If the person editing this post is different to the one having posted then we will add a log entry stating the edit
 			// Could be simplified by only adding to the log if the edit is not tracked - but this may confuse admins/mods
