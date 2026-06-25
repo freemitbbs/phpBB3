@@ -3,7 +3,7 @@
 	"type": "phpbb-extension",
 	"description": "Keeps local browser drafts for phpBB posting forms so text survives submit/network failures.",
 	"homepage": "https://freemitbbs.com",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"license": "GPL-2.0-only",
 	"authors": [
 		{
