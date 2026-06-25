@@ -358,9 +358,11 @@ class oauth extends base
 			if ($credentials['key'] && $credentials['secret'])
 			{
 				$oauth_service = $this->get_provider($service_name);
+				$login_url = $this->routing_helper->route('phpbb_ucp_oauth_login_controller', ['oauth_service' => $oauth_service]);
 
 				$login_data['BLOCK_VARS'][$service_name] = [
-					'LOGIN_URL'		=> $this->routing_helper->route('phpbb_ucp_oauth_login_controller', ['oauth_service' => $oauth_service]),
+					'LOGIN_URL'		=> $login_url,
+					'REDIRECT_URL'	=> $login_url,
 					'SERVICE_ID'	=> $oauth_service,
 					'SERVICE_NAME'	=> $this->get_provider_title($oauth_service),
 				];
@@ -409,6 +411,7 @@ class oauth extends base
 			$ret['BLOCK_VARS'][$provider] = [
 				'NAME'			=> $provider,
 				'ACTUAL_NAME'	=> $this->get_provider_title($provider),
+				'REDIRECT_URI'	=> generate_board_url(true) . $this->routing_helper->route('phpbb_ucp_oauth_authenticate_controller', ['oauth_service' => $provider]),
 				'KEY'			=> $new_config['auth_oauth_' . utf8_strtolower($provider) . '_key'],
 				'SECRET'		=> $new_config['auth_oauth_' . utf8_strtolower($provider) . '_secret'],
 			];

@@ -6,6 +6,10 @@
 	<fieldset>
 		<legend>{oauth_services.ACTUAL_NAME}</legend>
 		<dl>
+			<dt><label for="oauth_service_{oauth_services.NAME}_redirect_uri">{L_AUTH_PROVIDER_OAUTH_REDIRECT_URI}{L_COLON}</label><br /><span>{L_AUTH_PROVIDER_OAUTH_REDIRECT_URI_EXPLAIN}</span></dt>
+			<dd><input type="text" id="oauth_service_{oauth_services.NAME}_redirect_uri" size="80" readonly="readonly" onclick="this.select();" value="{oauth_services.REDIRECT_URI}" /></dd>
+		</dl>
+		<dl>
 			<dt><label for="oauth_service_{oauth_services.NAME}_key">{L_AUTH_PROVIDER_OAUTH_KEY}{L_COLON}</label></dt>
 			<dd><input type="text" id="oauth_service_{oauth_services.NAME}_key" size="40" name="config[auth_oauth_{oauth_services.NAME}_key]" value="{oauth_services.KEY}" /></dd>
 		</dl>

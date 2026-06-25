@@ -435,6 +435,8 @@ $lang = array_merge($lang, array(
 	'AUTH_PROVIDER_OAUTH_ERROR_ELEMENT_MISSING'	=> '每个启用的 OAuth 服务的密钥和密码都要提供。每个 OAuth 服务商 只需要一个个。',
 	'AUTH_PROVIDER_OAUTH_EXPLAIN'				=> '每个 OAuth 提供商需要唯一的密码和密钥，为了验证外部服务器。这些应该由 OAuth 服务提供，当您注册您的网站时应该输入准确。<br>任何没有密钥和密码的服务在这儿将不可用，也要注意用户仍可以注册和登录使用 DB 验证插件。',
 	'AUTH_PROVIDER_OAUTH_KEY'					=> '密钥 （Key）',
+	'AUTH_PROVIDER_OAUTH_REDIRECT_URI'			=> '重定向 URI',
+	'AUTH_PROVIDER_OAUTH_REDIRECT_URI_EXPLAIN'	=> '在 OAuth 提供商后台把这个 URI 配置为授权重定向 URI。',
 	'AUTH_PROVIDER_OAUTH_TITLE'					=> 'OAuth',
 	'AUTH_PROVIDER_OAUTH_SECRET'				=> '密码 （Secret）',
 
