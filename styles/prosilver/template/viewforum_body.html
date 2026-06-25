@@ -217,11 +217,12 @@ function toggleWidget(id, isHidden) {
 	<!-- IF topicrow.S_FIRST_ROW or not topicrow.S_TOPIC_TYPE_SWITCH -->
 		<div class="forumbg<!-- IF topicrow.S_TOPIC_TYPE_SWITCH and (topicrow.S_POST_ANNOUNCE or topicrow.S_POST_GLOBAL) --> announcement<!-- ENDIF -->">
 		<div class="inner">
-		<ul class="topiclist<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW --> freemitbbs-from-stats-list<!-- ENDIF -->">
+		<ul class="topiclist<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW --> freemitbbs-from-stats-list<!-- ENDIF --><!-- IF S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW and not S_NEWSSCRAPER_DIGEST_FORUM --> toptopics-compact-header<!-- ENDIF -->">
 			<li class="header">
 				<dl class="row-item">
 					<dt<!-- IF S_DISPLAY_ACTIVE --> id="active_topics"<!-- ENDIF -->><div class="list-inner"><!-- IF S_DISPLAY_ACTIVE -->{L_ACTIVE_TOPICS}<!-- ELSEIF topicrow.S_TOPIC_TYPE_SWITCH and (topicrow.S_POST_ANNOUNCE or topicrow.S_POST_GLOBAL) -->{L_ANNOUNCEMENTS}<!-- ELSE -->{L_TOPICS}<!-- ENDIF --></div></dt>
-					<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW -->
+					<!-- IF S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW and not S_NEWSSCRAPER_DIGEST_FORUM -->
+					<!-- ELSEIF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW -->
 						<dd class="lastpost"><span>{L_TOPTOPICS_FROM_COLUMN}</span></dd>
 					<!-- ELSE -->
 						<dd class="posts">{L_REPLIES}</dd>
@@ -231,10 +232,20 @@ function toggleWidget(id, isHidden) {
 				</dl>
 			</li>
 		</ul>
-		<ul class="topiclist topics<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW --> freemitbbs-from-stats-list<!-- ENDIF -->">
+		<ul class="topiclist topics<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW --> freemitbbs-from-stats-list<!-- ENDIF --><!-- IF S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW and not S_NEWSSCRAPER_DIGEST_FORUM --> toptopics-compact-list<!-- ENDIF -->">
 	<!-- ENDIF -->
 
 		<!-- EVENT viewforum_body_topicrow_row_before -->
+		{% if S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW and not S_NEWSSCRAPER_DIGEST_FORUM %}
+		{% set compact_pair_bg = (topicrow.S_ROW_COUNT is divisible by(4) or (topicrow.S_ROW_COUNT - 1) is divisible by(4)) ? 'bg1' : 'bg2' %}
+		<li class="row {{ compact_pair_bg }}{% if topicrow.S_POST_GLOBAL %} global-announce{% endif %}{% if topicrow.S_POST_ANNOUNCE %} announce{% endif %}{% if topicrow.S_POST_STICKY %} sticky{% endif %}{% if topicrow.S_TOPIC_REPORTED %} reported{% endif %} toptopics-compact-cell">
+			{% if topicrow.U_VIEW_TOPIC %}
+				<a href="{{ topicrow.U_VIEW_TOPIC }}" class="toptopics-compact-title {{ topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS }}">{{ topicrow.TOPIC_TITLE }}</a>
+			{% else %}
+				<span class="toptopics-compact-title {{ topicrow.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS }}">{{ topicrow.TOPIC_TITLE }}</span>
+			{% endif %}
+		</li>
+		{% else %}
 		<li class="row<!-- IF topicrow.S_ROW_COUNT is even --> bg1<!-- ELSE --> bg2<!-- ENDIF --><!-- IF topicrow.S_POST_GLOBAL --> global-announce<!-- ENDIF --><!-- IF topicrow.S_POST_ANNOUNCE --> announce<!-- ENDIF --><!-- IF topicrow.S_POST_STICKY --> sticky<!-- ENDIF --><!-- IF topicrow.S_TOPIC_REPORTED --> reported<!-- ENDIF --><!-- IF topicrow.S_NEWSSCRAPER_DIGEST_TOPIC_ROW --> newsscraper-digest-topic-row<!-- ENDIF -->">
 			<!-- EVENT viewforum_body_topic_row_prepend -->
 			<dl class="row-item {topicrow.TOPIC_IMG_STYLE}">
@@ -454,6 +465,7 @@ function toggleWidget(id, isHidden) {
 			</dl>
 			<!-- EVENT viewforum_body_topic_row_append -->
 		</li>
+		{% endif %}
 		<!-- EVENT viewforum_body_topic_row_after -->
 
 	<!-- IF topicrow.S_LAST_ROW -->

@@ -9,6 +9,7 @@ class header_preferences
 	private const USER_OPTION_HIDE_ENHANCED_TOPIC_LIST_VIEW = 22;
 	private const USER_OPTION_SHOW_ENHANCED_TOPIC_LIST_VIEW = 23;
 	private const USER_OPTION_SHOW_FLAT_TOPIC_LIST_VIEW = 24;
+	private const USER_OPTION_SHOW_COMPACT_TOPIC_LIST_VIEW = 25;
 	private const HASH_NAME = 'freemitbbs_toptopics_header_preferences';
 	private const THEME_GOLD = 'prosilver_fm';
 	private const THEME_COOL = 'prosilver_fm_cool';
@@ -16,6 +17,9 @@ class header_preferences
 	private const TOPIC_LIST_CLASSIC = 'classic';
 	private const TOPIC_LIST_ENHANCED = 'enhanced';
 	private const TOPIC_LIST_FLAT = 'flat';
+	private const TOPIC_LIST_COMPACT = 'compact';
+	private const HOME_LAYOUT_SPLIT = 'split';
+	private const HOME_LAYOUT_MERGED = 'merged';
 
 	protected \phpbb\auth\auth $auth;
 	protected \phpbb\config\config $config;
@@ -45,7 +49,14 @@ class header_preferences
 	{
 		$return_url = $this->safe_return_url($this->request->variable('return', '', true));
 		$theme = $this->normalise_theme($this->request->variable('theme', ''));
-		$topic_list = $this->normalise_topic_list($this->request->variable('topic_list', ''));
+		$raw_topic_list = strtolower(trim((string) $this->request->variable('topic_list', '')));
+		$topic_list = $this->normalise_topic_list($raw_topic_list);
+		$home_layout = $this->normalise_home_layout($this->request->variable('home_layout', ''));
+		if ($raw_topic_list === self::TOPIC_LIST_FLAT)
+		{
+			$topic_list = self::TOPIC_LIST_CLASSIC;
+			$home_layout = $home_layout !== '' ? $home_layout : self::HOME_LAYOUT_MERGED;
+		}
 		$style_id = $theme !== '' ? $this->get_style_id($theme) : 0;
 		$user_id = (int) ($this->user->data['user_id'] ?? ANONYMOUS);
 		$is_registered = $user_id !== ANONYMOUS;
@@ -57,13 +68,13 @@ class header_preferences
 				return new RedirectResponse($return_url);
 			}
 
-			$this->save_registered_user_preferences($user_id, $style_id, $topic_list);
+			$this->save_registered_user_preferences($user_id, $style_id, $topic_list, $home_layout);
 		}
 
 		$params = [];
 		if ($is_registered)
 		{
-			$return_url = $this->remove_query_params($return_url, ['style', 'toptopics_view']);
+			$return_url = $this->remove_query_params($return_url, ['style', 'toptopics_view', 'toptopics_home']);
 		}
 		else if ($style_id > 0 && $this->can_switch_style())
 		{
@@ -73,11 +84,15 @@ class header_preferences
 		{
 			$params['toptopics_view'] = $topic_list;
 		}
+		if (!$is_registered && $home_layout !== '')
+		{
+			$params['toptopics_home'] = $home_layout;
+		}
 
 		return new RedirectResponse($this->add_query_params($return_url, $params));
 	}
 
-	protected function save_registered_user_preferences(int $user_id, int $style_id, string $topic_list): void
+	protected function save_registered_user_preferences(int $user_id, int $style_id, string $topic_list, string $home_layout): void
 	{
 		$sql_ary = [];
 		if ($style_id > 0 && $this->can_switch_style())
@@ -88,11 +103,18 @@ class header_preferences
 		if ($topic_list !== '')
 		{
 			$show_enhanced = $topic_list === self::TOPIC_LIST_ENHANCED;
-			$show_flat = $topic_list === self::TOPIC_LIST_FLAT;
+			$show_compact = $topic_list === self::TOPIC_LIST_COMPACT;
 			$user_options = (int) ($this->user->data['user_options'] ?? 0);
-			$user_options = phpbb_optionset(self::USER_OPTION_HIDE_ENHANCED_TOPIC_LIST_VIEW, !$show_enhanced || $show_flat, $user_options);
+			$user_options = phpbb_optionset(self::USER_OPTION_HIDE_ENHANCED_TOPIC_LIST_VIEW, !$show_enhanced, $user_options);
 			$user_options = phpbb_optionset(self::USER_OPTION_SHOW_ENHANCED_TOPIC_LIST_VIEW, $show_enhanced, $user_options);
-			$user_options = phpbb_optionset(self::USER_OPTION_SHOW_FLAT_TOPIC_LIST_VIEW, $show_flat, $user_options);
+			$user_options = phpbb_optionset(self::USER_OPTION_SHOW_COMPACT_TOPIC_LIST_VIEW, $show_compact, $user_options);
+			$sql_ary['user_options'] = $user_options;
+		}
+
+		if ($home_layout !== '')
+		{
+			$user_options = (int) ($sql_ary['user_options'] ?? ($this->user->data['user_options'] ?? 0));
+			$user_options = phpbb_optionset(self::USER_OPTION_SHOW_FLAT_TOPIC_LIST_VIEW, $home_layout === self::HOME_LAYOUT_MERGED, $user_options);
 			$sql_ary['user_options'] = $user_options;
 		}
 
@@ -114,7 +136,16 @@ class header_preferences
 
 	protected function normalise_topic_list(string $topic_list): string
 	{
-		return in_array($topic_list, [self::TOPIC_LIST_CLASSIC, self::TOPIC_LIST_ENHANCED, self::TOPIC_LIST_FLAT], true) ? $topic_list : '';
+		$topic_list = strtolower(trim($topic_list));
+
+		return in_array($topic_list, [self::TOPIC_LIST_CLASSIC, self::TOPIC_LIST_ENHANCED, self::TOPIC_LIST_COMPACT], true) ? $topic_list : '';
+	}
+
+	protected function normalise_home_layout(string $home_layout): string
+	{
+		$home_layout = strtolower(trim($home_layout));
+
+		return in_array($home_layout, [self::HOME_LAYOUT_SPLIT, self::HOME_LAYOUT_MERGED], true) ? $home_layout : '';
 	}
 
 	protected function get_style_id(string $theme): int

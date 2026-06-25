@@ -26,14 +26,15 @@
 		{% EVENT forumlist_body_category_header_before %}
 		<div id="{{ rtng_box_id }}" class="forabg rtng">
 			<div class="inner">
-				<ul class="topiclist{% if S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW %} freemitbbs-from-stats-list{% endif %}">
+				<ul class="topiclist{% if S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW %} freemitbbs-from-stats-list{% endif %}{% if S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW %} toptopics-compact-header{% endif %}">
 					<li class="header">
 						{% EVENT forumlist_body_category_header_row_prepend %}
 						<dl class="row-item">
 							<dt><div class="list-inner">
 								<a href="{{ rtng_page_url|default(U_RTNG_PAGE_SEPARATE) }}" title="{{ rtng_title }}"><i class="icon fa-list fa-fw" aria-hidden="true"></i>{{ rtng_title }}</a></div>
 							</dt>
-							{% if S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW %}
+							{% if S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW %}
+							{% elseif S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW %}
 								<dd class="lastpost"><span>{{ lang('TOPTOPICS_FROM_COLUMN') }}</span></dd>
 							{% else %}
 								<dd class="posts">{{ lang('REPLIES') }}</dd>
@@ -50,9 +51,22 @@
 						{%- endfor %}
 					</li>
 				</ul>
-				<ul class="topiclist topics{% if S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW %} freemitbbs-from-stats-list{% endif %}{% if !S_RTNG_LOCATION_BOTTOM || !S_RTNG_LOCATION_TOP %} collapsible{% endif %}">
+				<ul class="topiclist topics{% if S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW %} freemitbbs-from-stats-list{% endif %}{% if S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW %} toptopics-compact-list{% endif %}{% if !S_RTNG_LOCATION_BOTTOM || !S_RTNG_LOCATION_TOP %} collapsible{% endif %}">
 	{% endif %}
 	{% EVENT viewforum_body_topicrow_row_before %}
+	{% if S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW %}
+		{% set compact_pair_bg = (loop.index0 is divisible by(4) or (loop.index0 - 1) is divisible by(4)) ? 'bg1' : 'bg2' %}
+		{% set compact_topic_url = rtng.S_DISP_FIRST_UNREAD_POST ? rtng.U_FIRST_UNREAD_POST : (rtng.S_DISP_LAST_POST ? rtng.U_LAST_POST : rtng.U_VIEW_TOPIC) %}
+		{% set compact_topic_title = rtng.S_DISP_FIRST_UNREAD_POST ? rtng.FIRST_UNREAD_POST_SUBJECT : (rtng.S_DISP_LAST_POST ? rtng.LAST_POST_SUBJECT : rtng.TOPIC_TITLE) %}
+	<li class="row {{ compact_pair_bg }}{{ [
+		rtng.S_POST_GLOBAL    ? ' global-announce',
+		rtng.S_POST_ANNOUNCE  ? ' announce',
+		rtng.S_POST_STICKY    ? ' sticky',
+		rtng.S_TOPIC_REPORTED ? ' reported',
+	]|join }} toptopics-compact-cell">
+		<a href="{{ compact_topic_url }}" class="toptopics-compact-title {{ rtng.TOPTOPICS_TOPIC_DISLIKE_FADE_CLASS }}">{{ compact_topic_title }}</a>
+	</li>
+	{% else %}
 	<li class="row bg{{ loop.index % 2 + 1 }}{{ [
 		rtng.S_POST_GLOBAL    ? ' global-announce',
 		rtng.S_POST_ANNOUNCE  ? ' announce',
@@ -181,6 +195,7 @@
 		</dl>
 		{% EVENT viewforum_body_topic_row_append %}
 	</li>
+	{% endif %}
 	{% EVENT viewforum_body_topic_row_after %}
 	{% if loop.last %}
 				</ul>
@@ -191,14 +206,15 @@
 	{% EVENT forumlist_body_category_header_before %}
 	<div id="{{ rtng_box_id }}" class="forabg rtng">
 		<div class="inner">
-				<ul class="topiclist{% if S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW %} freemitbbs-from-stats-list{% endif %}">
+				<ul class="topiclist{% if S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW %} freemitbbs-from-stats-list{% endif %}{% if S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW %} toptopics-compact-header{% endif %}">
 					<li class="header">
 						{% EVENT forumlist_body_category_header_row_prepend %}
 						<dl class="row-item">
 							<dt><div class="list-inner">
 								<a href="{{ rtng_page_url|default(U_RTNG_PAGE_SEPARATE) }}" title="{{ rtng_title }}"><i class="icon fa-list fa-fw" aria-hidden="true"></i>{{ rtng_title }}</a></div>
 						</dt>
-						{% if S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW %}
+						{% if S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW %}
+						{% elseif S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW %}
 							<dd class="lastpost"><span>{{ lang('TOPTOPICS_FROM_COLUMN') }}</span></dd>
 						{% else %}
 							<dd class="posts">{{ lang('REPLIES') }}</dd>

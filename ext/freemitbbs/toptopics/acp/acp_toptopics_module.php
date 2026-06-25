@@ -9,6 +9,7 @@ class acp_toptopics_module
 	private const SUMMARY_SETTINGS = [
 		['key' => 'toptopics_index_limit', 'type' => 'int', 'default' => 10, 'min' => 0, 'max' => 100],
 		['key' => 'toptopics_forum_limit', 'type' => 'int', 'default' => 5, 'min' => 0, 'max' => 100],
+		['key' => 'toptopics_flat_topic_list_per_page', 'type' => 'int', 'default' => 50, 'min' => 1, 'max' => 999],
 		['key' => 'toptopics_per_forum_limit', 'type' => 'int', 'default' => 3, 'min' => 0, 'max' => 100],
 		['key' => 'toptopics_summary_cache_seconds', 'type' => 'int', 'default' => 600, 'min' => 0, 'max' => 86400],
 		['key' => 'toptopics_index_excluded_forum_ids', 'type' => 'forum_ids', 'default' => '', 'size' => 40],

@@ -463,6 +463,70 @@ a.topictitle.toptopics-topic-dislike-fade,
 	display: block;
 }
 
+ul.topiclist.toptopics-compact-header dl.row-item dt {
+	width: 100%;
+}
+
+ul.topiclist.toptopics-compact-header dl.row-item dt .list-inner {
+	margin-right: 0;
+	padding-right: 0;
+}
+
+ul.topiclist.topics.toptopics-compact-list {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+ul.topiclist.topics.toptopics-compact-list > li.row {
+	box-sizing: border-box;
+	display: block;
+	min-width: 0;
+	margin: 0;
+}
+
+ul.topiclist.topics.toptopics-compact-list > li.row::after {
+	display: none;
+}
+
+ul.topiclist.topics.toptopics-compact-list > li.toptopics-compact-row-shell {
+	grid-column: 1 / -1;
+}
+
+.toptopics-compact-row {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.toptopics-compact-title {
+	box-sizing: border-box;
+	display: block;
+	min-width: 0;
+	padding: 7px 10px;
+	overflow: hidden;
+	color: #105289;
+	font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+	font-size: 1.35em;
+	font-weight: 700;
+	line-height: 1.35;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.toptopics-compact-title:hover {
+	color: #d31141;
+	text-decoration: underline;
+}
+
+.toptopics-compact-title-empty {
+	color: #536482;
+	font-weight: 600;
+}
+
+ul.topiclist.topics.toptopics-compact-list > li.row:nth-child(odd) .toptopics-compact-title,
+.toptopics-compact-row .toptopics-compact-title:nth-child(odd) {
+	border-right: 1px solid rgba(0, 0, 0, 0.06);
+}
+
 .toptopics-category-header-marker {
 	display: none;
 }
@@ -1471,6 +1535,22 @@ dl.row-item dt a.toptopics-inline-preview-carousel-slide {
 }
 
 @media only screen and (max-width: 700px) {
+	ul.topiclist.topics.toptopics-compact-list,
+	.toptopics-compact-row {
+		grid-template-columns: 1fr;
+	}
+
+	.toptopics-compact-title {
+		padding: 7px 9px;
+		font-size: 1.2em;
+		line-height: 1.3;
+	}
+
+	ul.topiclist.topics.toptopics-compact-list > li.row:nth-child(odd) .toptopics-compact-title,
+	.toptopics-compact-row .toptopics-compact-title:nth-child(odd) {
+		border-right: 0;
+	}
+
 	ul.topiclist.topics.freemitbbs-from-stats-list,
 	.toptopics-category-row.toptopics-enhanced-topic-list-row {
 		--toptopics-inline-preview-media-height: 90px;

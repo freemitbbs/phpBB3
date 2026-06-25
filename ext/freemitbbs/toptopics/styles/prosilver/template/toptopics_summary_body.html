@@ -3,11 +3,12 @@
 {% endif %}
 <div class="forabg toptopics-summary">
 	<div class="inner">
-		<ul class="topiclist<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW --> freemitbbs-from-stats-list<!-- ENDIF -->">
+		<ul class="topiclist<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW --> freemitbbs-from-stats-list<!-- ENDIF --><!-- IF S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW --> toptopics-compact-header<!-- ENDIF -->">
 			<li class="header">
 				<dl class="row-item">
 					<dt><div class="list-inner"><i class="icon fa-line-chart fa-fw" aria-hidden="true"></i> {{ TOPTOPICS_BLOCK_TITLE }}</div></dt>
-					<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW -->
+					<!-- IF S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW -->
+					<!-- ELSEIF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW -->
 						<dd class="lastpost"><span>{{ lang('TOPTOPICS_FROM_COLUMN') }}</span></dd>
 					<!-- ELSE -->
 						<dd class="posts">{{ lang('REPLIES') }}</dd>
@@ -29,8 +30,20 @@
 				{% endif %}
 			</li>
 		</ul>
-		<ul class="topiclist topics collapsible<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW --> freemitbbs-from-stats-list<!-- ENDIF -->">
+		<ul class="topiclist topics collapsible<!-- IF S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW --> freemitbbs-from-stats-list<!-- ENDIF --><!-- IF S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW --> toptopics-compact-list<!-- ENDIF -->">
 			<!-- BEGIN top_topics -->
+			{% if S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW %}
+			{% if top_topics.S_ROW_COUNT is even %}
+			{% set compact_pair_bg = top_topics.S_ROW_COUNT is divisible by(4) ? 'bg1' : 'bg2' %}
+			<li class="row {{ compact_pair_bg }} toptopics-compact-row-shell">
+				<div class="toptopics-compact-row">
+			{% endif %}
+				<a href="{{ top_topics.U_TOPIC }}" class="toptopics-compact-title {{ top_topics.TOPIC_DISLIKE_FADE_CLASS }}">{{ top_topics.TOPIC_TITLE }}</a>
+			{% if top_topics.S_ROW_COUNT is odd or top_topics.S_LAST_ROW %}
+				</div>
+			</li>
+			{% endif %}
+			{% else %}
 			<li class="row <!-- IF top_topics.S_ROW_COUNT is odd -->bg1<!-- ELSE -->bg2<!-- ENDIF -->">
 				<dl class="row-item {top_topics.TOPIC_IMG_STYLE}">
 					<dt title="{top_topics.TOPIC_FOLDER_IMG_ALT}">
@@ -133,8 +146,14 @@
 						<!-- ENDIF -->
 				</dl>
 			</li>
+			{% endif %}
 			<!-- BEGINELSE -->
 			<!-- IF S_TOPTOPICS_FLAT_INDEX -->
+			<!-- IF S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW -->
+			<li class="row bg1 toptopics-compact-empty">
+				<span class="toptopics-compact-title toptopics-compact-title-empty">{TOPTOPICS_FLAT_EMPTY}</span>
+			</li>
+			<!-- ELSE -->
 			<li class="row bg1">
 				<dl class="row-item">
 					<dt><div class="list-inner">{TOPTOPICS_FLAT_EMPTY}</div></dt>
@@ -147,6 +166,7 @@
 					<!-- ENDIF -->
 				</dl>
 			</li>
+			<!-- ENDIF -->
 			<!-- ENDIF -->
 			<!-- END top_topics -->
 		</ul>

@@ -4,13 +4,15 @@
 	<!-- ENDIF -->
 	<div class="forabg blog-index-latest-list">
 		<div class="inner">
-			<ul class="topiclist">
+			<ul class="topiclist<!-- IF S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW --> toptopics-compact-header<!-- ENDIF -->">
 				<li class="header">
 					<dl class="row-item">
 						<dt><div class="list-inner"><a href="{U_BLOG_INDEX}"><i class="icon fa-book fa-fw" aria-hidden="true"></i> {L_BLOG_LATEST_ENTRIES}</a></div></dt>
-						<dd class="posts">{L_BLOG_COMMENTS}</dd>
-						<dd class="views">{L_VIEWS}</dd>
-						<dd class="lastpost"><span>{L_BLOG_LAST_COMMENT}</span></dd>
+						<!-- IF not S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW -->
+							<dd class="posts">{L_BLOG_COMMENTS}</dd>
+							<dd class="views">{L_VIEWS}</dd>
+							<dd class="lastpost"><span>{L_BLOG_LAST_COMMENT}</span></dd>
+						<!-- ENDIF -->
 					</dl>
 					<!-- IF S_BLOG_INDEX_LATEST_COLLAPSIBLE -->
 						<a href="{U_BLOG_INDEX_LATEST_COLLAPSE_URL}"
@@ -26,8 +28,20 @@
 					<!-- ENDIF -->
 				</li>
 			</ul>
-			<ul class="topiclist topics collapsible">
+			<ul class="topiclist topics collapsible<!-- IF S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW --> toptopics-compact-list<!-- ENDIF -->">
 			<!-- BEGIN latest_blog_entries -->
+				{% if S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW %}
+				{% if latest_blog_entries.S_ROW_COUNT is even %}
+				{% set compact_pair_bg = latest_blog_entries.S_ROW_COUNT is divisible by(4) ? 'bg1' : 'bg2' %}
+				<li class="row {{ compact_pair_bg }} toptopics-compact-row-shell">
+					<div class="toptopics-compact-row">
+				{% endif %}
+					<a href="{{ latest_blog_entries.U_ENTRY }}" class="toptopics-compact-title">{{ latest_blog_entries.TOPIC_TITLE }}</a>
+				{% if latest_blog_entries.S_ROW_COUNT is odd or latest_blog_entries.S_LAST_ROW %}
+					</div>
+				</li>
+				{% endif %}
+				{% else %}
 				<li class="row <!-- IF latest_blog_entries.S_ROW_COUNT is odd -->bg1<!-- ELSE -->bg2<!-- ENDIF -->">
 					<dl class="row-item">
 						<dt>
@@ -57,6 +71,7 @@
 						</dd>
 					</dl>
 				</li>
+				{% endif %}
 			<!-- END latest_blog_entries -->
 			</ul>
 		</div>
