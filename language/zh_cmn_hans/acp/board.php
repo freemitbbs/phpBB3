@@ -200,8 +200,6 @@ $lang = array_merge($lang, array(
 	'SMILIES_LIMIT'					=> '每个帖子中的最大表情数量',
 	'SMILIES_LIMIT_EXPLAIN'			=> '设置为 0 则不作限制。',
 	'SMILIES_PER_PAGE'				=> '每页表情数量',
-	'TOPIC_TITLE_CHAR_LIMIT'		=> '主题标题最大字符数',
-	'TOPIC_TITLE_CHAR_LIMIT_EXPLAIN'=> '新主题标题和拆分主题标题允许使用的最大字符数。',
 	'TOPICS_PER_PAGE'				=> '每页主题数',
 ));
 
@@ -300,7 +298,7 @@ $lang = array_merge($lang, array(
 	'ACP_FEED_OVERALL_FORUMS_EXPLAIN'	=> '“所有版面”供稿输出会显示所有版面列表.',
 
 	'ACP_FEED_HTTP_AUTH'				=> '允许 HTTP 验证',
-	'ACP_FEED_HTTP_AUTH_EXPLAIN'		=> '启用此验证后，用户可以访问到其他无权限用户所无法访问的内容，需要添加 <samp>auth=http</samp> 参数到 URL。请注意一些 PHP 版本需要在 .htaccess 文件上做额外的设置。更多信息请搜索相关文章。',
+	'ACP_FEED_HTTP_AUTH_EXPLAIN'		=> '启用此 HTTP 身份验证，允许用户通过在 feed URL 中添加 <samp>auth=http</samp> 参数，来访问对方可隐藏的内容。请注意一些 PHP 配置需要在 .htaccess 文件上做额外的设置。更多信息请搜索相关文章，HTTP 身份验证仅支持加密（https）连接',
 	'ACP_FEED_ITEM_STATISTICS'			=> '条目统计',
 	'ACP_FEED_ITEM_STATISTICS_EXPLAIN'	=> '显示独立统计数<br>(作者， 日期和时间， 回复数， 查看数)',
 	'ACP_FEED_EXCLUDE_ID'				=> '排除下列版面',

@@ -95,8 +95,6 @@ if (PHPBB_ENVIRONMENT === 'development')
 else
 {
 	set_error_handler(defined('PHPBB_MSG_HANDLER') ? PHPBB_MSG_HANDLER : 'msg_handler');
-	set_exception_handler(defined('PHPBB_EXCEPTION_HANDLER') ? PHPBB_EXCEPTION_HANDLER : 'phpbb_exception_handler');
-	register_shutdown_function(defined('PHPBB_SHUTDOWN_HANDLER') ? PHPBB_SHUTDOWN_HANDLER : 'phpbb_shutdown_handler');
 }
 
 $phpbb_class_loader_ext = new \phpbb\class_loader('\\', "{$phpbb_root_path}ext/", $phpEx);

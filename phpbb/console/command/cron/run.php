@@ -79,28 +79,18 @@ class run extends \phpbb\console\command\command
 	{
 		if ($this->lock_db->acquire())
 		{
-			$lock_db = $this->lock_db;
-			register_shutdown_function(static function () use ($lock_db) {
-				if ($lock_db->owns_lock())
-				{
-					$lock_db->release();
-				}
-			});
-
-			try
+			$task_name = $input->getArgument('name');
+			if ($task_name)
 			{
-				$task_name = $input->getArgument('name');
-				if ($task_name)
-				{
-					return $this->run_one($input, $output, $task_name);
-				}
-
-				return $this->run_all($input, $output);
+				$exit_status = $this->run_one($input, $output, $task_name);
 			}
-			finally
+			else
 			{
-				$this->lock_db->release();
+				$exit_status = $this->run_all($input, $output);
 			}
+
+			$this->lock_db->release();
+			return $exit_status;
 		}
 		else
 		{

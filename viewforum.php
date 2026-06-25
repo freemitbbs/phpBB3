@@ -726,37 +726,19 @@ $vars = array(
 );
 extract($phpbb_dispatcher->trigger_event('core.viewforum_get_topic_ids_data', compact($vars)));
 
-$preload_topic_rows = false;
-if (!$phpbb_dispatcher->hasListeners('core.viewforum_modify_topic_list_sql')
-	&& trim((string) $sql_ary['SELECT']) === 't.topic_id')
-{
-	$preload_topic_rows = true;
-	$sql_ary['SELECT'] = $sql_array['SELECT'];
-	$sql_ary['LEFT_JOIN'] = array_merge($sql_array['LEFT_JOIN'], $sql_ary['LEFT_JOIN'] ?? []);
-}
-
 $sql = $db->sql_build_query('SELECT', $sql_ary);
 $result = $db->sql_query_limit($sql, $sql_limit, $sql_start);
 
 while ($row = $db->sql_fetchrow($result))
 {
 	$topic_list[] = (int) $row['topic_id'];
-	if ($preload_topic_rows)
-	{
-		if ($row['topic_status'] == ITEM_MOVED)
-		{
-			$shadow_topic_list[$row['topic_moved_id']] = $row['topic_id'];
-		}
-
-		$rowset[$row['topic_id']] = $row;
-	}
 }
 $db->sql_freeresult($result);
 
 // For storing shadow topics
-$shadow_topic_list = $shadow_topic_list ?? array();
+$shadow_topic_list = array();
 
-if (count($topic_list) && !$preload_topic_rows)
+if (count($topic_list))
 {
 	// SQL array for obtaining topics/stickies
 	$sql_array = array(

@@ -1,7 +1,7 @@
 <div class="content oauth-login-options">
 	{% for oauth in oauth %}
 		{% if oauth.SERVICE_ID|default('') == 'google' %}
-			<a href="{{ oauth.REDIRECT_URL }}" class="button2 google-oauth-button">
+			<a href="{{ oauth.LOGIN_URL }}" class="button2 google-oauth-button">
 				<span class="google-oauth-logo" aria-hidden="true">
 					<svg viewBox="0 0 18 18" focusable="false">
 						<path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/>
@@ -13,7 +13,7 @@
 				<span>{{ lang('REGISTER_WITH_GOOGLE') }}</span>
 			</a>
 		{% else %}
-			<a href="{{ oauth.REDIRECT_URL }}" class="button2">{{ oauth.SERVICE_NAME }}</a>
+			<a href="{{ oauth.LOGIN_URL }}" class="button2">{{ oauth.SERVICE_NAME }}</a>
 		{% endif %}
 	{% endfor %}
 </div>

@@ -984,9 +984,6 @@ abstract class driver implements driver_interface
 
 		if (!$this->return_on_error)
 		{
-			$error_context = $this->build_sql_error_context($sql, $user, $auth);
-			$this->write_sql_error_log($error_context);
-
 			$message = 'SQL ERROR [ ' . $this->sql_layer . ' ]<br /><br />' . $this->sql_error_returned['message'] . ' [' . $this->sql_error_returned['code'] . ']';
 
 			// Show complete SQL error and path to administrators only
@@ -1017,10 +1014,6 @@ abstract class driver implements driver_interface
 				}
 			}
 
-			$message .= '<br /><br />Error ID: <strong>' . htmlspecialchars($error_context['error_id'], ENT_COMPAT) . '</strong>';
-			$message .= '<br />Request: <code>' . htmlspecialchars($error_context['request_uri'], ENT_COMPAT) . '</code>';
-			$message .= '<br />Time (UTC): ' . htmlspecialchars($error_context['time_utc'], ENT_COMPAT);
-
 			if ($this->transaction)
 			{
 				$this->sql_transaction('rollback');
@@ -1044,152 +1037,6 @@ abstract class driver implements driver_interface
 		}
 
 		return $this->sql_error_returned;
-	}
-
-	/**
-	* Build a structured SQL error context payload for on-disk logging and user-facing incident IDs.
-	*
-	* @param string $sql
-	* @param mixed $user
-	* @param mixed $auth
-	* @return array
-	*/
-	protected function build_sql_error_context($sql, $user = null, $auth = null)
-	{
-		$request_uri = $this->get_request_uri();
-
-		return array(
-			'error_id'			=> $this->generate_sql_error_id(),
-			'time_utc'			=> gmdate('Y-m-d H:i:s') . ' UTC',
-			'sql_layer'			=> $this->sql_layer,
-			'db_name'			=> $this->dbname,
-			'db_error_message'	=> isset($this->sql_error_returned['message']) ? $this->sql_error_returned['message'] : '',
-			'db_error_code'		=> isset($this->sql_error_returned['code']) ? $this->sql_error_returned['code'] : '',
-			'request_method'	=> $this->get_server_var('REQUEST_METHOD', ''),
-			'request_uri'		=> $request_uri ?: '-',
-			'referrer'			=> $this->get_header_var('referer', ''),
-			'remote_addr'		=> $this->get_server_var('REMOTE_ADDR', ''),
-			'forwarded_for'		=> $this->get_header_var('x-forwarded-for', ''),
-			'user_agent'		=> $this->get_header_var('user-agent', ''),
-			'user_id'			=> (is_object($user) && isset($user->data['user_id'])) ? (int) $user->data['user_id'] : 0,
-			'username'			=> (is_object($user) && isset($user->data['username'])) ? $user->data['username'] : '',
-			'is_admin'			=> (is_object($auth) && method_exists($auth, 'acl_get')) ? (int) $auth->acl_get('a_') : 0,
-			'sql'				=> (string) $sql,
-		);
-	}
-
-	/**
-	* Get a server variable without touching deactivated superglobals.
-	*
-	* @param string $name
-	* @param string $default
-	* @return string
-	*/
-	protected function get_server_var($name, $default = '')
-	{
-		global $request;
-
-		if (!empty($request) && is_object($request) && method_exists($request, 'server'))
-		{
-			return $request->server($name, $default);
-		}
-
-		$var = getenv($name);
-		return ($var !== false && $var !== null) ? $var : $default;
-	}
-
-	/**
-	* Get a request header without touching deactivated superglobals.
-	*
-	* @param string $name
-	* @param string $default
-	* @return string
-	*/
-	protected function get_header_var($name, $default = '')
-	{
-		global $request;
-
-		if (!empty($request) && is_object($request) && method_exists($request, 'header'))
-		{
-			return $request->header($name, $default);
-		}
-
-		$var = getenv('HTTP_' . strtoupper(str_replace('-', '_', $name)));
-		return ($var !== false && $var !== null) ? $var : $default;
-	}
-
-	/**
-	* Build a request URI without touching deactivated superglobals.
-	*
-	* @return string
-	*/
-	protected function get_request_uri()
-	{
-		$request_uri = $this->get_server_var('REQUEST_URI', '');
-		if ($request_uri !== '')
-		{
-			return $request_uri;
-		}
-
-		$script_name = $this->get_server_var('SCRIPT_NAME', '');
-		if ($script_name === '')
-		{
-			return '';
-		}
-
-		$query_string = $this->get_server_var('QUERY_STRING', '');
-		return $query_string !== '' ? $script_name . '?' . $query_string : $script_name;
-	}
-
-	/**
-	* Write a SQL error context payload to disk as JSON lines.
-	*
-	* @param array $context
-	* @return void
-	*/
-	protected function write_sql_error_log(array $context)
-	{
-		$encoded = json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-		if ($encoded === false)
-		{
-			$encoded = json_encode(array(
-				'error_id'			=> $context['error_id'],
-				'time_utc'			=> $context['time_utc'],
-				'encode_failure'	=> true,
-			));
-		}
-
-		@file_put_contents($this->get_sql_error_log_path(), $encoded . PHP_EOL, FILE_APPEND | LOCK_EX);
-	}
-
-	/**
-	* Get the SQL error log path.
-	*
-	* @return string
-	*/
-	protected function get_sql_error_log_path()
-	{
-		global $phpbb_root_path;
-
-		$root_path = !empty($phpbb_root_path) ? $phpbb_root_path : dirname(__DIR__, 3) . '/';
-		return $root_path . 'store/sql_errors.log';
-	}
-
-	/**
-	* Generate a short incident identifier for SQL errors.
-	*
-	* @return string
-	*/
-	protected function generate_sql_error_id()
-	{
-		try
-		{
-			return gmdate('YmdHis') . '-' . substr(bin2hex(random_bytes(8)), 0, 12);
-		}
-		catch (\Exception $e)
-		{
-			return gmdate('YmdHis') . '-' . substr(md5(uniqid('', true)), 0, 12);
-		}
 	}
 
 	/**

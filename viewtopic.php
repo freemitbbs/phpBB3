@@ -2378,7 +2378,6 @@ if ($s_can_vote || $s_quick_reply)
 			'U_QR_ACTION'			=> append_sid("{$phpbb_root_path}posting.$phpEx", "mode=reply&amp;t=$topic_id"),
 			'QR_HIDDEN_FIELDS'		=> build_hidden_fields($qr_hidden_fields),
 			'SUBJECT'				=> 'Re: ' . censor_text($topic_data['topic_title']),
-			'TOPIC_TITLE_MAX_CHARS'	=> isset($config['max_topic_title_chars']) && (int) $config['max_topic_title_chars'] > 0 ? (int) $config['max_topic_title_chars'] : 50,
 		];
 
 		/**

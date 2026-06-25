@@ -1823,6 +1823,33 @@ function redirect($url, $return = false, $disable_cd_check = false)
 }
 
 /**
+ * Redirect to controller
+ *
+ * @param string $controller_name Controller name
+ * @param array $params Parameters for route generation
+ * @return void
+ */
+function phpbb_redirect_to_controller(string $controller_name, array $params)
+{
+	global $phpbb_container;
+
+	/** @var \phpbb\controller\helper $controller_helper */
+	$controller_helper = $phpbb_container->get('controller.helper');
+	/** @var \Symfony\Component\HttpKernel\HttpKernel $http_kernel */
+	$http_kernel = $phpbb_container->get('http_kernel');
+	/** @var \phpbb\symfony_request $symfony_request */
+	$symfony_request = $phpbb_container->get('symfony_request');
+
+	$response = new \Symfony\Component\HttpFoundation\RedirectResponse(
+		$controller_helper->route($controller_name, $params, false),
+		\Symfony\Component\HttpFoundation\Response::HTTP_MOVED_PERMANENTLY
+	);
+	$response->send();
+	$http_kernel->terminate($symfony_request, $response);
+	exit();
+}
+
+/**
  * Returns the install redirect path for phpBB.
  *
  * @param string $phpbb_root_path The root path of the phpBB installation.
@@ -3093,339 +3120,6 @@ function phpbb_ip_normalise(string $address)
 /**
 * Error and message handler, call with trigger_error if read
 */
-function phpbb_should_show_full_runtime_error()
-{
-	global $auth, $phpbb_container;
-
-	return ($phpbb_container != null && $phpbb_container->getParameter('debug.show_errors'))
-		|| (isset($auth) && $auth->acl_get('a_'));
-}
-
-function phpbb_generate_runtime_error_id()
-{
-	try
-	{
-		return gmdate('YmdHis') . '-' . substr(bin2hex(random_bytes(8)), 0, 12);
-	}
-	catch (\Exception $e)
-	{
-		return gmdate('YmdHis') . '-' . substr(md5(uniqid('', true)), 0, 12);
-	}
-}
-
-function phpbb_get_runtime_server_var($name, $default = '')
-{
-	global $request;
-
-	if (!empty($request) && is_object($request) && method_exists($request, 'server'))
-	{
-		return $request->server($name, $default);
-	}
-
-	$var = getenv($name);
-	return ($var !== false && $var !== null) ? $var : $default;
-}
-
-function phpbb_get_runtime_header_var($name, $default = '')
-{
-	global $request;
-
-	if (!empty($request) && is_object($request) && method_exists($request, 'header'))
-	{
-		return $request->header($name, $default);
-	}
-
-	$var = getenv('HTTP_' . strtoupper(str_replace('-', '_', $name)));
-	return ($var !== false && $var !== null) ? $var : $default;
-}
-
-function phpbb_get_runtime_error_request_uri()
-{
-	$request_uri = phpbb_get_runtime_server_var('REQUEST_URI', '');
-	if (!empty($request_uri))
-	{
-		return $request_uri;
-	}
-
-	$script_name = phpbb_get_runtime_server_var('SCRIPT_NAME', '');
-	if (!empty($script_name))
-	{
-		$request_uri = $script_name;
-		$query_string = phpbb_get_runtime_server_var('QUERY_STRING', '');
-		if (!empty($query_string))
-		{
-			$request_uri .= '?' . $query_string;
-		}
-
-		return $request_uri;
-	}
-
-	return '-';
-}
-
-function phpbb_build_runtime_error_public_block(array $context)
-{
-	return '<br /><br />Error ID: <strong>' . htmlspecialchars($context['error_id'], ENT_COMPAT) . '</strong>'
-		. '<br />Request: <code>' . htmlspecialchars($context['request_uri'], ENT_COMPAT) . '</code>'
-		. '<br />Time (UTC): ' . htmlspecialchars($context['time_utc'], ENT_COMPAT);
-}
-
-function phpbb_build_runtime_error_context($type, array $extra = array())
-{
-	global $auth, $db, $user;
-
-	return array_merge(array(
-		'error_id'			=> phpbb_generate_runtime_error_id(),
-		'time_utc'			=> gmdate('Y-m-d H:i:s') . ' UTC',
-		'type'				=> $type,
-		'request_method'	=> phpbb_get_runtime_server_var('REQUEST_METHOD', ''),
-		'request_uri'		=> phpbb_get_runtime_error_request_uri(),
-		'referrer'			=> phpbb_get_runtime_header_var('referer', ''),
-		'remote_addr'		=> phpbb_get_runtime_server_var('REMOTE_ADDR', ''),
-		'forwarded_for'		=> phpbb_get_runtime_header_var('x-forwarded-for', ''),
-		'user_agent'		=> phpbb_get_runtime_header_var('user-agent', ''),
-		'user_id'			=> (!empty($user) && is_object($user) && isset($user->data['user_id'])) ? (int) $user->data['user_id'] : 0,
-		'username'			=> (!empty($user) && is_object($user) && isset($user->data['username'])) ? $user->data['username'] : '',
-		'is_admin'			=> (isset($auth) && is_object($auth) && method_exists($auth, 'acl_get')) ? (int) $auth->acl_get('a_') : 0,
-		'db_name'			=> (isset($db) && is_object($db) && method_exists($db, 'get_db_name')) ? $db->get_db_name() : '',
-	), $extra);
-}
-
-function phpbb_write_runtime_error_log(array $context)
-{
-	global $phpbb_root_path;
-
-	$root_path = !empty($phpbb_root_path) ? $phpbb_root_path : dirname(__DIR__) . '/';
-	$encoded = json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-	if ($encoded === false)
-	{
-		$encoded = json_encode(array(
-			'error_id'			=> $context['error_id'],
-			'time_utc'			=> $context['time_utc'],
-			'encode_failure'	=> true,
-		));
-	}
-
-	@file_put_contents($root_path . 'store/php_errors.log', $encoded . PHP_EOL, FILE_APPEND | LOCK_EX);
-}
-
-function phpbb_runtime_error_handled()
-{
-	global $phpbb_runtime_error_handled;
-
-	return !empty($phpbb_runtime_error_handled);
-}
-
-function phpbb_mark_runtime_error_handled()
-{
-	global $phpbb_runtime_error_handled;
-
-	$phpbb_runtime_error_handled = true;
-}
-
-function phpbb_get_internal_error_message()
-{
-	global $config, $user;
-
-	if (!empty($user) && is_object($user) && method_exists($user, 'is_setup') && $user->is_setup())
-	{
-		if (!empty($config['board_contact']))
-		{
-			return sprintf($user->lang['INTERNAL_ERROR_OCCURRED'], '<a href="mailto:' . htmlspecialchars($config['board_contact'], ENT_COMPAT) . '">', '</a>');
-		}
-
-		return sprintf($user->lang['INTERNAL_ERROR_OCCURRED'], '', '');
-	}
-
-	if (!empty($config['board_contact']))
-	{
-		return 'An internal error occurred while fetching this page. Please contact the <a href="mailto:' . htmlspecialchars($config['board_contact'], ENT_COMPAT) . '">Board Administrator</a> if this problem persists.';
-	}
-
-	return 'An internal error occurred while fetching this page. Please contact the Board Administrator if this problem persists.';
-}
-
-function phpbb_get_error_page_context(&$msg_title, &$l_return_index, &$l_notify)
-{
-	global $config, $phpbb_root_path, $user;
-
-	if (!empty($user) && is_object($user) && method_exists($user, 'is_setup') && $user->is_setup())
-	{
-		$msg_title = (!isset($msg_title)) ? $user->lang['GENERAL_ERROR'] : ((!empty($user->lang[$msg_title])) ? $user->lang[$msg_title] : $msg_title);
-		$l_return_index = sprintf($user->lang['RETURN_INDEX'], '<a href="' . $phpbb_root_path . '">', '</a>');
-		$l_notify = '';
-
-		if (!empty($config['board_contact']))
-		{
-			$l_notify = '<p>' . sprintf($user->lang['NOTIFY_ADMIN_EMAIL'], $config['board_contact']) . '</p>';
-		}
-
-		return;
-	}
-
-	$msg_title = 'General Error';
-	$l_return_index = '<a href="' . $phpbb_root_path . '">Return to index page</a>';
-	$l_notify = '';
-
-	if (!empty($config['board_contact']))
-	{
-		$l_notify = '<p>Please notify the board administrator or webmaster: <a href="mailto:' . $config['board_contact'] . '">' . $config['board_contact'] . '</a></p>';
-	}
-}
-
-function phpbb_render_fatal_error_page($msg_title, $msg_text, $l_return_index, $l_notify)
-{
-	send_status_line(503, 'Service Unavailable');
-
-	garbage_collection();
-
-	echo '<!DOCTYPE html>';
-	echo '<html dir="ltr">';
-	echo '<head>';
-	echo '<meta charset="utf-8">';
-	echo '<meta http-equiv="X-UA-Compatible" content="IE=edge">';
-	echo '<title>' . $msg_title . '</title>';
-	echo '<style type="text/css">' . "\n" . '/* <![CDATA[ */' . "\n";
-	echo '* { margin: 0; padding: 0; } html { font-size: 100%; height: 100%; margin-bottom: 1px; background-color: #E4EDF0; } body { font-family: "Lucida Grande", Verdana, Helvetica, Arial, sans-serif; color: #536482; background: #E4EDF0; font-size: 62.5%; margin: 0; } ';
-	echo 'a:link, a:active, a:visited { color: #006699; text-decoration: none; } a:hover { color: #DD6900; text-decoration: underline; } ';
-	echo '#wrap { padding: 0 20px 15px 20px; min-width: 615px; } #page-header { text-align: right; height: 40px; } #page-footer { clear: both; font-size: 1em; text-align: center; } ';
-	echo '.panel { margin: 4px 0; background-color: #FFFFFF; border: solid 1px  #A9B8C2; } ';
-	echo '#errorpage #page-header a { font-weight: bold; line-height: 6em; } #errorpage #content { padding: 10px; } #errorpage #content h1 { line-height: 1.2em; margin-bottom: 0; color: #DF075C; } ';
-	echo '#errorpage #content div { margin-top: 20px; margin-bottom: 5px; border-bottom: 1px solid #CCCCCC; padding-bottom: 5px; color: #333333; font: bold 1.2em "Lucida Grande", Arial, Helvetica, sans-serif; text-decoration: none; line-height: 120%; text-align: left; } ';
-	echo "\n" . '/* ]]> */' . "\n";
-	echo '</style>';
-	echo '</head>';
-	echo '<body id="errorpage">';
-	echo '<div id="wrap">';
-	echo '	<div id="page-header">';
-	echo '		' . $l_return_index;
-	echo '	</div>';
-	echo '	<div id="acp">';
-	echo '	<div class="panel">';
-	echo '		<div id="content">';
-	echo '			<h1>' . $msg_title . '</h1>';
-	echo '			<div>' . $msg_text . '</div>';
-	echo $l_notify;
-	echo '		</div>';
-	echo '	</div>';
-	echo '	</div>';
-	echo '	<div id="page-footer">';
-	echo '		Powered by <a href="https://www.phpbb.com/">phpBB</a>&reg; Forum Software &copy; phpBB Limited';
-	echo '	</div>';
-	echo '</div>';
-	echo '</body>';
-	echo '</html>';
-
-	phpbb_mark_runtime_error_handled();
-	exit_handler();
-	exit;
-}
-
-function phpbb_exception_handler($exception)
-{
-	if (phpbb_runtime_error_handled())
-	{
-		return;
-	}
-
-	$msg_title = null;
-	$l_return_index = '';
-	$l_notify = '';
-	phpbb_get_error_page_context($msg_title, $l_return_index, $l_notify);
-
-	$message = $exception->getMessage();
-	if (!empty($GLOBALS['user']) && is_object($GLOBALS['user']) && method_exists($GLOBALS['user'], 'is_setup') && $GLOBALS['user']->is_setup() && $exception instanceof \phpbb\exception\exception_interface)
-	{
-		$message = $GLOBALS['user']->lang_array($message, $exception->get_parameters());
-	}
-
-	$context = phpbb_build_runtime_error_context('php_exception', array(
-		'exception_class'	=> get_class($exception),
-		'message'			=> $message,
-		'file'				=> phpbb_filter_root_path($exception->getFile()),
-		'line'				=> (int) $exception->getLine(),
-		'trace'				=> $exception->getTraceAsString(),
-	));
-	phpbb_write_runtime_error_log($context);
-
-	if (phpbb_should_show_full_runtime_error())
-	{
-		$msg_text = nl2br(htmlspecialchars(
-			'Uncaught ' . get_class($exception) . ': ' . $message
-			. "\nFILE: " . phpbb_filter_root_path($exception->getFile())
-			. "\nLINE: " . (int) $exception->getLine()
-			. "\nTRACE\n" . $exception->getTraceAsString(),
-			ENT_COMPAT
-		));
-	}
-	else
-	{
-		$msg_text = phpbb_get_internal_error_message();
-	}
-
-	$msg_text .= phpbb_build_runtime_error_public_block($context);
-	phpbb_render_fatal_error_page($msg_title, $msg_text, $l_return_index, $l_notify);
-}
-
-function phpbb_shutdown_handler()
-{
-	if (phpbb_runtime_error_handled())
-	{
-		return;
-	}
-
-	$error = error_get_last();
-	if (!$error)
-	{
-		return;
-	}
-
-	$fatal_types = array(E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_RECOVERABLE_ERROR);
-	if (!in_array($error['type'], $fatal_types, true) || $error['type'] === E_USER_ERROR)
-	{
-		return;
-	}
-
-	$error_names = array(
-		E_ERROR				=> 'PHP Fatal error',
-		E_PARSE				=> 'PHP Parse error',
-		E_CORE_ERROR		=> 'PHP Core error',
-		E_COMPILE_ERROR		=> 'PHP Compile error',
-		E_RECOVERABLE_ERROR	=> 'PHP Recoverable error',
-	);
-
-	$msg_title = null;
-	$l_return_index = '';
-	$l_notify = '';
-	phpbb_get_error_page_context($msg_title, $l_return_index, $l_notify);
-
-	$context = phpbb_build_runtime_error_context('php_fatal', array(
-		'errno'		=> (int) $error['type'],
-		'error_name'	=> isset($error_names[$error['type']]) ? $error_names[$error['type']] : 'PHP Fatal error',
-		'message'	=> $error['message'],
-		'file'		=> phpbb_filter_root_path($error['file']),
-		'line'		=> (int) $error['line'],
-	));
-	phpbb_write_runtime_error_log($context);
-
-	if (phpbb_should_show_full_runtime_error())
-	{
-		$msg_text = nl2br(htmlspecialchars(
-			$context['error_name'] . ': ' . $error['message']
-			. "\nFILE: " . phpbb_filter_root_path($error['file'])
-			. "\nLINE: " . (int) $error['line'],
-			ENT_COMPAT
-		));
-	}
-	else
-	{
-		$msg_text = phpbb_get_internal_error_message();
-	}
-
-	$msg_text .= phpbb_build_runtime_error_public_block($context);
-	phpbb_render_fatal_error_page($msg_title, $msg_text, $l_return_index, $l_notify);
-}
-
 function msg_handler($errno, $msg_text, $errfile, $errline)
 {
 	global $cache, $db, $auth, $template, $config, $user, $request;
@@ -3484,9 +3178,31 @@ function msg_handler($errno, $msg_text, $errfile, $errline)
 		break;
 
 		case E_USER_ERROR:
-			phpbb_get_error_page_context($msg_title, $l_return_index, $l_notify);
 
-			$msg_text = (!empty($user) && $user->is_setup() && !empty($user->lang[$msg_text])) ? $user->lang[$msg_text] : $msg_text;
+			if (!empty($user) && $user->is_setup())
+			{
+				$msg_text = (!empty($user->lang[$msg_text])) ? $user->lang[$msg_text] : $msg_text;
+				$msg_title = (!isset($msg_title)) ? $user->lang['GENERAL_ERROR'] : ((!empty($user->lang[$msg_title])) ? $user->lang[$msg_title] : $msg_title);
+
+				$l_return_index = sprintf($user->lang['RETURN_INDEX'], '<a href="' . $phpbb_root_path . '">', '</a>');
+				$l_notify = '';
+
+				if (!empty($config['board_contact']))
+				{
+					$l_notify = '<p>' . sprintf($user->lang['NOTIFY_ADMIN_EMAIL'], $config['board_contact']) . '</p>';
+				}
+			}
+			else
+			{
+				$msg_title = 'General Error';
+				$l_return_index = '<a href="' . $phpbb_root_path . '">Return to index page</a>';
+				$l_notify = '';
+
+				if (!empty($config['board_contact']))
+				{
+					$l_notify = '<p>Please notify the board administrator or webmaster: <a href="mailto:' . $config['board_contact'] . '">' . $config['board_contact'] . '</a></p>';
+				}
+			}
 
 			$log_text = $msg_text;
 			$backtrace = get_backtrace();
@@ -3494,27 +3210,10 @@ function msg_handler($errno, $msg_text, $errfile, $errline)
 			{
 				$log_text .= '<br /><br />BACKTRACE<br />' . $backtrace;
 			}
-			$is_sql_error = strpos($msg_text, 'SQL ERROR [') !== false;
-			if (!$is_sql_error)
-			{
-				$error_context = phpbb_build_runtime_error_context('php_user_error', array(
-					'errno'		=> $errno,
-					'message'	=> $msg_text,
-					'file'		=> phpbb_filter_root_path($errfile),
-					'line'		=> (int) $errline,
-					'backtrace'	=> trim(html_entity_decode(str_replace('<br />', "\n", strip_tags($backtrace)), ENT_COMPAT)),
-				));
-				phpbb_write_runtime_error_log($error_context);
-				$msg_text .= phpbb_build_runtime_error_public_block($error_context);
-			}
 
-			if (defined('IN_INSTALL') || phpbb_should_show_full_runtime_error())
+			if (defined('IN_INSTALL') || ($phpbb_container != null && $phpbb_container->getParameter('debug.show_errors')) || isset($auth) && $auth->acl_get('a_'))
 			{
 				$msg_text = $log_text;
-				if (!$is_sql_error)
-				{
-					$msg_text .= phpbb_build_runtime_error_public_block($error_context);
-				}
 
 				// If this is defined there already was some output
 				// So let's not break it
@@ -3535,7 +3234,57 @@ function msg_handler($errno, $msg_text, $errfile, $errline)
 				$db->sql_return_on_error(false);
 			}
 
-			phpbb_render_fatal_error_page($msg_title, $msg_text, $l_return_index, $l_notify);
+			// Do not send 200 OK, but service unavailable on errors
+			send_status_line(503, 'Service Unavailable');
+
+			garbage_collection();
+
+			// Try to not call the adm page data...
+
+			echo '<!DOCTYPE html>';
+			echo '<html dir="ltr">';
+			echo '<head>';
+			echo '<meta charset="utf-8">';
+			echo '<meta http-equiv="X-UA-Compatible" content="IE=edge">';
+			echo '<title>' . $msg_title . '</title>';
+			echo '<style type="text/css">' . "\n" . '/* <![CDATA[ */' . "\n";
+			echo '* { margin: 0; padding: 0; } html { font-size: 100%; height: 100%; margin-bottom: 1px; background-color: #E4EDF0; } body { font-family: "Lucida Grande", Verdana, Helvetica, Arial, sans-serif; color: #536482; background: #E4EDF0; font-size: 62.5%; margin: 0; } ';
+			echo 'a:link, a:active, a:visited { color: #006699; text-decoration: none; } a:hover { color: #DD6900; text-decoration: underline; } ';
+			echo '#wrap { padding: 0 20px 15px 20px; min-width: 615px; } #page-header { text-align: right; height: 40px; } #page-footer { clear: both; font-size: 1em; text-align: center; } ';
+			echo '.panel { margin: 4px 0; background-color: #FFFFFF; border: solid 1px  #A9B8C2; } ';
+			echo '#errorpage #page-header a { font-weight: bold; line-height: 6em; } #errorpage #content { padding: 10px; } #errorpage #content h1 { line-height: 1.2em; margin-bottom: 0; color: #DF075C; } ';
+			echo '#errorpage #content div { margin-top: 20px; margin-bottom: 5px; border-bottom: 1px solid #CCCCCC; padding-bottom: 5px; color: #333333; font: bold 1.2em "Lucida Grande", Arial, Helvetica, sans-serif; text-decoration: none; line-height: 120%; text-align: left; } ';
+			echo "\n" . '/* ]]> */' . "\n";
+			echo '</style>';
+			echo '</head>';
+			echo '<body id="errorpage">';
+			echo '<div id="wrap">';
+			echo '	<div id="page-header">';
+			echo '		' . $l_return_index;
+			echo '	</div>';
+			echo '	<div id="acp">';
+			echo '	<div class="panel">';
+			echo '		<div id="content">';
+			echo '			<h1>' . $msg_title . '</h1>';
+
+			echo '			<div>' . $msg_text . '</div>';
+
+			echo $l_notify;
+
+			echo '		</div>';
+			echo '	</div>';
+			echo '	</div>';
+			echo '	<div id="page-footer">';
+			echo '		Powered by <a href="https://www.phpbb.com/">phpBB</a>&reg; Forum Software &copy; phpBB Limited';
+			echo '	</div>';
+			echo '</div>';
+			echo '</body>';
+			echo '</html>';
+
+			exit_handler();
+
+			// On a fatal error (and E_USER_ERROR *is* fatal) we never want other scripts to continue and force an exit here.
+			exit;
 		break;
 
 		case E_USER_WARNING:
@@ -4405,8 +4154,7 @@ function page_header($page_title = '', $display_online_list = false, $item_id = 
 		'U_USER_PROFILE'		=> get_username_string('profile', $user->data['user_id'], $user->data['username'], $user->data['user_colour']),
 		'U_MODCP'				=> append_sid("{$phpbb_root_path}mcp.$phpEx", false, true, $user->session_id),
 		'U_FAQ'					=> $controller_helper->route('phpbb_help_faq_controller'),
-			'U_SEARCH_SELF'			=> append_sid("{$phpbb_root_path}search.$phpEx", 'search_id=egosearch'),
-			'U_SEARCH_SELF_TOPICS'	=> append_sid("{$phpbb_root_path}search.$phpEx", 'search_id=egosearch&amp;sr=topics'),
+		'U_SEARCH_SELF'			=> append_sid("{$phpbb_root_path}search.$phpEx", 'search_id=egosearch'),
 		'U_SEARCH_NEW'			=> append_sid("{$phpbb_root_path}search.$phpEx", 'search_id=newposts'),
 		'U_SEARCH_UNANSWERED'	=> append_sid("{$phpbb_root_path}search.$phpEx", 'search_id=unanswered'),
 		'U_SEARCH_UNREAD'		=> append_sid("{$phpbb_root_path}search.$phpEx", 'search_id=unreadposts'),
@@ -4810,4 +4558,15 @@ function phpbb_get_board_contact_link(\phpbb\config\config $config, $phpbb_root_
 	{
 		return 'mailto:' . htmlspecialchars($config['board_contact'], ENT_COMPAT);
 	}
+}
+
+/**
+ * Get host name for ip
+ *
+ * @param string $ip IP string
+ * @return string Hostname for IP in cleaned format
+ */
+function phpbb_get_host_for_ip(string $ip): string
+{
+	return utf8_htmlspecialchars(@gethostbyaddr($ip));
 }

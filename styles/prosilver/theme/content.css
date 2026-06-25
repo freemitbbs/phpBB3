@@ -29,7 +29,7 @@ ul.topiclist dt, ul.topiclist dd {
 ul.topiclist dt {
 	width: 100%;
 	margin-right: -440px;
-	font-size: 1.3em;
+	font-size: 1.1em;
 }
 
 ul.topiclist.missing-column dt {
@@ -112,7 +112,7 @@ li.header dt, li.header dd {
 	margin: 2px 0 4px 0;
 	padding-top: 2px;
 	padding-bottom: 2px;
-	font-size: 1.2em;
+	font-size: 1em;
 	font-family: Arial, Helvetica, sans-serif;
 	text-transform: uppercase;
 }
@@ -187,7 +187,7 @@ dd.posts, dd.topics, dd.views, dd.extra, dd.mark {
 	width: 80px;
 	text-align: center;
 	line-height: 2.2em;
-	font-size: 1.3em;
+	font-size: 1.2em;
 }
 
 dd.posts, dd.topics, dd.views {
@@ -208,7 +208,7 @@ dl.row-item dt li {
 
 dd.lastpost, dd.redirect, dd.moderation, dd.time, dd.info {
 	width: 250px;
-	font-size: 1.2em;
+	font-size: 1.1em;
 }
 
 dd.redirect {
@@ -232,7 +232,7 @@ dd.option {
 	width: 125px;
 	line-height: 200%;
 	text-align: center;
-	font-size: 1.2em;
+	font-size: 1.1em;
 }
 
 /* Post body styles
@@ -246,7 +246,7 @@ dd.option {
 }
 
 .postbody .ignore {
-	font-size: 1.2em;
+	font-size: 1.1em;
 }
 
 .postbody h3.first {
@@ -278,7 +278,7 @@ dd.option {
 }
 
 .postbody .content {
-	font-size: 1.5em;
+	font-size: 1.3em;
 	overflow-x: auto;
 }
 
@@ -345,14 +345,14 @@ dd.option {
 	overflow: hidden;
 	line-height: 1.4em;
 	font-family: "Lucida Grande", "Trebuchet MS", Verdana, Helvetica, Arial, sans-serif;
-	font-size: 1.2em;
+	font-size: 1em;
 	padding-bottom: 1px;
 }
 
 .content h2, .panel h2 {
 	font-weight: normal;
 	border-bottom: 1px solid transparent;
-	font-size: 1.7em;
+	font-size: 1.6em;
 	margin-top: 0.5em;
 	margin-bottom: 0.5em;
 	padding-bottom: 0.5em;
@@ -363,14 +363,14 @@ dd.option {
 }
 
 .panel p {
-	font-size: 1.3em;
+	font-size: 1.2em;
 	margin-bottom: 1em;
 	line-height: 1.4em;
 }
 
 .content p {
 	font-family: "Lucida Grande", "Trebuchet MS", Verdana, Helvetica, Arial, sans-serif;
-	font-size: 1.3em;
+	font-size: 1.2em;
 	margin-bottom: 1em;
 	line-height: 1.4em;
 }
@@ -420,14 +420,13 @@ p.author {
 	margin-bottom: 0.6em;
 	padding: 0 0 5px 0;
 	font-family: Verdana, Helvetica, Arial, sans-serif;
-	font-size: 1.1em;
+	font-size: 1em;
 	line-height: 1.2em;
 	clear: both;
 }
 
 /* Post signature */
 .signature {
-	max-height: 150px;
 	margin-top: 1.5em;
 	padding-top: 0.2em;
 	font-size: 1.1em;
@@ -487,7 +486,7 @@ ul.searchresults {
 /* Quote block */
 blockquote {
 	border: 1px solid transparent;
-	font-size: 1em;
+	font-size: 0.95em;
 	margin: 1em 1px 1em 25px;
 	overflow: hidden;
 	padding: 5px;
@@ -495,7 +494,7 @@ blockquote {
 
 blockquote blockquote {
 	/* Nested quotes */
-	font-size: 1.1em;
+	font-size: 1em;
 	margin: 1em 1px 1em 15px;
 }
 
@@ -504,7 +503,7 @@ blockquote cite {
 	font-style: normal;
 	font-weight: bold;
 	display: block;
-	font-size: 0.95em;
+	font-size: 0.9em;
 }
 
 blockquote cite cite {
@@ -685,7 +684,7 @@ fieldset.polls dt {
 	border-right: none;
 	padding: 0;
 	margin: 0;
-	font-size: 1.2em;
+	font-size: 1.1em;
 }
 
 fieldset.polls dd {
@@ -694,7 +693,7 @@ fieldset.polls dd {
 	border-left: none;
 	padding: 0 5px;
 	margin-left: 0;
-	font-size: 1.2em;
+	font-size: 1.1em;
 }
 
 fieldset.polls dd.resultbar {
@@ -774,8 +773,7 @@ fieldset.polls dd div {
 .postprofile .avatar img {
 	display: block;
 	height: auto !important;
-	max-height: 150px;
-	width: auto;
+	max-width: 100%;
 }
 
 .postprofile .profile-posts a {

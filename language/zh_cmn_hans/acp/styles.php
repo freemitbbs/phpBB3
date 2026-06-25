@@ -37,7 +37,7 @@ if (empty($lang) || !is_array($lang))
 // in a url you again do not need to specify an order e.g., 'Click %sHERE%s' is fine
 
 $lang = array_merge($lang, array(
-	'ACP_STYLES_EXPLAIN'	=> '这里您可以管理论坛上可用的风格。<br />请注意您无法卸载 “<strong>prosilver</strong>” 风格，因为它是 phpBB 的默认和主要父风格。',
+	'ACP_STYLES_EXPLAIN'	=> '这里您可以管理论坛上可用的风格。 <br>请注意您无法卸载 “<strong>prosilver</strong>” 风格，因为它是 phpBB 的默认和主要父风格。',
 
 	'CANNOT_BE_INSTALLED'		=> '无法安装',
 	'CONFIRM_UNINSTALL_STYLES'	=> '您确定要卸载所选风格吗？',
@@ -52,7 +52,7 @@ $lang = array_merge($lang, array(
 	'INHERITING_FROM'         	=> '继承自',
 	'INSTALL_STYLE'				=> '安装风格',
 	'INSTALL_STYLES'			=> '安装风格',
-	'INSTALL_STYLES_EXPLAIN'	=> '这里您可以安装新的风格。<br /> 如果您在下面列表中没有看到特定的风格，那么看看是否已经被安装了，或者看看风格文件是否上传正确。',
+	'INSTALL_STYLES_EXPLAIN'	=> '这里您可以安装新的风格。<br> 如果您在下面列表中没有看到特定的风格，那么看看是否已经被安装了，或者看看风格文件是否上传正确。',
 	'INVALID_STYLE_ID'			=> '无效的风格 ID。',
 
 	'NO_MATCHING_STYLES_FOUND'	=> '没有风格匹配您的查询。',
