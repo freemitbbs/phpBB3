@@ -162,15 +162,22 @@ class controller_common
 			return false;
 		}
 
-		$this->rtng_user_data[$user_data['user_id']] = [];
+		$rtng_user_data = [];
 
 		foreach ($user_data as $key => $value)
 		{
 			if (str_starts_with($key, 'user_rtng'))
 			{
-				$this->rtng_user_data[$user_data['user_id']][$key] = $value;
+				$rtng_user_data[$key] = $value;
 			}
 		}
+
+		if (empty($rtng_user_data))
+		{
+			return false;
+		}
+
+		$this->rtng_user_data[(int) $user_data['user_id']] = $this->merge_rtng_defaults($rtng_user_data);
 
 		return true;
 	}
@@ -198,8 +205,10 @@ class controller_common
 		$sql		= $this->db->sql_build_query('SELECT', $sql_array);
 		$cache_time = $user_id == ANONYMOUS ? 3600 : 0;
 		$result		= $this->db->sql_query($sql, $cache_time);
-		$this->rtng_user_data[$user_id] = $this->db->sql_fetchrow($result);
+		$row = $this->db->sql_fetchrow($result);
 		$this->db->sql_freeresult($result);
+
+		$this->rtng_user_data[$user_id] = $this->merge_rtng_defaults(is_array($row) ? $row : []);
 
 		return $this->rtng_user_data[$user_id];
 	}
@@ -210,14 +219,14 @@ class controller_common
 	public function get_user_setting(int $user_id = 0): array
 	{
 		$user_id	  = $user_id ?: $this->user->data['user_id'];
-		$default_data = $this->get_rtng_user_data(ANONYMOUS);
+		$default_data = $this->merge_rtng_defaults($this->get_rtng_user_data(ANONYMOUS));
 
 		if ($user_id == ANONYMOUS)
 		{
 			return $default_data;
 		}
 
-		$user_data = $this->get_rtng_user_data($user_id);
+		$user_data = $this->merge_rtng_defaults($this->get_rtng_user_data($user_id));
 
 		if ($user_id != $this->user->data['user_id'])
 		{
@@ -241,6 +250,22 @@ class controller_common
 		unset($user_auth);
 
 		return $default_data;
+	}
+
+	protected function merge_rtng_defaults(array $data): array
+	{
+		return array_merge([
+			'user_rtng_enable' => 1,
+			'user_rtng_sort_start_time' => 0,
+			'user_rtng_unread_only' => 0,
+			'user_rtng_disp_last_post' => 0,
+			'user_rtng_disp_first_unrd_post' => 0,
+			'user_rtng_location' => 'RTNG_TOP',
+			'user_rtng_index_topics_qty' => 5,
+			'user_rtng_index_page_qty' => 3,
+			'user_rtng_separate_topics_qty' => 10,
+			'user_rtng_separate_page_qty' => 3,
+		], $data);
 	}
 
 	/**

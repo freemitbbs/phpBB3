@@ -777,7 +777,7 @@ class user extends \phpbb\session
 	*/
 	function optionget($key, $data = false)
 	{
-		$var = ($data !== false) ? $data : $this->data['user_options'];
+		$var = ($data !== false) ? $data : ($this->data['user_options'] ?? 230271);
 		return phpbb_optionget($this->keyoptions[$key], $var);
 	}
 
@@ -795,7 +795,7 @@ class user extends \phpbb\session
 	*/
 	function optionset($key, $value, $data = false)
 	{
-		$var = ($data !== false) ? $data : $this->data['user_options'];
+		$var = ($data !== false) ? $data : ($this->data['user_options'] ?? 230271);
 
 		$new_var = phpbb_optionset($this->keyoptions[$key], $value, $var);
 
