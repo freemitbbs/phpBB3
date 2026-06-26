@@ -76,6 +76,12 @@
 		return window.location.pathname + window.location.search + window.location.hash;
 	}
 
+	function isFormWorkflowPage() {
+		var path = window.location.pathname || '';
+
+		return /(?:^|\/)(?:ucp|posting|mcp)\.php$/i.test(path);
+	}
+
 	function getQueryParam(url, name) {
 		var queryStart = url.indexOf('?');
 		if (queryStart === -1) {
@@ -244,7 +250,7 @@
 		}
 	}
 
-	if (isAnonymous) {
+	if (isAnonymous && !isFormWorkflowPage()) {
 		var storedTheme = normalizeTheme(storageGet(keys.theme));
 		var storedTopicListRaw = storageGet(keys.topicList);
 		var storedTopicList = normalizeTopicList(storedTopicListRaw);
