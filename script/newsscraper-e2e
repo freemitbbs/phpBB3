@@ -1,0 +1,314 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PHP_BIN="${PHP_BIN:-$(command -v php || true)}"
+MYSQL_BIN="${MYSQL_BIN:-$(command -v mysql || true)}"
+CURL_BIN="${CURL_BIN:-$(command -v curl || true)}"
+MYSQL_SOCKET="${MYSQL_SOCKET:-/tmp/phpbb-mysql.sock}"
+DB_USER="${DB_USER:-phpbb}"
+DB_PASS="${DB_PASS:-phpbb}"
+DB_NAME="${DB_NAME:-phpbb_test}"
+BOARD_URL="${BOARD_URL:-http://127.0.0.1:8090}"
+SOURCES="${NEWSSCRAPER_E2E_SOURCES:-guardian,bbc,dw,cnbc,ars}"
+CANDIDATES="${NEWSSCRAPER_E2E_CANDIDATES:-12}"
+MAX_SELECTED="${NEWSSCRAPER_E2E_MAX_SELECTED:-3}"
+MIN_SCORE="${NEWSSCRAPER_E2E_MIN_SCORE:-0}"
+KEEP_CONFIG=0
+
+CONFIG_KEYS=(
+	newsscraper_enabled
+	newsscraper_digest_forum_id
+	newsscraper_interval_seconds
+	newsscraper_candidates_per_run
+	newsscraper_max_selected_per_run
+	newsscraper_min_interest_score
+	newsscraper_per_source_cap
+	newsscraper_frontpage_count
+	newsscraper_title_max_chars
+	newsscraper_seen_retention_days
+	newsscraper_enabled_sources
+	newsscraper_api_endpoint
+	newsscraper_model
+)
+
+usage() {
+	cat <<'USAGE'
+Usage:
+  script/newsscraper-e2e [options]
+
+Runs a real local-board E2E for freemitbbs/newsscraper:
+  1. Uses the running local phpBB board and DB.
+  2. Temporarily enables newsscraper with live news sources.
+  3. Uses configured newsscraper API key, or topicmover API key fallback.
+  4. Runs cron.task.freemitbbs.newsscraper.scrape_news.
+  5. Verifies at least one digest topic was posted.
+  6. Restores the previous newsscraper config unless --keep-config is used.
+
+Options:
+  --sources LIST       Comma-separated source keys. Default: guardian,bbc,dw,cnbc,ars
+  --candidates N      Candidate titles per run. Default: 12
+  --max-selected N    Maximum articles AI may select/post. Default: 3
+  --min-score N       Minimum AI score. Default: 0
+  --board-url URL     Local board URL. Default: http://127.0.0.1:8090
+  --keep-config       Leave E2E scraper config enabled after the run.
+  -h, --help          Show this help.
+
+Environment overrides:
+  PHP_BIN, MYSQL_BIN, CURL_BIN, MYSQL_SOCKET, DB_USER, DB_PASS, DB_NAME,
+  BOARD_URL, NEWSSCRAPER_E2E_SOURCES, NEWSSCRAPER_E2E_CANDIDATES,
+  NEWSSCRAPER_E2E_MAX_SELECTED, NEWSSCRAPER_E2E_MIN_SCORE.
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--sources)
+			SOURCES="${2:?missing value after --sources}"
+			shift 2
+			;;
+		--candidates)
+			CANDIDATES="${2:?missing value after --candidates}"
+			shift 2
+			;;
+		--max-selected)
+			MAX_SELECTED="${2:?missing value after --max-selected}"
+			shift 2
+			;;
+		--min-score)
+			MIN_SCORE="${2:?missing value after --min-score}"
+			shift 2
+			;;
+		--board-url)
+			BOARD_URL="${2:?missing value after --board-url}"
+			shift 2
+			;;
+		--keep-config)
+			KEEP_CONFIG=1
+			shift
+			;;
+		-h|--help)
+			usage
+			exit 0
+			;;
+		*)
+			echo "Unknown argument: $1" >&2
+			usage >&2
+			exit 2
+			;;
+	esac
+done
+
+require_bin() {
+	local label="$1"
+	local path="$2"
+
+	if [[ -z "$path" ]]; then
+		echo "Missing required binary: $label" >&2
+		exit 1
+	fi
+}
+
+mysql_query() {
+	"$MYSQL_BIN" --protocol=SOCKET --socket="$MYSQL_SOCKET" -u "$DB_USER" "-p$DB_PASS" "$DB_NAME" "$@"
+}
+
+phpbb_cli() {
+	(
+		cd "$ROOT_DIR"
+		"$PHP_BIN" bin/phpbbcli.php "$@"
+	)
+}
+
+config_set() {
+	local name="$1"
+	local value="$2"
+
+	phpbb_cli config:set "$name" "$value" >/dev/null
+}
+
+require_int() {
+	local label="$1"
+	local value="$2"
+
+	if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+		echo "$label must be a non-negative integer: $value" >&2
+		exit 2
+	fi
+}
+
+http_get_ok() {
+	local url="$1"
+	local status
+
+	status="$("$CURL_BIN" -sS -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || true)"
+	[[ "$status" =~ ^[23][0-9][0-9]$ ]]
+}
+
+wait_for_board() {
+	local attempt=1
+	local health_url="${BOARD_URL%/}/assets/javascript/core.js"
+
+	while [[ "$attempt" -le 30 ]]; do
+		if http_get_ok "$health_url"; then
+			return 0
+		fi
+		sleep 1
+		attempt=$((attempt + 1))
+	done
+
+	return 1
+}
+
+CONFIG_RESTORED=0
+CONFIG_BACKUP_FILE=""
+
+restore_config() {
+	if [[ "$KEEP_CONFIG" -eq 1 || "$CONFIG_RESTORED" -eq 1 || -z "$CONFIG_BACKUP_FILE" || ! -f "$CONFIG_BACKUP_FILE" ]]; then
+		return 0
+	fi
+
+	echo "Restoring previous newsscraper config"
+	while IFS=$'\t' read -r key value; do
+		config_set "$key" "${value:-}"
+	done < "$CONFIG_BACKUP_FILE"
+	phpbb_cli cache:purge >/dev/null
+	CONFIG_RESTORED=1
+}
+
+trap restore_config EXIT
+
+main() {
+	require_bin php "$PHP_BIN"
+	require_bin mysql "$MYSQL_BIN"
+	require_bin curl "$CURL_BIN"
+	require_int "--candidates" "$CANDIDATES"
+	require_int "--max-selected" "$MAX_SELECTED"
+	require_int "--min-score" "$MIN_SCORE"
+
+	if [[ "$CANDIDATES" -lt 1 || "$CANDIDATES" -gt 200 ]]; then
+		echo "--candidates must be between 1 and 200" >&2
+		exit 2
+	fi
+	if [[ "$MAX_SELECTED" -lt 1 || "$MAX_SELECTED" -gt 50 ]]; then
+		echo "--max-selected must be between 1 and 50" >&2
+		exit 2
+	fi
+	if [[ "$MIN_SCORE" -gt 100 ]]; then
+		echo "--min-score must be between 0 and 100" >&2
+		exit 2
+	fi
+
+	if ! wait_for_board; then
+		echo "Local board is not reachable at $BOARD_URL" >&2
+		echo "Start it with: script/phpbb-test-start" >&2
+		exit 1
+	fi
+
+	if ! mysql_query -N -e 'SELECT 1' >/dev/null; then
+		echo "Local phpBB DB is not reachable on $MYSQL_SOCKET" >&2
+		exit 1
+	fi
+
+	local extension_active
+	extension_active="$(mysql_query -N -B -e "SELECT ext_active FROM phpbb_ext WHERE ext_name = 'freemitbbs/newsscraper'")"
+	if [[ "$extension_active" != "1" ]]; then
+		echo "freemitbbs/newsscraper is not enabled in the local board" >&2
+		exit 1
+	fi
+
+	local api_key_state
+	api_key_state="$(mysql_query -N -B -e "SELECT CASE WHEN EXISTS (SELECT 1 FROM phpbb_config WHERE config_name IN ('newsscraper_api_key', 'topicmover_api_key') AND config_value <> '') THEN 'present' ELSE 'missing' END")"
+	if [[ "$api_key_state" != "present" ]]; then
+		echo "No newsscraper_api_key or topicmover_api_key is configured in the local DB" >&2
+		exit 1
+	fi
+
+	local key_list
+	key_list="$(printf "'%s'," "${CONFIG_KEYS[@]}")"
+	key_list="${key_list%,}"
+	CONFIG_BACKUP_FILE="$(mktemp "${TMPDIR:-/tmp}/newsscraper-config.XXXXXX")"
+	mysql_query -N -B -e "SELECT config_name, config_value FROM phpbb_config WHERE config_name IN ($key_list)" > "$CONFIG_BACKUP_FILE"
+
+	local forum_id
+	forum_id="$(mysql_query -N -B -e "SELECT config_value FROM phpbb_config WHERE config_name = 'newsscraper_digest_forum_id'")"
+	if [[ ! "$forum_id" =~ ^[0-9]+$ || "$forum_id" -le 0 ]]; then
+		forum_id="$(mysql_query -N -B -e "SELECT forum_id FROM phpbb_forums WHERE forum_name IN ('新闻摘要', '新闻文摘') AND forum_type = 1 ORDER BY FIELD(forum_name, '新闻摘要', '新闻文摘') LIMIT 1")"
+	fi
+	if [[ ! "$forum_id" =~ ^[0-9]+$ || "$forum_id" -le 0 ]]; then
+		echo "Could not find the local 新闻摘要 digest forum" >&2
+		exit 1
+	fi
+
+	local before_topic_id
+	before_topic_id="$(mysql_query -N -B -e "SELECT COALESCE(MAX(topic_id), 0) FROM phpbb_topics WHERE forum_id = $forum_id")"
+
+	echo "Configuring real newsscraper E2E"
+	echo "Sources: $SOURCES"
+	echo "Digest forum: $forum_id"
+	echo "Topic before run: $before_topic_id"
+
+	config_set newsscraper_enabled 1
+	config_set newsscraper_digest_forum_id "$forum_id"
+	config_set newsscraper_interval_seconds 300
+	config_set newsscraper_candidates_per_run "$CANDIDATES"
+	config_set newsscraper_max_selected_per_run "$MAX_SELECTED"
+	config_set newsscraper_min_interest_score "$MIN_SCORE"
+	config_set newsscraper_per_source_cap 1
+	config_set newsscraper_frontpage_count 12
+	config_set newsscraper_title_max_chars 30
+	config_set newsscraper_seen_retention_days 30
+	config_set newsscraper_enabled_sources "$SOURCES"
+	config_set newsscraper_api_endpoint ''
+	config_set newsscraper_model ''
+	config_set cron_lock 0
+	phpbb_cli cache:purge >/dev/null
+
+	local output_file
+	output_file="$(mktemp "${TMPDIR:-/tmp}/newsscraper-e2e.XXXXXX")"
+
+	echo "Running cron.task.freemitbbs.newsscraper.scrape_news"
+	set +e
+	phpbb_cli cron:run cron.task.freemitbbs.newsscraper.scrape_news >"$output_file" 2>&1
+	local cron_status=$?
+	set -e
+
+	cat "$output_file"
+	if [[ "$cron_status" -ne 0 ]]; then
+		echo "Newsscraper cron command failed with status $cron_status" >&2
+		exit "$cron_status"
+	fi
+
+	local posted
+	posted="$(sed -n 's/.*posted=\([0-9][0-9]*\).*/\1/p' "$output_file" | tail -n 1)"
+	posted="${posted:-0}"
+	if [[ "$posted" -lt 1 ]]; then
+		echo "Expected at least one posted digest topic, got posted=$posted" >&2
+		echo "Recent seen rows:" >&2
+		mysql_query -e 'SELECT source_key, status, score, topic_id, LEFT(title, 90) AS title, reason FROM phpbb_newsscraper_seen ORDER BY updated_time DESC LIMIT 10' >&2
+		exit 1
+	fi
+
+	local topic_rows
+	topic_rows="$(mysql_query -N -B -e "SELECT topic_id, topic_title FROM phpbb_topics WHERE forum_id = $forum_id AND topic_id > $before_topic_id ORDER BY topic_id ASC")"
+	if [[ -z "$topic_rows" ]]; then
+		echo "Cron reported posted=$posted, but no new digest topic was found in forum $forum_id" >&2
+		exit 1
+	fi
+
+	echo "New digest topic(s):"
+	printf '%s\n' "$topic_rows" | while IFS=$'\t' read -r topic_id topic_title; do
+		local topic_url="$BOARD_URL/viewtopic.php?t=$topic_id"
+		echo "- $topic_id $topic_title"
+		echo "  $topic_url"
+		if ! http_get_ok "$topic_url"; then
+			echo "Topic URL did not return HTTP 200: $topic_url" >&2
+			exit 1
+		fi
+	done
+
+	echo "newsscraper E2E passed with posted=$posted"
+}
+
+main "$@"
