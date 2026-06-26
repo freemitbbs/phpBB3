@@ -358,7 +358,7 @@ class oauth extends base
 			if ($credentials['key'] && $credentials['secret'])
 			{
 				$oauth_service = $this->get_provider($service_name);
-				$login_url = $this->routing_helper->route('phpbb_ucp_oauth_login_controller', ['oauth_service' => $oauth_service]);
+				$login_url = $this->route_without_transient_params('phpbb_ucp_oauth_login_controller', ['oauth_service' => $oauth_service]);
 
 				$login_data['BLOCK_VARS'][$service_name] = [
 					'LOGIN_URL'		=> $login_url,
@@ -411,7 +411,7 @@ class oauth extends base
 			$ret['BLOCK_VARS'][$provider] = [
 				'NAME'			=> $provider,
 				'ACTUAL_NAME'	=> $this->get_provider_title($provider),
-				'REDIRECT_URI'	=> generate_board_url(true) . $this->routing_helper->route('phpbb_ucp_oauth_authenticate_controller', ['oauth_service' => $provider]),
+				'REDIRECT_URI'	=> generate_board_url(true) . $this->route_without_transient_params('phpbb_ucp_oauth_authenticate_controller', ['oauth_service' => $provider]),
 				'KEY'			=> $new_config['auth_oauth_' . utf8_strtolower($provider) . '_key'],
 				'SECRET'		=> $new_config['auth_oauth_' . utf8_strtolower($provider) . '_secret'],
 			];
@@ -764,6 +764,61 @@ class oauth extends base
 	}
 
 	/**
+	 * Generate OAuth routes without phpBB's transient URL state.
+	 *
+	 * The global append_sid() helper can add values such as sid/style to routed
+	 * URLs. OAuth redirect URIs must remain stable and match the provider
+	 * registration exactly.
+	 */
+	protected function route_without_transient_params($route, array $params)
+	{
+		return $this->strip_query_params(
+			$this->routing_helper->route($route, $params, true, ''),
+			['sid', 'style']
+		);
+	}
+
+	/**
+	 * Remove selected query parameters while preserving the rest of the URL.
+	 */
+	protected function strip_query_params($url, array $param_names)
+	{
+		$anchor = '';
+		$anchor_pos = strpos($url, '#');
+		if ($anchor_pos !== false)
+		{
+			$anchor = substr($url, $anchor_pos);
+			$url = substr($url, 0, $anchor_pos);
+		}
+
+		$query_pos = strpos($url, '?');
+		if ($query_pos === false)
+		{
+			return $url . $anchor;
+		}
+
+		$path = substr($url, 0, $query_pos);
+		$query = str_replace('&amp;', '&', substr($url, $query_pos + 1));
+		$filtered = [];
+
+		foreach (explode('&', $query) as $part)
+		{
+			if ($part === '')
+			{
+				continue;
+			}
+
+			$name = explode('=', $part, 2)[0];
+			if (!in_array(urldecode($name), $param_names, true))
+			{
+				$filtered[] = $part;
+			}
+		}
+
+		return $path . (count($filtered) ? '?' . implode('&amp;', $filtered) : '') . $anchor;
+	}
+
+	/**
 	 * Returns a new service object.
 	 *
 	 * @param string			$provider		The name of the provider
@@ -782,7 +837,7 @@ class oauth extends base
 		/** @see service_interface::get_auth_scope */
 		$scopes = $this->service_providers[$service_name]->get_auth_scope();
 
-		$callback = generate_board_url(true) . $this->routing_helper->route('phpbb_ucp_oauth_authenticate_controller', $query);
+		$callback = generate_board_url(true) . $this->route_without_transient_params('phpbb_ucp_oauth_authenticate_controller', $query);
 
 		// Setup the credentials for the requests
 		$credentials = new Credentials(

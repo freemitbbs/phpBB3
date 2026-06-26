@@ -78,7 +78,7 @@ switch ($mode)
 	break;
 
 	case 'register':
-		if ($user->data['is_registered'] || isset($_REQUEST['not_agreed']))
+		if ($user->data['is_registered'] || $request->is_set('not_agreed'))
 		{
 			redirect(append_sid("{$phpbb_root_path}index.$phpEx"));
 		}
@@ -106,8 +106,24 @@ switch ($mode)
 			redirect(append_sid("{$phpbb_root_path}index.$phpEx"));
 		}
 
-		$get_params_array = $request->get_super_global(\phpbb\request\request_interface::GET);
-		phpbb_redirect_to_controller('phpbb_ucp_oauth_link_account_controller', $get_params_array);
+		$get_params_array = array(
+			'auth_provider' => $request->variable('auth_provider', 'oauth', false, \phpbb\request\request_interface::GET),
+		);
+
+		if ($request->is_set('sid', \phpbb\request\request_interface::GET))
+		{
+			$get_params_array['sid'] = $request->variable('sid', '', false, \phpbb\request\request_interface::GET);
+		}
+
+		foreach ($request->variable_names(\phpbb\request\request_interface::GET) as $var_name)
+		{
+			if (strpos($var_name, 'login_link_') === 0)
+			{
+				$get_params_array[$var_name] = $request->variable($var_name, '', false, \phpbb\request\request_interface::GET);
+			}
+		}
+
+		redirect(append_sid("{$phpbb_root_path}app.$phpEx/user/oauth/link_account", $get_params_array));
 	break;
 
 	case 'logout':

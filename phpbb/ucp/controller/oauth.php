@@ -104,7 +104,7 @@ class oauth
 
 		$this->request->overwrite('oauth_service', $oauth_service);
 
-		$auth_provider = $this->auth_collection->get_provider();
+		$auth_provider = $this->auth_collection->get_provider('oauth');
 
 		// Check if auth provider supports linking
 		$provider_data = $auth_provider->get_auth_link_data();
@@ -167,7 +167,7 @@ class oauth
 	{
 		$this->request->overwrite('oauth_service', $oauth_service);
 
-		$provider = $this->auth_collection->get_provider();
+		$provider = $this->auth_collection->get_provider('oauth');
 		if (!$provider instanceof \phpbb\auth\provider\oauth\oauth)
 		{
 			// Handle differently once we move away from the shitty concept of having oauth as auth provider ...
