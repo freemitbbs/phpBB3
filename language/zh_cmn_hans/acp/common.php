@@ -444,6 +444,7 @@ $lang = array_merge($lang, array(
 
 	'VALUE'					=> '值',
 	'VERSIONCHECK_FAIL'			=> '无法获取最新版本信息。',
+	'VERSIONCHECK_DISABLED'		=> '本站已关闭自动版本检查。核心和扩展升级会在本地验证后手动处理。',
 	'VERSIONCHECK_FORCE_UPDATE'	=> '再次检查版本',
 	'VERSION_CHECK'				=> '版本检查',
 	'VERSION_CHECK_EXPLAIN'		=> '检查您安装的是否是最新版本的 phpBB 。',

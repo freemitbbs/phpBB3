@@ -437,6 +437,7 @@ $lang = array_merge($lang, array(
 
 	'VALUE'							=> 'Value',
 	'VERSIONCHECK_FAIL'				=> 'Failed to obtain latest version information.',
+	'VERSIONCHECK_DISABLED'			=> 'Automatic version checks are disabled for this board. Core and extension upgrades are handled manually after local validation.',
 	'VERSIONCHECK_FORCE_UPDATE'		=> 'Re-Check version',
 	'VERSION_CHECK'					=> 'Version check',
 	'VERSION_CHECK_EXPLAIN'			=> 'Checks to see if your phpBB installation is up to date.',

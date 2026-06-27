@@ -10,12 +10,16 @@
 	<div class="errorbox">
 		<p>{L_UPDATE_INCOMPLETE} {L_UPDATE_INCOMPLETE_MORE}</p>
 	</div>
+<!-- ELSEIF S_VERSIONCHECK_DISABLED -->
+	<div class="successbox">
+		<p>{L_VERSIONCHECK_DISABLED}</p>
+	</div>
 <!-- ENDIF -->
-<!-- IF S_UP_TO_DATE -->
+<!-- IF S_UP_TO_DATE and not S_VERSIONCHECK_DISABLED -->
 	<div class="successbox">
 		<p>{L_VERSION_UP_TO_DATE_ACP} - <a href="{U_VERSIONCHECK_FORCE}">{L_VERSIONCHECK_FORCE_UPDATE}</a></p>
 	</div>
-<!-- ELSEIF not S_UPDATE_INCOMPLETE -->
+<!-- ELSEIF not S_UPDATE_INCOMPLETE and not S_VERSIONCHECK_DISABLED -->
 	<div class="errorbox">
 		<p>{L_VERSION_NOT_UP_TO_DATE_ACP} - <a href="{U_VERSIONCHECK_FORCE}">{L_VERSIONCHECK_FORCE_UPDATE}</a></p>
 	</div>

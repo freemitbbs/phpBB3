@@ -465,41 +465,14 @@ class acp_main
 			));
 		}
 
-		if ($auth->acl_get('a_board'))
-		{
-			/** @var \phpbb\version_helper $version_helper */
-			$version_helper = $phpbb_container->get('version_helper');
-			try
-			{
-				$recheck = $request->variable('versioncheck_force', false);
-				$updates_available = $version_helper->get_update_on_branch($recheck);
-				$upgrades_available = $version_helper->get_suggested_updates();
-				if (!empty($upgrades_available))
-				{
-					$upgrades_available = array_pop($upgrades_available);
-				}
-
-				$template->assign_vars(array(
-					'S_VERSION_UP_TO_DATE'		=> empty($updates_available),
-					'S_VERSION_UPGRADEABLE'		=> !empty($upgrades_available),
-					'S_VERSIONCHECK_FORCE'		=> (bool) $recheck,
-					'UPGRADE_INSTRUCTIONS'		=> !empty($upgrades_available) ? $user->lang('UPGRADE_INSTRUCTIONS', $upgrades_available['current'], $upgrades_available['announcement']) : false,
-				));
-			}
-			catch (\phpbb\exception\runtime_exception $e)
-			{
-				$message = call_user_func_array(array($user, 'lang'), array_merge(array($e->getMessage()), $e->get_parameters()));
-				$template->assign_vars(array(
-					'S_VERSIONCHECK_FAIL'		=> true,
-					'VERSIONCHECK_FAIL_REASON'	=> ($e->getMessage() !== 'VERSIONCHECK_FAIL') ? $message : '',
-				));
-			}
-		}
-		else
-		{
-			// We set this template var to true, to not display an outdated version notice.
-			$template->assign_var('S_VERSION_UP_TO_DATE', true);
-		}
+		// Core phpBB version checks are intentionally disabled for this board.
+		// Upgrades are handled manually after local validation, not from ACP prompts.
+		$template->assign_vars(array(
+			'S_VERSION_UP_TO_DATE'		=> true,
+			'S_VERSION_UPGRADEABLE'		=> false,
+			'S_VERSIONCHECK_FORCE'		=> false,
+			'S_VERSIONCHECK_FAIL'		=> false,
+		));
 
 		// Incomplete update?
 		if (phpbb_version_compare($config['version'], PHPBB_VERSION, '<'))
@@ -606,10 +579,10 @@ class acp_main
 			'U_ADMIN_LOG'		=> append_sid("{$phpbb_admin_path}index.$phpEx", 'i=logs&amp;mode=admin'),
 			'U_INACTIVE_USERS'	=> append_sid("{$phpbb_admin_path}index.$phpEx", 'i=inactive&amp;mode=list'),
 			'U_VERSIONCHECK'	=> append_sid("{$phpbb_admin_path}index.$phpEx", 'i=update&amp;mode=version_check'),
-			'U_VERSIONCHECK_FORCE'	=> append_sid("{$phpbb_admin_path}index.$phpEx", 'versioncheck_force=1'),
+			'U_VERSIONCHECK_FORCE'	=> '',
 			'U_ATTACH_ORPHAN'	=> append_sid("{$phpbb_admin_path}index.$phpEx", 'i=acp_attachments&mode=orphan'),
 
-			'S_VERSIONCHECK'	=> ($auth->acl_get('a_board')) ? true : false,
+			'S_VERSIONCHECK'	=> false,
 			'S_ACTION_OPTIONS'	=> ($auth->acl_get('a_board')) ? true : false,
 			'S_FOUNDER'			=> ($user->data['user_type'] == USER_FOUNDER) ? true : false,
 			)

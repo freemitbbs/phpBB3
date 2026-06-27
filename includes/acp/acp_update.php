@@ -33,42 +33,19 @@ class acp_update
 		$this->tpl_name = 'acp_update';
 		$this->page_title = 'ACP_VERSION_CHECK';
 
-		/* @var $version_helper \phpbb\version_helper */
-		$version_helper = $phpbb_container->get('version_helper');
-		try
-		{
-			$recheck = $request->variable('versioncheck_force', false);
-			$updates_available = $version_helper->get_update_on_branch($recheck);
-			$upgrades_available = $version_helper->get_suggested_updates();
-			if (!empty($upgrades_available))
-			{
-				$upgrades_available = array_pop($upgrades_available);
-			}
-		}
-		catch (\RuntimeException $e)
-		{
-			$template->assign_var('S_VERSIONCHECK_FAIL', true);
-
-			$updates_available = array();
-		}
-
-		if (!empty($updates_available))
-		{
-			$template->assign_block_vars('updates_available', $updates_available);
-		}
-
 		$update_link = $phpbb_root_path . 'install/app.' . $phpEx;
 
 		$template_ary = [
-			'S_UP_TO_DATE'				=> empty($updates_available),
+			'S_UP_TO_DATE'				=> true,
+			'S_VERSIONCHECK_DISABLED'	=> true,
 			'U_ACTION'					=> $this->u_action,
-			'U_VERSIONCHECK_FORCE'		=> append_sid($this->u_action . '&amp;versioncheck_force=1'),
+			'U_VERSIONCHECK_FORCE'		=> '',
 
 			'CURRENT_VERSION'			=> $config['version'],
 
 			'UPDATE_INSTRUCTIONS'		=> $user->lang('UPDATE_INSTRUCTIONS', $update_link),
-			'S_VERSION_UPGRADEABLE'		=> !empty($upgrades_available),
-			'UPGRADE_INSTRUCTIONS'		=> !empty($upgrades_available) ? $user->lang('UPGRADE_INSTRUCTIONS', $upgrades_available['current'], $upgrades_available['announcement']) : false,
+			'S_VERSION_UPGRADEABLE'		=> false,
+			'UPGRADE_INSTRUCTIONS'		=> false,
 		];
 
 		$template->assign_vars($template_ary);
