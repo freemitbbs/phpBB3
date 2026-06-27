@@ -233,6 +233,7 @@ $lang = array_merge($lang, array(
 	'SUBMIT_POST'				=> '提交发帖',
 	'SUBMIT_POST_AND_COPY_TO_BLOG'	=> '提交并复制到博客',
 	'POST_TOPIC_AS'				=> 'Post topic as',
+	'POSTING_PERMISSIONS'		=> 'Posting permissions',
 	'PROGRESS_BAR'				=> 'Progress bar',
 
 	'QUOTE_DEPTH_EXCEEDED'		=> array(

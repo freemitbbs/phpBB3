@@ -290,6 +290,11 @@
 	margin-left: 5px;
 }
 
+.rtl .action-bar .forum-mark-topics-read {
+	float: right;
+	margin-left: 0;
+	margin-right: 8px;
+}
 
 /* Miscellaneous styles
 ---------------------------------------- */

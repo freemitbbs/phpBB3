@@ -20,6 +20,67 @@ body.simple {
 	padding: 0 5px;
 }
 
+/* Readability scale restored after phpBB upstream stylesheet refresh. */
+ul.topiclist dt {
+	font-size: 1.2em;
+}
+
+li.header dt,
+li.header dd {
+	font-size: 1.1em;
+}
+
+dd.posts,
+dd.topics,
+dd.views,
+dd.extra,
+dd.mark {
+	font-size: 1.25em;
+}
+
+dd.lastpost,
+dd.redirect,
+dd.moderation,
+dd.time,
+dd.info,
+dd.option,
+.postbody .ignore,
+.content,
+fieldset.polls dt,
+fieldset.polls dd {
+	font-size: 1.15em;
+}
+
+.postbody .content {
+	font-size: 1.4em;
+}
+
+.content h2,
+.panel h2 {
+	font-size: 1.65em;
+}
+
+.panel p,
+.content p {
+	font-size: 1.25em;
+}
+
+p.author {
+	font-size: 1.05em;
+}
+
+blockquote {
+	font-size: 1em;
+}
+
+blockquote blockquote {
+	font-size: 1.05em;
+}
+
+blockquote cite {
+	font-size: 0.92em;
+}
+
 .wrap {
 	border: 2px solid #E2E6EC;
 	border-radius: 15px;

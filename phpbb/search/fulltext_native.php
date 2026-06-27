@@ -206,7 +206,9 @@ class fulltext_native extends \phpbb\search\base
 	{
 		$tokens = '+-|()* ';
 
+		list($keywords, $cjk_placeholders) = $this->prepare_cjk_search_keywords($keywords);
 		$keywords = trim($this->cleanup($keywords, $tokens));
+		$keywords = trim($this->restore_cjk_search_keywords($keywords, $cjk_placeholders));
 
 		// allow word|word|word without brackets
 		if ((strpos($keywords, ' ') === false) && (strpos($keywords, '|') !== false) && (strpos($keywords, '(') === false))
@@ -369,9 +371,12 @@ class fulltext_native extends \phpbb\search\base
 			{
 				if ($row['word_common'])
 				{
-					$this->common_words[] = $row['word_text'];
-					$common_ids[$row['word_text']] = (int) $row['word_id'];
-					continue;
+					if (!$this->is_cjk_bigram($row['word_text']))
+					{
+						$this->common_words[] = $row['word_text'];
+						$common_ids[$row['word_text']] = (int) $row['word_id'];
+						continue;
+					}
 				}
 
 				$words[$row['word_text']] = (int) $row['word_id'];
@@ -1415,6 +1420,8 @@ class fulltext_native extends \phpbb\search\base
 			$word = strtok(' ');
 		}
 
+		$words = array_merge($words, $this->extract_cjk_bigrams($text));
+
 		return $words;
 	}
 
@@ -1908,12 +1915,29 @@ class fulltext_native extends \phpbb\search\base
 			$result = $this->db->sql_query($sql);
 
 			$sql_in = array();
+			$cjk_common_ids = array();
 			while ($row = $this->db->sql_fetchrow($result))
 			{
+				if ($this->is_cjk_bigram($row['word_text']))
+				{
+					$cjk_common_ids[] = (int) $row['word_id'];
+					$destroy_cache_words[] = $row['word_text'];
+					continue;
+				}
+
 				$sql_in[] = $row['word_id'];
 				$destroy_cache_words[] = $row['word_text'];
 			}
 			$this->db->sql_freeresult($result);
+
+			if (count($cjk_common_ids))
+			{
+				$sql = 'UPDATE ' . SEARCH_WORDLIST_TABLE . '
+					SET word_common = 0
+					WHERE ' . $this->db->sql_in_set('word_id', $cjk_common_ids);
+				$this->db->sql_query($sql);
+			}
+			unset($cjk_common_ids);
 
 			if (count($sql_in))
 			{

@@ -2199,6 +2199,7 @@ $page_data = array(
 	'TOPIC_TIME_LIMIT'		=> (int) $post_data['topic_time_limit'],
 	'EDIT_REASON'			=> $request->variable('edit_reason', '', true),
 	'SHOW_PANEL'			=> $request->variable('show_panel', ''),
+	'TOPIC_TITLE_MAX_CHARS'	=> isset($config['max_topic_title_chars']) && (int) $config['max_topic_title_chars'] > 0 ? min((int) $config['max_topic_title_chars'], 255) : 45,
 	'U_VIEW_FORUM'			=> append_sid("{$phpbb_root_path}viewforum.$phpEx", "f=$forum_id"),
 	'U_VIEW_TOPIC'			=> ($mode != 'post') ? append_sid("{$phpbb_root_path}viewtopic.$phpEx", "t=$topic_id") : '',
 	'U_PROGRESS_BAR'		=> append_sid("{$phpbb_root_path}posting.$phpEx", "f=$forum_id&amp;mode=popup"),

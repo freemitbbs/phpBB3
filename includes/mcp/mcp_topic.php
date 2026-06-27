@@ -51,7 +51,7 @@ function mcp_topic_view($id, $mode, $action)
 	$forum_id		= $request->variable('f', 0);
 	$to_topic_id	= $request->variable('to_topic_id', 0);
 	$to_forum_id	= $request->variable('to_forum_id', 0);
-	$sort			= isset($_POST['sort']) ? true : false;
+	$sort			= $request->is_set_post('sort');
 	$submitted_id_list	= $request->variable('post_ids', array(0));
 	$checked_ids = $post_id_list = $request->variable('post_id_list', array(0));
 	$view		= $request->variable('view', '');
@@ -402,6 +402,7 @@ function mcp_topic_view($id, $mode, $action)
 		'TO_TOPIC_INFO'		=> ($to_topic_id) ? sprintf($user->lang['YOU_SELECTED_TOPIC'], $to_topic_id, '<a href="' . append_sid("{$phpbb_root_path}viewtopic.$phpEx", 't=' . $to_topic_id) . '">' . $to_topic_info['topic_title'] . '</a>') : '',
 
 		'SPLIT_SUBJECT'		=> $subject,
+		'TOPIC_TITLE_MAX_CHARS'	=> isset($config['max_topic_title_chars']) && (int) $config['max_topic_title_chars'] > 0 ? min((int) $config['max_topic_title_chars'], 255) : 45,
 		'POSTS_PER_PAGE'	=> $posts_per_page,
 		'ACTION'			=> $action,
 
@@ -526,6 +527,8 @@ function split_topic($action, $topic_id, $to_forum_id, $subject)
 		$template->assign_var('MESSAGE', $user->lang['EMPTY_SUBJECT']);
 		return;
 	}
+	$topic_title_max_chars = isset($config['max_topic_title_chars']) && (int) $config['max_topic_title_chars'] > 0 ? min((int) $config['max_topic_title_chars'], 255) : 45;
+	$subject = truncate_string($subject, $topic_title_max_chars);
 
 	if ($to_forum_id <= 0)
 	{

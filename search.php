@@ -27,6 +27,7 @@ $user->setup('search');
 // Define initial vars
 $mode			= $request->variable('mode', '');
 $search_id		= $request->variable('search_id', '');
+$is_egosearch	= ($search_id === 'egosearch');
 $start			= max($request->variable('start', 0), 0);
 $post_id		= $request->variable('p', 0);
 $topic_id		= $request->variable('t', 0);
@@ -540,7 +541,9 @@ if ($keywords || $author || $author_id || $search_id || $submit)
 			break;
 
 			case 'egosearch':
-				$l_search_title = $user->lang['SEARCH_SELF'];
+				$l_search_title = ($show_results === 'topics' && isset($user->lang['SEARCH_SELF_TOPICS']))
+					? $user->lang['SEARCH_SELF_TOPICS']
+					: $user->lang['SEARCH_SELF'];
 			break;
 		}
 
@@ -594,6 +597,11 @@ if ($keywords || $author || $author_id || $search_id || $submit)
 			// Only return up to $total_matches_limit+1 ids (the last one will be removed later)
 			$id_ary = array_keys(get_unread_topics($user->data['user_id'], $sql_where, $sql_sort, $total_matches_limit + 1));
 		}
+		else if ($search_id == 'egosearch')
+		{
+			// Keep egosearch in pagination URLs so "Your topics" stays on the
+			// first-post-only path instead of degrading into a generic author search.
+		}
 		else
 		{
 			$search_id = '';
@@ -616,8 +624,12 @@ if ($keywords || $author || $author_id || $search_id || $submit)
 		}
 		else
 		{
-			// Set $start to 0 if no matches were found
-			$start = 0;
+			// Set $start to 0 if no matches were found. Egosearch is resolved
+			// later through author_search(), so keep the requested page offset.
+			if ($search_id !== 'egosearch')
+			{
+				$start = 0;
+			}
 		}
 	}
 
@@ -632,6 +644,10 @@ if ($keywords || $author || $author_id || $search_id || $submit)
 	else if (count($author_id_ary))
 	{
 		$firstpost_only = ($search_fields === 'firstpost' || $search_fields == 'titleonly') ? true : false;
+		if ($is_egosearch && $show_results === 'topics')
+		{
+			$firstpost_only = true;
+		}
 		$total_match_count = $search->author_search($show_results, $firstpost_only, $sort_by_sql, $sort_key, $sort_dir, $sort_days, $ex_fid_ary, $m_approve_posts_fid_sql, $topic_id, $author_id_ary, $sql_author_match, $id_ary, $start, $per_page);
 	}
 
@@ -1056,18 +1072,49 @@ if ($keywords || $author || $author_id || $search_id || $submit)
 			}
 		}
 
+		$hilit_non_cjk = '';
+		$hilit_cjk = '';
+
 		if ($hilit)
 		{
 			// Remove bad highlights
 			$hilit_array = array_filter(explode('|', $hilit), 'strlen');
+			$hilit_non_cjk_array = $hilit_cjk_array = array();
+
 			foreach ($hilit_array as $key => $value)
 			{
-				$hilit_array[$key] = phpbb_clean_search_string($value);
-				$hilit_array[$key] = str_replace('\*', '\w*?', preg_quote($hilit_array[$key], '#'));
+				$value = phpbb_clean_search_string($value);
+				$hilit_array[$key] = str_replace('\*', '\w*?', preg_quote($value, '#'));
 				$hilit_array[$key] = preg_replace('#(^|\s)\\\\w\*\?(\s|$)#', '$1\w+?$2', $hilit_array[$key]);
+
+				if (preg_match('#^[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]+$#u', str_replace('*', '', $value)))
+				{
+					$hilit_cjk_array[] = $hilit_array[$key];
+				}
+				else
+				{
+					$hilit_non_cjk_array[] = $hilit_array[$key];
+				}
 			}
 			$hilit = implode('|', $hilit_array);
+			$hilit_non_cjk = implode('|', $hilit_non_cjk_array);
+			$hilit_cjk = implode('|', $hilit_cjk_array);
 		}
+
+		$highlight_search_matches = function ($text) use (&$hilit_non_cjk, &$hilit_cjk)
+		{
+			if ($hilit_non_cjk)
+			{
+				$text = preg_replace('#(?!<.*)(?<!\w)(' . $hilit_non_cjk . ')(?!\w|[^<>]*(?:</s(?:cript|tyle))?>)#isu', '<span class="posthilit">$1</span>', $text);
+			}
+
+			if ($hilit_cjk)
+			{
+				$text = preg_replace('#(?!<.*)(' . $hilit_cjk . ')(?![^<>]*(?:</s(?:cript|tyle))?>)#isu', '<span class="posthilit">$1</span>', $text);
+			}
+
+			return $text;
+		};
 
 		/**
 		* Modify the rowset data
@@ -1101,6 +1148,10 @@ if ($keywords || $author || $author_id || $search_id || $submit)
 			$forum_id = $row['forum_id'];
 			$result_topic_id = $row['topic_id'];
 			$topic_title = censor_text($row['topic_title']);
+			if ($hilit)
+			{
+				$topic_title = $highlight_search_matches($topic_title);
+			}
 			$replies = $phpbb_content_visibility->get_count('topic_posts', $row, $forum_id) - 1;
 
 			$view_topic_url_params = "t=$result_topic_id" . (($u_hilit) ? "&amp;hilit=$u_hilit" : '');
@@ -1126,8 +1177,6 @@ if ($keywords || $author || $author_id || $search_id || $submit)
 				$topic_deleted = $row['topic_visibility'] == ITEM_DELETED;
 				$u_mcp_queue = ($topic_unapproved || $posts_unapproved) ? append_sid("{$phpbb_root_path}mcp.$phpEx", 'i=queue&amp;mode=' . (($topic_unapproved) ? 'approve_details' : 'unapproved_posts') . "&amp;t=$result_topic_id", true, $user->session_id) : '';
 				$u_mcp_queue = (!$u_mcp_queue && $topic_deleted) ? append_sid("{$phpbb_root_path}mcp.$phpEx", "i=queue&amp;mode=deleted_topics&amp;t=$result_topic_id", true, $user->session_id) : $u_mcp_queue;
-
-				$row['topic_title'] = preg_replace('#(?!<.*)(?<!\w)(' . $hilit . ')(?!\w|[^<>]*(?:</s(?:cript|tyle))?>)#isu', '<span class="posthilit">$1</span>', $row['topic_title']);
 
 				$tpl_ary = array(
 					'TOPIC_AUTHOR'				=> get_topic_list_username_string('username', $row['topic_poster'], $row['topic_first_poster_name'], $row['topic_first_poster_colour']),
@@ -1213,8 +1262,8 @@ if ($keywords || $author || $author_id || $search_id || $submit)
 				if ($hilit)
 				{
 					// post highlighting
-					$row['post_text'] = preg_replace('#(?!<.*)(?<!\w)(' . $hilit . ')(?!\w|[^<>]*(?:</s(?:cript|tyle))?>)#isu', '<span class="posthilit">$1</span>', $row['post_text']);
-					$row['post_subject'] = preg_replace('#(?!<.*)(?<!\w)(' . $hilit . ')(?!\w|[^<>]*(?:</s(?:cript|tyle))?>)#isu', '<span class="posthilit">$1</span>', $row['post_subject']);
+					$row['post_text'] = $highlight_search_matches($row['post_text']);
+					$row['post_subject'] = $highlight_search_matches($row['post_subject']);
 				}
 
 				$tpl_ary = array(

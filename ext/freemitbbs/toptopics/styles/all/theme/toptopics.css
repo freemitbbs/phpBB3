@@ -505,7 +505,7 @@ ul.topiclist.topics.toptopics-compact-list > li.toptopics-compact-row-shell {
 	overflow: hidden;
 	color: #105289;
 	font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
-	font-size: 1.35em;
+	font-size: 1.43em;
 	font-weight: 700;
 	line-height: 1.35;
 	text-overflow: ellipsis;
@@ -637,7 +637,7 @@ ul.topiclist.topics.freemitbbs-from-stats-list > li.row > dl.row-item > dt > .li
 
 ul.topiclist.topics.freemitbbs-from-stats-list a.topictitle,
 .toptopics-category-row.toptopics-enhanced-topic-list-row a.topictitle {
-	font-size: 1.35em;
+	font-size: 1.19em;
 	font-weight: 700;
 	line-height: 1.18;
 }
@@ -1542,7 +1542,7 @@ dl.row-item dt a.toptopics-inline-preview-carousel-slide {
 
 	.toptopics-compact-title {
 		padding: 7px 9px;
-		font-size: 1.2em;
+		font-size: 1.43em;
 		line-height: 1.3;
 	}
 
@@ -1563,7 +1563,7 @@ dl.row-item dt a.toptopics-inline-preview-carousel-slide {
 
 	ul.topiclist.topics.freemitbbs-from-stats-list a.topictitle,
 	.toptopics-category-row.toptopics-enhanced-topic-list-row a.topictitle {
-		font-size: 1.2em;
+		font-size: 1.19em;
 		line-height: 1.22;
 	}
 

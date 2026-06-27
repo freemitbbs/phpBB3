@@ -287,6 +287,17 @@ fieldset.submit-buttons input {
 	margin: 3px;
 }
 
+.posting-permissions-status summary {
+	cursor: pointer;
+	font-weight: bold;
+	list-style-position: inside;
+	margin-top: 5px;
+}
+
+.posting-permissions-status-list {
+	margin-top: 4px;
+}
+
 /* Input field styles
 ---------------------------------------- */
 .inputbox {
