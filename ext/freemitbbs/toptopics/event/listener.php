@@ -1683,6 +1683,7 @@ class listener implements EventSubscriberInterface
 			'TOPTOPICS_FLAT_EMPTY' => $this->language->lang('TOPTOPICS_FLAT_EMPTY'),
 			'TOPTOPICS_FLAT_PAGE_NUMBER' => $pagination !== null ? $pagination->on_page($total_topics, $per_page, $start) : '',
 		]);
+		$this->assign_flat_index_post_forum_picker();
 		$this->template->append_var('BODY_CLASS', ' toptopics-flat-index-page');
 
 		if ($pagination !== null)
@@ -1702,6 +1703,150 @@ class listener implements EventSubscriberInterface
 		{
 			$this->template->assign_block_vars('top_topics', $this->build_topic_template_row($topic));
 		}
+	}
+
+	protected function assign_flat_index_post_forum_picker(): void
+	{
+		$forums = $this->flat_index_post_forum_templates();
+		if (empty($forums))
+		{
+			return;
+		}
+
+		$this->template->assign_var('S_TOPTOPICS_FLAT_CAN_POST_TOPIC', true);
+		$this->template->destroy_block_vars('toptopics_flat_post_forums');
+		foreach ($forums as $forum)
+		{
+			$forum_id = (int) $forum['forum_id'];
+			$is_cat = (bool) $forum['is_cat'];
+			$this->template->assign_block_vars('toptopics_flat_post_forums', [
+				'FORUM_ID' => $forum_id,
+				'FORUM_NAME' => $this->escape_text((string) $forum['forum_name']),
+				'U_POST_TOPIC' => $is_cat ? '' : append_sid($this->root_path . 'posting.' . $this->php_ext, 'mode=post&amp;f=' . $forum_id),
+				'S_IS_CAT' => $is_cat,
+				'LEVEL' => (int) $forum['level'],
+			]);
+		}
+	}
+
+	protected function flat_index_post_forum_templates(): array
+	{
+		$rowset = $this->flat_index_post_forum_rows();
+		if (empty($rowset))
+		{
+			return [];
+		}
+
+		$blog_forum_id = (int) ($this->config['freemitbbs_blog_forum_id'] ?? 0);
+		$digest_forum_id = (int) ($this->config['newsscraper_digest_forum_id'] ?? 0);
+		$eligible_post_ids = [];
+		foreach ($rowset as $row)
+		{
+			$forum_id = (int) $row['forum_id'];
+			if ((int) $row['forum_type'] === FORUM_POST
+				&& ($blog_forum_id <= 0 || $forum_id !== $blog_forum_id)
+				&& ($digest_forum_id <= 0 || $forum_id !== $digest_forum_id)
+				&& (int) $row['forum_status'] === ITEM_UNLOCKED
+				&& (string) $row['forum_password'] === ''
+				&& (int) $row['display_on_index'] === 1
+				&& $this->auth->acl_get('f_list', $forum_id)
+				&& $this->auth->acl_get('f_read', $forum_id)
+				&& $this->auth->acl_get('f_post', $forum_id)
+			)
+			{
+				$eligible_post_ids[$forum_id] = true;
+			}
+		}
+
+		if (empty($eligible_post_ids))
+		{
+			return [];
+		}
+
+		$visible_category_ids = [];
+		foreach ($rowset as $row)
+		{
+			$forum_id = (int) $row['forum_id'];
+			if ((int) $row['forum_type'] !== FORUM_CAT
+				|| (int) $row['display_on_index'] !== 1
+				|| !$this->auth->acl_get('f_list', $forum_id)
+			)
+			{
+				continue;
+			}
+
+			foreach ($rowset as $candidate)
+			{
+				$candidate_id = (int) $candidate['forum_id'];
+				if (!isset($eligible_post_ids[$candidate_id]))
+				{
+					continue;
+				}
+
+				if ((int) $candidate['left_id'] > (int) $row['left_id']
+					&& (int) $candidate['right_id'] < (int) $row['right_id'])
+				{
+					$visible_category_ids[$forum_id] = true;
+					break;
+				}
+			}
+		}
+
+		$forums = [];
+		foreach ($rowset as $row)
+		{
+			$forum_id = (int) $row['forum_id'];
+			$is_cat = (int) $row['forum_type'] === FORUM_CAT;
+			if (!$is_cat && !isset($eligible_post_ids[$forum_id]))
+			{
+				continue;
+			}
+			if ($is_cat && !isset($visible_category_ids[$forum_id]))
+			{
+				continue;
+			}
+
+			$level = 0;
+			foreach ($rowset as $ancestor)
+			{
+				$ancestor_id = (int) $ancestor['forum_id'];
+				if (!isset($visible_category_ids[$ancestor_id]))
+				{
+					continue;
+				}
+				if ((int) $ancestor['left_id'] < (int) $row['left_id']
+					&& (int) $ancestor['right_id'] > (int) $row['right_id'])
+				{
+					$level++;
+				}
+			}
+
+			$forums[] = [
+				'forum_id' => $forum_id,
+				'forum_name' => (string) $row['forum_name'],
+				'is_cat' => $is_cat,
+				'level' => $level,
+			];
+		}
+
+		return $forums;
+	}
+
+	protected function flat_index_post_forum_rows(): array
+	{
+		$sql = 'SELECT forum_id, forum_name, forum_type, forum_status, forum_password, display_on_index, left_id, right_id
+			FROM ' . FORUMS_TABLE . '
+			WHERE ' . $this->db->sql_in_set('forum_type', [FORUM_CAT, FORUM_POST]) . '
+			ORDER BY left_id ASC';
+		$result = $this->db->sql_query($sql);
+		$rowset = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			$rowset[(int) $row['forum_id']] = $row;
+		}
+		$this->db->sql_freeresult($result);
+
+		return $rowset;
 	}
 
 	protected function get_flat_topic_list_per_page(): int

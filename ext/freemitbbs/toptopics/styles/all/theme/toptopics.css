@@ -91,9 +91,33 @@
 	display: block !important;
 }
 
+.toptopics-summary,
+.toptopics-summary > .inner {
+	overflow: visible;
+}
+
 .toptopics-flat-index-pagination {
 	clear: both;
 	margin-top: 0;
+}
+
+.toptopics-flat-index-toolbar {
+	align-items: center;
+	clear: both;
+	display: flex;
+	gap: 8px;
+	justify-content: space-between;
+	margin-top: 0;
+	overflow: visible;
+	position: relative;
+	z-index: 20;
+}
+
+.toptopics-flat-index-toolbar .toptopics-flat-index-pagination {
+	clear: none;
+	flex: 1 1 auto;
+	margin-left: auto;
+	min-width: 0;
 }
 
 .toptopics-flat-index-pagination .pagination {
@@ -103,9 +127,95 @@
 	width: 100%;
 }
 
+.toptopics-flat-post-topic-action {
+	align-items: center;
+	display: flex;
+	flex: 0 0 auto;
+	justify-content: flex-start;
+	margin: 0;
+	overflow: visible;
+	position: relative;
+	z-index: 20;
+}
+
+.toptopics-flat-post-topic-dropdown {
+	display: inline-block;
+	float: none;
+	margin: 0;
+	position: relative;
+	text-align: left;
+}
+
+.toptopics-flat-post-topic-dropdown.dropdown-visible {
+	z-index: 3002;
+}
+
+.toptopics-flat-post-topic-trigger {
+	align-items: center;
+	box-sizing: border-box;
+	display: inline-flex;
+	font-weight: bold;
+	gap: 4px;
+	justify-content: center;
+	max-width: 100%;
+	position: relative;
+	z-index: 3;
+}
+
+.toptopics-flat-post-topic-dropdown .dropdown {
+	left: 0;
+	margin-left: 0;
+	margin-right: 0;
+	min-width: 220px;
+	right: auto;
+	text-align: left;
+	z-index: 3003;
+}
+
+.toptopics-flat-post-topic-dropdown .dropdown .pointer {
+	left: 10px;
+	right: auto;
+	z-index: 3004;
+}
+
+.toptopics-flat-post-topic-row {
+	cursor: default;
+	display: block;
+	margin-right: 20px;
+	padding: 5px 10px;
+	text-decoration: none;
+	width: 100%;
+}
+
 @media (max-width: 700px) {
+	.toptopics-flat-index-toolbar {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.toptopics-flat-index-toolbar .toptopics-flat-index-pagination {
+		margin-left: 0;
+		width: 100%;
+	}
+
 	.toptopics-flat-index-pagination .pagination {
 		text-align: center;
+	}
+
+	.toptopics-flat-post-topic-action {
+		justify-content: flex-start;
+	}
+
+	.toptopics-flat-post-topic-trigger {
+		max-width: calc(100vw - 36px);
+		padding-left: 8px;
+		padding-right: 8px;
+		white-space: nowrap;
+	}
+
+	.toptopics-flat-post-topic-dropdown .dropdown {
+		max-width: calc(100vw - 24px);
+		min-width: min(280px, calc(100vw - 24px));
 	}
 }
 

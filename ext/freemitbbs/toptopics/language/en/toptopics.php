@@ -86,6 +86,7 @@ $lang = array_merge($lang, [
 		1 => '%d new post',
 		2 => '%d new posts',
 	],
+	'TOPTOPICS_FLAT_POST_TOPIC_BUTTON' => 'Choose forum to post a topic',
 	'TOPTOPICS_HOME_FORUM_EXCLUSIONS' => 'Hide forums from homepage topic lists',
 	'TOPTOPICS_HOME_FORUM_EXCLUSIONS_EXPLAIN' => 'Selected forums will not appear in the homepage Recent Topics or Top Topics lists.',
 	'TOPTOPICS_FROM_COLUMN' => 'From',

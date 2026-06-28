@@ -86,6 +86,7 @@ $lang = array_merge($lang, [
 		1 => '%d 个新帖',
 		2 => '%d 个新帖',
 	],
+	'TOPTOPICS_FLAT_POST_TOPIC_BUTTON' => '选择版面发表主题',
 	'TOPTOPICS_HOME_FORUM_EXCLUSIONS' => '从首页话题表中隐藏版面',
 	'TOPTOPICS_HOME_FORUM_EXCLUSIONS_EXPLAIN' => '选中的版面不会出现在首页最近更新话题表和首页热门话题表中。',
 	'TOPTOPICS_FROM_COLUMN' => '来自',

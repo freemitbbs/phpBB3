@@ -1,9 +1,53 @@
 <!-- IF S_TOPTOPICS_FLAT_INDEX -->
-	<!-- IF .toptopics_flat_pagination or TOPTOPICS_FLAT_PAGE_NUMBER -->
+	{% if S_TOPTOPICS_FLAT_CAN_POST_TOPIC and loops.toptopics_flat_post_forums|length %}
+		<div class="action-bar bar-top toptopics-flat-index-toolbar">
+			<div class="toptopics-flat-post-topic-action">
+				<div class="jumpbox dropdown-container dropdown-button-control toptopics-flat-post-topic-dropdown">
+					<span title="{{ lang('TOPTOPICS_FLAT_POST_TOPIC_BUTTON') }}" class="button button1 dropdown-trigger dropdown-select toptopics-flat-post-topic-trigger">
+						<span><i class="icon fa-pencil fa-fw" aria-hidden="true"></i>{{ lang('TOPTOPICS_FLAT_POST_TOPIC_BUTTON') }}</span>
+						<span class="caret"><i class="icon fa-sort-down fa-fw" aria-hidden="true"></i></span>
+					</span>
+					<div class="dropdown hidden">
+						<div class="pointer"><div class="pointer-inner"></div></div>
+						<ul class="dropdown-contents">
+							{% for forum in loops.toptopics_flat_post_forums %}
+								<li>
+									{% if forum.S_IS_CAT %}
+										<span class="{% if forum.LEVEL %}jumpbox-sub-link{% else %}jumpbox-cat-link{% endif %} toptopics-flat-post-topic-row">
+											{% if forum.LEVEL %}
+												{% for i in 1..forum.LEVEL %}<span class="spacer"></span>{% endfor %}
+												<span>{% if S_CONTENT_DIRECTION == 'rtl' %}&#8626;{% else %}&#8627;{% endif %} &nbsp;{{ forum.FORUM_NAME }}</span>
+											{% else %}
+												<span>{{ forum.FORUM_NAME }}</span>
+											{% endif %}
+										</span>
+									{% else %}
+										<a href="{{ forum.U_POST_TOPIC }}" class="{% if forum.LEVEL %}jumpbox-sub-link{% else %}jumpbox-forum-link{% endif %}">
+											{% if forum.LEVEL %}
+												{% for i in 1..forum.LEVEL %}<span class="spacer"></span>{% endfor %}
+												<span>{% if S_CONTENT_DIRECTION == 'rtl' %}&#8626;{% else %}&#8627;{% endif %} &nbsp;{{ forum.FORUM_NAME }}</span>
+											{% else %}
+												<span>{{ forum.FORUM_NAME }}</span>
+											{% endif %}
+										</a>
+									{% endif %}
+								</li>
+							{% endfor %}
+						</ul>
+					</div>
+				</div>
+			</div>
+			<!-- IF .toptopics_flat_pagination or TOPTOPICS_FLAT_PAGE_NUMBER -->
+			<div class="toptopics-flat-index-pagination">
+				<!-- INCLUDE @freemitbbs_toptopics/toptopics_flat_pagination.html -->
+			</div>
+			<!-- ENDIF -->
+		</div>
+	{% elseif loops.toptopics_flat_pagination|length or TOPTOPICS_FLAT_PAGE_NUMBER %}
 		<div class="action-bar bar-top toptopics-flat-index-pagination">
 			<!-- INCLUDE @freemitbbs_toptopics/toptopics_flat_pagination.html -->
 		</div>
-	<!-- ENDIF -->
+	{% endif %}
 	<!-- INCLUDE @freemitbbs_toptopics/toptopics_summary_body.html -->
 	<!-- IF .toptopics_flat_pagination or TOPTOPICS_FLAT_PAGE_NUMBER -->
 		<div class="action-bar bar-bottom toptopics-flat-index-pagination">
