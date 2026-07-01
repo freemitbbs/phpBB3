@@ -493,6 +493,12 @@ a.topictitle.toptopics-topic-dislike-fade,
 		text-align: left;
 	}
 
+	.headerbar .site-description h1 {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
 	.freemitbbs-header-prefs {
 		position: static;
 		float: none;
@@ -516,6 +522,12 @@ a.topictitle.toptopics-topic-dislike-fade,
 		padding: 2px 5px;
 		font-size: 11px;
 		line-height: 16px;
+	}
+}
+
+@media (max-width: 380px) {
+	.headerbar .site-description h1 {
+		display: none;
 	}
 }
 
