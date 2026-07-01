@@ -71,6 +71,7 @@ class listener implements EventSubscriberInterface
 			'core.viewforum_modify_topicrow' => ['customise_digest_forum_topic_row', -100],
 			'core.posting_modify_post_data' => 'prefill_discussion_post',
 			'core.submit_post_end' => 'record_submitted_discussion',
+			'core.search_modify_param_before' => 'exclude_digest_forum_from_unanswered_search',
 			'freemitbbs.toptopics.modify_topic_list' => 'filter_digest_top_topics',
 		];
 	}
@@ -92,6 +93,28 @@ class listener implements EventSubscriberInterface
 			'S_FREEMITBBS_NEWSSCRAPER_NAV' => true,
 			'U_NEWSSCRAPER_DIGEST_FORUM' => append_sid("{$this->phpbb_root_path}viewforum.{$this->php_ext}", 'f=' . $forum_id),
 		]);
+	}
+
+	public function exclude_digest_forum_from_unanswered_search($event): void
+	{
+		if (($event['search_id'] ?? '') !== 'unanswered')
+		{
+			return;
+		}
+
+		$forum_id = $this->digest_forum_id();
+		if ($forum_id <= 0)
+		{
+			return;
+		}
+
+		$excluded_forum_ids = (array) ($event['ex_fid_ary'] ?? []);
+		if (!in_array($forum_id, $excluded_forum_ids, true))
+		{
+			$excluded_forum_ids[] = $forum_id;
+		}
+
+		$event['ex_fid_ary'] = $excluded_forum_ids;
 	}
 
 	public function force_digest_forum_topic_list_view($event): void
