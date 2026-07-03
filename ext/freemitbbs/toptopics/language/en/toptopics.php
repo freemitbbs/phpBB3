@@ -87,6 +87,10 @@ $lang = array_merge($lang, [
 		2 => '%d new posts',
 	],
 	'TOPTOPICS_FLAT_POST_TOPIC_BUTTON' => 'Choose forum to post a topic',
+	'TOPTOPICS_NEW_MEMBER_APPROVAL_NOTICE' => [
+		1 => 'Newly registered users need %1$d approved post before posts stop entering the new-user approval queue. You currently have %2$d, with %3$d more needed. This post will not be visible to others until approved.',
+		2 => 'Newly registered users need %1$d approved posts before posts stop entering the new-user approval queue. You currently have %2$d, with %3$d more needed. This post will not be visible to others until approved.',
+	],
 	'TOPTOPICS_HOME_FORUM_EXCLUSIONS' => 'Hide forums from homepage topic lists',
 	'TOPTOPICS_HOME_FORUM_EXCLUSIONS_EXPLAIN' => 'Selected forums will not appear in the homepage Recent Topics or Top Topics lists.',
 	'TOPTOPICS_FROM_COLUMN' => 'From',

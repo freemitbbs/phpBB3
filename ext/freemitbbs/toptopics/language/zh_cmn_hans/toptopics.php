@@ -87,6 +87,10 @@ $lang = array_merge($lang, [
 		2 => '%d 个新帖',
 	],
 	'TOPTOPICS_FLAT_POST_TOPIC_BUTTON' => '选择版面发表主题',
+	'TOPTOPICS_NEW_MEMBER_APPROVAL_NOTICE' => [
+		1 => '新注册用户需要累计 %1$d 篇已审核通过的帖子，之后发帖不再进入新用户审核队列。你目前有 %2$d 篇，还差 %3$d 篇；当前提交的帖子审核通过前其他用户看不到。',
+		2 => '新注册用户需要累计 %1$d 篇已审核通过的帖子，之后发帖不再进入新用户审核队列。你目前有 %2$d 篇，还差 %3$d 篇；当前提交的帖子审核通过前其他用户看不到。',
+	],
 	'TOPTOPICS_HOME_FORUM_EXCLUSIONS' => '从首页话题表中隐藏版面',
 	'TOPTOPICS_HOME_FORUM_EXCLUSIONS_EXPLAIN' => '选中的版面不会出现在首页最近更新话题表和首页热门话题表中。',
 	'TOPTOPICS_FROM_COLUMN' => '来自',

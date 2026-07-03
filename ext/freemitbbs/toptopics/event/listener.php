@@ -200,6 +200,7 @@ class listener implements EventSubscriberInterface
 			'core.report_post_auth' => 'report_post_auth',
 			'core.index_modify_page_title' => 'index_page_summary',
 			'core.viewforum_modify_page_title' => 'forum_page_summary',
+			'core.posting_modify_template_vars' => 'posting_new_member_approval_notice',
 			'core.posting_modify_submit_post_before' => 'guard_duplicate_post_before',
 			'core.submit_post_end' => 'submit_post_end',
 			'core.set_post_visibility_after' => 'post_visibility_after',
@@ -225,6 +226,34 @@ class listener implements EventSubscriberInterface
 			'S_TOPTOPICS_FLAT_TOPIC_LIST_VIEW' => $current_home_layout === self::HEADER_HOME_LAYOUT_MERGED,
 			'S_TOPTOPICS_COMPACT_TOPIC_LIST_VIEW' => $current_topic_list_view === self::HEADER_TOPIC_LIST_COMPACT,
 		]);
+	}
+
+	public function posting_new_member_approval_notice($event): void
+	{
+		$mode = (string) $event['mode'];
+		if (!in_array($mode, ['post', 'reply', 'quote'], true))
+		{
+			return;
+		}
+
+		$forum_id = (int) $event['forum_id'];
+		$new_member_post_limit = (int) ($this->config['new_member_post_limit'] ?? 0);
+		if ($forum_id <= 0
+			|| $new_member_post_limit <= 0
+			|| empty($this->user->data['is_registered'])
+			|| empty($this->user->data['user_new'])
+			|| $this->auth->acl_get('f_noapprove', $forum_id))
+		{
+			return;
+		}
+
+		$current_post_count = max(0, (int) ($this->user->data['user_posts'] ?? 0));
+		$remaining_post_count = max(0, $new_member_post_limit - $current_post_count);
+
+		$page_data = $event['page_data'];
+		$page_data['S_TOPTOPICS_NEW_MEMBER_APPROVAL_NOTICE'] = true;
+		$page_data['TOPTOPICS_NEW_MEMBER_APPROVAL_NOTICE'] = $this->language->lang('TOPTOPICS_NEW_MEMBER_APPROVAL_NOTICE', $new_member_post_limit, $current_post_count, $remaining_post_count);
+		$event['page_data'] = $page_data;
 	}
 
 	public function assign_header_preferences($event): void
