@@ -17,7 +17,9 @@ class main
 	private const SHARE_REMOTE_IMAGE_MIME_TYPES = ['image/gif', 'image/jpeg', 'image/png', 'image/webp'];
 	private const COMMENT_PAGE_SIZE = 50;
 	private const TOP_BLOG_COLLAPSE_ID = 'freemitbbs_blog_top';
+	private const BLOG_HEADER_IMAGE_MAX_BYTES = 8388608;
 	private const BLOG_HEADER_IMAGE_EXTENSIONS = ['gif', 'jpg', 'jpeg', 'png', 'webp'];
+	private const BLOG_HEADER_IMAGE_MIME_TYPES = ['image/gif', 'image/jpeg', 'image/png', 'image/webp'];
 	private const BLOG_TITLE_MAX_LENGTH = 80;
 	private const BLOG_SUBTITLE_MAX_LENGTH = 140;
 	private const BLOG_PROTECTION_DEFAULT_KEYWORDS = '六四,反共,反华,中共,中国,美国,日本,印度,习近平,毛泽东,邓小平,法西斯,军国主义,靖国神社,共产党,华为,抗美';
@@ -940,26 +942,10 @@ class main
 
 	protected function upload_blog_header_image(int $forum_id, int $user_id): array
 	{
-		$filedata = $this->attachment_manager->upload('blog_header_image', $forum_id, false, '', false);
-		$errors = $filedata['error'] ?? [];
-		if (empty($filedata['post_attach']) || !empty($errors))
+		$filedata = $this->prepare_blog_header_upload('blog_header_image', $user_id);
+		if (!empty($filedata['error']))
 		{
-			return [
-				'attach_id' => 0,
-				'object_key' => '',
-				'error' => $errors ?: [$this->language->lang('NO_UPLOAD_FORM_FOUND')],
-			];
-		}
-
-		if (!$this->is_blog_header_image($filedata))
-		{
-			$this->cleanup_copied_attachment_files([(string) $filedata['physical_filename']]);
-
-			return [
-				'attach_id' => 0,
-				'object_key' => '',
-				'error' => [$this->language->lang('BLOG_HEADER_IMAGE_INVALID')],
-			];
+			return $filedata;
 		}
 
 		if ($this->has_blog_header_media_storage())
@@ -1019,6 +1005,132 @@ class main
 			'object_key' => '',
 			'error' => [],
 		];
+	}
+
+	protected function prepare_blog_header_upload(string $field, int $user_id): array
+	{
+		$upload = $this->request->file($field);
+		if (empty($upload) || empty($upload['name']))
+		{
+			return $this->blog_header_upload_error($this->language->lang('NO_UPLOAD_FORM_FOUND'));
+		}
+
+		$error = (int) ($upload['error'] ?? UPLOAD_ERR_OK);
+		if ($error !== UPLOAD_ERR_OK)
+		{
+			return $this->blog_header_upload_error($this->blog_header_php_upload_error($error));
+		}
+
+		$tmp_name = (string) ($upload['tmp_name'] ?? '');
+		if ($tmp_name === '' || !is_uploaded_file($tmp_name) || !is_readable($tmp_name))
+		{
+			return $this->blog_header_upload_error($this->language->lang('BLOG_HEADER_IMAGE_UPLOAD_FAILED'));
+		}
+
+		$filesize = (int) (@filesize($tmp_name) ?: ($upload['size'] ?? 0));
+		if ($filesize <= 0)
+		{
+			return $this->blog_header_upload_error($this->language->lang('BLOG_HEADER_IMAGE_INVALID'));
+		}
+
+		if ($filesize > self::BLOG_HEADER_IMAGE_MAX_BYTES)
+		{
+			return $this->blog_header_upload_error($this->language->lang(
+				'BLOG_HEADER_IMAGE_TOO_LARGE',
+				get_formatted_filesize(self::BLOG_HEADER_IMAGE_MAX_BYTES)
+			));
+		}
+
+		$real_filename = utf8_basename((string) $upload['name']);
+		$extension = strtolower((string) pathinfo($real_filename, PATHINFO_EXTENSION));
+		if ($extension === 'jpg')
+		{
+			$extension = 'jpeg';
+		}
+
+		$image_info = @getimagesize($tmp_name);
+		$mimetype = is_array($image_info) ? strtolower((string) ($image_info['mime'] ?? '')) : '';
+		if (!in_array($extension, self::BLOG_HEADER_IMAGE_EXTENSIONS, true)
+			|| !in_array($mimetype, self::BLOG_HEADER_IMAGE_MIME_TYPES, true))
+		{
+			return $this->blog_header_upload_error($this->language->lang('BLOG_HEADER_IMAGE_INVALID'));
+		}
+
+		$physical_filename = $this->build_blog_header_physical_filename($user_id, $extension);
+		$destination = $this->attachment_path($physical_filename, false);
+		$upload_dir = dirname($destination);
+		if (!is_dir($upload_dir) || !is_writable($upload_dir))
+		{
+			return $this->blog_header_upload_error($this->language->lang('BLOG_HEADER_IMAGE_UPLOAD_FAILED'));
+		}
+
+		if (!$this->has_blog_header_media_storage()
+			&& !empty($this->config['attachment_quota'])
+			&& (int) $this->config['upload_dir_size'] + $filesize > (int) $this->config['attachment_quota'])
+		{
+			return $this->blog_header_upload_error($this->language->lang('ATTACH_QUOTA_REACHED'));
+		}
+
+		if (!move_uploaded_file($tmp_name, $destination))
+		{
+			return $this->blog_header_upload_error($this->language->lang('BLOG_HEADER_IMAGE_UPLOAD_FAILED'));
+		}
+
+		@chmod($destination, 0644);
+		clearstatcache(true, $destination);
+		$stored_filesize = (int) (@filesize($destination) ?: $filesize);
+
+		return [
+			'attach_id' => 0,
+			'object_key' => '',
+			'post_attach' => true,
+			'physical_filename' => $physical_filename,
+			'real_filename' => $real_filename,
+			'extension' => $extension,
+			'mimetype' => $mimetype,
+			'filesize' => $stored_filesize,
+			'filetime' => time(),
+			'thumbnail' => 0,
+			'error' => [],
+		];
+	}
+
+	protected function blog_header_upload_error(string $error): array
+	{
+		return [
+			'attach_id' => 0,
+			'object_key' => '',
+			'error' => [$error],
+		];
+	}
+
+	protected function blog_header_php_upload_error(int $error): string
+	{
+		if (in_array($error, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true))
+		{
+			return $this->language->lang(
+				'BLOG_HEADER_IMAGE_TOO_LARGE',
+				get_formatted_filesize(self::BLOG_HEADER_IMAGE_MAX_BYTES)
+			);
+		}
+
+		return $this->language->lang('BLOG_HEADER_IMAGE_UPLOAD_FAILED');
+	}
+
+	protected function build_blog_header_physical_filename(int $user_id, string $extension): string
+	{
+		$extension = strtolower($extension);
+		if ($extension === 'jpg')
+		{
+			$extension = 'jpeg';
+		}
+
+		if (!in_array($extension, self::BLOG_HEADER_IMAGE_EXTENSIONS, true))
+		{
+			$extension = 'png';
+		}
+
+		return $user_id . '_' . $this->random_hex(16) . '.' . $extension;
 	}
 
 	protected function upload_blog_header_media_object(array $filedata): string
@@ -1114,27 +1226,54 @@ class main
 			return null;
 		}
 
-		$shared_config = [];
+		$config = $this->get_blog_header_base_storage_config();
+
+		return $this->is_complete_blog_header_storage_config($config) ? $config : null;
+	}
+
+	protected function get_blog_header_public_storage_config(): ?array
+	{
+		$config = $this->get_blog_header_base_storage_config();
+		if (trim((string) ($config['public_base_url'] ?? '')) !== '')
+		{
+			return $config;
+		}
+
+		return trim((string) ($config['endpoint'] ?? '')) !== ''
+			&& trim((string) ($config['bucket'] ?? '')) !== ''
+			? $config
+			: null;
+	}
+
+	protected function get_blog_header_base_storage_config(): array
+	{
+		$shared_config = [
+			'endpoint' => (string) ($this->config['s3storage_endpoint'] ?? ''),
+			'region' => (string) ($this->config['s3storage_region'] ?? ''),
+			'bucket' => (string) ($this->config['s3storage_bucket'] ?? ''),
+			'access_key' => (string) ($this->config['s3storage_access_key'] ?? ''),
+			'secret_key' => (string) ($this->config['s3storage_secret_key'] ?? ''),
+			'public_base_url' => (string) ($this->config['s3storage_public_base_url'] ?? ''),
+			'use_path_style' => (int) ($this->config['s3storage_use_path_style'] ?? 0),
+		];
 		if ($this->shared_storage_config_provider
-			&& method_exists($this->shared_storage_config_provider, 'has_shared_storage_config')
-			&& $this->shared_storage_config_provider->has_shared_storage_config()
 			&& method_exists($this->shared_storage_config_provider, 'get_shared_storage_config'))
 		{
 			$shared_config = (array) $this->shared_storage_config_provider->get_shared_storage_config();
 		}
 
 		$config = [
-			'endpoint' => trim((string) (($this->config['videoupload_s3_endpoint'] ?? '') ?: ($shared_config['endpoint'] ?? ''))),
-			'region' => trim((string) (($this->config['videoupload_s3_region'] ?? '') ?: ($shared_config['region'] ?? 'us-east-1'))),
-			'bucket' => trim((string) (($this->config['videoupload_s3_bucket'] ?? '') ?: ($shared_config['bucket'] ?? ''))),
-			'access_key' => trim((string) (($this->config['videoupload_s3_access_key'] ?? '') ?: ($shared_config['access_key'] ?? ''))),
-			'secret_key' => trim((string) (($this->config['videoupload_s3_secret_key'] ?? '') ?: ($shared_config['secret_key'] ?? ($this->config['s3storage_secret_key'] ?? '')))),
-			'public_base_url' => rtrim(trim((string) (($this->config['videoupload_s3_public_base_url'] ?? '') ?: ($shared_config['public_base_url'] ?? ''))), '/'),
-			'use_path_style' => (int) ($this->config['videoupload_s3_use_path_style'] ?? ($shared_config['use_path_style'] ?? 0)),
+			'endpoint' => trim((string) (($shared_config['endpoint'] ?? '') ?: ($this->config['videoupload_s3_endpoint'] ?? ''))),
+			'region' => trim((string) (($shared_config['region'] ?? '') ?: ($this->config['videoupload_s3_region'] ?? 'us-east-1'))),
+			'bucket' => trim((string) (($shared_config['bucket'] ?? '') ?: ($this->config['videoupload_s3_bucket'] ?? ''))),
+			'access_key' => trim((string) (($shared_config['access_key'] ?? '') ?: ($this->config['videoupload_s3_access_key'] ?? ''))),
+			'secret_key' => trim((string) (($shared_config['secret_key'] ?? '') ?: ($this->config['videoupload_s3_secret_key'] ?? ($this->config['s3storage_secret_key'] ?? '')))),
+			'public_base_url' => rtrim(trim((string) (($shared_config['public_base_url'] ?? '') ?: ($this->config['videoupload_s3_public_base_url'] ?? ''))), '/'),
+			'use_path_style' => (int) (($shared_config['use_path_style'] ?? null) ?? ($this->config['videoupload_s3_use_path_style'] ?? 0)),
 			'acl' => trim((string) ($this->config['videoupload_s3_acl'] ?? 'public-read')),
 		];
 
-		return $this->is_complete_blog_header_storage_config($config) ? $config : null;
+		return $config;
 	}
 
 	protected function is_complete_blog_header_storage_config(array $config): bool
@@ -1177,24 +1316,64 @@ class main
 		$object_key = trim((string) ($blog_user['user_blog_header_object_key'] ?? ''));
 		if ($object_key !== '')
 		{
-			$storage_config = $this->get_blog_header_storage_config();
-			if ($storage_config !== null
-				&& $this->public_object_store
-				&& method_exists($this->public_object_store, 'build_public_url'))
+			$public_url = $this->build_blog_header_public_url($object_key);
+			if ($public_url !== '')
 			{
-				try
-				{
-					return $this->public_object_store->build_public_url($storage_config, $object_key);
-				}
-				catch (\Exception $e)
-				{
-				}
+				return $public_url;
 			}
 		}
 
 		return !empty($blog_user['user_blog_header_attachment_id'])
 			? $this->public_blog_route('freemitbbs_blog_header_image', ['user_id' => (int) ($blog_user['user_id'] ?? 0)])
 			: '';
+	}
+
+	protected function build_blog_header_public_url(string $object_key): string
+	{
+		$storage_config = $this->get_blog_header_public_storage_config();
+		if ($storage_config === null)
+		{
+			return '';
+		}
+
+		$key_segment = $this->encode_blog_header_public_path(ltrim($object_key, '/'));
+		$public_base_url = rtrim(trim((string) ($storage_config['public_base_url'] ?? '')), '/');
+		if ($public_base_url !== '')
+		{
+			return $public_base_url . '/' . $key_segment;
+		}
+
+		$endpoint_parts = parse_url(rtrim(trim((string) ($storage_config['endpoint'] ?? '')), '/'));
+		if (!is_array($endpoint_parts))
+		{
+			return '';
+		}
+
+		$scheme = strtolower((string) ($endpoint_parts['scheme'] ?? 'https'));
+		$host = (string) ($endpoint_parts['host'] ?? '');
+		if ($host === '')
+		{
+			return '';
+		}
+
+		$port = isset($endpoint_parts['port']) ? (':' . (int) $endpoint_parts['port']) : '';
+		$base_path = trim((string) ($endpoint_parts['path'] ?? ''), '/');
+		$base_path = ($base_path !== '') ? '/' . $this->encode_blog_header_public_path($base_path) : '';
+		$bucket_segment = rawurlencode(trim((string) ($storage_config['bucket'] ?? '')));
+
+		if (!empty($storage_config['use_path_style']))
+		{
+			return $scheme . '://' . $host . $port . '/' . ltrim($base_path . '/' . $bucket_segment . '/' . $key_segment, '/');
+		}
+
+		return $scheme . '://' . $bucket_segment . '.' . $host . $port . '/' . ltrim($base_path . '/' . $key_segment, '/');
+	}
+
+	protected function encode_blog_header_public_path(string $path): string
+	{
+		$parts = array_map('rawurlencode', explode('/', trim($path, '/')));
+
+		return implode('/', $parts);
 	}
 
 	protected function has_blog_header_image(array $blog_user): bool
