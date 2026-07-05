@@ -1930,7 +1930,7 @@ class listener implements EventSubscriberInterface
 				t.topic_last_post_time, t.topic_last_poster_id, t.topic_last_poster_name,
 				t.topic_last_poster_colour, t.topic_status, t.topic_type, t.poll_start,
 				t.topic_first_post_id, t.topic_views AS views,
-				GREATEST(t.topic_posts_approved - 1, 0) AS replies,
+				CASE WHEN t.topic_posts_approved > 0 THEN t.topic_posts_approved - 1 ELSE 0 END AS replies,
 				0 AS like_count, 0 AS dislike_count, 0 AS flag_count,
 				f.forum_name
 			FROM ' . TOPICS_TABLE . ' t
