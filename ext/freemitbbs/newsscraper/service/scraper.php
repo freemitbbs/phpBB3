@@ -8,8 +8,9 @@ class scraper
 	private const DEFAULT_MODEL = 'deepseek-chat';
 	private const DEFAULT_DIGEST_FORUM_NAME = '新闻摘要';
 	private const GUEST_POSTER_NAME = '新闻摘要';
-	private const HTTP_TIMEOUT_SECONDS = 12;
-	private const API_TIMEOUT_SECONDS = 45;
+	private const HTTP_CONNECT_TIMEOUT_SECONDS = 10;
+	private const HTTP_TIMEOUT_SECONDS = 20;
+	private const API_TIMEOUT_SECONDS = 60;
 	private const MAX_SOURCE_BYTES = 2097152;
 	private const MAX_ARTICLE_CHARS = 6500;
 	private const MAX_DIGEST_CHARS = 1200;
@@ -1370,7 +1371,7 @@ class scraper
 				CURLOPT_RETURNTRANSFER => false,
 				CURLOPT_FOLLOWLOCATION => true,
 				CURLOPT_MAXREDIRS => 3,
-				CURLOPT_CONNECTTIMEOUT => 6,
+				CURLOPT_CONNECTTIMEOUT => self::HTTP_CONNECT_TIMEOUT_SECONDS,
 				CURLOPT_TIMEOUT => self::HTTP_TIMEOUT_SECONDS,
 				CURLOPT_WRITEFUNCTION => static function ($curl, string $chunk) use (&$data, &$too_large): int {
 					$data .= $chunk;
