@@ -571,6 +571,10 @@ class listener implements EventSubscriberInterface
 		$post_row['POST_DISLIKE_URL'] = $this->build_dislike_url($post_id, $current_user_disliked);
 		$post_row['POST_DISLIKE_DISABLED'] = $disabled;
 		$post_row['POST_DISLIKE_FADE_CLASS'] = $this->get_post_dislike_fade_class($net_dislike_score);
+		if ($this->is_post_authored_by_foe($poster_id))
+		{
+			$post_row['S_TOPTOPICS_HIDE_FOE_POST'] = true;
+		}
 		if ($this->should_collapse_post_for_dislikes($post_id, $net_dislike_score, $post_row))
 		{
 			$post_row['S_IGNORE_POST'] = true;
@@ -4572,6 +4576,18 @@ class listener implements EventSubscriberInterface
 		$this->db->sql_freeresult($result);
 
 		return $this->foe_user_id_map;
+	}
+
+	protected function is_post_authored_by_foe(int $poster_id): bool
+	{
+		if ($poster_id <= 0)
+		{
+			return false;
+		}
+
+		$foe_user_id_map = $this->get_current_user_foe_id_map();
+
+		return isset($foe_user_id_map[$poster_id]);
 	}
 
 	protected function build_non_foe_topic_sql(string $topic_alias = 't'): string
