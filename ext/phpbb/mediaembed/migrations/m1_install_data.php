@@ -55,7 +55,7 @@ class m1_install_data extends \phpbb\db\migration\container_aware_migration
 		/** @var \s9e\TextFormatter\Configurator $configurator */
 		$configurator = $this->container->get('text_formatter.s9e.factory')->get_configurator();
 		$sites = array_filter(array_keys(iterator_to_array($configurator->MediaEmbed->defaultSites)), function ($siteId) use ($configurator) {
-			return !isset($configurator->BBCodes[$siteId]);
+			return $siteId !== 'amazon' && !isset($configurator->BBCodes[$siteId]);
 		});
 
 		return json_encode(array_values($sites));

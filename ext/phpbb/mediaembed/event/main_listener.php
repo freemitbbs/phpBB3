@@ -28,6 +28,11 @@ class main_listener implements EventSubscriberInterface
 	/** @var string A link to a rich content media site for demo purposes */
 	public const MEDIA_DEMO_URL = 'https://youtu.be/Ne18ZQ7LLI0';
 
+	/** @var array Media sites that should remain normal autolinks */
+	private const PLAIN_LINK_SITE_IDS = [
+		'amazon' => true,
+	];
+
 	/** @var auth */
 	protected $auth;
 
@@ -378,7 +383,15 @@ class main_listener implements EventSubscriberInterface
 	{
 		$siteIds = $this->config_text->get('media_embed_sites');
 
-		return $siteIds ? json_decode($siteIds, true) : [];
+		$siteIds = $siteIds ? json_decode($siteIds, true) : [];
+		if (!is_array($siteIds))
+		{
+			return [];
+		}
+
+		return array_values(array_filter($siteIds, function ($siteId) {
+			return !isset(self::PLAIN_LINK_SITE_IDS[(string) $siteId]);
+		}));
 	}
 
 	/**

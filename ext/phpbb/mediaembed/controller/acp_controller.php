@@ -61,6 +61,11 @@ class acp_controller implements acp_controller_interface
 	/** @var array An array of errors */
 	protected $errors = [];
 
+	/** @var array Media sites that should remain normal autolinks */
+	private const PLAIN_LINK_SITE_IDS = [
+		'amazon' => true,
+	];
+
 	/**
 	 * Constructor
 	 */
@@ -157,7 +162,7 @@ class acp_controller implements acp_controller_interface
 	 */
 	public function save_manage()
 	{
-		$this->config_text->set('media_embed_sites', json_encode($this->request->variable('mark', [''])));
+		$this->config_text->set("media_embed_sites", json_encode($this->filter_plain_link_sites($this->request->variable("mark", [""]))));
 
 		$this->media_cache->purge_textformatter_cache();
 
@@ -197,6 +202,11 @@ class acp_controller implements acp_controller_interface
 		$configurator = $this->textformatter->get_configurator();
 		foreach ($configurator->MediaEmbed->defaultSites as $siteId => $siteConfig)
 		{
+			if (isset(self::PLAIN_LINK_SITE_IDS[(string) $siteId]))
+			{
+				continue;
+			}
+
 			$disabled = isset($configurator->BBCodes[$siteId]);
 			$sites[$siteId] = [
 				'id'       => $siteId,
@@ -224,10 +234,23 @@ class acp_controller implements acp_controller_interface
 		if ($this->enabled_sites === null)
 		{
 			$sites = json_decode($this->config_text->get('media_embed_sites'), true);
-			$this->enabled_sites = is_array($sites) ? $sites : [];
+			$this->enabled_sites = is_array($sites) ? $this->filter_plain_link_sites($sites) : [];
 		}
 
 		return $this->enabled_sites;
+	}
+
+	/**
+	 * Remove sites that should be rendered as normal links.
+	 *
+	 * @param array $siteIds
+	 * @return array
+	 */
+	protected function filter_plain_link_sites(array $siteIds)
+	{
+		return array_values(array_filter($siteIds, function ($siteId) {
+			return !isset(self::PLAIN_LINK_SITE_IDS[(string) $siteId]);
+		}));
 	}
 
 	/**
