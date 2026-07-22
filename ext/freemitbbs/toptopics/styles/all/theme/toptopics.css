@@ -101,6 +101,10 @@
 	margin-top: 0;
 }
 
+#page-header .nav-main > .dropdown-container.dropdown-visible {
+	z-index: 4000;
+}
+
 .toptopics-flat-index-toolbar {
 	align-items: center;
 	clear: both;
