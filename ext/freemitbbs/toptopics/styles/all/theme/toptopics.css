@@ -101,7 +101,7 @@
 	margin-top: 0;
 }
 
-#page-header .nav-main > .dropdown-container.dropdown-visible {
+#page-header .dropdown-container.dropdown-visible {
 	z-index: 4000;
 }
 
