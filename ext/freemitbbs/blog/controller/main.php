@@ -821,6 +821,10 @@ class main
 
 		if ($existing)
 		{
+			if ($autosend)
+			{
+				$this->sync_existing_source_topic($existing, $post, $blog_forum_id);
+			}
 			$this->publish_existing_source_topic($existing, $blog_forum_id);
 			redirect($this->public_blog_entry_url((int) $existing['topic_id']));
 		}
@@ -1622,11 +1626,84 @@ class main
 		}
 	}
 
+	protected function sync_existing_source_topic(array $topic, array $source_post, int $blog_forum_id): void
+	{
+		$topic_id = (int) ($topic['topic_id'] ?? 0);
+		$post_id = (int) ($topic['topic_first_post_id'] ?? 0);
+		if ($topic_id <= 0 || $post_id <= 0)
+		{
+			return;
+		}
+
+		$title = $this->copied_post_title($source_post);
+		$message = (string) $source_post['post_text'];
+		$post_sql = [
+			'post_subject' => $title,
+			'post_text' => $message,
+			'post_checksum' => md5($message),
+			'post_attachment' => 0,
+			'bbcode_bitfield' => (string) $source_post['bbcode_bitfield'],
+			'bbcode_uid' => (string) $source_post['bbcode_uid'],
+			'enable_bbcode' => (int) $source_post['enable_bbcode'],
+			'enable_smilies' => (int) $source_post['enable_smilies'],
+			'enable_magic_url' => (int) $source_post['enable_magic_url'],
+		];
+
+		$this->db->sql_transaction('begin');
+		try
+		{
+			$this->db->sql_query('UPDATE ' . POSTS_TABLE . '
+				SET ' . $this->db->sql_build_array('UPDATE', $post_sql) . '
+				WHERE post_id = ' . $post_id . '
+					AND topic_id = ' . $topic_id . '
+					AND forum_id = ' . (int) $blog_forum_id);
+
+			$this->db->sql_query('UPDATE ' . TOPICS_TABLE . "
+				SET topic_title = '" . $this->db->sql_escape($title) . "',
+					topic_last_post_subject = CASE
+						WHEN topic_last_post_id = " . $post_id . " THEN '" . $this->db->sql_escape($title) . "'
+						ELSE topic_last_post_subject
+					END
+				WHERE topic_id = " . $topic_id . '
+					AND forum_id = ' . (int) $blog_forum_id);
+
+			$this->db->sql_query('UPDATE ' . FORUMS_TABLE . "
+				SET forum_last_post_subject = '" . $this->db->sql_escape($title) . "'
+				WHERE forum_id = " . (int) $blog_forum_id . '
+					AND forum_last_post_id = ' . $post_id);
+
+			// Copied attachment rows share the source files, so replace only the
+			// database references and leave the physical files untouched.
+			$this->db->sql_query('DELETE FROM ' . ATTACHMENTS_TABLE . '
+				WHERE post_msg_id = ' . $post_id . '
+					AND topic_id = ' . $topic_id . '
+					AND in_message = 0');
+			$this->copy_post_attachments($source_post, $topic_id, $post_id);
+
+			$result = $this->db->sql_query_limit('SELECT attach_id
+				FROM ' . ATTACHMENTS_TABLE . '
+				WHERE topic_id = ' . $topic_id . '
+					AND in_message = 0', 1);
+			$topic_has_attachments = (bool) $this->db->sql_fetchfield('attach_id');
+			$this->db->sql_freeresult($result);
+			$this->db->sql_query('UPDATE ' . TOPICS_TABLE . '
+				SET topic_attachment = ' . (int) $topic_has_attachments . '
+				WHERE topic_id = ' . $topic_id);
+
+			$this->db->sql_transaction('commit');
+		}
+		catch (\Throwable $e)
+		{
+			$this->db->sql_transaction('rollback');
+			throw $e;
+		}
+
+		$this->copy_post_tags((int) $source_post['post_id'], $post_id);
+	}
+
 	protected function create_topic_from_post(array $post, array $forum, bool $publish = false): array
 	{
-		$title = trim((string) ($post['post_subject'] ?: $post['topic_title']));
-		$title = $title !== '' ? $title : $this->language->lang('BLOG_UNTITLED');
-		$title = truncate_string($title, isset($this->config['max_topic_title_chars']) && (int) $this->config['max_topic_title_chars'] > 0 ? (int) $this->config['max_topic_title_chars'] : 50);
+		$title = $this->copied_post_title($post);
 		$message = (string) $post['post_text'];
 		$forum_id = (int) $forum['forum_id'];
 		$user_id = (int) $this->user->data['user_id'];
@@ -1729,6 +1806,14 @@ class main
 		];
 	}
 
+	protected function copied_post_title(array $post): string
+	{
+		$title = trim((string) ($post['post_subject'] ?: $post['topic_title']));
+		$title = $title !== '' ? $title : $this->language->lang('BLOG_UNTITLED');
+
+		return truncate_string($title, isset($this->config['max_topic_title_chars']) && (int) $this->config['max_topic_title_chars'] > 0 ? (int) $this->config['max_topic_title_chars'] : 50);
+	}
+
 	protected function update_forum_after_copy(int $forum_id, int $post_id, string $title, int $current_time, bool $publish): void
 	{
 		if ($publish)
@@ -1818,13 +1903,7 @@ class main
 			return;
 		}
 
-		$tags = $this->posttags_manager->get_post_tags($source_post_id);
-		if (empty($tags))
-		{
-			return;
-		}
-
-		$this->posttags_manager->set_post_tags($target_post_id, $tags);
+		$this->posttags_manager->set_post_tags($target_post_id, $this->posttags_manager->get_post_tags($source_post_id));
 	}
 
 	protected function cleanup_copied_attachment_files(array $physical_filenames): void

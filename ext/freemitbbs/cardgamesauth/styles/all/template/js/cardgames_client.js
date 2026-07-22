@@ -84,6 +84,7 @@ const state = {
   dealingTotalCount: 0,
   dealingTimerId: 0,
   dealingCardIndexes: [],
+  dealingCardIds: [],
   dealtHandKeys: new Set(),
   privateHandAvailableWidth: 0,
   privateHandOverlapValue: "",
@@ -1953,8 +1954,11 @@ function syncDealingAnimation(table, previousTable = null) {
 
   if (state.dealingHandKey === descriptor.key) {
     state.dealingTotalCount = descriptor.total;
-    if (state.dealingCardIndexes.length !== descriptor.total) {
-      state.dealingCardIndexes = shuffledCardIndexes(descriptor.total);
+    if (
+      state.dealingCardIndexes.length !== descriptor.total
+      || state.dealingCardIds.length !== descriptor.total
+    ) {
+      initializeDealingCardOrder(descriptor.cards);
     }
     if (state.dealingVisibleCount >= descriptor.total) {
       rememberDealtHandKey(descriptor.key);
@@ -1978,7 +1982,7 @@ function syncDealingAnimation(table, previousTable = null) {
   state.dealingHandKey = descriptor.key;
   state.dealingVisibleCount = 0;
   state.dealingTotalCount = descriptor.total;
-  state.dealingCardIndexes = shuffledCardIndexes(descriptor.total);
+  initializeDealingCardOrder(descriptor.cards);
   scheduleDealingTick();
 }
 
@@ -2004,8 +2008,19 @@ function tractorDealingDescriptor(table, cards = null) {
     key: `${roomKey}:${seatIndex}:${handId}`,
     roomKey,
     seatIndex,
-    total: handCards.length
+    total: handCards.length,
+    cards: handCards
   };
+}
+
+function initializeDealingCardOrder(cards) {
+  state.dealingCardIndexes = shuffledCardIndexes(cards.length);
+  state.dealingCardIds = state.dealingCardIndexes.map((index) => privateCardId(cards[index]));
+}
+
+function privateCardId(entry) {
+  const id = entry?.card?.id ?? entry?.id;
+  return id === undefined || id === null ? "" : String(id);
 }
 
 function scheduleDealingTick() {
@@ -2044,6 +2059,7 @@ function clearDealingAnimation(resetCompleted = false) {
   state.dealingTotalCount = 0;
   state.dealingTimerId = 0;
   state.dealingCardIndexes = [];
+  state.dealingCardIds = [];
   if (resetCompleted) {
     state.dealtHandKeys.clear();
   }
@@ -6757,6 +6773,25 @@ function visiblePrivateHandCards(table, cards) {
   }
 
   const visibleCount = Math.min(Math.max(state.dealingVisibleCount, 0), cards.length);
+  if (state.dealingCardIds.length === cards.length) {
+    const remainingById = new Map();
+    state.dealingCardIds.slice(0, visibleCount).forEach((id) => {
+      remainingById.set(id, (remainingById.get(id) || 0) + 1);
+    });
+    const visibleCards = cards.filter((entry) => {
+      const id = privateCardId(entry);
+      const remaining = remainingById.get(id) || 0;
+      if (remaining <= 0) {
+        return false;
+      }
+      remainingById.set(id, remaining - 1);
+      return true;
+    });
+    if (visibleCards.length === visibleCount) {
+      return visibleCards;
+    }
+  }
+
   const order = state.dealingCardIndexes.length === cards.length
     ? state.dealingCardIndexes
     : cards.map((_, index) => index);
