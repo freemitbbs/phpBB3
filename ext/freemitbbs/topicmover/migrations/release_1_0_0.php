@@ -19,7 +19,7 @@ class release_1_0_0 extends \phpbb\db\migration\migration
 			['config.add', ['topicmover_api_endpoint', 'https://api.deepseek.com/chat/completions']],
 			['config.add', ['topicmover_api_key', '']],
 			['config.add', ['topicmover_excluded_forum_ids', '']],
-			['config.add', ['topicmover_model', 'deepseek-chat']],
+			['config.add', ['topicmover_model', 'deepseek-v4-flash']],
 			['config.add', ['topicmover_version', '1.0.0']],
 			['module.add', [
 				'acp',

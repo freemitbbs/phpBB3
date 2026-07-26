@@ -5,7 +5,8 @@ namespace freemitbbs\newsscraper\service;
 class scraper
 {
 	private const DEFAULT_ENDPOINT = 'https://api.deepseek.com/chat/completions';
-	private const DEFAULT_MODEL = 'deepseek-chat';
+	private const DEFAULT_MODEL = 'deepseek-v4-flash';
+	private const DEPRECATED_MODELS = ['deepseek-chat', 'deepseek-reasoner'];
 	private const DEFAULT_DIGEST_FORUM_NAME = '新闻摘要';
 	private const GUEST_POSTER_NAME = '新闻摘要';
 	private const HTTP_CONNECT_TIMEOUT_SECONDS = 10;
@@ -1644,11 +1645,20 @@ class scraper
 		$model = trim((string) ($this->config['newsscraper_model'] ?? ''));
 		if ($model !== '')
 		{
-			return $model;
+			return $this->normalize_api_model($model);
 		}
 		$model = trim((string) ($this->config['topicmover_model'] ?? ''));
 
-		return $model !== '' ? $model : self::DEFAULT_MODEL;
+		return $this->normalize_api_model($model);
+	}
+
+	protected function normalize_api_model(string $model): string
+	{
+		$model = trim($model);
+
+		return $model === '' || in_array($model, self::DEPRECATED_MODELS, true)
+			? self::DEFAULT_MODEL
+			: $model;
 	}
 
 	protected function api_key(): string

@@ -5,6 +5,8 @@ namespace freemitbbs\topicmover\acp;
 class acp_topicmover_module
 {
 	private const FORM_KEY = 'freemitbbs/topicmover';
+	private const DEFAULT_MODEL = 'deepseek-v4-flash';
+	private const DEPRECATED_MODELS = ['deepseek-chat', 'deepseek-reasoner'];
 
 	public string $tpl_name;
 	public string $page_title;
@@ -41,7 +43,7 @@ class acp_topicmover_module
 			$min_latest_reply_age_hours = max(0, min(8760, (int) $request->variable('topicmover_min_latest_reply_age_hours', 12)));
 			$interval_seconds = max(300, min(86400, (int) $request->variable('topicmover_interval_seconds', 3600)));
 			$api_endpoint = trim((string) $request->variable('topicmover_api_endpoint', '', true));
-			$model = trim((string) $request->variable('topicmover_model', 'deepseek-chat', true));
+			$model = $this->normalize_model((string) $request->variable('topicmover_model', self::DEFAULT_MODEL, true));
 			$api_key = trim((string) $request->variable('topicmover_api_key', '', true));
 			$clear_api_key = (int) $request->variable('topicmover_api_key_clear', 0);
 			$excluded_forum_ids = $this->normalize_forum_ids((string) $request->variable('topicmover_excluded_forum_ids', '', true));
@@ -51,7 +53,7 @@ class acp_topicmover_module
 			$config->set('topicmover_min_latest_reply_age_hours', (string) $min_latest_reply_age_hours);
 			$config->set('topicmover_interval_seconds', (string) $interval_seconds);
 			$config->set('topicmover_api_endpoint', $api_endpoint !== '' ? $api_endpoint : 'https://api.deepseek.com/chat/completions');
-			$config->set('topicmover_model', $model !== '' ? $model : 'deepseek-chat');
+			$config->set('topicmover_model', $model !== '' ? $model : self::DEFAULT_MODEL);
 			$config->set('topicmover_excluded_forum_ids', $excluded_forum_ids);
 			$config->set('topicmover_excluded_user_ids', $excluded_user_ids);
 
@@ -73,11 +75,18 @@ class acp_topicmover_module
 			'TOPICMOVER_MIN_LATEST_REPLY_AGE_HOURS' => (int) ($config['topicmover_min_latest_reply_age_hours'] ?? 12),
 			'TOPICMOVER_INTERVAL_SECONDS' => (int) ($config['topicmover_interval_seconds'] ?? 3600),
 			'TOPICMOVER_API_ENDPOINT' => (string) ($config['topicmover_api_endpoint'] ?? 'https://api.deepseek.com/chat/completions'),
-			'TOPICMOVER_MODEL' => (string) ($config['topicmover_model'] ?? 'deepseek-chat'),
+			'TOPICMOVER_MODEL' => $this->normalize_model((string) ($config['topicmover_model'] ?? self::DEFAULT_MODEL)),
 			'TOPICMOVER_EXCLUDED_FORUM_IDS' => (string) ($config['topicmover_excluded_forum_ids'] ?? ''),
 			'TOPICMOVER_EXCLUDED_USER_IDS' => (string) ($config['topicmover_excluded_user_ids'] ?? ''),
 			'S_TOPICMOVER_API_KEY_CONFIGURED' => trim((string) ($config['topicmover_api_key'] ?? '')) !== '',
 		]);
+	}
+
+	protected function normalize_model(string $model): string
+	{
+		$model = trim($model);
+
+		return $model === '' || in_array($model, self::DEPRECATED_MODELS, true) ? self::DEFAULT_MODEL : $model;
 	}
 
 	protected function normalize_forum_ids(string $value): string

@@ -26,3 +26,138 @@
 	opacity: 0.6;
 	pointer-events: none;
 }
+
+.postbody .content img.freemitbbs-image-zoomable,
+.postbody .attachbox img.freemitbbs-image-zoomable {
+	cursor: zoom-in;
+}
+
+body.freemitbbs-image-viewer-open {
+	overflow: hidden;
+}
+
+.freemitbbs-image-viewer {
+	position: fixed;
+	z-index: 100000;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.92);
+	color: #ffffff;
+}
+
+.freemitbbs-image-viewer[hidden] {
+	display: none !important;
+}
+
+.freemitbbs-image-viewer-viewport {
+	position: absolute;
+	inset: 0;
+	overflow: auto;
+	overscroll-behavior: contain;
+	-webkit-overflow-scrolling: touch;
+}
+
+.freemitbbs-image-viewer-canvas {
+	display: flex;
+	box-sizing: border-box;
+	min-width: 100%;
+	min-height: 100%;
+	padding: 72px 24px 24px;
+	align-items: center;
+	justify-content: center;
+}
+
+.freemitbbs-image-viewer-image {
+	display: block;
+	flex: 0 0 auto;
+	max-width: none !important;
+	max-height: none !important;
+	box-shadow: 0 6px 30px rgba(0, 0, 0, 0.55);
+	cursor: zoom-in;
+	user-select: none;
+	-webkit-user-drag: none;
+}
+
+.freemitbbs-image-viewer-image.is-actual-size {
+	cursor: zoom-out;
+}
+
+.freemitbbs-image-viewer-toolbar {
+	position: fixed;
+	z-index: 1;
+	top: max(12px, env(safe-area-inset-top));
+	left: 50%;
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	padding: 6px;
+	border: 1px solid rgba(255, 255, 255, 0.22);
+	border-radius: 8px;
+	background: rgba(20, 20, 20, 0.86);
+	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+	transform: translateX(-50%);
+}
+
+.freemitbbs-image-viewer-button {
+	display: inline-flex;
+	box-sizing: border-box;
+	min-width: 38px;
+	height: 36px;
+	margin: 0;
+	padding: 0 10px;
+	border: 1px solid rgba(255, 255, 255, 0.3);
+	border-radius: 5px;
+	background: rgba(255, 255, 255, 0.12);
+	color: #ffffff !important;
+	font: 600 15px/34px Arial, sans-serif;
+	text-align: center;
+	text-decoration: none !important;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+}
+
+.freemitbbs-image-viewer-button:hover,
+.freemitbbs-image-viewer-button:focus {
+	border-color: #ffffff;
+	background: rgba(255, 255, 255, 0.24);
+	outline: 2px solid transparent;
+}
+
+.freemitbbs-image-viewer-button:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.freemitbbs-image-viewer-level {
+	min-width: 50px;
+	font: 600 13px/1 Arial, sans-serif;
+	text-align: center;
+}
+
+.freemitbbs-image-viewer.has-error .freemitbbs-image-viewer-image {
+	display: none;
+}
+
+@media (max-width: 500px) {
+	.freemitbbs-image-viewer-canvas {
+		padding: 64px 12px 12px;
+	}
+
+	.freemitbbs-image-viewer-toolbar {
+		top: max(8px, env(safe-area-inset-top));
+		gap: 3px;
+		padding: 4px;
+	}
+
+	.freemitbbs-image-viewer-button {
+		min-width: 34px;
+		height: 34px;
+		padding: 0 7px;
+		font-size: 14px;
+		line-height: 32px;
+	}
+
+	.freemitbbs-image-viewer-level {
+		min-width: 43px;
+	}
+}

@@ -7,7 +7,8 @@ class acp_newsscraper_module
 	private const FORM_KEY = 'freemitbbs/newsscraper';
 
 	private const DEFAULT_ENDPOINT = 'https://api.deepseek.com/chat/completions';
-	private const DEFAULT_MODEL = 'deepseek-chat';
+	private const DEFAULT_MODEL = 'deepseek-v4-flash';
+	private const DEPRECATED_MODELS = ['deepseek-chat', 'deepseek-reasoner'];
 
 	private const SOURCES = [
 		'guardian' => 'The Guardian',
@@ -59,7 +60,7 @@ class acp_newsscraper_module
 			$source_input = $request->variable('newsscraper_sources', ['' => ''], true);
 			$enabled_sources = $this->normalize_sources(array_keys($source_input));
 			$api_endpoint = trim((string) $request->variable('newsscraper_api_endpoint', '', true));
-			$model = trim((string) $request->variable('newsscraper_model', '', true));
+			$model = $this->normalize_model((string) $request->variable('newsscraper_model', '', true));
 			$api_key = trim((string) $request->variable('newsscraper_api_key', '', true));
 			$clear_api_key = (int) $request->variable('newsscraper_api_key_clear', 0);
 
@@ -112,12 +113,19 @@ class acp_newsscraper_module
 			'NEWSSCRAPER_TITLE_MAX_CHARS' => (int) ($config['newsscraper_title_max_chars'] ?? 30),
 			'NEWSSCRAPER_SEEN_RETENTION_DAYS' => (int) ($config['newsscraper_seen_retention_days'] ?? 30),
 			'NEWSSCRAPER_API_ENDPOINT' => (string) ($config['newsscraper_api_endpoint'] ?? ''),
-			'NEWSSCRAPER_MODEL' => (string) ($config['newsscraper_model'] ?? ''),
+			'NEWSSCRAPER_MODEL' => $this->normalize_model((string) ($config['newsscraper_model'] ?? '')),
 			'NEWSSCRAPER_DEFAULT_API_ENDPOINT' => self::DEFAULT_ENDPOINT,
 			'NEWSSCRAPER_DEFAULT_MODEL' => self::DEFAULT_MODEL,
 			'S_NEWSSCRAPER_API_KEY_CONFIGURED' => trim((string) ($config['newsscraper_api_key'] ?? '')) !== '',
 			'S_NEWSSCRAPER_TOPICMOVER_API_KEY_CONFIGURED' => trim((string) ($config['topicmover_api_key'] ?? '')) !== '',
 		]);
+	}
+
+	protected function normalize_model(string $model): string
+	{
+		$model = trim($model);
+
+		return in_array($model, self::DEPRECATED_MODELS, true) ? self::DEFAULT_MODEL : $model;
 	}
 
 	protected function normalize_sources(array $source_keys): string

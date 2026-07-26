@@ -7,7 +7,8 @@ class mover
 	private const SOURCE_FORUM_ID = 2;
 	private const DEFAULT_THRESHOLD = 5;
 	private const DEFAULT_ENDPOINT = 'https://api.deepseek.com/chat/completions';
-	private const DEFAULT_MODEL = 'deepseek-chat';
+	private const DEFAULT_MODEL = 'deepseek-v4-flash';
+	private const DEPRECATED_MODELS = ['deepseek-chat', 'deepseek-reasoner'];
 	private const DEFAULT_MIN_LATEST_REPLY_AGE_HOURS = 12;
 	private const MIN_CONFIDENCE = 0.70;
 	private const API_TIMEOUT_SECONDS = 25;
@@ -303,7 +304,7 @@ class mover
 	protected function classify_topic(array $topic_context, array $forums): array
 	{
 		$payload = [
-			'model' => (string) ($this->config['topicmover_model'] ?? self::DEFAULT_MODEL),
+			'model' => $this->api_model(),
 			'temperature' => 0.1,
 			'response_format' => ['type' => 'json_object'],
 			'messages' => [
@@ -331,6 +332,20 @@ class mover
 		}
 
 		return $decoded;
+	}
+
+	protected function api_model(): string
+	{
+		return $this->normalize_api_model((string) ($this->config['topicmover_model'] ?? self::DEFAULT_MODEL));
+	}
+
+	protected function normalize_api_model(string $model): string
+	{
+		$model = trim($model);
+
+		return $model === '' || in_array($model, self::DEPRECATED_MODELS, true)
+			? self::DEFAULT_MODEL
+			: $model;
 	}
 
 	protected function should_keep_in_source(array $topic_context): bool

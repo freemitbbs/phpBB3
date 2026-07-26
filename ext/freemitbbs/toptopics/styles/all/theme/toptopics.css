@@ -105,6 +105,10 @@
 	z-index: 4000;
 }
 
+#topic_preview.topic_preview_container {
+	z-index: 100;
+}
+
 .toptopics-flat-index-toolbar {
 	align-items: center;
 	clear: both;
