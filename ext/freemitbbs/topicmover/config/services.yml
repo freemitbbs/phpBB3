@@ -8,6 +8,28 @@ services:
             - '%core.root_path%'
             - '%core.php_ext%'
 
+    freemitbbs.topicmover.author_move:
+        class: freemitbbs\topicmover\service\author_move
+        arguments:
+            - '@auth'
+            - '@config'
+            - '@dbal.conn'
+            - '@log'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+
+    freemitbbs.topicmover.controller.author_move:
+        class: freemitbbs\topicmover\controller\author_move
+        arguments:
+            - '@controller.helper'
+            - '@language'
+            - '@request'
+            - '@template'
+            - '@user'
+            - '@freemitbbs.topicmover.author_move'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+
     freemitbbs.topicmover.cron.move_topics:
         class: freemitbbs\topicmover\cron\move_topics
         arguments:
@@ -20,11 +42,22 @@ services:
             - { name: cron.task }
 
     freemitbbs.topicmover.listener:
-        class: freemitbbs\topicmover\event\listener
+        class: freemitbbs\topicmover\event\base_listener
         arguments:
             - '@language'
             - '@request'
             - '@template'
             - '@user'
+        tags:
+            - { name: event.listener }
+
+    freemitbbs.topicmover.author_move_listener:
+        class: freemitbbs\topicmover\event\author_move_listener
+        arguments:
+            - '@controller.helper'
+            - '@language'
+            - '@template'
+            - '@user'
+            - '@freemitbbs.topicmover.author_move'
         tags:
             - { name: event.listener }

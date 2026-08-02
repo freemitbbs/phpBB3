@@ -1,0 +1,6 @@
+freemitbbs_topicmover_author_move:
+    path: /topic/move/{topic_id}
+    defaults: { _controller: freemitbbs.topicmover.controller.author_move:move }
+    requirements:
+        topic_id: \d+
+    methods: [GET, POST]

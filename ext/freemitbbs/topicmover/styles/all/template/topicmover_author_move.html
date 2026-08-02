@@ -1,0 +1,58 @@
+<!-- INCLUDE overall_header.html -->
+
+<form id="topicmover-author-move" method="post" action="{U_TOPICMOVER_AUTHOR_MOVE}">
+	<div class="panel">
+		<div class="inner">
+			<h2>{L_TOPICMOVER_AUTHOR_MOVE_TITLE}</h2>
+			<p>{L_TOPICMOVER_AUTHOR_MOVE_EXPLAIN}</p>
+
+			<!-- IF TOPICMOVER_ERROR -->
+				<div class="error">{TOPICMOVER_ERROR}</div>
+			<!-- ENDIF -->
+
+			<fieldset class="fields2">
+				<dl>
+					<dt><strong>{L_TOPIC}{L_COLON}</strong></dt>
+					<dd>{TOPICMOVER_TOPIC_TITLE}</dd>
+				</dl>
+				<dl>
+					<dt><strong>{L_TOPICMOVER_AUTHOR_MOVE_CURRENT_FORUM}{L_COLON}</strong></dt>
+					<dd>{TOPICMOVER_SOURCE_FORUM}</dd>
+				</dl>
+				<dl>
+					<dt><label for="to_forum_id">{L_TOPICMOVER_AUTHOR_MOVE_DESTINATION}{L_COLON}</label></dt>
+					<dd>
+						<!-- IF S_TOPICMOVER_HAS_DESTINATIONS -->
+							<select id="to_forum_id" name="to_forum_id" required>
+								<option value="">{L_TOPICMOVER_AUTHOR_MOVE_CHOOSE_FORUM}</option>
+								<!-- BEGIN topicmover_forums -->
+									<!-- IF topicmover_forums.S_IS_CAT -->
+										<option value="" disabled>{topicmover_forums.FORUM_NAME}</option>
+									<!-- ELSE -->
+										<option value="{topicmover_forums.FORUM_ID}"><!-- IF topicmover_forums.LEVEL -->&#8627; <!-- ENDIF -->{topicmover_forums.FORUM_NAME}</option>
+									<!-- ENDIF -->
+								<!-- END topicmover_forums -->
+							</select>
+						<!-- ELSE -->
+							<strong>{L_TOPICMOVER_AUTHOR_MOVE_NO_DESTINATIONS}</strong>
+						<!-- ENDIF -->
+					</dd>
+				</dl>
+			</fieldset>
+
+			<div class="rules">
+				<div class="inner">{L_TOPICMOVER_AUTHOR_MOVE_WARNING}</div>
+			</div>
+		</div>
+	</div>
+
+	<fieldset class="submit-buttons">
+		<!-- IF S_TOPICMOVER_HAS_DESTINATIONS -->
+			<input class="button1" type="submit" name="submit" value="{L_TOPICMOVER_AUTHOR_MOVE_SUBMIT}" />&nbsp;
+		<!-- ENDIF -->
+		<input class="button2" type="submit" name="cancel" value="{L_CANCEL}" />
+		{S_FORM_TOKEN}
+	</fieldset>
+</form>
+
+<!-- INCLUDE overall_footer.html -->
