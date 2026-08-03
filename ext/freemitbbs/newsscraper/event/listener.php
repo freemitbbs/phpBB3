@@ -6,6 +6,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 class listener implements EventSubscriberInterface
 {
+	private const USER_OPTION_HIDE_INDEX_DIGEST = 26;
 	private const DEFAULT_DIGEST_FORUM_NAME = '新闻摘要';
 	private const INDEX_DIGEST_COLLAPSE_ID = 'freemitbbs_newsscraper_index_digest';
 	private const DISCUSS_HASH_PREFIX = 'freemitbbs_newsscraper_discuss_';
@@ -19,6 +20,7 @@ class listener implements EventSubscriberInterface
 	protected \phpbb\language\language $language;
 	protected \phpbb\request\request_interface $request;
 	protected \phpbb\template\template $template;
+	protected ?\phpbb\user $user;
 	protected $collapsible_operator;
 	protected array $digest_discussion_links = [];
 	protected array $digest_topic_meta = [];
@@ -41,7 +43,8 @@ class listener implements EventSubscriberInterface
 		string $discussion_table,
 		string $phpbb_root_path,
 		string $php_ext,
-		$collapsible_operator = null
+		$collapsible_operator = null,
+		?\phpbb\user $user = null
 	)
 	{
 		$this->auth = $auth;
@@ -51,6 +54,7 @@ class listener implements EventSubscriberInterface
 		$this->language = $language;
 		$this->request = $request;
 		$this->template = $template;
+		$this->user = $user;
 		$this->collapsible_operator = $collapsible_operator;
 		$this->seen_table = $seen_table;
 		$this->discussion_table = $discussion_table;
@@ -62,6 +66,8 @@ class listener implements EventSubscriberInterface
 	{
 		return [
 			'core.user_setup' => 'load_language',
+			'core.ucp_prefs_view_data' => 'ucp_prefs_view_data',
+			'core.ucp_prefs_view_update_data' => 'ucp_prefs_view_update_data',
 			'core.page_header' => 'assign_header_link',
 			'core.index_modify_page_title' => 'assign_index_digest',
 			'core.viewforum_modify_page_title' => 'force_digest_forum_topic_list_view',
@@ -79,6 +85,32 @@ class listener implements EventSubscriberInterface
 	public function load_language(): void
 	{
 		$this->language->add_lang('common', 'freemitbbs/newsscraper');
+	}
+
+	public function ucp_prefs_view_data($event): void
+	{
+		$data = $event['data'];
+		$data['newsscraper_show_index_digest'] = !empty($event['submit'])
+			? (bool) $this->request->variable('newsscraper_show_index_digest', true)
+			: !$this->user_hides_index_digest();
+		$event['data'] = $data;
+
+		$this->template->assign_var(
+			'S_NEWSSCRAPER_SHOW_INDEX_DIGEST',
+			(bool) $data['newsscraper_show_index_digest']
+		);
+	}
+
+	public function ucp_prefs_view_update_data($event): void
+	{
+		$data = $event['data'];
+		$sql_ary = $event['sql_ary'];
+		$sql_ary['user_options'] = phpbb_optionset(
+			self::USER_OPTION_HIDE_INDEX_DIGEST,
+			!(bool) ($data['newsscraper_show_index_digest'] ?? true),
+			(int) $sql_ary['user_options']
+		);
+		$event['sql_ary'] = $sql_ary;
 	}
 
 	public function assign_header_link(): void
@@ -134,6 +166,11 @@ class listener implements EventSubscriberInterface
 
 	public function assign_index_digest(): void
 	{
+		if ($this->user_hides_index_digest())
+		{
+			return;
+		}
+
 		$forum_id = $this->digest_forum_id();
 		$limit = max(0, min(50, (int) ($this->config['newsscraper_frontpage_count'] ?? 20)));
 		if ($forum_id <= 0 || $limit <= 0 || !$this->auth->acl_get('f_read', $forum_id))
@@ -190,6 +227,19 @@ class listener implements EventSubscriberInterface
 			'NEWSSCRAPER_INDEX_COLLAPSE_ALT_TITLE' => $hidden ? $this->language->lang('NEWSSCRAPER_INDEX_COLLAPSE_HIDE') : $this->language->lang('NEWSSCRAPER_INDEX_COLLAPSE_SHOW'),
 			'NEWSSCRAPER_INDEX_COLLAPSE_ICON' => $hidden ? 'fa-plus-square' : 'fa-minus-square',
 		]);
+	}
+
+	protected function user_hides_index_digest(): bool
+	{
+		if ($this->user === null || (int) ($this->user->data['user_id'] ?? ANONYMOUS) === ANONYMOUS)
+		{
+			return false;
+		}
+
+		return phpbb_optionget(
+			self::USER_OPTION_HIDE_INDEX_DIGEST,
+			(int) ($this->user->data['user_options'] ?? 0)
+		);
 	}
 
 	public function assign_discuss_form($event): void

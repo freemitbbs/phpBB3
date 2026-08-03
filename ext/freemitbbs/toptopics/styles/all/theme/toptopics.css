@@ -4,6 +4,43 @@
 	position: relative;
 }
 
+.toptopics-post-floor {
+	color: #536471;
+	float: left;
+	font-family: "Trebuchet MS", Verdana, Helvetica, Arial, sans-serif;
+	font-size: 1.5em;
+	font-weight: 700;
+	line-height: 125%;
+	margin: 0 0.35em 0.3em 0;
+	padding-top: 2px;
+	white-space: nowrap;
+}
+
+.rtl .toptopics-post-floor {
+	float: right;
+	margin-left: 0.35em;
+	margin-right: 0;
+}
+
+.toptopics-topic-author-badge {
+	background: #3f6f9f;
+	border-radius: 999px;
+	color: #ffffff;
+	display: inline-block;
+	font-size: 0.72em;
+	font-weight: 700;
+	line-height: 1.45;
+	margin-left: 5px;
+	padding: 1px 6px;
+	vertical-align: middle;
+	white-space: nowrap;
+}
+
+.rtl .toptopics-topic-author-badge {
+	margin-left: 0;
+	margin-right: 5px;
+}
+
 .freemitbbs-header-prefs {
 	box-sizing: border-box;
 	display: flex;

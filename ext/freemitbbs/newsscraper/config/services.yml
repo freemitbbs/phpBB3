@@ -39,5 +39,6 @@ services:
             - '%core.root_path%'
             - '%core.php_ext%'
             - '@?phpbb.collapsiblecategories.operator'
+            - '@user'
         tags:
             - { name: event.listener }

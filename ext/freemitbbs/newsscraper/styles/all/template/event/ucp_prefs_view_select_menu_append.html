@@ -1,0 +1,8 @@
+<hr />
+<dl>
+	<dt><label for="newsscraper_show_index_digest1">{L_NEWSSCRAPER_UCP_SHOW_INDEX_DIGEST}{L_COLON}</label><br /><span>{L_NEWSSCRAPER_UCP_SHOW_INDEX_DIGEST_EXPLAIN}</span></dt>
+	<dd>
+		<label for="newsscraper_show_index_digest1"><input type="radio" name="newsscraper_show_index_digest" id="newsscraper_show_index_digest1" value="1"{% if S_NEWSSCRAPER_SHOW_INDEX_DIGEST is not defined or S_NEWSSCRAPER_SHOW_INDEX_DIGEST %} checked="checked"{% endif %} /> {L_YES}</label>
+		<label for="newsscraper_show_index_digest0"><input type="radio" name="newsscraper_show_index_digest" id="newsscraper_show_index_digest0" value="0"{% if S_NEWSSCRAPER_SHOW_INDEX_DIGEST is defined and not S_NEWSSCRAPER_SHOW_INDEX_DIGEST %} checked="checked"{% endif %} /> {L_NO}</label>
+	</dd>
+</dl>
