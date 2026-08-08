@@ -557,10 +557,17 @@ class similar_topics
 	protected function apply_forum_filters(array &$sql_array, $similar_topic_forums = null)
 	{
 		$passworded_forums = $this->get_passworded_forums();
+		$excluded_forums = $passworded_forums;
+		$news_digest_forum_id = (int) ($this->config['newsscraper_digest_forum_id'] ?? 0);
+		if ($news_digest_forum_id > 0)
+		{
+			$excluded_forums[] = $news_digest_forum_id;
+			$excluded_forums = array_values(array_unique($excluded_forums));
+		}
 
 		if (!empty($similar_topic_forums))
 		{
-			$included_forums = array_diff(json_decode($similar_topic_forums, true), $passworded_forums);
+			$included_forums = array_diff(json_decode($similar_topic_forums, true), $excluded_forums);
 			if (empty($included_forums))
 			{
 				return false;
@@ -570,9 +577,9 @@ class similar_topics
 			return true;
 		}
 
-		if (count($passworded_forums))
+		if (count($excluded_forums))
 		{
-			$sql_array['WHERE'] .= ' AND ' . $this->db->sql_in_set('f.forum_id', $passworded_forums, true);
+			$sql_array['WHERE'] .= ' AND ' . $this->db->sql_in_set('f.forum_id', $excluded_forums, true);
 		}
 
 		$sql_array['WHERE'] .= ' AND f.similar_topics_ignore = 0';
