@@ -677,7 +677,7 @@ class ranker
 		$base_sql = 'SELECT t.topic_id, t.forum_id, t.topic_title, t.topic_time, t.topic_last_post_time, t.topic_last_post_id,
 					t.topic_last_poster_id, t.topic_last_poster_name, t.topic_last_poster_colour, t.topic_type,
 					t.topic_status, t.poll_start, t.topic_posts_approved, t.topic_views,
-					t.topic_poster, t.topic_first_poster_name, t.topic_first_poster_colour,
+					t.topic_poster, t.topic_first_poster_name, t.topic_first_poster_colour, t.topic_min_reputation,
 					COALESCE(first_post_quality.quality_length, 0) AS first_post_quality_length,
 					COALESCE(ov.override_state, \'\') AS override_state,
 					f.forum_name, COALESCE(u.user_posts, 0) AS user_posts,

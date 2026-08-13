@@ -42,6 +42,12 @@ class preview_controller
 	/** @var display */
 	protected $preview_display;
 
+	/** @var \phpbb\user|null */
+	protected $user;
+
+	/** @var \freemitbbs\toptopics\service\reputation|null */
+	protected $reputation;
+
 	/**
 	 * Constructor.
 	 *
@@ -52,7 +58,7 @@ class preview_controller
 	 * @param data               $preview_data
 	 * @param display            $preview_display
 	 */
-	public function __construct(auth $auth, cache_driver $cache, content_visibility $content_visibility, request_interface $request, data $preview_data, display $preview_display)
+	public function __construct(auth $auth, cache_driver $cache, content_visibility $content_visibility, request_interface $request, data $preview_data, display $preview_display, ?\phpbb\user $user = null, ?\freemitbbs\toptopics\service\reputation $reputation = null)
 	{
 		$this->auth = $auth;
 		$this->cache = $cache;
@@ -60,6 +66,8 @@ class preview_controller
 		$this->request = $request;
 		$this->preview_data = $preview_data;
 		$this->preview_display = $preview_display;
+		$this->user = $user;
+		$this->reputation = $reputation;
 	}
 
 	/**
@@ -222,8 +230,36 @@ class preview_controller
 	protected function get_inaccessible_status($row)
 	{
 		$forum_id = (int) $row['forum_id'];
+		if (!$this->can_view_reputation_restricted_topic($row))
+		{
+			return 404;
+		}
 
 		return (!$this->auth->acl_get('f_read', $forum_id) || !$this->content_visibility->is_visible('topic', $forum_id, $row)) ? 404 : 0;
+	}
+
+	protected function can_view_reputation_restricted_topic(array $row)
+	{
+		$required_score = (int) ($row['topic_min_reputation'] ?? 0);
+		if ($required_score <= 0 || $this->auth->acl_get('a_'))
+		{
+			return true;
+		}
+
+		$forum_id = (int) ($row['forum_id'] ?? 0);
+		if ($forum_id > 0 && $this->auth->acl_get('m_', $forum_id))
+		{
+			return true;
+		}
+
+		if ($this->user === null || $this->reputation === null)
+		{
+			return false;
+		}
+
+		$user_id = (int) ($this->user->data['user_id'] ?? ANONYMOUS);
+		return ($user_id !== ANONYMOUS && $user_id === (int) ($row['topic_poster'] ?? 0))
+			|| $this->reputation->get_score($user_id) >= $required_score;
 	}
 
 	/**

@@ -4,7 +4,7 @@ namespace freemitbbs\newsscraper\cron;
 
 class scrape_news extends \phpbb\cron\task\base
 {
-	private const LAST_RUN_CACHE_KEY = '_freemitbbs_newsscraper_last_run';
+	private const LAST_RUN_CONFIG_KEY = 'newsscraper_last_run';
 	private const DEFAULT_INTERVAL_SECONDS = 3600;
 
 	protected \phpbb\cache\service $cache;
@@ -30,8 +30,10 @@ class scrape_news extends \phpbb\cron\task\base
 			return;
 		}
 
+		// Persist this outside phpBB's cache so CLI cron processes and cache purges
+		// cannot make an hourly task run every few minutes.
+		$this->config->set(self::LAST_RUN_CONFIG_KEY, (string) time(), false);
 		$result = $this->scraper->process();
-		$this->cache->put(self::LAST_RUN_CACHE_KEY, time(), 86400);
 		$this->write_stdout(sprintf(
 			'discovered=%d evaluated=%d selected=%d posted=%d rejected=%d failed=%d',
 			(int) $result['discovered'],
@@ -55,7 +57,7 @@ class scrape_news extends \phpbb\cron\task\base
 			return false;
 		}
 
-		$last_run = (int) $this->cache->get(self::LAST_RUN_CACHE_KEY);
+		$last_run = (int) ($this->config[self::LAST_RUN_CONFIG_KEY] ?? 0);
 		if ($last_run > (time() - $this->get_interval_seconds()))
 		{
 			return false;

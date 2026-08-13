@@ -16,6 +16,8 @@ class scraper
 	private const MAX_ARTICLE_CHARS = 6500;
 	private const MAX_DIGEST_CHARS = 1200;
 	private const MIN_ARTICLE_CHARS = 300;
+	private const TITLE_SELECTION_MAX_TOKENS = 1000;
+	private const DIGEST_MAX_TOKENS = 1200;
 	private const DIGEST_CONTEXT_LIMIT = 100;
 	private const RTNG_DEFAULT_TPL_LOOP = 'rtng_topics';
 	private const RTNG_RECENT_CONTEXT_LIMIT = 30;
@@ -480,6 +482,8 @@ class scraper
 
 		$payload = [
 			'model' => $this->api_model(),
+			'thinking' => ['type' => 'disabled'],
+			'max_tokens' => self::TITLE_SELECTION_MAX_TOKENS,
 			'temperature' => 0.1,
 			'response_format' => ['type' => 'json_object'],
 			'messages' => [
@@ -1143,6 +1147,8 @@ class scraper
 		$title_max_chars = $this->title_max_chars();
 		$payload = [
 			'model' => $this->api_model(),
+			'thinking' => ['type' => 'disabled'],
+			'max_tokens' => self::DIGEST_MAX_TOKENS,
 			'temperature' => 0.2,
 			'response_format' => ['type' => 'json_object'],
 			'messages' => [

@@ -21,6 +21,8 @@ class inline_preview
 	protected \phpbb\content_visibility $content_visibility;
 	protected \phpbb\db\driver\driver_interface $db;
 	protected \phpbb\request\request_interface $request;
+	protected ?\phpbb\user $user;
+	protected ?\freemitbbs\toptopics\service\reputation $reputation;
 	protected string $root_path;
 	protected string $php_ext;
 	protected ?array $media_site_tags = null;
@@ -34,7 +36,9 @@ class inline_preview
 		\phpbb\db\driver\driver_interface $db,
 		\phpbb\request\request_interface $request,
 		string $root_path,
-		string $php_ext
+		string $php_ext,
+		?\phpbb\user $user = null,
+		?\freemitbbs\toptopics\service\reputation $reputation = null
 	)
 	{
 		$this->auth = $auth;
@@ -44,6 +48,8 @@ class inline_preview
 		$this->request = $request;
 		$this->root_path = $root_path;
 		$this->php_ext = $php_ext;
+		$this->user = $user;
+		$this->reputation = $reputation;
 	}
 
 	public function base($topic): JsonResponse
@@ -234,7 +240,7 @@ class inline_preview
 			return [];
 		}
 
-		$sql = 'SELECT t.topic_id, t.forum_id, t.topic_first_post_id, t.topic_visibility, t.topic_poster,
+		$sql = 'SELECT t.topic_id, t.forum_id, t.topic_first_post_id, t.topic_visibility, t.topic_poster, t.topic_min_reputation,
 				p.post_id, p.poster_id, p.post_visibility, p.post_attachment, p.post_time, p.post_edit_time,
 				f.forum_password
 			FROM ' . TOPICS_TABLE . ' t
@@ -308,13 +314,43 @@ class inline_preview
 
 		return $forum_id > 0
 			&& $this->auth->acl_get('f_read', $forum_id)
+			&& $this->can_view_reputation_restricted_row($row)
 			&& $this->content_visibility->is_visible('topic', $forum_id, $row)
 			&& $this->content_visibility->is_visible('post', $forum_id, $row);
+	}
+
+	protected function can_view_reputation_restricted_row(array $row): bool
+	{
+		$required_score = (int) ($row['topic_min_reputation'] ?? 0);
+		if ($required_score <= 0 || $this->auth->acl_get('a_'))
+		{
+			return true;
+		}
+
+		$forum_id = (int) ($row['forum_id'] ?? 0);
+		if ($forum_id > 0 && $this->auth->acl_get('m_', $forum_id))
+		{
+			return true;
+		}
+
+		if ($this->user === null || $this->reputation === null)
+		{
+			return false;
+		}
+
+		$user_id = (int) ($this->user->data['user_id'] ?? ANONYMOUS);
+		if ($user_id !== ANONYMOUS && $user_id === (int) ($row['topic_poster'] ?? 0))
+		{
+			return true;
+		}
+
+		return $this->reputation->get_score($user_id) >= $required_score;
 	}
 
 	protected function is_public_cacheable_row(array $row): bool
 	{
 		return \defined('ITEM_APPROVED')
+			&& (int) ($row['topic_min_reputation'] ?? 0) === 0
 			&& (int) ($row['topic_visibility'] ?? 0) === ITEM_APPROVED
 			&& (int) ($row['post_visibility'] ?? 0) === ITEM_APPROVED
 			&& (string) ($row['forum_password'] ?? '') === ''

@@ -111,6 +111,8 @@ services:
             - '@request'
             - '%core.root_path%'
             - '%core.php_ext%'
+            - '@user'
+            - '@freemitbbs.toptopics.reputation'
 
     freemitbbs.toptopics.header_preferences:
         class: freemitbbs\toptopics\controller\header_preferences

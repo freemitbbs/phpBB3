@@ -30,6 +30,7 @@ class listener implements EventSubscriberInterface
 	private const DEFAULT_POST_COLLAPSE_DISLIKE_THRESHOLD = 5;
 	private const DUPLICATE_POST_WINDOW_SECONDS = 60;
 	private const DUPLICATE_POST_LOCK_TIMEOUT_SECONDS = 0.5;
+	private const MAX_TOPIC_MIN_REPUTATION = 1000000;
 	private const INLINE_PREVIEW_MAX_IMAGES = 8;
 	private const INLINE_PREVIEW_SERVER_RENDER_LIMIT = 5;
 	private const REPUTATION_TIER_STEADY = 100;
@@ -95,6 +96,7 @@ class listener implements EventSubscriberInterface
 	protected ?array $index_recenttopics_topic_id_map = null;
 	protected ?array $index_forum_viewership_order = null;
 	protected ?array $foe_user_id_map = null;
+	protected array $feed_topic_reputation_rows = [];
 	protected ?string $duplicate_post_lock_name = null;
 
 	public function __construct(
@@ -186,6 +188,16 @@ class listener implements EventSubscriberInterface
 			'core.memberlist_view_profile' => 'user_profile_reaction_records',
 			'core.viewforum_get_topic_ids_data' => 'viewforum_exclude_foe_topics',
 			'core.viewforum_get_announcement_topic_ids_data' => 'viewforum_exclude_foe_topics',
+			'core.viewtopic_before_f_read_check' => 'enforce_viewtopic_reputation_access',
+			'core.posting_modify_row_data' => 'enforce_posting_reputation_access',
+			'core.posting_modify_submission_errors' => 'validate_topic_min_reputation',
+			'core.submit_post_modify_sql_data' => 'persist_topic_min_reputation',
+			'core.search_backend_search_after' => 'filter_search_post_ids_by_reputation',
+			'core.search_modify_rowset' => 'restrict_search_fulltext_by_reputation',
+			'core.search_modify_tpl_ary' => 'search_add_topic_reputation_badge',
+			'core.feed_base_modify_item_sql' => 'add_topic_reputation_to_feed_sql',
+			'core.feed_modify_feed_row' => 'restrict_feed_fulltext_by_reputation',
+			'core.download_file_send_to_browser_before' => ['enforce_attachment_reputation_access', 100],
 			'imcger.recenttopicsng.sql_pull_topics_list' => 'recenttopics_exclude_first_post_disliked_topics',
 			'imcger.recenttopicsng.sql_pull_topics_data' => 'recenttopics_exclude_first_post_disliked_topics',
 			'imcger.recenttopicsng.modify_topics_list' => 'recenttopics_filter_first_post_disliked_topics',
@@ -231,12 +243,26 @@ class listener implements EventSubscriberInterface
 	public function posting_new_member_approval_notice($event): void
 	{
 		$mode = (string) $event['mode'];
+		$page_data = $event['page_data'];
+		$post_data = $event['post_data'] ?? [];
+		$post_id = (int) ($event['post_id'] ?? 0);
+		$forum_id = (int) ($event['forum_id'] ?? 0);
+
+		if ($this->can_manage_topic_min_reputation($mode, $post_id, $forum_id, $post_data))
+		{
+			$stored_value = max(0, (int) ($post_data['topic_min_reputation'] ?? 0));
+			$requested_value = $this->requested_topic_min_reputation($stored_value);
+			$page_data['S_TOPTOPICS_TOPIC_REPUTATION_CONTROL'] = true;
+			$page_data['TOPTOPICS_TOPIC_MIN_REPUTATION'] = $requested_value ?? $stored_value;
+			$page_data['TOPTOPICS_CURRENT_REPUTATION'] = $this->format_reputation($this->get_current_user_reputation());
+		}
+
 		if (!in_array($mode, ['post', 'reply', 'quote'], true))
 		{
+			$event['page_data'] = $page_data;
 			return;
 		}
 
-		$forum_id = (int) $event['forum_id'];
 		$new_member_post_limit = (int) ($this->config['new_member_post_limit'] ?? 0);
 		if ($forum_id <= 0
 			|| $new_member_post_limit <= 0
@@ -244,16 +270,81 @@ class listener implements EventSubscriberInterface
 			|| empty($this->user->data['user_new'])
 			|| $this->auth->acl_get('f_noapprove', $forum_id))
 		{
+			$event['page_data'] = $page_data;
 			return;
 		}
 
 		$current_post_count = max(0, (int) ($this->user->data['user_posts'] ?? 0));
 		$remaining_post_count = max(0, $new_member_post_limit - $current_post_count);
 
-		$page_data = $event['page_data'];
 		$page_data['S_TOPTOPICS_NEW_MEMBER_APPROVAL_NOTICE'] = true;
 		$page_data['TOPTOPICS_NEW_MEMBER_APPROVAL_NOTICE'] = $this->language->lang('TOPTOPICS_NEW_MEMBER_APPROVAL_NOTICE', $new_member_post_limit, $current_post_count, $remaining_post_count);
 		$event['page_data'] = $page_data;
+	}
+
+	public function validate_topic_min_reputation($event): void
+	{
+		if (empty($event['submit']))
+		{
+			return;
+		}
+
+		$mode = (string) ($event['mode'] ?? '');
+		$post_id = (int) ($event['post_id'] ?? 0);
+		$forum_id = (int) ($event['forum_id'] ?? 0);
+		$post_data = $event['post_data'] ?? [];
+		if (!$this->can_manage_topic_min_reputation($mode, $post_id, $forum_id, $post_data))
+		{
+			return;
+		}
+
+		$value = $this->requested_topic_min_reputation((int) ($post_data['topic_min_reputation'] ?? 0));
+		if ($value !== null && !$this->is_restricted_topic_blog_copy_request($value))
+		{
+			return;
+		}
+
+		$error = $event['error'] ?? [];
+		$error[] = $value === null
+			? $this->language->lang('TOPTOPICS_TOPIC_MIN_REPUTATION_INVALID')
+			: $this->language->lang('TOPTOPICS_REPUTATION_TOPIC_CANNOT_COPY_TO_BLOG');
+		$event['error'] = $error;
+	}
+
+	protected function is_restricted_topic_blog_copy_request(int $topic_min_reputation): bool
+	{
+		if ($topic_min_reputation <= 0)
+		{
+			return false;
+		}
+
+		$post_action = $this->request->variable('post', '', true);
+		return $this->request->is_set_post('post_to_blog')
+			|| $post_action === 'post_to_blog'
+			|| $post_action === $this->language->lang('SUBMIT_POST_AND_COPY_TO_BLOG');
+	}
+
+	public function persist_topic_min_reputation($event): void
+	{
+		$post_mode = (string) ($event['post_mode'] ?? '');
+		$data = $event['data'] ?? [];
+		if (!in_array($post_mode, ['post', 'edit_topic', 'edit_first_post'], true)
+			|| !array_key_exists('topic_min_reputation', $data))
+		{
+			return;
+		}
+
+		$sql_data = $event['sql_data'] ?? [];
+		if (!isset($sql_data[TOPICS_TABLE]['sql']) || !is_array($sql_data[TOPICS_TABLE]['sql']))
+		{
+			return;
+		}
+
+		$sql_data[TOPICS_TABLE]['sql']['topic_min_reputation'] = max(0, min(
+			self::MAX_TOPIC_MIN_REPUTATION,
+			(int) $data['topic_min_reputation']
+		));
+		$event['sql_data'] = $sql_data;
 	}
 
 	public function assign_header_preferences($event): void
@@ -300,6 +391,16 @@ class listener implements EventSubscriberInterface
 	{
 		$row = $event['row'];
 		$block = $event['block'];
+		if (!$this->can_current_user_view_reputation_topic($row))
+		{
+			$block['TOPIC_PREVIEW_FIRST_POST'] = '';
+			$block['TOPIC_PREVIEW_LAST_POST'] = '';
+			$block['TOPIC_PREVIEW_FIRST_AVATAR'] = '';
+			$block['TOPIC_PREVIEW_LAST_AVATAR'] = '';
+			$event['block'] = $block;
+			return;
+		}
+
 		$image_urls = $this->extract_inline_preview_image_urls((string) ($row['first_post_text'] ?? ''));
 
 		if (empty($image_urls))
@@ -1207,6 +1308,109 @@ class listener implements EventSubscriberInterface
 		));
 	}
 
+	public function enforce_viewtopic_reputation_access($event): void
+	{
+		$topic_data = $event['topic_data'] ?? [];
+		if ($this->can_current_user_view_reputation_topic($topic_data))
+		{
+			return;
+		}
+
+		$this->deny_topic_for_reputation((int) ($topic_data['topic_min_reputation'] ?? 0));
+	}
+
+	public function enforce_posting_reputation_access($event): void
+	{
+		$mode = (string) ($event['mode'] ?? '');
+		if ($mode === 'post' || $mode === 'popup' || $mode === 'smilies')
+		{
+			return;
+		}
+
+		$post_data = $event['post_data'] ?? [];
+		if ($this->can_current_user_view_reputation_topic($post_data))
+		{
+			return;
+		}
+
+		$this->language->add_lang('toptopics', 'freemitbbs/toptopics');
+		$this->deny_topic_for_reputation((int) ($post_data['topic_min_reputation'] ?? 0));
+	}
+
+	protected function deny_topic_for_reputation(int $required_score): void
+	{
+		send_status_line(403, 'Forbidden');
+		trigger_error($this->language->lang(
+			'TOPTOPICS_TOPIC_REPUTATION_REQUIRED',
+			$this->format_reputation(max(0, $required_score)),
+			$this->format_reputation($this->get_current_user_reputation())
+		));
+	}
+
+	protected function can_manage_topic_min_reputation(string $mode, int $post_id, int $forum_id, array $post_data): bool
+	{
+		$user_id = (int) ($this->user->data['user_id'] ?? ANONYMOUS);
+		$blog_forum_id = (int) ($this->config['freemitbbs_blog_forum_id'] ?? 0);
+		if ($user_id === ANONYMOUS || ($blog_forum_id > 0 && $forum_id === $blog_forum_id))
+		{
+			return false;
+		}
+
+		if ($mode === 'post')
+		{
+			return true;
+		}
+
+		if ($mode !== 'edit' || $post_id <= 0 || $post_id !== (int) ($post_data['topic_first_post_id'] ?? 0))
+		{
+			return false;
+		}
+
+		return $user_id === (int) ($post_data['topic_poster'] ?? 0)
+			|| $this->auth->acl_get('a_')
+			|| ($forum_id > 0 && $this->auth->acl_get('m_', $forum_id));
+	}
+
+	protected function requested_topic_min_reputation(int $default): ?int
+	{
+		if (!$this->request->is_set_post('topic_min_reputation'))
+		{
+			return max(0, min(self::MAX_TOPIC_MIN_REPUTATION, $default));
+		}
+
+		$raw_value = trim((string) $this->request->variable('topic_min_reputation', ''));
+		if ($raw_value === '' || !preg_match('/^\d+$/D', $raw_value))
+		{
+			return null;
+		}
+
+		$value = (int) $raw_value;
+		return $value <= self::MAX_TOPIC_MIN_REPUTATION ? $value : null;
+	}
+
+	protected function can_current_user_view_reputation_topic(array $topic): bool
+	{
+		$required_score = (int) ($topic['topic_min_reputation'] ?? 0);
+		if ($required_score <= 0 || $this->auth->acl_get('a_'))
+		{
+			return true;
+		}
+
+		$forum_id = (int) ($topic['forum_id'] ?? 0);
+		if ($forum_id > 0 && $this->auth->acl_get('m_', $forum_id))
+		{
+			return true;
+		}
+
+		$user_id = (int) ($this->user->data['user_id'] ?? ANONYMOUS);
+		if ($user_id !== ANONYMOUS && $user_id === (int) ($topic['topic_poster'] ?? 0))
+		{
+			return true;
+		}
+
+		return $this->get_current_user_reputation() >= $required_score;
+	}
+
 	public function viewtopic_admin_override($event): void
 	{
 		$topic_id = (int) ($event['topic_data']['topic_id'] ?? 0);
@@ -1549,8 +1753,223 @@ class listener implements EventSubscriberInterface
 		);
 		$tpl_ary['TOPIC_LIKE_COUNT'] = $this->get_topic_like_count_from_row($row);
 		$tpl_ary = $this->copy_inline_topic_preview_vars($tpl_ary, $row, true);
+		$tpl_ary = $this->add_topic_reputation_badge_vars($tpl_ary, $row);
 		$tpl_ary = $this->copy_first_post_length_badge_vars($tpl_ary, $row);
 		$event['tpl_ary'] = $tpl_ary;
+	}
+
+	public function search_add_topic_reputation_badge($event): void
+	{
+		$tpl_ary = $event['tpl_ary'] ?? [];
+		$row = $event['row'] ?? [];
+		if (!is_array($tpl_ary) || !is_array($row))
+		{
+			return;
+		}
+
+		$event['tpl_ary'] = $this->add_topic_reputation_badge_vars($tpl_ary, $row);
+	}
+
+	public function restrict_search_fulltext_by_reputation($event): void
+	{
+		if ((string) ($event['show_results'] ?? 'topics') !== 'posts')
+		{
+			return;
+		}
+
+		$rowset = $event['rowset'] ?? [];
+		$attachments = $event['attachments'] ?? [];
+		foreach ($rowset as &$row)
+		{
+			if (!is_array($row) || $this->can_current_user_view_reputation_topic($row))
+			{
+				continue;
+			}
+
+			$row['post_text'] = $this->language->lang(
+				'TOPTOPICS_TOPIC_REPUTATION_REQUIRED',
+				$this->format_reputation((int) ($row['topic_min_reputation'] ?? 0)),
+				$this->format_reputation($this->get_current_user_reputation())
+			);
+			$row['display_text_only'] = false;
+			$row['bbcode_uid'] = '';
+			$row['bbcode_bitfield'] = '';
+			$row['post_attachment'] = 0;
+			unset($attachments[(int) ($row['post_id'] ?? 0)]);
+		}
+		unset($row);
+
+		$event['rowset'] = $rowset;
+		$event['attachments'] = $attachments;
+	}
+
+	public function filter_search_post_ids_by_reputation($event): void
+	{
+		$id_ary = $event['id_ary'] ?? [];
+		if ((string) ($event['show_results'] ?? 'topics') !== 'posts' || !is_array($id_ary) || empty($id_ary))
+		{
+			return;
+		}
+
+		$post_ids = array_values(array_unique(array_filter(array_map('intval', $id_ary), static function (int $post_id): bool {
+			return $post_id > 0;
+		})));
+		$sql = 'SELECT p.post_id, t.topic_id, t.forum_id, t.topic_poster, t.topic_min_reputation
+			FROM ' . POSTS_TABLE . ' p
+			INNER JOIN ' . TOPICS_TABLE . ' t
+				ON t.topic_id = p.topic_id
+			WHERE ' . $this->db->sql_in_set('p.post_id', $post_ids);
+		$result = $this->db->sql_query($sql);
+		$allowed = [];
+		while ($row = $this->db->sql_fetchrow($result))
+		{
+			if ($this->can_current_user_view_reputation_topic($row))
+			{
+				$allowed[(int) $row['post_id']] = true;
+			}
+		}
+		$this->db->sql_freeresult($result);
+
+		$filtered_ids = array_values(array_filter($id_ary, static function ($post_id) use ($allowed): bool {
+			return isset($allowed[(int) $post_id]);
+		}));
+		$removed_count = count($id_ary) - count($filtered_ids);
+		$event['id_ary'] = $filtered_ids;
+		if ($removed_count > 0)
+		{
+			$event['total_match_count'] = max(count($filtered_ids), (int) ($event['total_match_count'] ?? 0) - $removed_count);
+		}
+	}
+
+	public function add_topic_reputation_to_feed_sql($event): void
+	{
+		$sql_ary = $event['sql_ary'] ?? [];
+		if (!is_array($sql_ary) || !$this->sql_array_uses_topic_alias($sql_ary, 't'))
+		{
+			return;
+		}
+
+		$sql_ary['SELECT'] .= ', t.topic_min_reputation AS freemitbbs_topic_min_reputation,
+			t.topic_poster AS freemitbbs_topic_poster';
+		$event['sql_ary'] = $sql_ary;
+	}
+
+	public function restrict_feed_fulltext_by_reputation($event): void
+	{
+		$row = $event['row'] ?? [];
+		$feed = $event['feed'] ?? null;
+		if (!is_array($row) || $feed === null)
+		{
+			return;
+		}
+
+		$topic = $this->get_feed_topic_reputation_row($row);
+		if ($topic === null)
+		{
+			return;
+		}
+
+		if ($this->can_current_user_view_reputation_topic($topic))
+		{
+			return;
+		}
+
+		$text_field = $feed->get('text');
+		if ($text_field !== null)
+		{
+			$row[$text_field] = $this->language->lang(
+				'TOPTOPICS_TOPIC_REPUTATION_REQUIRED',
+				$this->format_reputation((int) $topic['topic_min_reputation']),
+				$this->format_reputation($this->get_current_user_reputation())
+			);
+		}
+		foreach (['bbcode_uid', 'bitfield'] as $feed_key)
+		{
+			$field = $feed->get($feed_key);
+			if ($field !== null)
+			{
+				$row[$field] = '';
+			}
+		}
+		$row['post_attachment'] = 0;
+		$event['row'] = $row;
+	}
+
+	protected function get_feed_topic_reputation_row(array $row): ?array
+	{
+		if (array_key_exists('freemitbbs_topic_min_reputation', $row))
+		{
+			return [
+				'topic_id' => (int) ($row['topic_id'] ?? 0),
+				'forum_id' => (int) ($row['forum_id'] ?? 0),
+				'topic_poster' => (int) ($row['freemitbbs_topic_poster'] ?? 0),
+				'topic_min_reputation' => (int) ($row['freemitbbs_topic_min_reputation'] ?? 0),
+			];
+		}
+
+		$topic_id = (int) ($row['topic_id'] ?? 0);
+		if ($topic_id <= 0)
+		{
+			return null;
+		}
+
+		if (!array_key_exists($topic_id, $this->feed_topic_reputation_rows))
+		{
+			$sql = 'SELECT topic_id, forum_id, topic_poster, topic_min_reputation
+				FROM ' . TOPICS_TABLE . '
+				WHERE topic_id = ' . $topic_id;
+			$result = $this->db->sql_query_limit($sql, 1);
+			$this->feed_topic_reputation_rows[$topic_id] = $this->db->sql_fetchrow($result) ?: null;
+			$this->db->sql_freeresult($result);
+		}
+
+		return $this->feed_topic_reputation_rows[$topic_id];
+	}
+
+	public function enforce_attachment_reputation_access($event): void
+	{
+		$attachment = $event['attachment'] ?? [];
+		if (!is_array($attachment) || !empty($attachment['in_message']))
+		{
+			return;
+		}
+
+		$topic_id = (int) ($attachment['topic_id'] ?? 0);
+		if ($topic_id <= 0)
+		{
+			return;
+		}
+
+		$sql = 'SELECT topic_id, forum_id, topic_poster, topic_min_reputation
+			FROM ' . TOPICS_TABLE . '
+			WHERE topic_id = ' . $topic_id;
+		$result = $this->db->sql_query_limit($sql, 1);
+		$topic = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+		if (!$topic || $this->can_current_user_view_reputation_topic($topic))
+		{
+			return;
+		}
+
+		$this->deny_topic_for_reputation((int) ($topic['topic_min_reputation'] ?? 0));
+	}
+
+	protected function sql_array_uses_topic_alias(array $sql_ary, string $alias): bool
+	{
+		if (($sql_ary['FROM'][TOPICS_TABLE] ?? null) === $alias)
+		{
+			return true;
+		}
+
+		foreach (($sql_ary['LEFT_JOIN'] ?? []) as $join)
+		{
+			if (($join['FROM'][TOPICS_TABLE] ?? null) === $alias)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public function viewforum_score_first_post_disliked_topics($event): void
@@ -1620,6 +2039,7 @@ class listener implements EventSubscriberInterface
 			(int) ($row['TOPTOPICS_FIRST_POST_NET_DISLIKE_SCORE'] ?? 0)
 		);
 		$topic_row = $this->copy_inline_topic_preview_vars($topic_row, $row, true);
+		$topic_row = $this->add_topic_reputation_badge_vars($topic_row, $row);
 		$topic_row = $this->copy_first_post_length_badge_vars($topic_row, $row);
 		$event['topic_row'] = $topic_row;
 	}
@@ -1926,7 +2346,7 @@ class listener implements EventSubscriberInterface
 			return [];
 		}
 
-		$sql = 'SELECT t.topic_id, t.forum_id, t.topic_title, t.topic_time, t.topic_poster,
+		$sql = 'SELECT t.topic_id, t.forum_id, t.topic_title, t.topic_time, t.topic_poster, t.topic_min_reputation,
 				t.topic_first_poster_name, t.topic_first_poster_colour, t.topic_last_post_id,
 				t.topic_last_post_time, t.topic_last_poster_id, t.topic_last_poster_name,
 				t.topic_last_poster_colour, t.topic_status, t.topic_type, t.poll_start,
@@ -2110,6 +2530,20 @@ class listener implements EventSubscriberInterface
 	public function guard_duplicate_post_before($event): void
 	{
 		$mode = (string) ($event['mode'] ?? '');
+		$post_data = $event['post_data'] ?? [];
+		$post_id = (int) ($event['post_id'] ?? 0);
+		$forum_id = (int) ($event['forum_id'] ?? 0);
+		if ($this->can_manage_topic_min_reputation($mode, $post_id, $forum_id, $post_data))
+		{
+			$topic_min_reputation = $this->requested_topic_min_reputation((int) ($post_data['topic_min_reputation'] ?? 0));
+			if ($topic_min_reputation !== null)
+			{
+				$data = $event['data'] ?? [];
+				$data['topic_min_reputation'] = $topic_min_reputation;
+				$event['data'] = $data;
+			}
+		}
+
 		if (!in_array($mode, ['post', 'reply', 'quote'], true))
 		{
 			return;
@@ -2117,7 +2551,7 @@ class listener implements EventSubscriberInterface
 
 		$data = $event['data'] ?? [];
 		$message_md5 = (string) ($data['message_md5'] ?? '');
-		$forum_id = (int) ($data['forum_id'] ?? 0);
+		$forum_id = (int) ($data['forum_id'] ?? $forum_id);
 		if ($message_md5 === '' || $forum_id <= 0)
 		{
 			return;
@@ -3527,6 +3961,7 @@ class listener implements EventSubscriberInterface
 				. '<div class="list-inner">'
 				. $unread_icon
 				. '<a href="' . $topic_url . '" class="topictitle' . ($topic_fade_class !== '' ? ' ' . $topic_fade_class : '') . '">' . $topic_title . '</a>'
+				. $this->build_topic_reputation_badge_html($topic)
 				. $this->build_inline_topic_preview_html($topic, $topic_url, $topic_fade_class)
 				. (!$enhanced_topic_list_view ? '<br>' : '')
 				. $this->build_mobile_topic_author_html($topic)
@@ -3566,13 +4001,29 @@ class listener implements EventSubscriberInterface
 				$topic_fade_class = $this->escape_attr($this->get_topic_dislike_fade_class((int) ($topic['first_post_net_dislike_score'] ?? 0)));
 				$topic_url = append_sid($this->root_path . 'viewtopic.' . $this->php_ext, 'f=' . (int) $topic['forum_id'] . '&t=' . (int) $topic['topic_id']);
 				$topic_title = $this->escape_display_text(censor_text((string) $topic['topic_title']));
-				$html .= '<a href="' . $topic_url . '" class="toptopics-compact-title' . ($topic_fade_class !== '' ? ' ' . $topic_fade_class : '') . '" title="' . $this->escape_attr($this->decode_display_text(censor_text((string) $topic['topic_title']))) . '">' . $topic_title . '</a>';
+				$html .= '<span class="toptopics-compact-title-wrap"><a href="' . $topic_url . '" class="toptopics-compact-title' . ($topic_fade_class !== '' ? ' ' . $topic_fade_class : '') . '" title="' . $this->escape_attr($this->decode_display_text(censor_text((string) $topic['topic_title']))) . '">' . $topic_title . '</a>'
+					. $this->build_topic_reputation_badge_html($topic) . '</span>';
 			}
 
 			$html .= '</div></li>';
 		}
 
 		return $html;
+	}
+
+	protected function build_topic_reputation_badge_html(array $topic): string
+	{
+		$required_score = (int) ($topic['topic_min_reputation'] ?? 0);
+		if ($required_score <= 0)
+		{
+			return '';
+		}
+
+		return '<span class="toptopics-topic-reputation-badge" title="'
+			. $this->escape_attr($this->language->lang('TOPTOPICS_TOPIC_REPUTATION_BADGE_EXPLAIN', $required_score))
+			. '"><i class="icon fa-lock fa-fw" aria-hidden="true"></i>'
+			. $this->escape_text($this->language->lang('TOPTOPICS_TOPIC_REPUTATION_BADGE', $required_score))
+			. '</span>';
 	}
 
 	protected function refresh_reputation_for_post_ids(array $post_ids): void
@@ -4510,8 +4961,21 @@ class listener implements EventSubscriberInterface
 		];
 		$topic_row = array_merge($topic_row, $this->build_hover_topic_preview_vars((int) ($topic['topic_id'] ?? 0)));
 		$topic_row = $this->copy_inline_topic_preview_vars($topic_row, $topic);
+		$topic_row = $this->add_topic_reputation_badge_vars($topic_row, $topic);
 
 		return $this->copy_first_post_length_badge_vars($topic_row, $topic);
+	}
+
+	protected function add_topic_reputation_badge_vars(array $target, array $topic): array
+	{
+		$required_score = (int) ($topic['topic_min_reputation'] ?? 0);
+		$target['S_TOPTOPICS_TOPIC_REPUTATION_GATED'] = $required_score > 0;
+		$target['TOPTOPICS_TOPIC_MIN_REPUTATION'] = max(0, $required_score);
+		$target['TOPTOPICS_TOPIC_REPUTATION_BADGE'] = $required_score > 0
+			? $this->language->lang('TOPTOPICS_TOPIC_REPUTATION_BADGE', $this->format_reputation($required_score))
+			: '';
+
+		return $target;
 	}
 
 	protected function exclude_foe_authored_topics(array $topics): array

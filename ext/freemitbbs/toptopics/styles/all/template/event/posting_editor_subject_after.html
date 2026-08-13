@@ -1,0 +1,11 @@
+{% if S_TOPTOPICS_TOPIC_REPUTATION_CONTROL %}
+<dl class="toptopics-topic-reputation-control">
+	<dt>
+		<label for="topic_min_reputation">{{ lang('TOPTOPICS_TOPIC_MIN_REPUTATION') }}{{ lang('COLON') }}</label>
+		<br><span>{{ lang('TOPTOPICS_TOPIC_MIN_REPUTATION_EXPLAIN', TOPTOPICS_CURRENT_REPUTATION) }}</span>
+	</dt>
+	<dd>
+		<input type="number" name="topic_min_reputation" id="topic_min_reputation" min="0" max="1000000" step="1" value="{{ TOPTOPICS_TOPIC_MIN_REPUTATION }}" class="inputbox autowidth" inputmode="numeric">
+	</dd>
+</dl>
+{% endif %}

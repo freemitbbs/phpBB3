@@ -12,6 +12,7 @@ class mover
 	private const DEFAULT_MIN_LATEST_REPLY_AGE_HOURS = 12;
 	private const MIN_CONFIDENCE = 0.70;
 	private const API_TIMEOUT_SECONDS = 25;
+	private const CLASSIFICATION_MAX_TOKENS = 400;
 	private const FIRST_POST_MAX_CHARS = 4000;
 	private const REPLY_MAX_CHARS = 1600;
 	private const FORUM_DESC_MAX_CHARS = 700;
@@ -305,6 +306,8 @@ class mover
 	{
 		$payload = [
 			'model' => $this->api_model(),
+			'thinking' => ['type' => 'disabled'],
+			'max_tokens' => self::CLASSIFICATION_MAX_TOKENS,
 			'temperature' => 0.1,
 			'response_format' => ['type' => 'json_object'],
 			'messages' => [

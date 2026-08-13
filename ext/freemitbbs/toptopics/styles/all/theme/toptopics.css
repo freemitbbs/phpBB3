@@ -41,6 +41,31 @@
 	margin-right: 5px;
 }
 
+.toptopics-topic-reputation-badge {
+	background: rgba(83, 100, 113, 0.12);
+	border: 1px solid rgba(83, 100, 113, 0.28);
+	border-radius: 999px;
+	color: #536471;
+	display: inline-block;
+	font-size: 0.72em;
+	font-weight: 700;
+	line-height: 1.45;
+	margin-left: 6px;
+	padding: 1px 6px;
+	vertical-align: middle;
+	white-space: nowrap;
+}
+
+.toptopics-topic-reputation-badge .icon {
+	font-size: 0.9em;
+	margin-right: 2px;
+}
+
+.rtl .toptopics-topic-reputation-badge {
+	margin-left: 0;
+	margin-right: 6px;
+}
+
 .freemitbbs-header-prefs {
 	box-sizing: border-box;
 	display: flex;

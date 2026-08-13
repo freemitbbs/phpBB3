@@ -602,9 +602,13 @@ class listener implements EventSubscriberInterface
 
 	protected function can_show_submit_post_to_blog_button(string $mode, int $forum_id, array $post_data): bool
 	{
+		$topic_min_reputation = $this->request->is_set_post('topic_min_reputation')
+			? max(0, $this->request->variable('topic_min_reputation', 0))
+			: max(0, (int) ($post_data['topic_min_reputation'] ?? 0));
 		if (!in_array($mode, ['post', 'edit'], true)
 			|| $forum_id <= 0
 			|| $this->is_blog_forum($forum_id)
+			|| $topic_min_reputation > 0
 			|| !$this->can_submit_post_to_blog())
 		{
 			return false;

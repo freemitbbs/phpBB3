@@ -1567,7 +1567,7 @@ class main
 	{
 		$sql = 'SELECT p.post_id, p.topic_id, p.forum_id, p.poster_id, p.post_subject, p.post_text, p.post_attachment,
 				p.bbcode_uid, p.bbcode_bitfield, p.enable_bbcode, p.enable_smilies, p.enable_magic_url,
-				p.post_visibility, t.topic_title, t.topic_visibility, t.topic_poster
+				p.post_visibility, t.topic_title, t.topic_visibility, t.topic_poster, t.topic_min_reputation
 			FROM ' . POSTS_TABLE . ' p
 			INNER JOIN ' . TOPICS_TABLE . ' t
 				ON t.topic_id = p.topic_id
@@ -1583,6 +1583,7 @@ class main
 	{
 		$forum_id = (int) $post['forum_id'];
 		return (int) $post['poster_id'] === (int) $this->user->data['user_id']
+			&& (int) ($post['topic_min_reputation'] ?? 0) === 0
 			&& $this->auth->acl_get('f_read', $forum_id)
 			&& $this->content_visibility->is_visible('post', $forum_id, $post)
 			&& $this->content_visibility->is_visible('topic', $forum_id, $post);

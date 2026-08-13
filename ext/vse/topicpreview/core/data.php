@@ -163,7 +163,7 @@ class data extends base
 			return [];
 		}
 
-		$select = 't.topic_id, t.forum_id, t.topic_visibility, t.topic_attachment, t.topic_first_post_id, t.topic_last_post_id, t.topic_poster, t.topic_last_poster_id,
+		$select = 't.topic_id, t.forum_id, t.topic_visibility, t.topic_attachment, t.topic_first_post_id, t.topic_last_post_id, t.topic_poster, t.topic_last_poster_id, t.topic_min_reputation,
 			fp.post_time AS first_post_time, fp.post_edit_time AS first_post_edit_time, fp.post_checksum AS first_post_checksum';
 		if ($this->last_post_enabled())
 		{

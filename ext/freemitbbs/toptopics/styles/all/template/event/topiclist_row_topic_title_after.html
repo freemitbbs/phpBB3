@@ -1,3 +1,11 @@
+{% for context in [topicrow, rtng, searchresults, similar] %}
+	{% if context.S_TOPTOPICS_TOPIC_REPUTATION_GATED %}
+		<span class="toptopics-topic-reputation-badge" title="{{ lang('TOPTOPICS_TOPIC_REPUTATION_BADGE_EXPLAIN', context.TOPTOPICS_TOPIC_MIN_REPUTATION) }}">
+			<i class="icon fa-lock fa-fw" aria-hidden="true"></i>{{ context.TOPTOPICS_TOPIC_REPUTATION_BADGE }}
+		</span>
+	{% endif %}
+{% endfor %}
+
 {% if S_TOPTOPICS_ENHANCED_TOPIC_LIST_VIEW %}
 	{% for context in [topicrow, rtng] %}
 		{% if context.S_TOPTOPICS_INLINE_SERVER_PREVIEW and context.TOPTOPICS_INLINE_PREVIEW_HTML %}
