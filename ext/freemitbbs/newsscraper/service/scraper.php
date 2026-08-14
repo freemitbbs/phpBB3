@@ -16,8 +16,6 @@ class scraper
 	private const MAX_ARTICLE_CHARS = 6500;
 	private const MAX_DIGEST_CHARS = 1200;
 	private const MIN_ARTICLE_CHARS = 300;
-	private const TITLE_SELECTION_MAX_TOKENS = 1000;
-	private const DIGEST_MAX_TOKENS = 1200;
 	private const DIGEST_CONTEXT_LIMIT = 100;
 	private const RTNG_DEFAULT_TPL_LOOP = 'rtng_topics';
 	private const RTNG_RECENT_CONTEXT_LIMIT = 30;
@@ -482,21 +480,18 @@ class scraper
 
 		$payload = [
 			'model' => $this->api_model(),
-			'thinking' => ['type' => 'disabled'],
-			'max_tokens' => self::TITLE_SELECTION_MAX_TOKENS,
 			'temperature' => 0.1,
 			'response_format' => ['type' => 'json_object'],
 			'messages' => [
 				[
 					'role' => 'system',
-					'content' => '你是 mitbbs（买买提）的新闻编辑。本站用户多有欧美留学背景，学历至少硕士以上，大多事业有成。请只根据标题和来源挑选可能引发本站用户兴趣的新闻。偏好：中美关系、美国政治社会、华人相关、科技/AI、中国科技、中国军事、中国社会新闻、战争与国际局势、经济金融、重大公共事件。候选中若有非重复、质量尚可的中文来源新闻或中国相关新闻，优先纳入，目标每轮至少 1 到 2 条；除非明显低质、重复或标题党。娱乐八卦和重大体育赛况不必一律过滤，若可能引发讨论可入选。过滤：软文、地方小新闻、重复/标题党。不要选择与 recent_digest_titles、recent_topics 或 junban_recent_topics 已有话题语义重复的候选；同一事件的不同来源或不同措辞也算重复。候选之间若是同一事件，只选一个。按优先级返回最多 max_selected 条。只能返回 JSON，不要 Markdown。格式：{"selected":[{"id":数字,"score":0到100,"reason":"简短中文理由"}]}。',
+					'content' => '你是 mitbbs（买买提）的新闻编辑。本站用户多有欧美留学背景，学历至少硕士以上，大多事业有成。请只根据标题和来源挑选可能引发本站用户兴趣的新闻。偏好：中美关系、美国政治社会、华人相关、科技/AI、中国科技、中国军事、中国社会新闻、战争与国际局势、经济金融、重大公共事件。候选中若有非重复、质量尚可的中文来源新闻或中国相关新闻，优先纳入，目标每轮至少 1 到 2 条；除非明显低质、重复或标题党。娱乐八卦和重大体育赛况不必一律过滤，若可能引发讨论可入选。过滤：软文、地方小新闻、重复/标题党。不要选择与 recent_topics 或 junban_recent_topics 已有话题语义重复的候选；同一事件的不同来源或不同措辞也算重复。候选之间若是同一事件，只选一个。按优先级返回最多 max_selected 条。只能返回 JSON，不要 Markdown。格式：{"selected":[{"id":数字,"score":0到100,"reason":"简短中文理由"}]}。',
 				],
 				[
 					'role' => 'user',
 					'content' => $this->encode_json([
 						'max_selected' => $selection_limit,
 						'min_score' => $this->min_interest_score(),
-						'recent_digest_titles' => $recent_digest_titles,
 						'recent_topics' => $recent_topic_titles,
 						'junban_recent_topics' => $recent_junban_titles,
 						'candidates' => $payload_candidates,
@@ -1147,8 +1142,6 @@ class scraper
 		$title_max_chars = $this->title_max_chars();
 		$payload = [
 			'model' => $this->api_model(),
-			'thinking' => ['type' => 'disabled'],
-			'max_tokens' => self::DIGEST_MAX_TOKENS,
 			'temperature' => 0.2,
 			'response_format' => ['type' => 'json_object'],
 			'messages' => [
