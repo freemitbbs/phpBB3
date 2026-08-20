@@ -509,6 +509,7 @@ class topstats_manager
 			$sql = 'SELECT user_id, username, user_posts, user_colour, user_regdate
 					FROM ' . USERS_TABLE . '
 					WHERE user_inactive_time = 0
+						AND user_id <> ' . ANONYMOUS . '
 						AND user_type NOT IN (' . USER_INACTIVE . ', ' . USER_IGNORE . ')
 					ORDER BY user_posts DESC, user_id DESC';
 			$result = $this->db->sql_query_limit($sql, $number);
