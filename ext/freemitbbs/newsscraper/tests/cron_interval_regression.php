@@ -107,6 +107,14 @@ namespace freemitbbs\newsscraper\tests
 	$cases['scraper processed once'] = $scraper->process_count === 1;
 	$cases['new timestamp blocks immediate rerun'] = $cron->should_run() === false;
 
+	$default_config = new \phpbb\config\config([
+		'newsscraper_last_run' => time() - 5400,
+	]);
+	$default_cron = new \freemitbbs\newsscraper\cron\scrape_news($cache, $default_config, $scraper);
+	$cases['two-hour default blocks run after ninety minutes'] = $default_cron->should_run() === false;
+	$default_config->values['newsscraper_last_run'] = time() - 10800;
+	$cases['two-hour default allows run after three hours'] = $default_cron->should_run() === true;
+
 	$failures = array_keys(array_filter($cases, static fn (bool $passed): bool => !$passed));
 	if ($failures)
 	{

@@ -836,6 +836,65 @@ class server
 		return $this->event_export_response(false);
 	}
 
+	public function recorded_request(): JsonResponse
+	{
+		$body = $this->raw_body();
+		if (($error = $this->require_server_auth($body)) !== null)
+		{
+			return $error;
+		}
+
+		$data = $this->require_json_object($body);
+		if (!is_array($data))
+		{
+			return $this->json_error('invalid_json', 'Request body must be a JSON object.', 400);
+		}
+
+		try
+		{
+			$session_id = max(0, $this->int_value($data, 'sessionId', 'session_id', 0));
+			$room_key = $this->string_value($data, 'roomKey', 'room_key', 64, '');
+			$request_id = $this->required_string($data, 'requestId', 'request_id', 64);
+			$raw_event_types = $data['eventTypes'] ?? $data['event_types'] ?? [];
+			if (!is_array($raw_event_types) || count($raw_event_types) > 32)
+			{
+				throw new \InvalidArgumentException('invalid_event_types');
+			}
+
+			$event_types = [];
+			foreach ($raw_event_types as $event_type)
+			{
+				if (!is_string($event_type))
+				{
+					throw new \InvalidArgumentException('invalid_event_types');
+				}
+				$event_type = substr(trim($event_type), 0, 64);
+				if ($event_type !== '')
+				{
+					$event_types[$event_type] = $event_type;
+				}
+			}
+
+			if ($session_id <= 0 && $room_key === '')
+			{
+				throw new \InvalidArgumentException('missing_request_selector');
+			}
+
+			$row = $this->load_recorded_request($session_id, $room_key, $request_id, array_values($event_types));
+		}
+		catch (\InvalidArgumentException $e)
+		{
+			return $this->json_error((string) $e->getMessage(), 'Recorded request lookup is invalid.', 400);
+		}
+
+		return $this->json([
+			'ok' => true,
+			'success' => true,
+			'recorded' => !empty($row),
+			'event' => !empty($row) ? $this->event_export_event_payload($row) : null,
+		]);
+	}
+
 	public function replay_export(): JsonResponse
 	{
 		return $this->event_export_response(true);
@@ -3891,6 +3950,38 @@ class server
 			LIMIT 1
 			FOR UPDATE";
 		$result = $this->db->sql_query($sql);
+		$row = $this->db->sql_fetchrow($result);
+		$this->db->sql_freeresult($result);
+
+		return is_array($row) ? $row : [];
+	}
+
+	protected function load_recorded_request(int $session_id, string $room_key, string $request_id, array $event_types): array
+	{
+		$where = [
+			"e.request_id = '" . $this->db->sql_escape($request_id) . "'",
+		];
+		$join = '';
+		if ($session_id > 0)
+		{
+			$where[] = 'e.session_id = ' . $session_id;
+		}
+		else if ($room_key !== '')
+		{
+			$join = ' INNER JOIN ' . $this->sessions_table . ' s ON s.id = e.session_id';
+			$where[] = "s.room_key = '" . $this->db->sql_escape($room_key) . "'";
+		}
+		if (!empty($event_types))
+		{
+			$where[] = $this->db->sql_in_set('e.event_type', $event_types);
+		}
+
+		$sql = 'SELECT e.id, e.session_id, e.seq, e.game_type, e.actor_user_id, e.request_id,
+				e.event_type, e.payload_schema_version, e.payload_json, e.created_at
+			FROM ' . $this->events_table . ' e' . $join . '
+			WHERE ' . implode(' AND ', $where) . '
+			ORDER BY e.id DESC';
+		$result = $this->db->sql_query_limit($sql, 1);
 		$row = $this->db->sql_fetchrow($result);
 		$this->db->sql_freeresult($result);
 

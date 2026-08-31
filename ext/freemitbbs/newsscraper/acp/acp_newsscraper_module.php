@@ -66,7 +66,7 @@ class acp_newsscraper_module
 
 			$config->set('newsscraper_enabled', (string) (int) $request->variable('newsscraper_enabled', 0));
 			$config->set('newsscraper_digest_forum_id', (string) max(0, (int) $request->variable('newsscraper_digest_forum_id', 0)));
-			$config->set('newsscraper_interval_seconds', (string) max(300, min(86400, (int) $request->variable('newsscraper_interval_seconds', 3600))));
+			$config->set('newsscraper_interval_seconds', (string) max(300, min(86400, (int) $request->variable('newsscraper_interval_seconds', 7200))));
 			$config->set('newsscraper_candidates_per_run', (string) max(1, min(200, (int) $request->variable('newsscraper_candidates_per_run', 60))));
 			$config->set('newsscraper_max_selected_per_run', (string) max(1, min(50, (int) $request->variable('newsscraper_max_selected_per_run', 4))));
 			$config->set('newsscraper_min_interest_score', (string) max(0, min(100, (int) $request->variable('newsscraper_min_interest_score', 65))));
@@ -104,7 +104,7 @@ class acp_newsscraper_module
 			'U_ACTION' => $this->u_action,
 			'NEWSSCRAPER_ENABLED' => (int) ($config['newsscraper_enabled'] ?? 0),
 			'NEWSSCRAPER_DIGEST_FORUM_ID' => (int) ($config['newsscraper_digest_forum_id'] ?? 0),
-			'NEWSSCRAPER_INTERVAL_SECONDS' => (int) ($config['newsscraper_interval_seconds'] ?? 3600),
+			'NEWSSCRAPER_INTERVAL_SECONDS' => (int) ($config['newsscraper_interval_seconds'] ?? 7200),
 			'NEWSSCRAPER_CANDIDATES_PER_RUN' => (int) ($config['newsscraper_candidates_per_run'] ?? 60),
 			'NEWSSCRAPER_MAX_SELECTED_PER_RUN' => (int) ($config['newsscraper_max_selected_per_run'] ?? 4),
 			'NEWSSCRAPER_MIN_INTEREST_SCORE' => (int) ($config['newsscraper_min_interest_score'] ?? 65),

@@ -546,12 +546,15 @@ class mover
 	protected function excluded_forum_ids(): array
 	{
 		$ids = [];
-		foreach (preg_split('/[,\s]+/', (string) ($this->config['topicmover_excluded_forum_ids'] ?? '')) ?: [] as $part)
+		foreach (['topicmover_excluded_forum_ids', 'freemitbbs_adult_forum_ids'] as $config_key)
 		{
-			$id = (int) trim($part);
-			if ($id > 0)
+			foreach (preg_split('/[,\s]+/', (string) ($this->config[$config_key] ?? '')) ?: [] as $part)
 			{
-				$ids[$id] = true;
+				$id = (int) trim($part);
+				if ($id > 0)
+				{
+					$ids[$id] = true;
+				}
 			}
 		}
 

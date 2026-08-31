@@ -92,6 +92,11 @@ freemitbbs_cardgamesauth_server_events_read:
     defaults: { _controller: freemitbbs.cardgamesauth.controller.server:events_read }
     methods: [GET]
 
+freemitbbs_cardgamesauth_server_recorded_request:
+    path: /card-games/server/recorded-request
+    defaults: { _controller: freemitbbs.cardgamesauth.controller.server:recorded_request }
+    methods: [POST]
+
 freemitbbs_cardgamesauth_server_replay_export:
     path: /card-games/server/replay/export
     defaults: { _controller: freemitbbs.cardgamesauth.controller.server:replay_export }

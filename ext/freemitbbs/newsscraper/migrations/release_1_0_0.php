@@ -54,7 +54,7 @@ class release_1_0_0 extends \phpbb\db\migration\migration
 			['config.add', ['newsscraper_version', '1.0.0']],
 			['config.add', ['newsscraper_enabled', '0']],
 			['config.add', ['newsscraper_digest_forum_id', '0']],
-			['config.add', ['newsscraper_interval_seconds', '3600']],
+			['config.add', ['newsscraper_interval_seconds', '7200']],
 			['config.add', ['newsscraper_candidates_per_run', '60']],
 			['config.add', ['newsscraper_max_selected_per_run', '4']],
 			['config.add', ['newsscraper_min_interest_score', '65']],

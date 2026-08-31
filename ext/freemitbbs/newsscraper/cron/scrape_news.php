@@ -5,7 +5,7 @@ namespace freemitbbs\newsscraper\cron;
 class scrape_news extends \phpbb\cron\task\base
 {
 	private const LAST_RUN_CONFIG_KEY = 'newsscraper_last_run';
-	private const DEFAULT_INTERVAL_SECONDS = 3600;
+	private const DEFAULT_INTERVAL_SECONDS = 7200;
 
 	protected \phpbb\cache\service $cache;
 	protected \phpbb\config\config $config;
