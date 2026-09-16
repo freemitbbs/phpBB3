@@ -94,6 +94,14 @@ $lang = array_merge($lang, [
 		2 => '%d new posts',
 	],
 	'TOPTOPICS_FLAT_POST_TOPIC_BUTTON' => 'Choose forum to post a topic',
+	'TOPTOPICS_FLAT_FORUM_FILTER_BUTTON' => 'Filter by forum',
+	'TOPTOPICS_FLAT_FORUM_FILTER_ALL' => 'All forums',
+	'TOPTOPICS_FLAT_FORUM_FILTER_COUNT' => [
+		0 => '%d forums selected',
+		1 => '%d forum selected',
+		2 => '%d forums selected',
+	],
+	'TOPTOPICS_FLAT_FILTER_EMPTY' => 'No new posts in the selected forums.',
 	'TOPTOPICS_NEW_MEMBER_APPROVAL_NOTICE' => [
 		1 => 'Newly registered users need %1$d approved post before posts stop entering the new-user approval queue. You currently have %2$d, with %3$d more needed. This post will not be visible to others until approved.',
 		2 => 'Newly registered users need %1$d approved posts before posts stop entering the new-user approval queue. You currently have %2$d, with %3$d more needed. This post will not be visible to others until approved.',

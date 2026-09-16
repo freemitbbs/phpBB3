@@ -94,6 +94,14 @@ $lang = array_merge($lang, [
 		2 => '%d 个新帖',
 	],
 	'TOPTOPICS_FLAT_POST_TOPIC_BUTTON' => '选择版面发表主题',
+	'TOPTOPICS_FLAT_FORUM_FILTER_BUTTON' => '选择版面',
+	'TOPTOPICS_FLAT_FORUM_FILTER_ALL' => '全部版面',
+	'TOPTOPICS_FLAT_FORUM_FILTER_COUNT' => [
+		0 => '已选 %d 个版面',
+		1 => '已选 %d 个版面',
+		2 => '已选 %d 个版面',
+	],
+	'TOPTOPICS_FLAT_FILTER_EMPTY' => '所选版面没有新帖。',
 	'TOPTOPICS_NEW_MEMBER_APPROVAL_NOTICE' => [
 		1 => '新注册用户需要累计 %1$d 篇已审核通过的帖子，之后发帖不再进入新用户审核队列。你目前有 %2$d 篇，还差 %3$d 篇；当前提交的帖子审核通过前其他用户看不到。',
 		2 => '新注册用户需要累计 %1$d 篇已审核通过的帖子，之后发帖不再进入新用户审核队列。你目前有 %2$d 篇，还差 %3$d 篇；当前提交的帖子审核通过前其他用户看不到。',

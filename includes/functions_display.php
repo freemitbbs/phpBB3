@@ -1518,6 +1518,13 @@ function phpbb_get_user_rank($user_data, $user_posts)
 	$vars = array('user_data', 'user_posts');
 	extract($phpbb_dispatcher->trigger_event('core.modify_user_rank', compact($vars)));
 
+	// Rank thresholds are numeric. A listener may hand us a formatted display
+	// value instead of the raw count, so coerce it before comparing.
+	if ($user_posts !== false)
+	{
+		$user_posts = (int) $user_posts;
+	}
+
 	if (empty($ranks))
 	{
 		global $cache;

@@ -22,6 +22,8 @@ class listener implements EventSubscriberInterface
 	protected string $blog_topics_table;
 	protected array $blog_comments_disabled_topic_cache = [];
 	protected array $blog_profile_link_cache = [];
+	protected string $profile_blog_link = '';
+	protected int $profile_blog_user_posts = 0;
 	protected ?bool $nickname_profile_field_exists = null;
 	protected array $nickname_cache = [];
 
@@ -61,7 +63,8 @@ class listener implements EventSubscriberInterface
 			'core.viewtopic_modify_post_row' => 'add_send_to_blog_button',
 			'core.viewtopic_modify_forum_id' => 'redirect_blog_viewtopic',
 			'core.viewforum_modify_page_title' => 'redirect_blog_viewforum',
-			'core.memberlist_view_profile' => 'add_profile_blog_link',
+			'core.memberlist_view_profile' => 'capture_profile_blog_user',
+			'core.memberlist_modify_view_profile_template_vars' => 'add_profile_blog_link',
 			'core.ucp_display_module_before' => 'load_ucp_language',
 			'core.modify_posting_auth' => 'block_disabled_blog_comments',
 			'core.viewtopic_modify_quick_reply_template_vars' => 'disable_blog_quick_reply',
@@ -455,23 +458,35 @@ class listener implements EventSubscriberInterface
 		$event['topics'] = array_values($this->filter_reposted_topic_rowset($topics));
 	}
 
-	public function add_profile_blog_link($event): void
+	public function capture_profile_blog_user($event): void
 	{
 		$member = $event['member'];
 		$user_id = (int) ($member['user_id'] ?? ANONYMOUS);
-		if ($user_id === ANONYMOUS)
+
+		// Keep the real post count; it is later used to resolve the user's rank.
+		$this->profile_blog_user_posts = (int) ($member['user_posts'] ?? 0);
+		$this->profile_blog_link = '';
+
+		if ($user_id === ANONYMOUS || !$this->has_public_blog_entries($user_id))
 		{
 			return;
 		}
 
-		if (!$this->has_public_blog_entries($user_id))
+		$this->profile_blog_link = $this->public_blog_route('freemitbbs_blog_user', ['user_id' => $user_id]);
+	}
+
+	public function add_profile_blog_link($event): void
+	{
+		if ($this->profile_blog_link === '')
 		{
 			return;
 		}
 
-		$blog_url = $this->public_blog_route('freemitbbs_blog_user', ['user_id' => $user_id]);
-		$member['user_posts'] = $this->append_blog_profile_link((string) (($member['user_posts'] ?? 0) ?: 0), $blog_url, true);
-		$event['member'] = $member;
+		// Only decorate the displayed post count. The raw user_posts value must
+		// stay numeric so phpbb_get_user_rank() keeps resolving the correct rank.
+		$template_ary = $event['template_ary'];
+		$template_ary['POSTS'] = $this->append_blog_profile_link((string) $this->profile_blog_user_posts, $this->profile_blog_link, true);
+		$event['template_ary'] = $template_ary;
 	}
 
 	protected function append_postrow_blog_profile_link(array $post_row, string $blog_url): array

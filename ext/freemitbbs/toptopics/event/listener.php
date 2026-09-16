@@ -2100,7 +2100,9 @@ class listener implements EventSubscriberInterface
 
 	protected function assign_flat_index_topic_list(): void
 	{
-		$forum_ids = $this->get_flat_index_forum_ids();
+		$all_forum_ids = $this->get_flat_index_forum_ids();
+		$selected_forum_ids = $this->get_flat_index_selected_forum_ids($all_forum_ids);
+		$forum_ids = !empty($selected_forum_ids) ? $selected_forum_ids : $all_forum_ids;
 		$total_topics = !empty($forum_ids) ? $this->count_flat_index_topics($forum_ids) : 0;
 		$pagination = $this->get_pagination_service();
 		$per_page = $this->get_flat_topic_list_per_page();
@@ -2130,17 +2132,23 @@ class listener implements EventSubscriberInterface
 			'TOPTOPICS_BLOCK_TITLE' => $this->language->lang('SEARCH_NEW'),
 			'TOPTOPICS_BLOCK_ID' => 'toptopics_flat_index',
 			'TOPTOPICS_FLAT_TOTAL' => $this->language->lang('TOPTOPICS_FLAT_TOTAL', $total_topics),
-			'TOPTOPICS_FLAT_EMPTY' => $this->language->lang('TOPTOPICS_FLAT_EMPTY'),
+			'TOPTOPICS_FLAT_EMPTY' => $this->language->lang(!empty($selected_forum_ids) ? 'TOPTOPICS_FLAT_FILTER_EMPTY' : 'TOPTOPICS_FLAT_EMPTY'),
 			'TOPTOPICS_FLAT_PAGE_NUMBER' => $pagination !== null ? $pagination->on_page($total_topics, $per_page, $start) : '',
 		]);
 		$this->assign_flat_index_post_forum_picker();
+		$this->assign_flat_index_forum_filter($all_forum_ids, $selected_forum_ids);
 		$this->template->append_var('BODY_CLASS', ' toptopics-flat-index-page');
+
+		$pagination_base_url = append_sid(
+			$this->root_path . 'index.' . $this->php_ext,
+			!empty($selected_forum_ids) ? ['ff' => implode(',', $selected_forum_ids)] : ''
+		);
 
 		if ($pagination !== null)
 		{
 			$this->template->destroy_block_vars('toptopics_flat_pagination');
 			$pagination->generate_template_pagination(
-				append_sid($this->root_path . 'index.' . $this->php_ext),
+				$pagination_base_url,
 				'toptopics_flat_pagination',
 				'start',
 				$total_topics,
@@ -2179,6 +2187,111 @@ class listener implements EventSubscriberInterface
 		}
 	}
 
+	protected function get_flat_index_selected_forum_ids(array $allowed_forum_ids): array
+	{
+		$raw = (string) $this->request->variable('ff', '');
+		if ($raw === '')
+		{
+			return [];
+		}
+
+		$allowed_forum_ids = $this->normalise_forum_ids($allowed_forum_ids);
+		if (empty($allowed_forum_ids))
+		{
+			return [];
+		}
+
+		$selected_forum_ids = $this->normalise_forum_ids(explode(',', $raw));
+
+		return array_values(array_intersect($selected_forum_ids, $allowed_forum_ids));
+	}
+
+	protected function assign_flat_index_forum_filter(array $all_forum_ids, array $selected_forum_ids): void
+	{
+		$forums = $this->flat_index_filter_forum_templates($all_forum_ids);
+		$selectable_count = 0;
+		foreach ($forums as $forum)
+		{
+			if (empty($forum['is_cat']))
+			{
+				$selectable_count++;
+			}
+		}
+
+		if ($selectable_count < 2)
+		{
+			return;
+		}
+
+		$selected_map = array_fill_keys($this->normalise_forum_ids($selected_forum_ids), true);
+		$selected_ids = array_keys($selected_map);
+		$index_script = $this->root_path . 'index.' . $this->php_ext;
+		$index_url = append_sid($index_script);
+
+		$this->template->assign_vars([
+			'S_TOPTOPICS_FLAT_HAS_FORUM_FILTER' => true,
+			'S_TOPTOPICS_FLAT_FORUM_FILTER' => !empty($selected_map),
+			'U_TOPTOPICS_FLAT_FILTER_CLEAR' => $index_url,
+			'TOPTOPICS_FLAT_FILTER_LABEL' => $this->flat_index_filter_label($forums, $selected_map),
+		]);
+		$this->template->destroy_block_vars('toptopics_flat_filter_forums');
+
+		foreach ($forums as $forum)
+		{
+			$forum_id = (int) $forum['forum_id'];
+			$is_cat = (bool) $forum['is_cat'];
+			$is_selected = !$is_cat && isset($selected_map[$forum_id]);
+			if ($is_cat)
+			{
+				$filter_url = '';
+			}
+			else if ($is_selected)
+			{
+				$remaining_ids = array_values(array_diff($selected_ids, [$forum_id]));
+				$filter_url = empty($remaining_ids)
+					? $index_url
+					: append_sid($index_script, ['ff' => implode(',', $remaining_ids)]);
+			}
+			else
+			{
+				$filter_ids = $this->normalise_forum_ids(array_merge($selected_ids, [$forum_id]));
+				$filter_url = append_sid($index_script, ['ff' => implode(',', $filter_ids)]);
+			}
+
+			$this->template->assign_block_vars('toptopics_flat_filter_forums', [
+				'FORUM_ID' => $forum_id,
+				'FORUM_NAME' => $this->escape_text((string) $forum['forum_name']),
+				'U_FILTER_URL' => $filter_url,
+				'S_IS_CAT' => $is_cat,
+				'S_SELECTED' => $is_selected,
+				'LEVEL' => (int) $forum['level'],
+			]);
+		}
+	}
+
+	protected function flat_index_filter_label(array $forums, array $selected_map): string
+	{
+		if (empty($selected_map))
+		{
+			return $this->language->lang('TOPTOPICS_FLAT_FORUM_FILTER_BUTTON');
+		}
+
+		$selected_ids = array_keys($selected_map);
+		if (count($selected_ids) === 1)
+		{
+			$selected_id = (int) $selected_ids[0];
+			foreach ($forums as $forum)
+			{
+				if ((int) $forum['forum_id'] === $selected_id)
+				{
+					return (string) $forum['forum_name'];
+				}
+			}
+		}
+
+		return $this->language->lang('TOPTOPICS_FLAT_FORUM_FILTER_COUNT', count($selected_ids));
+	}
+
 	protected function flat_index_post_forum_templates(): array
 	{
 		$rowset = $this->flat_index_post_forum_rows();
@@ -2213,6 +2326,33 @@ class listener implements EventSubscriberInterface
 			return [];
 		}
 
+		return $this->flat_index_forum_tree_templates($rowset, $eligible_post_ids);
+	}
+
+	protected function flat_index_filter_forum_templates(array $forum_ids): array
+	{
+		$visible_forum_ids = [];
+		foreach ($this->normalise_forum_ids($forum_ids) as $forum_id)
+		{
+			$visible_forum_ids[$forum_id] = true;
+		}
+
+		if (empty($visible_forum_ids))
+		{
+			return [];
+		}
+
+		$rowset = $this->flat_index_post_forum_rows();
+		if (empty($rowset))
+		{
+			return [];
+		}
+
+		return $this->flat_index_forum_tree_templates($rowset, $visible_forum_ids);
+	}
+
+	protected function flat_index_forum_tree_templates(array $rowset, array $visible_forum_ids): array
+	{
 		$visible_category_ids = [];
 		foreach ($rowset as $row)
 		{
@@ -2228,7 +2368,7 @@ class listener implements EventSubscriberInterface
 			foreach ($rowset as $candidate)
 			{
 				$candidate_id = (int) $candidate['forum_id'];
-				if (!isset($eligible_post_ids[$candidate_id]))
+				if (!isset($visible_forum_ids[$candidate_id]))
 				{
 					continue;
 				}
@@ -2247,7 +2387,7 @@ class listener implements EventSubscriberInterface
 		{
 			$forum_id = (int) $row['forum_id'];
 			$is_cat = (int) $row['forum_type'] === FORUM_CAT;
-			if (!$is_cat && !isset($eligible_post_ids[$forum_id]))
+			if (!$is_cat && !isset($visible_forum_ids[$forum_id]))
 			{
 				continue;
 			}

@@ -257,6 +257,100 @@
 	width: 100%;
 }
 
+.toptopics-flat-toolbar-actions {
+	align-items: center;
+	display: flex;
+	flex: 0 0 auto;
+	gap: 8px;
+	min-width: 0;
+}
+
+.toptopics-flat-forum-filter-action {
+	align-items: center;
+	display: flex;
+	flex: 0 0 auto;
+	justify-content: flex-start;
+	margin: 0;
+	overflow: visible;
+	position: relative;
+	z-index: 20;
+}
+
+.toptopics-flat-forum-filter-dropdown {
+	display: inline-block;
+	float: none;
+	margin: 0;
+	position: relative;
+	text-align: left;
+}
+
+.toptopics-flat-forum-filter-dropdown.dropdown-visible {
+	z-index: 3002;
+}
+
+.toptopics-flat-forum-filter-trigger {
+	align-items: center;
+	box-sizing: border-box;
+	display: inline-flex;
+	gap: 4px;
+	justify-content: center;
+	max-width: 260px;
+	position: relative;
+	z-index: 3;
+}
+
+.toptopics-flat-forum-filter-trigger > span:first-child {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.toptopics-flat-forum-filter-dropdown .dropdown {
+	left: 0;
+	margin-left: 0;
+	margin-right: 0;
+	min-width: 220px;
+	right: auto;
+	text-align: left;
+	z-index: 3003;
+}
+
+.toptopics-flat-forum-filter-dropdown .dropdown .pointer {
+	left: 10px;
+	right: auto;
+	z-index: 3004;
+}
+
+.toptopics-flat-forum-filter-contents {
+	max-height: 60vh;
+	overflow-y: auto;
+}
+
+.toptopics-flat-forum-filter-row {
+	cursor: default;
+	display: block;
+	margin-right: 20px;
+	padding: 5px 10px;
+	text-decoration: none;
+	width: 100%;
+}
+
+.toptopics-flat-forum-filter-row-cat {
+	color: inherit;
+	display: block;
+	font-weight: bold;
+}
+
+.toptopics-flat-forum-filter-link {
+	display: block;
+	text-decoration: none;
+}
+
+.toptopics-flat-forum-filter-current {
+	font-weight: bold;
+}
+
 @media (max-width: 700px) {
 	.toptopics-flat-index-toolbar {
 		align-items: flex-start;
@@ -276,6 +370,12 @@
 		justify-content: flex-start;
 	}
 
+	.toptopics-flat-toolbar-actions {
+		align-items: flex-start;
+		flex-direction: column;
+		width: 100%;
+	}
+
 	.toptopics-flat-post-topic-trigger {
 		max-width: calc(100vw - 36px);
 		padding-left: 8px;
@@ -284,6 +384,22 @@
 	}
 
 	.toptopics-flat-post-topic-dropdown .dropdown {
+		max-width: calc(100vw - 24px);
+		min-width: min(280px, calc(100vw - 24px));
+	}
+
+	.toptopics-flat-forum-filter-action {
+		justify-content: flex-start;
+	}
+
+	.toptopics-flat-forum-filter-trigger {
+		max-width: calc(100vw - 36px);
+		padding-left: 8px;
+		padding-right: 8px;
+		white-space: nowrap;
+	}
+
+	.toptopics-flat-forum-filter-dropdown .dropdown {
 		max-width: calc(100vw - 24px);
 		min-width: min(280px, calc(100vw - 24px));
 	}
