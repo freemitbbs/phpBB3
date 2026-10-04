@@ -23,6 +23,8 @@ class listener implements EventSubscriberInterface
 	private const HEADER_HOME_LAYOUT_SPLIT = 'split';
 	private const HEADER_HOME_LAYOUT_MERGED = 'merged';
 	private const DEFAULT_FLAT_TOPIC_LIST_PER_PAGE = 50;
+	private const FLAT_INDEX_GUEST_CACHE_PREFIX = '_freemitbbs_toptopics_flat_index_guest_v1_';
+	private const FLAT_INDEX_GUEST_CACHE_SECONDS = 60;
 	private const DEFAULT_PER_FORUM_TOPIC_LIMIT = 3;
 	private const BALANCED_TOPIC_FETCH_MULTIPLIER = 5;
 	private const INDEX_CATEGORY_FORUM_CANDIDATE_MULTIPLIER = 2;
@@ -96,6 +98,8 @@ class listener implements EventSubscriberInterface
 	protected ?array $index_recenttopics_topic_id_map = null;
 	protected ?array $index_forum_viewership_order = null;
 	protected ?array $foe_user_id_map = null;
+	protected ?array $flat_index_guest_index = null;
+	protected ?array $flat_index_post_forum_rows = null;
 	protected array $feed_topic_reputation_rows = [];
 	protected ?string $duplicate_post_lock_name = null;
 
@@ -215,6 +219,8 @@ class listener implements EventSubscriberInterface
 			'core.posting_modify_template_vars' => 'posting_new_member_approval_notice',
 			'core.posting_modify_submit_post_before' => 'guard_duplicate_post_before',
 			'core.submit_post_end' => 'submit_post_end',
+			'core.move_topics_after' => 'flat_index_topics_changed',
+			'core.move_posts_after' => 'flat_index_topics_changed',
 			'core.set_post_visibility_after' => 'post_visibility_after',
 			'core.set_topic_visibility_after' => 'topic_visibility_after',
 			'core.notification_manager_add_notifications' => 'report_notification_added',
@@ -2424,6 +2430,11 @@ class listener implements EventSubscriberInterface
 
 	protected function flat_index_post_forum_rows(): array
 	{
+		if ($this->flat_index_post_forum_rows !== null)
+		{
+			return $this->flat_index_post_forum_rows;
+		}
+
 		$sql = 'SELECT forum_id, forum_name, forum_type, forum_status, forum_password, display_on_index, left_id, right_id
 			FROM ' . FORUMS_TABLE . '
 			WHERE ' . $this->db->sql_in_set('forum_type', [FORUM_CAT, FORUM_POST]) . '
@@ -2436,7 +2447,8 @@ class listener implements EventSubscriberInterface
 		}
 		$this->db->sql_freeresult($result);
 
-		return $rowset;
+		$this->flat_index_post_forum_rows = $rowset;
+		return $this->flat_index_post_forum_rows;
 	}
 
 	protected function get_flat_topic_list_per_page(): int
@@ -2462,6 +2474,18 @@ class listener implements EventSubscriberInterface
 
 	protected function count_flat_index_topics(array $forum_ids): int
 	{
+		$index = $this->get_flat_index_guest_index();
+		if ($index !== null)
+		{
+			$count = 0;
+			foreach ($this->normalise_forum_ids($forum_ids) as $forum_id)
+			{
+				$count += $index['forum_counts'][$forum_id] ?? 0;
+			}
+
+			return $count;
+		}
+
 		$where_sql = $this->build_flat_index_topic_where_sql($forum_ids);
 		if ($where_sql === '')
 		{
@@ -2486,6 +2510,39 @@ class listener implements EventSubscriberInterface
 			return [];
 		}
 
+		$index = $this->get_flat_index_guest_index();
+		if ($index !== null)
+		{
+			$forum_map = array_fill_keys($this->normalise_forum_ids($forum_ids), true);
+			$topic_ids = [];
+			$skip = max(0, $start);
+			foreach ($index['topic_forums'] as $topic_id => $forum_id)
+			{
+				if (!isset($forum_map[$forum_id]))
+				{
+					continue;
+				}
+				if ($skip > 0)
+				{
+					$skip--;
+					continue;
+				}
+				$topic_ids[] = (int) $topic_id;
+				if (count($topic_ids) >= max(1, $limit))
+				{
+					break;
+				}
+			}
+			if (empty($topic_ids))
+			{
+				return [];
+			}
+
+			// Recheck current visibility and reactions, even if the index changed mid-request.
+			$where_sql .= ' AND ' . $this->db->sql_in_set('t.topic_id', $topic_ids);
+			$start = 0;
+		}
+
 		$sql = 'SELECT t.topic_id, t.forum_id, t.topic_title, t.topic_time, t.topic_poster, t.topic_min_reputation,
 				t.topic_first_poster_name, t.topic_first_poster_colour, t.topic_last_post_id,
 				t.topic_last_post_time, t.topic_last_poster_id, t.topic_last_poster_name,
@@ -2508,6 +2565,76 @@ class listener implements EventSubscriberInterface
 		$this->db->sql_freeresult($result);
 
 		return $topics;
+	}
+
+	protected function get_flat_index_guest_index(): ?array
+	{
+		// Registered users retain their own visibility and foe filters.
+		if ((int) ($this->user->data['user_id'] ?? 0) !== ANONYMOUS)
+		{
+			return null;
+		}
+		if ($this->flat_index_guest_index !== null)
+		{
+			return $this->flat_index_guest_index;
+		}
+
+		$forum_ids = $this->get_flat_index_forum_ids();
+		$where_sql = $this->build_flat_index_topic_where_sql($forum_ids);
+		if ($where_sql === '')
+		{
+			$this->flat_index_guest_index = ['topic_forums' => [], 'forum_counts' => []];
+			return $this->flat_index_guest_index;
+		}
+
+		// The key covers the whole readable index; ff and start never create cache entries.
+		$cache_key = self::FLAT_INDEX_GUEST_CACHE_PREFIX . md5($where_sql);
+		$scope = $this->cache_invalidator->get_cache_scope($forum_ids);
+		$cached = $this->cache_invalidator->get($cache_key);
+		if (is_array($cached) && ($cached['scope'] ?? null) === $scope)
+		{
+			$this->flat_index_guest_index = $cached;
+			return $this->flat_index_guest_index;
+		}
+
+		// Only one PHP worker rebuilds a cold or invalidated index.
+		$lock = new \phpbb\lock\flock($this->root_path . 'cache/toptopics_flat_index_guest');
+		try
+		{
+			if (!$lock->acquire())
+			{
+				return null;
+			}
+			$scope = $this->cache_invalidator->get_cache_scope($forum_ids);
+			$cached = $this->cache_invalidator->get($cache_key);
+			if (is_array($cached) && ($cached['scope'] ?? null) === $scope)
+			{
+				$this->flat_index_guest_index = $cached;
+				return $this->flat_index_guest_index;
+			}
+
+			$index = ['scope' => $scope, 'topic_forums' => [], 'forum_counts' => []];
+			$sql = 'SELECT t.topic_id, t.forum_id
+				FROM ' . TOPICS_TABLE . ' t
+				WHERE ' . $where_sql . '
+				ORDER BY t.topic_last_post_time DESC, t.topic_last_post_id DESC';
+			$result = $this->db->sql_query($sql);
+			while ($row = $this->db->sql_fetchrow($result))
+			{
+				$forum_id = (int) $row['forum_id'];
+				$index['topic_forums'][(int) $row['topic_id']] = $forum_id;
+				$index['forum_counts'][$forum_id] = ($index['forum_counts'][$forum_id] ?? 0) + 1;
+			}
+			$this->db->sql_freeresult($result);
+			$this->cache_invalidator->put($cache_key, $index, self::FLAT_INDEX_GUEST_CACHE_SECONDS);
+			$this->flat_index_guest_index = $index;
+
+			return $this->flat_index_guest_index;
+		}
+		finally
+		{
+			$lock->release();
+		}
 	}
 
 	protected function build_flat_index_topic_where_sql(array $forum_ids): string
@@ -2653,6 +2780,15 @@ class listener implements EventSubscriberInterface
 		$this->release_duplicate_post_lock();
 
 		$data = $event['data'] ?? [];
+		$forum_id = (int) ($data['forum_id'] ?? 0);
+		if ($forum_id > 0)
+		{
+			$this->cache_invalidator->invalidate_forums([$forum_id]);
+		}
+		else
+		{
+			$this->cache_invalidator->invalidate_all();
+		}
 		$post_id = (int) ($data['post_id'] ?? 0);
 		if ($post_id > 0)
 		{
@@ -2665,6 +2801,13 @@ class listener implements EventSubscriberInterface
 				error_log('TopTopics post quality queue failed after submit: post_id=' . $post_id . ' error=' . $e->getMessage());
 			}
 		}
+	}
+
+	public function flat_index_topics_changed($event): void
+	{
+		// A move can change both source and destination eligibility and ordering.
+		$this->cache_invalidator->invalidate_all();
+		$this->flat_index_guest_index = null;
 	}
 
 	public function guard_duplicate_post_before($event): void
@@ -5288,15 +5431,18 @@ class listener implements EventSubscriberInterface
 			return '';
 		}
 
-		return ' AND ((
-			SELECT COUNT(ttfpd.user_id)
+		// Materialize the small set of excluded posts once instead of counting per topic.
+		return ' AND ' . $topic_alias . '.topic_first_post_id NOT IN (
+			SELECT ttfpd.post_id
 			FROM ' . $this->dislikes_table . ' ttfpd
-			WHERE ttfpd.post_id = ' . $topic_alias . '.topic_first_post_id
-		) - (
-			SELECT COUNT(ttfpl.user_id)
-			FROM ' . $this->likes_table . ' ttfpl
-			WHERE ttfpl.post_id = ' . $topic_alias . '.topic_first_post_id
-		)) < ' . $threshold;
+			GROUP BY ttfpd.post_id
+			HAVING COUNT(ttfpd.user_id) >= ' . $threshold . '
+				AND COUNT(ttfpd.user_id) - (
+					SELECT COUNT(ttfpl.user_id)
+					FROM ' . $this->likes_table . ' ttfpl
+					WHERE ttfpl.post_id = ttfpd.post_id
+				) >= ' . $threshold . '
+		)';
 	}
 
 	protected function get_first_post_disliked_topic_id_map(array $topic_ids): array

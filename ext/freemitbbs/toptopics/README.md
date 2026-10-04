@@ -4,6 +4,16 @@
 
 The extension also maintains a materialized per-user reputation score that can gate negative actions such as dislikes and post reports.
 
+## Merged homepage query cost
+
+For anonymous readers, the chronological merged homepage shares a cached index of topic IDs, their forum IDs, and per-forum counts. Its key covers the complete readable forum set and eligibility conditions; arbitrary `ff` combinations and `start` offsets reuse that index. Topic metadata and personalized presentation are not cached here. Each displayed page fetches only its selected topic IDs and rechecks current forum visibility and first-post reaction eligibility.
+
+The index expires after 60 seconds and uses the existing forum/global cache generations. Posts and edits, likes/dislikes, visibility changes, deletions, and topic/post moves invalidate it. Changes without an event hook, such as topic bumping, appear on the next expiry. A file lock allows only one worker to rebuild an expired or invalidated index. Registered readers retain their individual visibility and foe filters through the regular database queries.
+
+First-post exclusion queries group dislikes by post and materialize the small set whose net dislikes meet the collapse threshold. They no longer count likes and dislikes separately for every candidate topic. Forum-picker data is also reused within each request.
+
+`release_1_1_32` adds the covering session index `toptopics_guest_online` on `(session_user_id, session_time, session_ip)`. phpBB's online guest count runs on each page; this index lets the database read the active anonymous session range and count distinct IPs directly from the index. On MariaDB production it can be applied explicitly with `ALGORITHM=NOCOPY, LOCK=NONE` and a short session `lock_wait_timeout`; the migration recognizes an index installed this way.
+
 ## What the ranker considers
 
 For each candidate topic inside the configured lookback window:
