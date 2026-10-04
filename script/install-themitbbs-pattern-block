@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""Install or disable a temporary nginx block for the observed attack pattern."""
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import tempfile
+
+ROOT = Path(__file__).resolve().parent.parent
+SITE = Path('/etc/nginx/sites-available/themitbbs')
+HTTP = Path('/etc/nginx/conf.d/themitbbs-pattern-block.conf')
+SERVER = Path('/etc/nginx/snippets/themitbbs-pattern-block.conf')
+INCLUDE = 'include /etc/nginx/snippets/themitbbs-pattern-block.conf;'
+ANCHOR = 'include /etc/nginx/snippets/themitbbs-attack-guard.conf;'
+FILES = {'site': SITE, 'http': HTTP, 'server': SERVER}
+
+
+def command(*args):
+    subprocess.run(args, check=True)
+
+
+def health():
+    for route in ['/index.php', '/app.php/blog']:
+        status = subprocess.check_output(['curl', '-sS', '--max-time', '20',
+            '--resolve', 'themitbbs.com:443:127.0.0.1', '-o', '/dev/null',
+            '-w', '%{http_code}', 'https://themitbbs.com' + route], text=True)
+        print('Origin', route, 'HTTP', status, flush=True)
+        if status != '200':
+            raise RuntimeError('Origin health check failed.')
+
+
+def write(path, content):
+    descriptor, temporary = tempfile.mkstemp(prefix=path.name + '.', dir=path.parent)
+    try:
+        with os.fdopen(descriptor, 'w') as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+            os.fchmod(stream.fileno(), 0o644)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def restore(backup):
+    manifest = json.loads((backup / 'manifest.json').read_text())
+    for name, target in FILES.items():
+        if manifest[name]:
+            shutil.copy2(backup / name, target)
+        elif target.exists():
+            target.unlink()
+    command('/usr/sbin/nginx', '-t')
+    command('systemctl', 'reload', 'nginx')
+    health()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--disable', action='store_true')
+    modes.add_argument('--rollback', type=Path)
+    args = parser.parse_args()
+    if os.geteuid() != 0:
+        raise RuntimeError('Run with sudo; nginx configuration is root-owned.')
+    os.umask(0o077)
+    for path in FILES.values():
+        if path.is_symlink() or (path.exists() and not path.is_file()):
+            raise RuntimeError('Refusing unexpected file type: ' + str(path))
+    if args.rollback:
+        backup = args.rollback.resolve()
+        if backup.parent != Path('/var/backups') or not backup.name.startswith('themitbbs-pattern-block.'):
+            raise RuntimeError('Use the backup directory printed by this installer.')
+        if backup.stat().st_uid != 0 or backup.stat().st_mode & 0o077:
+            raise RuntimeError('Backup must be private and root-owned.')
+        restore(backup)
+        return
+    command('/usr/sbin/nginx', '-t')
+    command('systemctl', 'is-active', '--quiet', 'nginx')
+    site = SITE.read_text()
+    includes = list(re.finditer(r'^[ \t]*' + re.escape(INCLUDE) + r'[ \t]*$', site, re.MULTILINE))
+    if len(includes) > 1:
+        raise RuntimeError('Multiple pattern includes; refusing an ambiguous update.')
+    if args.disable:
+        if includes:
+            site = site[:includes[0].start()] + site[includes[0].end():]
+    else:
+        if not Path('/etc/nginx/conf.d/themitbbs-attack-guard.conf').is_file():
+            raise RuntimeError('Install the aggregate attack guard first.')
+        if not includes:
+            anchors = list(re.finditer(r'^(?P<indent>[ \t]*)' + re.escape(ANCHOR) + r'[ \t]*$', site, re.MULTILINE))
+            if len(anchors) != 1:
+                raise RuntimeError('Expected exactly one existing aggregate guard include.')
+            anchor = anchors[0]
+            site = site[:anchor.end()] + '\n' + anchor['indent'] + INCLUDE + site[anchor.end():]
+    backup = Path(tempfile.mkdtemp(prefix='themitbbs-pattern-block.', dir='/var/backups'))
+    manifest = {name: path.exists() for name, path in FILES.items()}
+    for name, path in FILES.items():
+        if manifest[name]:
+            shutil.copy2(path, backup / name)
+    (backup / 'manifest.json').write_text(json.dumps(manifest))
+    print('Backup:', backup, flush=True)
+    try:
+        if not args.disable:
+            docs = ROOT / 'docs/themitbbs-ip-guard'
+            write(HTTP, (docs / 'nginx-pattern-http.conf').read_text())
+            write(SERVER, (docs / 'nginx-pattern-server.conf').read_text())
+        write(SITE, site)
+        command('/usr/sbin/nginx', '-t')
+        command('systemctl', 'reload', 'nginx')
+        health()
+    except BaseException:
+        print('Activation failed; restoring nginx configuration immediately.', flush=True)
+        restore(backup)
+        raise
+    print('Temporary attack pattern block ' + ('disabled.' if args.disable else 'active; matching requests return 403 before PHP.'))
+    if not args.disable:
+        print('The observed Firefox unfiltered-homepage pattern shares 1 request/s, burst 3; excess returns 429.')
+    print('Disable: sudo python3', Path(__file__).resolve(), '--disable')
+    print('Rollback: sudo python3', Path(__file__).resolve(), '--rollback', backup)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as error:
+        print(str(error))
+        raise SystemExit(1)

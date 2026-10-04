@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""Apply or disable the themitbbs filtered-homepage Cloudflare challenge."""
+import argparse
+import importlib.machinery
+import importlib.util
+import ipaddress
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import tempfile
+
+ROOT = Path(__file__).resolve().parent.parent
+ENTRYPOINT = '/rulesets/phases/http_request_firewall_custom/entrypoint'
+REF = 'themitbbs_expensive_home_guard_v1'
+
+
+def module():
+    loader = importlib.machinery.SourceFileLoader('themitbbs_cloudflare', '/usr/local/sbin/themitbbs-cloudflare-ban')
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    imported = importlib.util.module_from_spec(spec)
+    loader.exec_module(imported)
+    return imported
+
+
+def identifier(value):
+    if not isinstance(value, str) or not re.fullmatch(r'[0-9a-fA-F]{32}', value):
+        raise RuntimeError('Invalid Cloudflare identifier.')
+    return value
+
+
+def entrypoint(client):
+    try:
+        value = client.api('GET', ENTRYPOINT)['result']
+    except Exception as error:
+        if type(error).__name__ == 'GuardError' and str(error) == 'Cloudflare HTTP 404':
+            return None
+        raise
+    if value.get('kind') != 'zone' or value.get('phase') != 'http_request_firewall_custom':
+        raise RuntimeError('Unexpected Cloudflare ruleset scope.')
+    identifier(value.get('id'))
+    return value
+
+
+def own_rule(ruleset):
+    rules = [rule for rule in (ruleset or {}).get('rules', []) if rule.get('ref') == REF]
+    if len(rules) > 1:
+        raise RuntimeError('Multiple owned challenge rules; refusing an ambiguous update.')
+    if rules:
+        identifier(rules[0].get('id'))
+        return rules[0]
+    return None
+
+
+def rule_path(ruleset, rule=None):
+    path = '/rulesets/' + identifier(ruleset['id']) + '/rules'
+    return path if rule is None else path + '/' + identifier(rule['id'])
+
+
+def health():
+    for route in ['/index.php', '/app.php/blog']:
+        status = subprocess.check_output(['curl', '-sS', '--max-time', '20', '-o', '/dev/null',
+            '-w', '%{http_code}', 'https://themitbbs.com' + route], text=True)
+        print('Public', route, 'status=' + status, flush=True)
+        if status != '200':
+            raise RuntimeError('Public health check failed.')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--apply', action='store_true', help='Activate this rule using saved credentials.')
+    modes.add_argument('--disable', action='store_true', help='Disable only this script\'s owned rule.')
+    modes.add_argument('--status', action='store_true', help='Read current rules and potential IP allow exceptions.')
+    args = parser.parse_args()
+    if os.geteuid() != 0:
+        raise RuntimeError('Run with sudo to read the existing private Cloudflare credentials.')
+    os.umask(0o077)
+    client = module().Cloudflare()
+    client.check()
+    candidate = json.loads((ROOT / 'docs/themitbbs-ip-guard/cloudflare-challenge.json').read_text())
+    exemptions = [str(ipaddress.ip_network(value, strict=False)) for value in client.config.get('ignoreip', [])]
+    if exemptions:
+        candidate['expression'] = '(' + candidate['expression'] + ' and not ip.src in {' + ' '.join(exemptions) + '})'
+    print(json.dumps(candidate, indent=2), flush=True)
+    current = entrypoint(client)
+    previous = own_rule(current)
+    print('Existing custom rules:', len((current or {}).get('rules', [])), flush=True)
+    if args.status:
+        print('Installed owned rule:', json.dumps(previous, indent=2), flush=True)
+        print('Matches requested protection:', bool(previous and previous.get('enabled') is True
+            and previous.get('action') == candidate['action']
+            and previous.get('expression') == candidate['expression']), flush=True)
+        for index, rule in enumerate((current or {}).get('rules', []), 1):
+            print('Custom rule:', json.dumps({'position': index, 'action': rule.get('action'),
+                'enabled': rule.get('enabled'), 'description': rule.get('description'),
+                'owned': rule.get('ref') == REF}), flush=True)
+        allows = []
+        for page in range(1, 101):
+            payload = client.api('GET', '/firewall/access_rules/rules',
+                query={'mode': 'whitelist', 'match': 'all', 'per_page': 100, 'page': page})
+            allows.extend({'configuration': rule.get('configuration'), 'scope': rule.get('scope')}
+                for rule in payload['result'] if rule.get('mode') == 'whitelist')
+            if page >= payload.get('result_info', {}).get('total_pages', 1):
+                break
+        else:
+            raise RuntimeError('IP allow-rule pagination exceeded the diagnostic bound.')
+        print('IP access allow exceptions:', json.dumps(allows, indent=2), flush=True)
+        print('Read only; no rules changed. Check Cloudflare Security Events for requests that pass this rule.')
+        return
+    if args.disable:
+        if previous is not None:
+            client.api('PATCH', rule_path(current, previous), {'enabled': False})
+        print('Owned edge challenge disabled.')
+        return
+    if not args.apply:
+        print('Plan only; no changes made. Add --apply to activate.')
+        return
+    backup = Path(tempfile.mkdtemp(prefix='themitbbs-edge-challenge.', dir='/var/backups'))
+    (backup / 'before.json').write_text(json.dumps(current, indent=2))
+    print('Ruleset backup:', backup, flush=True)
+    # Add/update one rule only. Never replace the complete custom ruleset.
+    # Put it first so an existing Skip rule cannot silently bypass protection.
+    candidate['position'] = {'index': 1}
+    try:
+        if current is None:
+            candidate.pop('position')
+            client.api('POST', '/rulesets', {'name': 'themitbbs custom security rules',
+                'kind': 'zone', 'phase': 'http_request_firewall_custom', 'rules': [candidate]})
+        elif previous is None:
+            client.api('POST', rule_path(current), candidate)
+        else:
+            client.api('PATCH', rule_path(current, previous), candidate)
+        deployed = own_rule(entrypoint(client))
+        if (deployed is None or deployed.get('action') != 'managed_challenge'
+                or deployed.get('enabled') is not True or deployed.get('expression') != candidate['expression']):
+            raise RuntimeError('Cloudflare did not confirm the requested challenge rule.')
+        health()
+    except BaseException:
+        # Recover first if a change could have reached Cloudflare, including an
+        # ambiguous network failure after POST or PATCH; find it by its ref.
+        print('Activation failed; attempting immediate restoration of the owned rule.', file=sys.stderr, flush=True)
+        try:
+            current_after = entrypoint(client)
+            owned_after = own_rule(current_after)
+            if owned_after is not None:
+                if previous is None:
+                    client.api('PATCH', rule_path(current_after, owned_after), {'enabled': False})
+                else:
+                    restored = {key: previous[key] for key in ['action', 'expression', 'description', 'enabled', 'ref'] if key in previous}
+                    restored['position'] = {'index': next(index + 1 for index, rule in enumerate(current['rules']) if rule.get('id') == previous['id'])}
+                    client.api('PATCH', rule_path(current_after, owned_after), restored)
+                health()
+        except Exception:
+            print('Restoration could not be confirmed. Disable the owned rule in Cloudflare Security rules.', file=sys.stderr)
+        raise
+    print('Managed Challenge active for filtered homepage requests on themitbbs.com.')
+    print('Visitors to these requests may see browser verification. Existing nginx limits remain active.')
+    print('Disable: sudo python3', Path(__file__).resolve(), '--disable')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as error:
+        if type(error).__name__ == 'GuardError' and str(error) in ['Cloudflare HTTP 401', 'Cloudflare HTTP 403']:
+            print('Cloudflare denied access. Add Zone / Zone WAF / Edit to the existing token, keeping its themitbbs.com-only scope, then rerun. Editing token permissions does not require pasting a new secret.', file=sys.stderr)
+        elif isinstance(error, RuntimeError) or type(error).__name__ == 'GuardError':
+            print(str(error), file=sys.stderr)
+        else:
+            print('Operation failed:', type(error).__name__, file=sys.stderr)
+        sys.exit(1)

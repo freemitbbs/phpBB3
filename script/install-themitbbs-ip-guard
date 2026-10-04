@@ -1,0 +1,293 @@
+#!/usr/bin/env python3
+"""Install trusted real IP logging and progressive, zone-scoped Fail2ban bans."""
+import argparse
+import getpass
+import importlib.machinery
+import importlib.util
+import ipaddress
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import urllib.request
+
+ROOT = Path(__file__).resolve().parent.parent
+DOCS = ROOT / 'docs/themitbbs-ip-guard'
+SITE = Path('/etc/nginx/sites-available/themitbbs')
+CREDENTIALS = Path('/etc/fail2ban/themitbbs-cloudflare.json')
+PENDING_CREDENTIALS = Path('/etc/fail2ban/themitbbs-cloudflare.pending.json')
+HELPER = Path('/usr/local/sbin/themitbbs-cloudflare-ban')
+JAIL = Path('/etc/fail2ban/jail.d/themitbbs-expensive-home.local')
+TIMER = 'themitbbs-cloudflare-expiry.timer'
+INCLUDE = 'include /etc/nginx/snippets/themitbbs-ip-guard.conf;'
+NGINX_PATHS = [SITE, Path('/etc/nginx/conf.d/themitbbs-ip-guard.conf'),
+    Path('/etc/nginx/snippets/themitbbs-ip-guard.conf'),
+    Path('/etc/nginx/snippets/themitbbs-cloudflare-realip.conf'),
+    Path('/etc/nginx/snippets/themitbbs-cloudflare-geo.conf')]
+FULL_PATHS = [HELPER, JAIL, Path('/etc/fail2ban/filter.d/themitbbs-expensive-home.conf'),
+    Path('/etc/fail2ban/action.d/themitbbs-cloudflare.conf'),
+    Path('/etc/fail2ban/fail2ban.d/themitbbs-history.local'),
+    Path('/etc/fail2ban/themitbbs-cloudflare-networks.txt'),
+    Path('/etc/systemd/system/themitbbs-cloudflare-expiry.service'),
+    Path('/etc/systemd/system/themitbbs-cloudflare-expiry.timer')]
+
+
+def run(*args, check=True):
+    return subprocess.run(args, check=check)
+
+
+def active(unit):
+    return subprocess.run(['systemctl', 'is-active', '--quiet', unit]).returncode == 0
+
+
+def write(path, contents, mode=0o644):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, candidate = tempfile.mkstemp(prefix='.' + path.name + '.', dir=path.parent)
+    try:
+        with os.fdopen(descriptor, 'wb') as output:
+            output.write(contents.encode() if isinstance(contents, str) else contents)
+            output.flush()
+            os.fsync(output.fileno())
+        os.chmod(candidate, mode)
+        os.chown(candidate, 0, 0)
+        os.replace(candidate, path)
+    finally:
+        if os.path.exists(candidate):
+            os.unlink(candidate)
+
+
+def helper_module():
+    loader = importlib.machinery.SourceFileLoader('themitbbs_cloudflare', str(ROOT / 'script/themitbbs-cloudflare-ban'))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def configure():
+    print('Create a Cloudflare custom API token with Zone / Firewall Services / Edit')
+    print('and Zone / Zone / Read, restricted to the themitbbs.com zone.')
+    saved_token = None
+    if PENDING_CREDENTIALS.exists():
+        info = PENDING_CREDENTIALS.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o077:
+            raise RuntimeError('Pending credentials must be a regular root-owned file with mode 600.')
+        saved_token = json.loads(PENDING_CREDENTIALS.read_text()).get('api_token')
+    prompt = 'API token (hidden; Enter reuses your saved token): ' if saved_token else 'API token (hidden): '
+    token = getpass.getpass(prompt).strip() or saved_token
+    module = helper_module()
+    module.Cloudflare.token_headers(token)
+    # Save the one-time secret before any network operation, so a retry does
+    # not require finding the creation screen again. Existing live credentials
+    # remain in place until the replacement has passed preflight.
+    write(PENDING_CREDENTIALS, json.dumps({'api_token': token}), 0o600)
+    print('Token saved privately. Looking up themitbbs.com automatically...', flush=True)
+    zone = module.Cloudflare.discover_zone(token)
+    exemptions = input('Optional admin IPs/CIDRs to exempt (space separated; Enter for none): ').split()
+    exemptions = [str(ipaddress.ip_network(value, strict=False)) for value in exemptions]
+    # Verify before replacing any working credential file. Never put the token in argv.
+    descriptor, candidate = tempfile.mkstemp(prefix='themitbbs-credentials.')
+    candidate = Path(candidate)
+    try:
+        with os.fdopen(descriptor, 'w') as output:
+            json.dump({'zone_id': zone, 'api_token': token, 'ignoreip': exemptions}, output)
+        module.Cloudflare(candidate).check()
+        write(CREDENTIALS, candidate.read_bytes(), 0o600)
+        PENDING_CREDENTIALS.unlink(missing_ok=True)
+    finally:
+        candidate.unlink(missing_ok=True)
+    print('Verified zone and rule read access; saved root-only credentials.')
+
+
+def ranges():
+    # The public API avoids bot protection on Cloudflare's marketing website.
+    request = urllib.request.Request('https://api.cloudflare.com/client/v4/ips',
+        headers={'User-Agent': 'themitbbs-ip-guard/1'})
+    with urllib.request.urlopen(request, timeout=20) as response:
+        payload = json.loads(response.read(65536))
+    if not payload.get('success'):
+        raise RuntimeError('Cloudflare public IP list request failed.')
+    networks = []
+    for version, minimum in [(4, 10), (6, 5)]:
+        values = payload['result']['ipv' + str(version) + '_cidrs']
+        if not minimum <= len(values) <= 100:
+            raise RuntimeError('Unexpected Cloudflare network list length.')
+        for value in values:
+            network = ipaddress.ip_network(value, strict=True)
+            if network.version != version or network.prefixlen < (12 if version == 4 else 24):
+                raise RuntimeError('Unexpectedly broad Cloudflare network.')
+            if not network.network_address.is_global:
+                raise RuntimeError('Non-public Cloudflare network.')
+            networks.append(str(network))
+    if len(networks) != len(set(networks)):
+        raise RuntimeError('Duplicate Cloudflare networks.')
+    return networks
+
+
+def health():
+    for route in ['/index.php', '/app.php/blog']:
+        result = subprocess.check_output(['curl', '-k', '-sS', '-o', '/dev/null', '--max-time', '20',
+            '--resolve', 'themitbbs.com:443:127.0.0.1', '-w', '%{http_code}',
+            'https://themitbbs.com' + route], text=True)
+        print('Origin', route, 'status=' + result, flush=True)
+        if result != '200':
+            raise RuntimeError('Origin health check failed.')
+
+
+def backup(paths, full):
+    directory = Path(tempfile.mkdtemp(prefix='themitbbs-ip-guard.', dir='/var/backups'))
+    manifest = {'full': full, 'timer_active': active(TIMER), 'jail_existed': JAIL.exists(), 'paths': {}}
+    for number, path in enumerate(paths):
+        if path.is_symlink():
+            raise RuntimeError('Refusing to replace a symlink: ' + str(path))
+        name = str(number)
+        manifest['paths'][str(path)] = name if path.exists() else None
+        if path.exists():
+            shutil.copy2(path, directory / name)
+    write(directory / 'manifest.json', json.dumps(manifest), 0o600)
+    return directory, manifest
+
+
+def restore_paths(directory, manifest, paths):
+    for path in paths:
+        name = manifest['paths'][str(path)]
+        if name is None:
+            path.unlink(missing_ok=True)
+        else:
+            original = directory / name
+            write(path, original.read_bytes(), original.stat().st_mode & 0o777)
+
+
+def restore(directory):
+    directory = directory.resolve()
+    if directory.parent != Path('/var/backups') or not directory.name.startswith('themitbbs-ip-guard.'):
+        raise RuntimeError('Specify the backup directory printed by this installer.')
+    manifest = json.loads((directory / 'manifest.json').read_text())
+    expected = NGINX_PATHS + (FULL_PATHS if manifest['full'] else [])
+    if set(manifest['paths']) != {str(path) for path in expected}:
+        raise RuntimeError('Unexpected backup manifest paths.')
+    # Restore site availability first, before any ban-action troubleshooting.
+    restore_paths(directory, manifest, NGINX_PATHS)
+    run('/usr/sbin/nginx', '-t')
+    run('systemctl', 'reload', 'nginx')
+    health()
+    if manifest['full']:
+        if not manifest['jail_existed']:
+            run('fail2ban-client', 'stop', 'themitbbs-expensive-home', check=False)
+            if HELPER.exists() and CREDENTIALS.exists():
+                run(str(HELPER), 'flush', check=False)
+        if not manifest['timer_active']:
+            run('systemctl', 'disable', '--now', TIMER, check=False)
+        restore_paths(directory, manifest, FULL_PATHS)
+        run('systemctl', 'daemon-reload')
+        run('fail2ban-client', '-t')
+        run('fail2ban-client', 'reload')
+        if manifest['timer_active']:
+            run('systemctl', 'enable', '--now', TIMER)
+    print('Restored configuration from', directory)
+
+
+def install(realip_only):
+    run('/usr/sbin/nginx', '-t')
+    if not active('nginx') or not active('fail2ban'):
+        raise RuntimeError('nginx and Fail2ban must already be running.')
+    content = SITE.read_text()
+    if content.count(INCLUDE) > 1:
+        raise RuntimeError('Ambiguous existing real IP includes.')
+    if INCLUDE not in content:
+        matches = list(re.finditer(r'^(?P<indent>[ \t]*)access_log[ \t]+/var/log/nginx/themitbbs\.access\.log;[ \t]*$', content, re.M))
+        if len(matches) != 1:
+            raise RuntimeError('Expected one themitbbs access log directive.')
+        match = matches[0]
+        content = content[:match.end()] + '\n' + match['indent'] + INCLUDE + content[match.end():]
+    networks = ranges()
+    config = None
+    if not realip_only:
+        client = helper_module().Cloudflare()
+        client.check()
+        config = client.config
+        run('fail2ban-client', '-t')
+    paths = NGINX_PATHS + ([] if realip_only else FULL_PATHS)
+    directory, manifest = backup(paths, not realip_only)
+    print('Backup:', directory, flush=True)
+    try:
+        write(NGINX_PATHS[1], (DOCS / 'nginx-http.conf').read_bytes())
+        write(NGINX_PATHS[2], (DOCS / 'nginx-server.conf').read_bytes())
+        write(NGINX_PATHS[3], ''.join('set_real_ip_from ' + network + ';\n' for network in networks))
+        write(NGINX_PATHS[4], ''.join(network + ' 1;\n' for network in networks))
+        write(SITE, content)
+        log = Path('/var/log/nginx/themitbbs.abuse.log')
+        if log.is_symlink():
+            raise RuntimeError('Refusing a symlink for the abuse log.')
+        if not log.exists():
+            import grp
+            import pwd
+            log.touch(mode=0o640)
+            os.chown(log, pwd.getpwnam('www-data').pw_uid, grp.getgrnam('adm').gr_gid)
+            os.chmod(log, 0o640)
+        run('/usr/sbin/nginx', '-t')
+        run('systemctl', 'reload', 'nginx')
+        health()
+        if not realip_only:
+            state = Path('/var/lib/themitbbs-ip-guard')
+            state.mkdir(mode=0o700, exist_ok=True)
+            os.chmod(state, 0o700)
+            os.chown(state, 0, 0)
+            write(HELPER, (ROOT / 'script/themitbbs-cloudflare-ban').read_bytes(), 0o755)
+            write(FULL_PATHS[2], (DOCS / 'filter.conf').read_bytes())
+            write(FULL_PATHS[3], (DOCS / 'action.conf').read_bytes())
+            write(FULL_PATHS[4], (DOCS / 'history.conf').read_bytes())
+            write(FULL_PATHS[5], '\n'.join(networks) + '\n')
+            for destination, source in [(FULL_PATHS[6], 'expiry.service'), (FULL_PATHS[7], 'expiry.timer')]:
+                write(destination, (DOCS / source).read_bytes())
+            extra = ' '.join(networks + config.get('ignoreip', []))
+            jail = (DOCS / 'jail.conf').read_text().rstrip() + ' ' + extra + '\n'
+            write(JAIL, jail)
+            run('fail2ban-client', '-t')
+            run('systemctl', 'daemon-reload')
+            run('systemctl', 'enable', '--now', TIMER)
+            run('fail2ban-client', 'reload')
+            run('fail2ban-client', 'status', 'themitbbs-expensive-home')
+    except BaseException:
+        print('Installation failed; restoring configuration immediately.', file=sys.stderr, flush=True)
+        restore(directory)
+        raise
+    print('Trusted real visitor IP logging is active.')
+    if not realip_only:
+        print('Bans: initial 30 filtered-homepage rejections / 10 minutes; repeat offenders trigger sooner.')
+        print('Duration: 10 minutes -> 1 hour -> 6 hours -> 1 day -> 7 days -> 30 days (cap).')
+    print('Rollback: sudo python3', Path(__file__).resolve(), '--rollback', directory)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--configure', action='store_true', help='Prompt securely for credentials, then install.')
+    mode.add_argument('--realip-only', action='store_true', help='Restore visitor IP logging without API credentials.')
+    mode.add_argument('--rollback', type=Path, help='Restore the printed backup.')
+    args = parser.parse_args()
+    if os.geteuid() != 0:
+        raise RuntimeError('Root authentication is required; run with sudo.')
+    os.umask(0o077)
+    if args.rollback:
+        restore(args.rollback)
+        return
+    if args.configure:
+        configure()
+    install(args.realip_only)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as error:
+        # Avoid dumping configuration contents or API payloads in tracebacks.
+        print('Installation error:', type(error).__name__, file=sys.stderr)
+        if isinstance(error, RuntimeError) or type(error).__name__ == 'GuardError':
+            print(str(error), file=sys.stderr)
+        sys.exit(1)

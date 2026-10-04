@@ -1,0 +1,15 @@
+[Unit]
+Description=Expire themitbbs Cloudflare bans if Fail2ban misses an unban
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/themitbbs-cloudflare-ban expire
+User=root
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/themitbbs-ip-guard

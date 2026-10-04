@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""Zone-scoped Fail2ban action. No third party dependencies or shell commands."""
+import argparse
+import fcntl
+import ipaddress
+import json
+import math
+import os
+from pathlib import Path
+import re
+import stat
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+CONFIG = Path('/etc/fail2ban/themitbbs-cloudflare.json')
+RANGES = Path('/etc/fail2ban/themitbbs-cloudflare-networks.txt')
+PREFIX = 'themitbbs-fail2ban:v1:'
+
+
+class GuardError(Exception):
+    pass
+
+
+class Cloudflare:
+    def __init__(self, config=CONFIG):
+        info = config.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o077:
+            raise GuardError('Credentials must be a regular root-owned file with mode 600.')
+        self.config = json.loads(config.read_text())
+        zone = self.config.get('zone_id', '')
+        token = self.config.get('api_token', '')
+        if not re.fullmatch(r'[0-9a-fA-F]{32}', zone):
+            raise GuardError('Invalid Cloudflare zone ID.')
+        self.base = 'https://api.cloudflare.com/client/v4/zones/' + zone
+        self.headers = self.token_headers(token)
+        self.ignored = [ipaddress.ip_network(v, strict=False) for v in self.config.get('ignoreip', [])]
+
+    @staticmethod
+    def token_headers(token):
+        if not isinstance(token, str) or len(token) < 20 or any(c.isspace() for c in token):
+            raise GuardError('Invalid Cloudflare API token format.')
+        return {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json',
+                'User-Agent': 'themitbbs-ip-guard/1'}
+
+    @staticmethod
+    def request(headers, method, url, data=None, query=None):
+        if query:
+            url += '?' + urllib.parse.urlencode(query)
+        body = None if data is None else json.dumps(data).encode()
+        # Retrying a POST after an ambiguous response could duplicate a rule.
+        attempts = 1 if method == 'POST' else 3
+        for attempt in range(attempts):
+            try:
+                request = urllib.request.Request(url, data=body, headers=headers, method=method)
+                with urllib.request.urlopen(request, timeout=10) as response:
+                    payload = json.load(response)
+                if not payload.get('success'):
+                    codes = [e.get('code') for e in payload.get('errors', [])]
+                    raise GuardError('Cloudflare rejected operation; error codes: ' + str(codes))
+                return payload
+            except urllib.error.HTTPError as error:
+                if attempt + 1 < attempts and (error.code == 429 or error.code >= 500):
+                    time.sleep(attempt + 1)
+                    continue
+                # Do not dump response bodies, request headers, or credentials.
+                raise GuardError('Cloudflare HTTP ' + str(error.code)) from None
+            except (urllib.error.URLError, TimeoutError, OSError):
+                if attempt + 1 < attempts:
+                    time.sleep(attempt + 1)
+                    continue
+                raise GuardError('Cloudflare network request failed.') from None
+
+    def api(self, method, suffix='', data=None, query=None):
+        return self.request(self.headers, method, self.base + suffix, data, query)
+
+    @classmethod
+    def discover_zone(cls, token):
+        payload = cls.request(cls.token_headers(token), 'GET',
+            'https://api.cloudflare.com/client/v4/zones',
+            query={'name': 'themitbbs.com', 'status': 'active', 'per_page': 5})
+        zones = [zone for zone in payload.get('result', [])
+                 if zone.get('name') == 'themitbbs.com' and zone.get('status') == 'active']
+        if len(zones) != 1 or payload.get('result_info', {}).get('total_pages', 1) > 1:
+            raise GuardError('Could not find one active themitbbs.com zone. Check Zone / Zone / Read and the token zone scope.')
+        zone_id = zones[0].get('id', '')
+        if not re.fullmatch(r'[0-9a-fA-F]{32}', zone_id):
+            raise GuardError('Invalid zone ID returned by Cloudflare.')
+        return zone_id
+
+    def check(self):
+        if self.api('GET')['result']['name'] != 'themitbbs.com':
+            raise GuardError('Zone ID must refer to themitbbs.com.')
+        self.api('GET', '/firewall/access_rules/rules', query={'per_page': 1})
+
+    def address(self, value):
+        address = ipaddress.ip_address(value)
+        networks = [ipaddress.ip_network(v) for v in RANGES.read_text().splitlines() if v]
+        if (not address.is_global or address.is_multicast or address.is_reserved
+                or any(address in network for network in networks + self.ignored)
+                or str(address) == '159.195.12.16'):
+            raise GuardError('Refusing to ban a proxy, origin, private, or exempt address.')
+        return address
+
+    def rules(self, address=None):
+        query = {'notes': PREFIX, 'mode': 'block', 'match': 'all', 'per_page': 100}
+        if address is not None:
+            query['configuration.target'] = 'ip' if address.version == 4 else 'ip6'
+            query['configuration.value'] = str(address)
+        rules = []
+        for page in range(1, 1001):
+            query['page'] = page
+            payload = self.api('GET', '/firewall/access_rules/rules', query=query)
+            for rule in payload['result']:
+                # Cloudflare's notes query is a substring match; enforce ownership here.
+                if (re.fullmatch(re.escape(PREFIX) + r'\d+', rule.get('notes', ''))
+                        and rule.get('mode') == 'block'
+                        and rule.get('configuration', {}).get('target') in ('ip', 'ip6')
+                        and (address is None or rule['configuration'].get('value') == str(address))):
+                    rules.append(rule)
+            if page >= payload.get('result_info', {}).get('total_pages', 1):
+                return rules
+        raise GuardError('Cloudflare rule pagination exceeded the safety bound.')
+
+    def rule_path(self, rule):
+        value = rule.get('id', '')
+        if not re.fullmatch(r'[0-9a-fA-F]{32}', value):
+            raise GuardError('Invalid rule ID returned by Cloudflare.')
+        return '/firewall/access_rules/rules/' + value
+
+    def ban(self, address, started, duration):
+        if not math.isfinite(started) or not math.isfinite(duration) or not 0 < duration <= 2592000:
+            raise GuardError('Ban duration must be positive and at most 30 days.')
+        expiry = math.ceil(started + duration)
+        if expiry <= time.time():
+            return
+        if expiry > time.time() + 2592000 + 60:
+            raise GuardError('Invalid future ban timestamp.')
+        notes = PREFIX + str(expiry)
+        owned = self.rules(address)
+        if owned:
+            for rule in owned:
+                self.api('PATCH', self.rule_path(rule), {'mode': 'block', 'notes': notes})
+        else:
+            target = 'ip' if address.version == 4 else 'ip6'
+            self.api('POST', '/firewall/access_rules/rules', {
+                'mode': 'block', 'configuration': {'target': target, 'value': str(address)},
+                'notes': notes,
+            })
+        print('Cloudflare ban active for', address, 'until', expiry)
+
+    def remove(self, rules):
+        for rule in rules:
+            self.api('DELETE', self.rule_path(rule))
+            print('Removed owned Cloudflare ban for', rule['configuration']['value'])
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('operation', choices=['check', 'ban', 'unban', 'expire', 'flush'])
+    parser.add_argument('ip', nargs='?')
+    parser.add_argument('started', type=float, nargs='?')
+    parser.add_argument('duration', type=float, nargs='?')
+    args = parser.parse_args()
+    if os.geteuid() != 0:
+        raise GuardError('Run this action as root.')
+    if args.operation in ('ban', 'unban') and args.ip is None:
+        raise GuardError('An IP address is required.')
+    if args.operation == 'ban' and (args.started is None or args.duration is None):
+        raise GuardError('Ban start time and duration are required.')
+    client = Cloudflare()
+    with open('/var/lib/themitbbs-ip-guard/action.lock', 'a') as lock:
+        # Expiry maintenance must not queue ahead of active ban actions.
+        flags = fcntl.LOCK_EX | (fcntl.LOCK_NB if args.operation == 'expire' else 0)
+        try:
+            fcntl.flock(lock, flags)
+        except BlockingIOError:
+            return
+        if args.operation == 'check':
+            client.check()
+            print('Cloudflare zone and rule read access verified for themitbbs.com.')
+        elif args.operation == 'ban':
+            client.ban(client.address(args.ip), args.started, args.duration)
+        elif args.operation == 'unban':
+            client.remove(client.rules(ipaddress.ip_address(args.ip)))
+        else:
+            owned = client.rules()
+            if args.operation == 'expire':
+                owned = [rule for rule in owned if int(rule['notes'][len(PREFIX):]) <= time.time()]
+            client.remove(owned)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (GuardError, ValueError, KeyError, TypeError) as error:
+        # Config parsing exceptions must never include secret file contents.
+        message = str(error) if isinstance(error, GuardError) else 'Invalid configuration or API response.'
+        print(message, file=sys.stderr)
+        sys.exit(1)

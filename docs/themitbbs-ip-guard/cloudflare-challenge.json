@@ -1,0 +1,7 @@
+{
+  "ref": "themitbbs_expensive_home_guard_v1",
+  "description": "themitbbs: challenge filtered homepage requests",
+  "action": "managed_challenge",
+  "enabled": true,
+  "expression": "(http.host in {\"themitbbs.com\" \"www.themitbbs.com\"} and (http.request.uri.path in {\"/\" \"/index.php\"} or starts_with(http.request.uri.path, \"/index.php/\")) and (any(http.request.uri.args[\"ff\"][*] ne \"\") or any(http.request.uri.args[\"FF\"][*] ne \"\") or any(http.request.uri.args[\"Ff\"][*] ne \"\") or any(http.request.uri.args[\"fF\"][*] ne \"\")))"
+}
