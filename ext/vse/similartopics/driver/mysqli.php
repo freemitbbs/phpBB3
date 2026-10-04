@@ -105,6 +105,8 @@ class mysqli implements driver_interface
 
 		return array(
 			'SELECT'	=> "f.forum_id, f.forum_name, t.*, $score AS score",
+			// Execution can distinguish uncached scans from indexed searches.
+			'PST_TERM_SEARCH' => true,
 			'FROM'		=> array(
 				TOPICS_TABLE	=> 't',
 			),

@@ -28,6 +28,8 @@ use vse\similartopics\driver\manager as similartopics_manager;
 class similar_topics
 {
 	public const SEARCH_TITLE_COLUMN = 'similar_topic_search_title';
+	private const FULLTEXT_METADATA_CACHE_SECONDS = 300;
+	private const GUEST_FALLBACK_INTERVAL_SECONDS = 5;
 
 	/** @var auth */
 	protected $auth;
@@ -222,7 +224,7 @@ class similar_topics
 
 		$rowset = $this->execute_similar_topics_query($this->apply_search_query_event($sql_array), $this->config['similar_topics_limit'], $this->config['similar_topics_cache']);
 
-		if (empty($rowset) && $is_cjk_query && $this->similartopics->is_fulltext(self::SEARCH_TITLE_COLUMN))
+		if (empty($rowset) && $is_cjk_query && $this->has_search_title_fulltext())
 		{
 			$fallback_sql_array = $this->build_search_query((int) $topic_data['topic_id'], $topic_data['topic_title'], false);
 			if (!empty($fallback_sql_array))
@@ -230,7 +232,7 @@ class similar_topics
 				$this->apply_tracking_query_modifiers($fallback_sql_array, $tracking_topics);
 				if ($this->apply_forum_filters($fallback_sql_array, $topic_data['similar_topic_forums']))
 				{
-					$rowset = $this->execute_similar_topics_query($this->apply_search_query_event($fallback_sql_array), $this->config['similar_topics_limit'], $this->config['similar_topics_cache']);
+					$rowset = $this->execute_similar_topics_query($this->apply_search_query_event($fallback_sql_array), $this->config['similar_topics_limit'], $this->config['similar_topics_cache'], true);
 				}
 			}
 		}
@@ -408,12 +410,12 @@ class similar_topics
 		$topics = [];
 		$rowset = $this->execute_similar_topics_query($sql_array, 5);
 
-		if (empty($rowset) && $is_cjk_query && $this->similartopics->is_fulltext(self::SEARCH_TITLE_COLUMN))
+		if (empty($rowset) && $is_cjk_query && $this->has_search_title_fulltext())
 		{
 			$fallback_sql_array = $this->build_search_query(0, $query, false);
 			if (!empty($fallback_sql_array) && $this->apply_forum_filters($fallback_sql_array, $similar_topic_forums))
 			{
-				$rowset = $this->execute_similar_topics_query($fallback_sql_array, 5);
+				$rowset = $this->execute_similar_topics_query($fallback_sql_array, 5, 0, true);
 			}
 		}
 
@@ -459,7 +461,7 @@ class similar_topics
 
 			$search_column = $this->can_use_search_title_index() ? self::SEARCH_TITLE_COLUMN : 'topic_title';
 
-			if ($prefer_fulltext && $search_column === self::SEARCH_TITLE_COLUMN && $this->similartopics->is_fulltext(self::SEARCH_TITLE_COLUMN))
+			if ($prefer_fulltext && $search_column === self::SEARCH_TITLE_COLUMN && $this->has_search_title_fulltext())
 			{
 				return $this->similartopics->get_query($topic_id, $search_text, $this->config['similar_topics_time'], $sensitivity, self::SEARCH_TITLE_COLUMN);
 			}
@@ -511,6 +513,31 @@ class similar_topics
 		$this->search_title_index_available = $this->config->offsetExists('similar_topics_search_title_ready')
 			&& !empty($this->config['similar_topics_search_title_ready']);
 		return $this->search_title_index_available;
+	}
+
+	/**
+	 * Cache schema inspection independently of individual topic searches.
+	 * The normal deployment/cache purge refreshes this capability as needed.
+	 */
+	protected function has_search_title_fulltext(): bool
+	{
+		if (!$this->can_use_search_title_index())
+		{
+			return false;
+		}
+
+		$key = '_pst_search_title_fulltext_' . md5(TOPICS_TABLE . ':' . $this->similartopics->get_type());
+		$driver = $this->cache->get_driver();
+		$cached = $driver->get($key);
+		if (is_array($cached) && isset($cached['available']))
+		{
+			return (bool) $cached['available'];
+		}
+
+		$available = $this->similartopics->is_fulltext(self::SEARCH_TITLE_COLUMN);
+		$driver->put($key, ['available' => $available], self::FULLTEXT_METADATA_CACHE_SECONDS);
+
+		return $available;
 	}
 
 	/**
@@ -616,12 +643,114 @@ class similar_topics
 	 * @param array $sql_array
 	 * @param int $limit
 	 * @param int $cache
+	 * @param bool $fallback Whether this is the expensive title-fragment fallback
 	 * @return array
 	 */
-	protected function execute_similar_topics_query(array $sql_array, $limit, $cache = 0)
+	protected function execute_similar_topics_query(array $sql_array, $limit, $cache = 0, $fallback = false)
+	{
+		$sql = $this->db->sql_build_query('SELECT', $sql_array);
+		$guest_fallback = ($fallback || !empty($sql_array['PST_TERM_SEARCH'])) && empty($this->user->data['is_registered'])
+			&& $this->similartopics->get_type() === 'mysql';
+		$lock = null;
+
+		if ($guest_fallback)
+		{
+			$cached = $this->get_cached_mysql_rowset($sql, (int) $limit, (int) $cache);
+			if ($cached !== null)
+			{
+				return $cached;
+			}
+
+			// One board-wide lock avoids creating one file per crawled topic.
+			// Guests never wait for a cold optional recommendation query.
+			$lock = @fopen($this->root_path . 'cache/similar_topics_guest_fallback.lock', 'c+');
+			if ($lock === false)
+			{
+				return [];
+			}
+			if (!@flock($lock, LOCK_EX | LOCK_NB))
+			{
+				fclose($lock);
+				return [];
+			}
+		}
+
+		try
+		{
+			if ($guest_fallback)
+			{
+				// Another worker may have populated this exact SQL cache meanwhile.
+				$cached = $this->get_cached_mysql_rowset($sql, (int) $limit, (int) $cache);
+				if ($cached !== null)
+				{
+					return $cached;
+				}
+
+				$last_scan = @stream_get_contents($lock);
+				if ($last_scan === false)
+				{
+					return [];
+				}
+				$last_scan = (float) $last_scan;
+				$now = microtime(true);
+				if ($now - $last_scan < self::GUEST_FALLBACK_INTERVAL_SECONDS)
+				{
+					return [];
+				}
+
+				// Keep the shared budget across PHP workers and APCu cache purges.
+				$stamp = sprintf('%.6F', $now);
+				if (!@ftruncate($lock, 0) || !@rewind($lock)
+					|| @fwrite($lock, $stamp) !== strlen($stamp) || !@fflush($lock))
+				{
+					return [];
+				}
+			}
+
+			return $this->fetch_similar_topics_rowset($sql, (int) $limit, (int) $cache);
+		}
+		finally
+		{
+			if (is_resource($lock))
+			{
+				flock($lock, LOCK_UN);
+				fclose($lock);
+			}
+		}
+	}
+
+	/**
+	 * Probe the existing MySQL SQL cache, including cached empty results.
+	 * Match mysql_base's LIMIT rendering; do not create a second rowset cache.
+	 * null means a cache miss, whereas [] is a valid cached negative result.
+	 */
+	protected function get_cached_mysql_rowset(string $sql, int $limit, int $ttl): ?array
+	{
+		if ($ttl <= 0)
+		{
+			return null;
+		}
+
+		$driver = $this->cache->get_driver();
+		$result = $driver->sql_load($sql . "\n LIMIT " . ($limit === 0 ? '18446744073709551615' : $limit));
+		if ($result === false)
+		{
+			return null;
+		}
+
+		$rowset = [];
+		while ($row = $driver->sql_fetchrow($result))
+		{
+			$rowset[(int) $row['topic_id']] = $row;
+		}
+		$driver->sql_freeresult($result);
+
+		return $rowset;
+	}
+
+	protected function fetch_similar_topics_rowset(string $sql, int $limit, int $cache): array
 	{
 		$rowset = [];
-		$sql = $this->db->sql_build_query('SELECT', $sql_array);
 		$result = $this->db->sql_query_limit($sql, (int) $limit, 0, (int) $cache);
 
 		while ($row = $this->db->sql_fetchrow($result))
