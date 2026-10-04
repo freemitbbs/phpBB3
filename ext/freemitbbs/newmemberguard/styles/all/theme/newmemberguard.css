@@ -1,0 +1,38 @@
+.newmemberguard-panel {
+	margin: 8px 0;
+}
+
+.newmemberguard-panel .newmemberguard-head {
+	margin: 0 0 6px;
+}
+
+.newmemberguard-badge {
+	background: #0a6ebd;
+	border-radius: 3px;
+	color: #fff;
+	display: inline-block;
+	font-size: 0.85em;
+	font-weight: bold;
+	margin-right: 6px;
+	padding: 1px 6px;
+}
+
+.newmemberguard-panel.newmemberguard-offtopic {
+	border-left: 4px solid #bc2a4d;
+}
+
+.newmemberguard-warning {
+	color: #bc2a4d;
+}
+
+.newmemberguard-move {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 4px;
+}
+
+.newmemberguard-move select {
+	max-width: 520px;
+}

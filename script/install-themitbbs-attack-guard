@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+umask 077
+
+GUARD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+GUARD_NGINX=/usr/sbin/nginx
+GUARD_SITE=/etc/nginx/sites-available/themitbbs
+GUARD_HTTP=/etc/nginx/conf.d/themitbbs-attack-guard.conf
+GUARD_SERVER=/etc/nginx/snippets/themitbbs-attack-guard.conf
+GUARD_BACKUP=""
+
+if [[ "$EUID" -ne 0 ]]; then
+    printf 'Installation needs root: sudo bash %s\n' "${BASH_SOURCE[0]}" >&2
+    exit 1
+fi
+
+restore_guard_files() {
+    local guard_restore_dir="$1"
+    cp -a -- "$guard_restore_dir/site" "$GUARD_SITE"
+    if [[ -f "$guard_restore_dir/http" ]]; then
+        cp -a -- "$guard_restore_dir/http" "$GUARD_HTTP"
+    else
+        rm -f -- "$GUARD_HTTP"
+    fi
+    if [[ -f "$guard_restore_dir/server" ]]; then
+        cp -a -- "$guard_restore_dir/server" "$GUARD_SERVER"
+    else
+        rm -f -- "$GUARD_SERVER"
+    fi
+}
+
+rollback_failed_install() {
+    local guard_exit_code="$?"
+    if [[ "$guard_exit_code" -eq 0 ]]; then guard_exit_code=1; fi
+    trap - ERR INT TERM
+    set +e
+    printf 'Restoring nginx configuration from %s\n' "$GUARD_BACKUP" >&2
+    restore_guard_files "$GUARD_BACKUP"
+    if "$GUARD_NGINX" -t; then
+        systemctl reload nginx
+        curl -k -sS -o /dev/null --max-time 15 \
+            --resolve themitbbs.com:443:127.0.0.1 \
+            -w 'Restored origin index status=%{http_code}\n' \
+            https://themitbbs.com/index.php
+    fi
+    exit "${guard_exit_code:-1}"
+}
+
+if [[ "${1:-}" == --rollback ]]; then
+    GUARD_BACKUP="${2:-}"
+    if [[ "$GUARD_BACKUP" != /var/backups/themitbbs-attack-guard.* || ! -f "$GUARD_BACKUP/site" ]]; then
+        printf 'Specify the backup directory printed during installation.\n' >&2
+        exit 1
+    fi
+    restore_guard_files "$GUARD_BACKUP"
+    "$GUARD_NGINX" -t
+    systemctl reload nginx
+    printf 'Restored nginx configuration from %s\n' "$GUARD_BACKUP"
+    exit 0
+fi
+
+if [[ "$#" -ne 0 ]]; then
+    printf 'Usage: %s [--rollback BACKUP_DIRECTORY]\n' "$0" >&2
+    exit 1
+fi
+
+"$GUARD_NGINX" -t
+systemctl is-active --quiet nginx
+test -f "$GUARD_ROOT/docs/nginx.themitbbs-attack-guard.conf"
+test -f "$GUARD_ROOT/docs/nginx.themitbbs-attack-guard.server.conf"
+test -f "$GUARD_SITE"
+test -d /etc/nginx/snippets
+
+GUARD_BACKUP="$(mktemp -d /var/backups/themitbbs-attack-guard.XXXXXXXX)"
+cp -a -- "$GUARD_SITE" "$GUARD_BACKUP/site"
+if [[ -e "$GUARD_HTTP" ]]; then cp -a -- "$GUARD_HTTP" "$GUARD_BACKUP/http"; fi
+if [[ -e "$GUARD_SERVER" ]]; then cp -a -- "$GUARD_SERVER" "$GUARD_BACKUP/server"; fi
+
+# Build the virtual host edit before changing the active configuration.
+python3 - "$GUARD_SITE" "$GUARD_BACKUP/candidate-site" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+site = Path(sys.argv[1]).read_text()
+include = 'include /etc/nginx/snippets/themitbbs-attack-guard.conf;'
+if site.count(include) > 1:
+    raise SystemExit('Multiple existing guard includes; refusing ambiguous edit.')
+if include not in site:
+    anchor = re.compile(r'^(?P<indent>[ \t]*)access_log[ \t]+/var/log/nginx/themitbbs\.access\.log;[ \t]*$', re.MULTILINE)
+    matches = list(anchor.finditer(site))
+    if len(matches) != 1:
+        raise SystemExit('Expected exactly one themitbbs access_log directive.')
+    match = matches[0]
+    site = site[:match.end()] + '\n\n' + match['indent'] + include + site[match.end():]
+Path(sys.argv[2]).write_text(site)
+PY
+
+trap rollback_failed_install ERR INT TERM
+install -o root -g root -m 0644 "$GUARD_ROOT/docs/nginx.themitbbs-attack-guard.conf" "$GUARD_HTTP"
+install -o root -g root -m 0644 "$GUARD_ROOT/docs/nginx.themitbbs-attack-guard.server.conf" "$GUARD_SERVER"
+install -o root -g root -m 0644 "$GUARD_BACKUP/candidate-site" "$GUARD_SITE"
+"$GUARD_NGINX" -t
+systemctl reload nginx
+
+# The filtered homepage can return 429 while the attack consumes its budget.
+# An unfiltered page and an application route must still work.
+for guard_path in /index.php /app.php/blog; do
+    guard_status="$(curl -k -sS -o /dev/null --max-time 20 \
+        --resolve themitbbs.com:443:127.0.0.1 -w '%{http_code}' \
+        "https://themitbbs.com$guard_path")"
+    printf 'Origin %s status=%s\n' "$guard_path" "$guard_status"
+    [[ "$guard_status" == 200 ]]
+done
+
+trap - ERR INT TERM
+printf 'Installed: filtered homepage 5 requests/s, burst 5, concurrency 32; excess returns 429.\n'
+printf 'Backup: %s\n' "$GUARD_BACKUP"
+printf 'Rollback: sudo bash %s --rollback %s\n' "${BASH_SOURCE[0]}" "$GUARD_BACKUP"

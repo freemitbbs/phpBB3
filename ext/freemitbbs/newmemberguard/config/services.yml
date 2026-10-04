@@ -1,0 +1,33 @@
+services:
+    freemitbbs.newmemberguard.analyzer:
+        class: freemitbbs\newmemberguard\service\analyzer
+        arguments:
+            - '@dbal.conn'
+            - '%core.table_prefix%'
+            - '%core.root_path%'
+            - '%core.php_ext%'
+
+    freemitbbs.newmemberguard.listener:
+        class: freemitbbs\newmemberguard\event\listener
+        arguments:
+            - '@auth'
+            - '@dbal.conn'
+            - '@language'
+            - '@template'
+            - '@controller.helper'
+            - '@freemitbbs.newmemberguard.analyzer'
+        tags:
+            - { name: event.listener }
+
+    freemitbbs.newmemberguard.controller.move_post:
+        class: freemitbbs\newmemberguard\controller\move_post
+        arguments:
+            - '@auth'
+            - '@dbal.conn'
+            - '@language'
+            - '@log'
+            - '@request'
+            - '@user'
+            - '@controller.helper'
+            - '%core.root_path%'
+            - '%core.php_ext%'

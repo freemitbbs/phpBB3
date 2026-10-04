@@ -1,0 +1,23 @@
+{
+	"name": "freemitbbs/newmemberguard",
+	"type": "phpbb-extension",
+	"description": "Flags new-member posts that look off-topic on the moderation approval page and offers a one-click move to a better topic.",
+	"homepage": "https://www.phpbb.com",
+	"version": "1.0.0",
+	"license": "GPL-2.0-only",
+	"authors": [
+		{
+			"name": "freemitbbs"
+		}
+	],
+	"require": {
+		"php": ">=7.4",
+		"phpbb/phpbb": ">=3.3.0"
+	},
+	"extra": {
+		"display-name": "FreemitBBS New Member Guard",
+		"soft-require": {
+			"phpbb/phpbb": ">=3.3.0"
+		}
+	}
+}

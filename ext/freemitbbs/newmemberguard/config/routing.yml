@@ -1,0 +1,5 @@
+freemitbbs_newmemberguard_move_post:
+    path: /newmemberguard/move/{post_id}
+    defaults: { _controller: freemitbbs.newmemberguard.controller.move_post:move }
+    requirements:
+        post_id: '\d+'

@@ -1,0 +1,24 @@
+{% if S_NEWMEMBERGUARD_PANEL %}
+<div class="rules newmemberguard-panel{% if S_NEWMEMBERGUARD_OFFTOPIC %} newmemberguard-offtopic{% endif %}">
+	<div class="inner">
+		<p class="newmemberguard-head">
+			<span class="newmemberguard-badge">{{ lang('NEWMEMBERGUARD_NEW_MEMBER') }}</span>
+			{% if S_NEWMEMBERGUARD_OFFTOPIC %}<strong class="newmemberguard-warning">{{ lang('NEWMEMBERGUARD_OFFTOPIC_WARNING') }}</strong>{% endif %}
+		</p>
+		<form method="post" action="{{ NEWMEMBERGUARD_MOVE_ACTION }}" class="newmemberguard-move">
+			{% if S_NEWMEMBERGUARD_HAS_CANDIDATES %}
+			<label for="newmemberguard-target">{{ lang('NEWMEMBERGUARD_SUGGESTED') }}{{ lang('COLON') }}
+				<select name="target_topic_id" id="newmemberguard-target">
+					{% for candidate in newmemberguard_candidates %}
+					<option value="{{ candidate.TOPIC_ID }}">{{ candidate.LABEL }}</option>
+					{% endfor %}
+				</select>
+			</label>
+			{% endif %}
+			<label for="newmemberguard-manual">{{ lang('NEWMEMBERGUARD_OR_TOPIC_ID') }}{{ lang('COLON') }} <input type="text" name="manual_topic_id" id="newmemberguard-manual" size="8" /></label>
+			<input type="submit" name="move_post" class="button1" value="{{ lang('NEWMEMBERGUARD_MOVE') }}" />
+			{{ S_FORM_TOKEN_NEWMEMBERGUARD }}
+		</form>
+	</div>
+</div>
+{% endif %}
