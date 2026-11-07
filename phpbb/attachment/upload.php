@@ -153,7 +153,9 @@ class upload
 			$this->file->upload->set_max_filesize($allowed_filesize);
 		}
 
-		$this->file->clean_filename('unique', $this->user->data['user_id'] . '_');
+		// A file may later be posted anonymously. Storage/CDN URLs must not encode
+		// the uploader's account ID; ownership is tracked in the attachment table.
+		$this->file->clean_filename('unique');
 
 		// Are we uploading an image *and* this image being within the image category?
 		// Only then perform additional image checks.

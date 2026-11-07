@@ -4,7 +4,7 @@
 	var STORAGE_PREFIX = 'freemitbbs.postautosave.v1.';
 	var MAX_DRAFT_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 	var SAVE_DELAY_MS = 300;
-	var FIELD_NAMES = ['subject', 'message', 'posttags_tags'];
+	var FIELD_NAMES = ['subject', 'message', 'posttags_tags', 'anonymous_post'];
 	var TEXT = {
 		available: '发现上次未提交的本地草稿。',
 		restored: '已恢复上次未提交的本地草稿。提交成功后可以丢弃本地草稿。',
@@ -73,7 +73,7 @@
 		FIELD_NAMES.forEach(function (name) {
 			var field = getField(form, name);
 			if (field) {
-				fields[name] = field.value;
+				fields[name] = field.type === 'checkbox' ? (field.checked ? '1' : '') : field.value;
 			}
 		});
 
@@ -82,7 +82,7 @@
 
 	function hasContent(fields) {
 		return Object.keys(fields).some(function (name) {
-			return String(fields[name] || '').trim() !== '';
+			return name !== 'anonymous_post' && String(fields[name] || '').trim() !== '';
 		});
 	}
 
@@ -149,6 +149,11 @@
 	function applyFields(form, fields) {
 		FIELD_NAMES.forEach(function (name) {
 			var field = getField(form, name);
+			if (field && field.type === 'checkbox' && typeof fields[name] === 'string') {
+				field.checked = fields[name] === '1';
+				fireEvent(field, 'change');
+				return;
+			}
 			if (field && typeof fields[name] === 'string' && field.value !== fields[name]) {
 				field.value = fields[name];
 				fireEvent(field, 'input');

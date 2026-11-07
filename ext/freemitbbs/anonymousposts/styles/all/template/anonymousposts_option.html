@@ -1,0 +1,9 @@
+<!-- IF S_ANONPOST_ALLOWED -->
+<dl>
+	<dt><label for="anonymous_post">{L_ANONPOST_OPTION}{L_COLON}</label></dt>
+	<dd><label><input type="checkbox" name="anonymous_post" id="anonymous_post" value="1"<!-- IF S_ANONPOST_CHECKED --> checked="checked"<!-- ENDIF --> /> {L_ANONPOST_OPTION}</label></dd>
+	<dd>{L_ANONPOST_EXPLAIN}</dd>
+</dl>
+<!-- ELSEIF S_ANONPOST_LOCKED -->
+<p>{L_ANONPOST_LOCKED}</p>
+<!-- ENDIF -->

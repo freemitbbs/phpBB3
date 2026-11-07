@@ -1999,6 +1999,12 @@ function submit_post($mode, $subject, $username, $topic_type, &$poll_ary, &$data
 	unset($poll);
 	unset($data);
 
+	// Extensions may store a public author different from the authenticated user.
+	// Use that identity for public metadata, attachments, search and notifications.
+	$public_poster_id = (int) $sql_data[POSTS_TABLE]['sql']['poster_id'];
+	$public_poster_name = ($public_poster_id == ANONYMOUS) ? $sql_data[POSTS_TABLE]['sql']['post_username'] : $user->data['username'];
+	$public_poster_colour = ($public_poster_id == ANONYMOUS) ? '' : $user->data['user_colour'];
+
 	// Submit new topic
 	if ($post_mode == 'post')
 	{
@@ -2034,8 +2040,8 @@ function submit_post($mode, $subject, $username, $topic_type, &$poll_ary, &$data
 				'topic_last_post_id'		=> $data_ary['post_id'],
 				'topic_last_post_time'		=> $current_time,
 				'topic_last_poster_id'		=> $sql_data[POSTS_TABLE]['sql']['poster_id'],
-				'topic_last_poster_name'	=> ($user->data['user_id'] == ANONYMOUS) ? $sql_data[POSTS_TABLE]['sql']['post_username'] : $user->data['username'],
-				'topic_last_poster_colour'	=> $user->data['user_colour'],
+				'topic_last_poster_name'	=> $public_poster_name,
+				'topic_last_poster_colour'	=> $public_poster_colour,
 				'topic_last_post_subject'	=> (string) $subject,
 			);
 		}
@@ -2057,9 +2063,9 @@ function submit_post($mode, $subject, $username, $topic_type, &$poll_ary, &$data
 			$sql_data[FORUMS_TABLE]['stat'][] = 'forum_last_post_id = ' . $data_ary['post_id'];
 			$sql_data[FORUMS_TABLE]['stat'][] = "forum_last_post_subject = '" . $db->sql_escape($subject) . "'";
 			$sql_data[FORUMS_TABLE]['stat'][] = 'forum_last_post_time = ' . $current_time;
-			$sql_data[FORUMS_TABLE]['stat'][] = 'forum_last_poster_id = ' . (int) $user->data['user_id'];
-			$sql_data[FORUMS_TABLE]['stat'][] = "forum_last_poster_name = '" . $db->sql_escape((!$user->data['is_registered'] && $username) ? $username : (($user->data['user_id'] != ANONYMOUS) ? $user->data['username'] : '')) . "'";
-			$sql_data[FORUMS_TABLE]['stat'][] = "forum_last_poster_colour = '" . $db->sql_escape($user->data['user_colour']) . "'";
+			$sql_data[FORUMS_TABLE]['stat'][] = 'forum_last_poster_id = ' . $public_poster_id;
+			$sql_data[FORUMS_TABLE]['stat'][] = "forum_last_poster_name = '" . $db->sql_escape($public_poster_name) . "'";
+			$sql_data[FORUMS_TABLE]['stat'][] = "forum_last_poster_colour = '" . $db->sql_escape($public_poster_colour) . "'";
 		}
 
 		unset($sql_data[POSTS_TABLE]['sql']);
@@ -2216,7 +2222,7 @@ function submit_post($mode, $subject, $username, $topic_type, &$poll_ary, &$data
 					'post_msg_id'		=> $data_ary['post_id'],
 					'topic_id'			=> $data_ary['topic_id'],
 					'is_orphan'			=> 0,
-					'poster_id'			=> $poster_id,
+					'poster_id'			=> $public_poster_id,
 					'attach_comment'	=> $attach_row['attach_comment'],
 				);
 
@@ -2353,7 +2359,7 @@ function submit_post($mode, $subject, $username, $topic_type, &$poll_ary, &$data
 			trigger_error($error);
 		}
 
-		$search->index($mode, $data_ary['post_id'], $data_ary['message'], $subject, $poster_id, $data_ary['forum_id']);
+		$search->index($mode, $data_ary['post_id'], $data_ary['message'], $subject, $public_poster_id, $data_ary['forum_id']);
 	}
 
 	// Topic Notification, do not change if moderator is changing other users posts...
@@ -2421,8 +2427,8 @@ function submit_post($mode, $subject, $username, $topic_type, &$poll_ary, &$data
 	// Send Notifications
 	$notification_data = array_merge($data_ary, array(
 		'topic_title'		=> (isset($data_ary['topic_title'])) ? $data_ary['topic_title'] : $subject,
-		'post_username'		=> $username,
-		'poster_id'			=> $poster_id,
+		'post_username'		=> ($public_poster_id == ANONYMOUS) ? $public_poster_name : $username,
+		'poster_id'			=> $public_poster_id,
 		'post_text'			=> $data_ary['message'],
 		'post_time'			=> $current_time,
 		'post_subject'		=> $subject,

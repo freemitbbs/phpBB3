@@ -101,6 +101,7 @@ class listener implements EventSubscriberInterface
 			'core.permissions' => 'acp_markdown_permissions',
 			'core.text_formatter_s9e_configure_after' => 'configure_markdown',
 			'core.text_formatter_s9e_parser_setup' => 'enable_markdown',
+			'core.text_formatter_s9e_render_before' => 'restore_list_start',
 			'core.ucp_display_module_before' => 'ucp_markdown_status',
 			'core.ucp_prefs_post_data' => 'ucp_markdown_configuration',
 			'core.ucp_prefs_post_update_data' => 'ucp_markdown_configuration_data',
@@ -232,6 +233,15 @@ class listener implements EventSubscriberInterface
 		$configurator->PipeTables;
 		$configurator->TaskLists;
 
+		// phpBB defines LIST before Litedown, so Litedown cannot add its start attribute.
+		$list = $configurator->tags['LIST'];
+		if (!isset($list->attributes['start']))
+		{
+			$start = $list->attributes->add('start');
+			$start->filterChain->append('#uint');
+			$start->required = false;
+		}
+
 		// List of tag that will get a CSS class
 		$tags = [
 			// Litedown
@@ -257,6 +267,16 @@ class listener implements EventSubscriberInterface
 			$object = $configurator->tags[$tag];
 			$dom = $object->template->asDom();
 			$xpath = new \DOMXPath($dom);
+
+			if ($tag === 'LIST')
+			{
+				$start = $dom->createElementNS('http://www.w3.org/1999/XSL/Transform', 'xsl:copy-of');
+				$start->setAttribute('select', '@start');
+				foreach ($xpath->query('//ol') as $node)
+				{
+					$node->insertBefore($start->cloneNode(true), $node->firstChild);
+				}
+			}
 
 			// XPath expression
 			switch ($tag)
@@ -288,6 +308,29 @@ class listener implements EventSubscriberInterface
 
 			$dom->saveChanges();
 		}
+	}
+
+	/**
+	 * Recover starting numbers discarded by older parsers, before s9e removes source markers.
+	 */
+	public function restore_list_start($event)
+	{
+		$xml = $event['xml'];
+		if (strpos($xml, '<LIST') === false)
+		{
+			return;
+		}
+
+		// Only match a decimal list whose first item begins with a Markdown number.
+		// Explicit starts and BBCode lists keep their existing behavior.
+		$event['xml'] = preg_replace_callback(
+			'#(<LIST\b(?![^>]*\bstart=)(?=[^>]*\btype="decimal")[^>]*)(>\s*<LI>\s*(?:<p>\s*)?<s>)([0-9]+)(\.[ \t]+</s>)#',
+			static function ($match)
+			{
+				return $match[1] . ' start="' . (int) $match[3] . '"' . $match[2] . $match[3] . $match[4];
+			},
+			$xml
+		);
 	}
 
 	/**

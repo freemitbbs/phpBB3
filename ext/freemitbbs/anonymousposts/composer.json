@@ -1,0 +1,13 @@
+{
+	"name": "freemitbbs/anonymousposts",
+	"type": "phpbb-extension",
+	"description": "Optional anonymous posting for selected forums, with private authorship for editing and moderation.",
+	"version": "1.0.0",
+	"license": "GPL-2.0-only",
+	"authors": [{"name": "FreeMITBBS"}],
+	"require": {"php": ">=7.4", "phpbb/phpbb": ">=3.3.0,<4.0.0"},
+	"extra": {
+		"display-name": "FreeMITBBS Anonymous Posts",
+		"soft-require": {"phpbb/phpbb": ">=3.3.0,<4.0.0"}
+	}
+}
