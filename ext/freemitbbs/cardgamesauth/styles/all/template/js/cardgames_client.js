@@ -14,6 +14,10 @@ const state = {
   trumpRevealTimerId: 0,
   trickReviewTimerSignature: "",
   trumpRevealTimerSignature: "",
+  autoTrumpEnabled: false,
+  autoTrumpTimerId: 0,
+  autoTrumpTimerSignature: "",
+  autoTrumpAttemptSignature: "",
   heartbeatId: 0,
   heartbeatMisses: 0,
   syncPromise: null,
@@ -140,6 +144,9 @@ const commandTimeoutMs = 15000;
 const lateResponseRetentionMs = 60000;
 const retryRequestRetentionMs = 10 * 60 * 1000;
 const retryRequestStorageKey = "freemitbbs.cardgames.retryRequests.v1";
+const autoTrumpStorageKey = "freemitbbs.cardgames.autoTrump.v1";
+const autoTrumpDelayMs = 3000;
+const autoTrumpCounterHoldbackMs = 2000;
 const lobbyChatChannelKey = "__lobby__";
 const lobbyRoomPlaceholderCount = 7;
 const guandanRoomKeys = new Set(["fengrenzhai", "tongtianlou", "siwangyuan"]);
@@ -596,6 +603,7 @@ async function init() {
   state.token = queryParam("token") || state.bootstrap.token || "";
   state.assetBaseUrl = normalizeBaseUrl(state.bootstrap.assetBaseUrl || defaultAssetBaseUrl());
   state.cardStyle = state.bootstrap.cardStyle || "cardsclassic";
+  restoreAutoTrumpPreference();
   initializeLobbyRooms();
   restoreRetryRequests();
   state.initialized = true;
@@ -767,6 +775,7 @@ function disconnect() {
   clearTurnTimer();
   clearTrickReviewTimer();
   clearTrumpRevealTimer();
+  clearAutoTrumpTimer();
   clearDealingAnimation();
   state.ws = null;
   state.connected = false;
@@ -1118,6 +1127,7 @@ function clearRoomState(advanceEpoch = true) {
   resetPlayLog();
   clearTrickReviewTimer();
   clearTrumpRevealTimer();
+  clearAutoTrumpTimer();
   clearDealingAnimation();
   disconnectDeskOverlapObserver();
   state.guandanDeskPasses.clear();
@@ -1940,6 +1950,7 @@ function applyTable(table, shouldRender = true) {
   syncDealingAnimation(table, previousTable);
   syncGuandanDeskPasses(table);
   syncSelectedHandIndexes();
+  syncAutoTrump();
   if (shouldRender) {
     scheduleRender();
   }
@@ -3436,6 +3447,7 @@ function renderTable() {
     clearTurnTimer();
     clearTrickReviewTimer();
     clearTrumpRevealTimer();
+    clearAutoTrumpTimer();
     clearDealingAnimation();
     disconnectDeskOverlapObserver();
     renderRoomDeadlineControls(null);
@@ -3530,6 +3542,7 @@ function renderTable() {
   }
   syncTrickReviewTimer(table);
   syncTrumpRevealTimer(table);
+  syncAutoTrump();
 }
 
 function renderTableEmptyState() {
@@ -6311,6 +6324,9 @@ function tableActionsHtml(table) {
   const disabled = isGameInteractionLocked() || Boolean(state.transitionRoomKey) || hasRoomTransitionPending() || isRoomMutationPending(roomKey);
   const parts = [];
 
+  if (table.viewer?.role === "player") {
+    parts.push(`<button class="table-action-auto-trump" data-action="tractor.toggleAutoTrump" type="button" aria-pressed="${state.autoTrumpEnabled}" title="按机器人策略自动亮主、反主；需保持游戏页面连接">自动抢庄：${state.autoTrumpEnabled ? "开" : "关"}</button>`);
+  }
   if (discardAction.enabled) {
     parts.push(`<button data-action="tractor.discardBottom" type="button" ${!disabled && !isActionPending("tractor.discardBottom", roomKey) && selectedCards.length === discardAction.count ? "" : "disabled"} title="请选择 ${discardAction.count} 张牌">埋牌</button>`);
   }
@@ -6377,6 +6393,170 @@ function quickTrumpOptionsSignature(table) {
   return quickTrumpOptions(table)
     .map((option) => `${option.suit}:${option.exposure}`)
     .join(",");
+}
+
+function restoreAutoTrumpPreference() {
+  try {
+    state.autoTrumpEnabled = window.localStorage.getItem(autoTrumpStorageKey) === "true";
+  } catch {
+    // Storage may be unavailable in private or embedded contexts.
+  }
+}
+
+function toggleAutoTrump() {
+  state.autoTrumpEnabled = !state.autoTrumpEnabled;
+  state.autoTrumpAttemptSignature = "";
+  clearAutoTrumpTimer();
+  try {
+    window.localStorage.setItem(autoTrumpStorageKey, String(state.autoTrumpEnabled));
+  } catch {
+    // The switch still works for this page when preferences cannot be saved.
+  }
+  syncAutoTrump();
+  scheduleSyncTableActions();
+}
+
+function currentAutoTrumpCandidate() {
+  const table = state.table;
+  const roomKey = table?.room?.roomKey;
+  if (!state.autoTrumpEnabled || !roomKey || roomKey !== state.currentRoomKey
+    || isGuandanTable(table) || table.phase !== "making_trump"
+    || table.viewer?.role !== "player"
+    || !isPrivateHandSeat(table, table.viewer.seatIndex)
+    || !action(table, "tractor.makeTrump").enabled
+    || tableActionBlockedReason("tractor.makeTrump", roomKey)) {
+    return null;
+  }
+
+  const revealAt = trumpRevealAtMs(table);
+  if (Number.isFinite(revealAt) && revealAt <= Date.now()) {
+    return null;
+  }
+
+  const publicState = table.engine?.public;
+  if (!Number.isInteger(publicState?.rank)) {
+    return null;
+  }
+  // Bots also evaluate the entire dealt hand, before the dealing animation ends.
+  const payload = chooseAutoTrumpCall(table.engine.private.cards || [], publicState.rank, publicState.trump?.exposure || "none");
+  if (!payload) {
+    return null;
+  }
+  return {
+    roomKey,
+    payload,
+    revealAt,
+    signature: [state.roomEpoch, roomKey, publicState.handId || publicState.startedAt,
+      table.viewer.seatIndex, publicState.trump?.suit, publicState.trump?.exposure,
+      payload.suit, payload.exposure, publicState.trumpRevealAt || ""].join(":")
+  };
+}
+
+function syncAutoTrump() {
+  const candidate = currentAutoTrumpCandidate();
+  if (!candidate || candidate.signature === state.autoTrumpAttemptSignature) {
+    clearAutoTrumpTimer();
+    return;
+  }
+  if (candidate.signature === state.autoTrumpTimerSignature) {
+    return;
+  }
+
+  clearAutoTrumpTimer();
+  state.autoTrumpTimerSignature = candidate.signature;
+  const delay = Number.isFinite(candidate.revealAt)
+    ? Math.max(autoTrumpDelayMs, candidate.revealAt - Date.now() - autoTrumpCounterHoldbackMs)
+    : autoTrumpDelayMs;
+  const timerId = window.setTimeout(() => {
+    if (state.autoTrumpTimerId !== timerId) {
+      return;
+    }
+    state.autoTrumpTimerId = 0;
+    state.autoTrumpTimerSignature = "";
+    const current = currentAutoTrumpCandidate();
+    if (!current || current.signature !== candidate.signature) {
+      syncAutoTrump();
+      return;
+    }
+    // One attempt per call avoids loops after a rejected or uncertain response.
+    state.autoTrumpAttemptSignature = current.signature;
+    setStatus(`正在${trumpActionLabel(state.table)}...`);
+    void sendEngineCommand("tractor.makeTrump", current.roomKey, current.payload);
+  }, delay);
+  state.autoTrumpTimerId = timerId;
+}
+
+function clearAutoTrumpTimer() {
+  if (state.autoTrumpTimerId) {
+    window.clearTimeout(state.autoTrumpTimerId);
+  }
+  state.autoTrumpTimerId = 0;
+  state.autoTrumpTimerSignature = "";
+}
+
+// Keep the policy in sync with card-games/src/tractor/robot.ts.
+function chooseAutoTrumpCall(cards, rank, currentExposure) {
+  const strength = trumpExposureStrength(currentExposure);
+  const counts = cardCountsById(cards.map((card) => ({ card })));
+  for (const [id, exposure] of [[53, "pair_red_joker"], [52, "pair_black_joker"]]) {
+    if ((counts.get(id) || 0) >= 2 && trumpExposureStrength(exposure) > strength) {
+      return { suit: "joker", exposure };
+    }
+  }
+
+  const rankCards = [...new Map(cards.filter((card) => card.rank === rank && cardSuitLabels[card.suit])
+    .map((card) => [card.id, card])).values()];
+  for (const exposure of ["pair_rank", "single_rank"]) {
+    if (trumpExposureStrength(exposure) <= strength) {
+      continue;
+    }
+    let best = null;
+    for (const card of rankCards) {
+      if (exposure === "pair_rank" && (counts.get(card.id) || 0) < 2) {
+        continue;
+      }
+      const profile = autoTrumpSuitProfile(cards, counts, card.suit, rank);
+      const eligible = exposure === "pair_rank"
+        ? profile.sameSuitCount >= 5 || profile.pairCount >= 2 || profile.tractorPairs >= 2 || profile.score >= 30
+        : profile.sameSuitCount >= 7 || (profile.sameSuitCount >= 6
+          && (profile.pairCount >= 1 || profile.highCards >= 2 || profile.totalTrumpCount >= 10)) || profile.score >= 38;
+      if (eligible && (!best || profile.score > best.score)) {
+        best = { suit: card.suit, score: profile.score };
+      }
+    }
+    if (best) {
+      return { suit: best.suit, exposure };
+    }
+  }
+  return null;
+}
+
+function autoTrumpSuitProfile(cards, counts, suit, rank) {
+  const sameSuitCards = cards.filter((card) => card.suit === suit);
+  const suitCards = sameSuitCards.filter((card) => card.rank !== rank);
+  const trumpCards = cards.filter((card) => card.suit === "joker" || card.rank === rank || card.suit === suit);
+  const pairCount = new Set(sameSuitCards.filter((card) => (counts.get(card.id) || 0) >= 2).map((card) => card.id)).size;
+  const pairRanks = [...new Set(suitCards.filter((card) => (counts.get(card.id) || 0) >= 2).map((card) => card.rank))]
+    .sort((left, right) => left - right);
+  let longestRun = 0;
+  let run = 0;
+  pairRanks.forEach((pairRank, index) => {
+    run = index > 0 && pairRank === pairRanks[index - 1] + 1 ? run + 1 : 1;
+    longestRun = Math.max(longestRun, run);
+  });
+  const tractorPairs = longestRun > 1 ? longestRun : 0;
+  const bigTrumpCount = trumpCards.filter((card) => card.suit === "joker" || card.rank === rank || card.rank === 12 || card.rank === 11).length;
+  const highCards = suitCards.filter((card) => card.rank === 12 || card.rank === 11).length;
+  const looseLowCards = suitCards.filter((card) => (counts.get(card.id) || 0) === 1 && card.points === 0 && card.rank <= 6).length;
+  return {
+    sameSuitCount: sameSuitCards.length,
+    totalTrumpCount: trumpCards.length,
+    pairCount,
+    tractorPairs,
+    highCards,
+    score: trumpCards.length * 3 + bigTrumpCount * 5 + tractorPairs * 4 + highCards * 2 - looseLowCards
+      + (sameSuitCards.length >= 5 ? 10 : 0) + (pairCount >= 2 ? 8 : 0)
+  };
 }
 
 function quickTrumpOptions(table) {
@@ -6526,6 +6706,8 @@ function viewerTableActionsElement() {
 function tableActionsRenderSignature(table) {
   const roomKey = table.room?.roomKey || "";
   return [
+    state.autoTrumpEnabled ? "auto-trump-on" : "auto-trump-off",
+    table.viewer?.role || "",
     state.selectedHandIndexes.join(","),
     actionSignature(action(table, "tractor.discardBottom")),
     actionSignature(action(table, "tractor.playCards")),
@@ -7347,6 +7529,12 @@ function durationLabel(milliseconds) {
 }
 
 function handleTableAction(type, seatValue, button = null) {
+  if (type === "tractor.toggleAutoTrump") {
+    if (!isGuandanTable(state.table) && state.table?.viewer?.role === "player") {
+      toggleAutoTrump();
+    }
+    return;
+  }
   const seatIndex = Number(seatValue);
   const roomKey = state.currentRoomKey;
   const blockedReason = tableActionBlockedReason(type, roomKey);

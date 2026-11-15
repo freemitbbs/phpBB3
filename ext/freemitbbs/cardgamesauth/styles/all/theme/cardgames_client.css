@@ -1436,6 +1436,12 @@
   gap: 6px;
 }
 
+.app-shell .table-action-auto-trump[aria-pressed="true"] {
+  border-color: #27805a;
+  background: #e3f9eb;
+  color: #1f6f48;
+}
+
 .app-shell .trump-reveal-label {
   font-size: 12px;
   font-weight: 800;
